@@ -44,7 +44,6 @@ For active development or to try the latest features:
 ```bash
 uv venv .venv
 source .venv/bin/activate
-uv pip install pip   # spacy auto-download requires pip inside the venv
 ```
 
 **Step 2:** Install neuralfetch in editable mode:
