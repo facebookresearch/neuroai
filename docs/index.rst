@@ -14,15 +14,33 @@
 
    <div class="hero-section-root">
      <h1 class="hero-tagline-main">
-       From raw data to
-       state-of-the-art decoding.
+       Simple. Fast. Robust. Scalable.
      </h1>
      <p class="hero-subtitle">
-       The ultimate Python suite for neuroscience research across all modalities.
+       The Python suite for brain data across all modalities — from raw recordings to state-of-the-art decoding.
      </p>
      <div style="text-align: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
-       <pre style="display: inline-block; background: var(--color-background-secondary); padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--color-border); font-family: var(--font-stack--monospace); font-size: 0.9em; margin: 0; color: var(--color-foreground-primary);">pip install neuralset neuralfetch</pre>
+       <div style="display: inline-flex; align-items: center; gap: 0.6rem; position: relative;">
+         <pre id="hero-pip-install" style="display: inline-block; background: var(--color-background-secondary); padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--color-border); font-family: var(--font-stack--monospace); font-size: 0.9em; margin: 0; color: var(--color-foreground-primary);">pip install neuralset neuralfetch</pre>
+         <button class="copy-btn" id="hero-copy-btn" title="Copy install command" style="position: static; flex-shrink: 0;"><i class="fas fa-copy"></i></button>
+       </div>
      </div>
+     <script>
+     (function() {
+       var btn = document.getElementById('hero-copy-btn');
+       if (!btn) return;
+       btn.addEventListener('click', function() {
+         navigator.clipboard.writeText('pip install neuralset neuralfetch').then(function() {
+           btn.innerHTML = 'Copied ⚡🧠';
+           btn.classList.add('copied');
+           setTimeout(function() {
+             btn.innerHTML = '<i class="fas fa-copy"></i>';
+             btn.classList.remove('copied');
+           }, 1500);
+         });
+       });
+     })();
+     </script>
      <p style="margin-top: 1rem; font-size: 0.9em;">
        New here? Start with <a href="neuralset/index.html" style="color: var(--color-brand-primary); font-weight: 600; text-decoration: none;">neuralset</a> — the core data pipeline.
      </p>
@@ -40,7 +58,7 @@
         <a href="neuralfetch/index.html" class="package-card">
           <div class="package-card-icon"><i class="fas fa-download"></i></div>
           <div class="package-card-name">neuralfetch</div>
-           <div class="package-card-tagline">Access the world's public brain datasets.</div>
+           <div class="package-card-tagline">Access the world's curated brain datasets.</div>
          </a>
        </div>
 

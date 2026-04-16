@@ -118,13 +118,45 @@ Pick a sample dataset and see the full fetch-to-events workflow.
      var codeEl = document.getElementById('nh-code-data');
      if (!sel || !codeEl) return;
 
+     var wrapper = codeEl.closest('.code-block-wrapper') || codeEl.parentElement.parentElement;
+
+     function addCopyBtn(code) {
+       var existing = wrapper.querySelector('.copy-btn');
+       if (existing) existing.remove();
+       var btn = document.createElement('button');
+       btn.className = 'copy-btn';
+       btn.title = 'Copy code';
+       btn.innerHTML = '<i class="fas fa-copy"></i>';
+       btn.addEventListener('click', function() {
+         navigator.clipboard.writeText(code).then(function() {
+           btn.innerHTML = 'Copied ⚡\u{1F9E0}';
+           btn.classList.add('copied');
+           setTimeout(function() {
+             btn.innerHTML = '<i class="fas fa-copy"></i>';
+             btn.classList.remove('copied');
+           }, 1500);
+         });
+       });
+       wrapper.appendChild(btn);
+     }
+
      function update() {
-       codeEl.textContent = PRESETS[sel.value] || '';
-       if (window.Prism) Prism.highlightElement(codeEl);
+       var code = PRESETS[sel.value] || '';
+       if (window._highlightPy) {
+         codeEl.innerHTML = window._highlightPy(code);
+       } else {
+         codeEl.textContent = code;
+       }
+       addCopyBtn(code);
      }
 
      sel.addEventListener('change', update);
-     update();
+     // DOMContentLoaded may have already fired; call update() directly if so.
+     if (document.readyState === 'loading') {
+       document.addEventListener('DOMContentLoaded', update);
+     } else {
+       update();
+     }
    })();
    </script>
 
