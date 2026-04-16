@@ -10,7 +10,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-on: [push]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
   # Architecture: 3 test/check jobs + 1 lint job. Each job's steps are gated
   # by dorny/paths-filter so unchanged packages are skipped entirely (the main
