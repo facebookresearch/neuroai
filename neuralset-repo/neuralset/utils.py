@@ -390,36 +390,12 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
 
 @functools.lru_cache(maxsize=3)
 def _get_model(model: str) -> tp.Any:
-    import sys
-
     import spacy
 
     if not spacy.util.is_package(model):
-        import shutil
-        import subprocess
+        import spacy.cli
 
-        if shutil.which("uv"):
-            # uv-managed venvs have no pip; use uv with explicit --python so the
-            # model lands in the current interpreter's venv, not the project default.
-            # Replicate spacy's URL construction to bypass pip entirely.
-            from spacy import about
-            from spacy.cli.download import (
-                get_compatibility,
-                get_model_filename,
-                get_version,
-            )
-
-            compatibility = get_compatibility()
-            version = get_version(model, compatibility)
-            filename = get_model_filename(model, version, sdist=False)
-            url = about.__download_url__ + "/" + filename
-            subprocess.check_call(
-                ["uv", "pip", "install", "--python", sys.executable, url]
-            )
-        else:
-            import spacy.cli
-
-            spacy.cli.download(model)  # type: ignore
+        spacy.cli.download(model)  # type: ignore
     nlp = spacy.load(model)
     return nlp
 
