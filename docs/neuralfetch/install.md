@@ -17,6 +17,12 @@ all_studies = ns.Study.catalog()
 print(f"{len(all_studies)} studies available")
 ```
 
+To run the example tutorials, also install `neuralset` with the `tutorials` extra:
+
+```bash
+pip install 'neuralset[tutorials]'
+```
+
 ## Developer Install
 
 For active development or to try the latest features:
@@ -45,9 +51,6 @@ source .venv/bin/activate
 ```bash
 # from the repo root
 uv pip install -e 'neuralfetch-repo/.'
-
-# or, for the full feature set with all dataset support:
-uv pip install -e 'neuralfetch-repo/.[dev,all]'
 ```
 
 **Step 3:** For strict type checking (optional):
@@ -88,9 +91,6 @@ pip install uv
 ```bash
 # from the repo root
 uv pip install -e 'neuralfetch-repo/.'
-
-# or, for the full feature set with all dataset support:
-uv pip install -e 'neuralfetch-repo/.[dev,all]'
 ```
 
 **Step 4:** For strict type checking (optional):
