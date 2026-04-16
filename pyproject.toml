@@ -1,0 +1,47 @@
+# this is used for the pre-commit hooks
+# and when running from the root folder (eg: in the CI)
+
+[tool.ruff]
+line-length = 90
+exclude = [
+    "__editable__",
+    "docs/pythonplusplus",
+    "*.ipynb",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "W",   # pycodestyle warnings
+    "A",   # flake8-builtins (parity: redefined-builtin)
+    "B006",  # mutable default argument (parity: dangerous-default-value)
+    "PIE790",  # unnecessary-placeholder (rough parity: unnecessary-pass)
+]
+ignore = [
+    "E501",  # line too long (formatter handles this)
+    "E712",  # == True comparisons (intentional in pandas boolean filtering)
+    "E722",  # bare except (intentional in defensive data-loading code)
+    "E731",  # lambda assignment (common pattern in tests)
+    "E741",  # ambiguous variable name (l, O — intentional in math code)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["neuralset", "neuraltrain", "neuralfetch"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+    "F401",  # re-exports
+    "E402",  # late imports after version check
+]
+"test_*.py" = ["F811"]   # pytest fixture redefinitions
+"**/tests/**" = ["F811"]  # pytest fixture redefinitions
+"docs*/**/*.py" = [
+    "A001",  # copyright is a standard Sphinx config variable
+    "E402",  # sphinx-gallery import structure
+    "F811",  # sphinx setup function redefinitions
+]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]

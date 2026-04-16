@@ -1,0 +1,64 @@
+[project]
+name = "neuralfetch"
+readme = "README.md"
+authors = [{name = "Meta FAIR"}]
+description = "Download backends and data-fetching utilities for neuralset."
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+version = "0.1.0"
+
+dependencies = [
+  "neuralset>=0.0.1",
+  "h5py",
+  "pybv>=0.7.3",
+  "mne_bids>=0.16",
+]
+
+[project.urls]
+  Source = "https://github.com/facebookresearch/neuroai"
+  Tracker = "https://github.com/facebookresearch/neuroai/issues"
+
+# Study auto-discovery by neuralset; value = scan root module path.
+[project.entry-points."neuralset.studies"]
+neuralfetch = "neuralfetch"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+# py.typed marker enables cross-package type checking (PEP 561)
+# editable installs need: pip install --config-settings editable_mode=strict -e .
+"neuralfetch" = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["neuralfetch*"]
+namespaces = false
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.mypy]
+  plugins = ['pydantic.mypy']
+  show_error_codes = true
+[[tool.mypy.overrides]]
+  module = [
+  'mne', 'mne.io', 'mne.io.fiff', 'mne.datasets', 'mne_bids',
+  'scipy.*', 'nibabel', 'h5py',
+  'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack',
+  'moviepy',
+  'hcp_utils',
+  'nilearn',
+  'moabb.datasets.utils', 'moabb.datasets.base', 'moabb.datasets.bnci.*', 'pymatreader',
+  'textgrids',
+  'nltk_contrib.textgrid',
+  'sklearn.*', 'pooch', 'matio', 'matio.*',
+  ]
+  ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+  init_forbid_extra = true
+  init_typed = true
+  warn_required_dynamic_aliases = true

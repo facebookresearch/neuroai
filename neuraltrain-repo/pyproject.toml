@@ -1,0 +1,93 @@
+[project]
+name = "neuraltrain"
+version = "0.1.0"
+authors = [{name = "Meta FAIR"}]
+license = "MIT"
+license-files = ["LICENSE"]
+description = "A lightweight deep learning library for learning on M/EEG and other neuroimaging modalities."
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "pandas>=2.0.1",
+  "numpy>=2.1",
+  "scikit-learn>=0.21.2",
+  "torch>=2.5.1",
+  "torchvision>=0.20.1",
+  "packaging",
+  "pydantic>=2.5.0",
+  "torchmetrics>=1.1.2",
+]
+
+[project.optional-dependencies]
+    models = [
+        "braindecode>=1.4.0",
+        "x_transformers>=1.27.20",
+        "dalle2_pytorch",
+        "vit_pytorch",
+    ]
+    metrics = [
+        "openai-clip",
+    ]
+    lightning = [  # For use with pytorch-lightning and wandb
+        "lightning>=2.0.8",
+        "wandb>=0.15.11",
+    ]
+    dev = [
+        # Test
+        "pytest>=4.3.0",
+        "pytest-mock",
+        "pytest-markdown-docs",
+        # Format + lint
+        "ruff>=0.15",
+        "pre-commit>=1.15.2",
+        # Type checking
+        "mypy>=0.971",
+        # typing stubs
+        "pandas-stubs",
+        "types-PyYAML",
+        "types-Pillow",
+        "types-pywin32",
+        "types-requests",
+        "types-setuptools",
+        "types-tabulate",
+        "types-tqdm",
+    ]
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[project.urls]
+  Source = "https://github.com/facebookresearch/neuroai"
+  Tracker = "https://github.com/facebookresearch/neuroai/issues"
+
+[tool.setuptools.package-data]
+# py.typed marker enables cross-package type checking (PEP 561)
+# editable installs need: pip install --config-settings editable_mode=strict -e .
+"neuraltrain" = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["."]  # list of folders that contain the packages (["."] by default)
+include = ["neuraltrain*"]  # package names should match these glob patterns (["*"] by default)
+namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
+
+[tool.mypy]
+  plugins = ['pydantic.mypy']
+  show_error_codes = true
+[[tool.mypy.overrides]]
+  module = ['pytest', 'setuptools', 'av', 'mne', 'torchvision', 'julius', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'pyunpack', 'moviepy', 'moviepy.*', 'torchvision.*', 'mne_bids', 'torchaudio', 'torchaudio.*', 'raft.*', 'cloudpickle', 'plotext', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'clip', 'dalle2_pytorch', 'dalle2_pytorch.dalle2_pytorch', 'vit_pytorch.*']
+  ignore_missing_imports = true
+
+
+[tool.pydantic-mypy]
+  init_forbid_extra = true
+  init_typed = true
+  warn_required_dynamic_aliases = true
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"

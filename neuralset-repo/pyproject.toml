@@ -1,0 +1,127 @@
+[project]
+name = "neuralset"
+readme = "README.md"
+authors = [{name = "Meta FAIR"}]
+description = "A Python toolkit for building neuroimaging data pipelines."
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+version = "0.1.0"
+
+dependencies = [
+  "pandas>=2.2.2",
+  "numpy>=2.1",
+  "pyarrow>=17.0.0",
+  "mne>=1.10.2",
+  "scikit-learn>=0.21.2",
+  "torch>=2.5.1",
+  "nibabel>=5.1.0",
+  "tqdm>=4.65.0",
+  "exca>=0.5.20",
+  "rapidfuzz",
+  "packaging",
+  "ujson",
+]
+
+[project.urls]
+  Source = "https://github.com/facebookresearch/neuroai"
+  Tracker = "https://github.com/facebookresearch/neuroai/issues"
+
+[project.optional-dependencies]
+    tutorials = [
+        "soundfile",
+        "spacy",
+        "matplotlib",
+    ]
+    all = [
+        "neuralset[tutorials]",
+        "julius",
+        "moviepy>=2.2.1",
+        "torchvision",
+        "torchaudio",
+        "transformers",
+        "scikit-image",
+        "opencv-python",
+        "wordfreq",
+        "nilearn",
+        "pybids",
+    ]
+    dev = [
+        # Test
+        "pytest>=4.3.0",
+        "pytest-markdown-docs>=0.5.0",
+        # Format + lint
+        "ruff>=0.15",
+        "pre-commit>=3.0.0",
+        # Type checking
+        "mypy>=1.11.0",
+        # typing stubs
+        "pandas-stubs",
+        "types-PyYAML",
+        "types-Pillow",
+        "types-pywin32",
+        "types-requests",
+        "types-setuptools",
+        "types-tabulate",
+        "types-tqdm",
+        # documentation
+        "sphinx>=7.4.7",
+        "sphinx_rtd_theme>=2.0.0",
+        # "recommonmark>=0.7.1",
+        # "autodocsumm>=0.2.12",
+        "myst-parser>=3.0.1",
+        "furo",
+        "sphinx-copybutton",
+        "sphinx-design",
+        "sphinx-gallery",
+        'deepmultilingualpunctuation',
+        # Release
+        "build",
+        "twine",
+    ]
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.setuptools.packages.find]
+where = ["."]  # list of folders that contain the packages (["."] by default)
+include = ["neuralset*"]  # package names should match these glob patterns (["*"] by default)
+namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
+
+[tool.setuptools.package-data]
+# not sufficient in editable mode: https://github.com/python/mypy/issues/13392
+# still need to install with: pip install --config-settings editable_mode=strict -e .
+"neuralset" = ["py.typed", ".pyi", "**/data/huggingface-repos.txt"]
+
+[tool.mypy]
+  plugins = ['pydantic.mypy']
+  show_error_codes = true
+[[tool.mypy.overrides]]
+  # we bluntly override the input type for _get in the features
+  module = ['neuralset.extractors.*']
+  disable_error_code = ['override']
+[[tool.mypy.overrides]]
+  module = ['pytest', 'mne', 'mne.io', 'torchvision',
+  'julius', 'spacy', 'spacy.cli',
+  'wordfreq', 'transformers', 'moviepy', 'moviepy.*', 'torchvision.*',
+  'torchaudio', 'cloudpickle', 'sklearn.*',
+  'scipy.*', 'skimage.*', 'nilearn.*', 'bids',
+  'bs4', 'mne_nirs',
+  'soundfile', 'matplotlib.*', 'plotly', 'plotly.*',
+  'cv2', 'huggingface_hub',
+  'sonar.*', 'deepmultilingualpunctuation']
+  ignore_missing_imports = true
+[[tool.mypy.overrides]]
+  # many overrides of Model and Processor
+  module = ['neuralset.extractors.image', 'neuralset.extractors.video', 'neuralset.extractors.text']
+  disable_error_code = ['no-redef']
+
+
+[tool.pydantic-mypy]
+  init_forbid_extra = true
+  init_typed = true
+  warn_required_dynamic_aliases = true
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"

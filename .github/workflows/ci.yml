@@ -1,0 +1,193 @@
+name: CI
+
+permissions:
+  contents: read
+
+env:
+  IN_GITHUB_ACTION: 1
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on: [push]
+
+  # Architecture: 3 test/check jobs + 1 lint job. Each job's steps are gated
+  # by dorny/paths-filter so unchanged packages are skipped entirely (the main
+  # win). A multi-job split (one per package) was rejected: downstream tests
+  # are ~1 min each while machine spawn + cache restore costs ~3 min per job.
+  # 8-core runners are used for disk space, not speed (conda env + caches > 14GB).
+
+jobs:
+
+  # ── Detect changed paths ────────────────────────────────────
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      neuralset: ${{ steps.filter.outputs.neuralset }}
+      neuralfetch: ${{ steps.filter.outputs.neuralfetch }}
+      neuraltrain: ${{ steps.filter.outputs.neuraltrain }}
+      docs: ${{ steps.filter.outputs.docs }}
+      any: ${{ steps.filter.outputs.neuralset == 'true' || steps.filter.outputs.neuralfetch == 'true' || steps.filter.outputs.neuraltrain == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: main
+          filters: |
+            neuralset:
+              - 'neuralset-repo/**'
+            neuralfetch:
+              - 'neuralset-repo/**'
+              - 'neuralfetch-repo/**'
+            neuraltrain:
+              - 'neuraltrain-repo/**'
+            docs:
+              - 'docs/**'
+
+  # ── Lint (lightweight runner — no conda/torch) ──────────────
+  # Formatting and linting (ruff) don't need the full env.
+  lint:
+    name: Lint (ruff)
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # keep ruff version in sync with .pre-commit-config.yaml
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.8"
+          args: "check"
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.8"
+          args: "format --check"
+
+  # ── Job 1: pytest neuralset (the bottleneck) ────────────────
+  test-neuralset:
+    name: pytest neuralset
+    needs: changes
+    if: needs.changes.outputs.neuralset == 'true'
+    runs-on: 8-core-ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+      - name: pytest neuralset
+        run: |
+          source activate ./ci_env
+          cd neuralset-repo
+          pytest neuralset --durations=10
+      - name: Wheel smoke test
+        run: |
+          source activate ./ci_env
+          pip install build
+          for repo in neuralset-repo neuraltrain-repo; do
+            python -m build --wheel "$repo" --outdir dist/
+          done
+          pip install --force-reinstall --no-deps dist/neuralset-*.whl dist/neuraltrain-*.whl
+          python -c "from neuralset import events, segments, extractors; print('neuralset OK')"
+          python -c "from neuraltrain import models, metrics; print('neuraltrain OK')"
+
+  # ── Job 2: pytest downstream (neuraltrain first, then smaller) ─
+  test-downstream:
+    name: pytest downstream
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: 8-core-ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+
+      # neuraltrain first (2nd biggest test suite: ~1m18s + 9s)
+      - name: pytest neuraltrain
+        if: needs.changes.outputs.neuraltrain == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuraltrain-repo
+          pytest neuraltrain --durations=10
+      - name: neuraltrain project example
+        if: needs.changes.outputs.neuraltrain == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuraltrain-repo
+          mkdir -p project_example/cache
+          python -m project_example.grids.test_run
+
+      - name: pytest neuralfetch
+        if: needs.changes.outputs.neuralfetch == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuralfetch-repo
+          pytest neuralfetch --durations=10
+
+  # ── Job 3: type checks (no data caches needed) ─────────────
+  # mypy doesn't need HuggingFace/MNE data caches, only the conda env.
+  # restore-data-caches: 'false' saves disk and restore time.
+  typecheck:
+    name: mypy
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: 8-core-ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+        with:
+          restore-data-caches: 'false'
+
+      - name: mypy neuralset
+        if: needs.changes.outputs.neuralset == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuralset-repo
+          mypy neuralset
+      - name: mypy neuraltrain
+        if: needs.changes.outputs.neuraltrain == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuraltrain-repo
+          mypy neuraltrain
+      - name: mypy neuralfetch
+        if: needs.changes.outputs.neuralfetch == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuralfetch-repo
+          mypy neuralfetch
+
+  # ── Job 4: build documentation ──────────────────────────────
+  build-docs:
+    name: Build documentation
+    needs: changes
+    # Always run on main; on other branches only if docs/ changed
+    if: github.ref == 'refs/heads/main' || needs.changes.outputs.docs == 'true'
+    # Require 8-core machines (Github Actions Larger Runners) to have more than 14GB disk space
+    runs-on: 8-core-ubuntu  # ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-python-env
+
+      - name: Install Sphinx extras
+        run: |
+          source activate ./ci_env
+          pip install sphinx furo myst_parser sphinx_rtd_theme sphinx-copybutton sphinx-design sphinx-gallery
+
+      - name: Sphinx build
+        run: |
+          source activate ./ci_env
+          make -C docs html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        # Only deploy from main branch
+        if: github.ref == 'refs/heads/main'
+        with:
+          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/_build/html
+          force_orphan: true

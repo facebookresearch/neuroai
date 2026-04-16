@@ -1,0 +1,127 @@
+name: Setup Python environment
+description: >
+  Shared composite action that sets up conda, restores caches,
+  and installs all packages (neuralset, neuralfetch, neuraltrain).
+  All packages live under <pkg>-repo/ directories.
+
+inputs:
+  restore-data-caches:
+    description: >
+      Whether to restore HuggingFace, TorchHub, and neuralset data caches.
+      Set to 'false' for jobs that only need the conda env (e.g. mypy).
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Add conda to system path
+      shell: bash
+      run: |
+        echo $CONDA/bin >> $GITHUB_PATH
+
+    - name: Set monthly cache key
+      shell: bash
+      run: echo "MONTH=$(date +%Y-%m)" >> $GITHUB_ENV
+
+    # ── Conda env cache ──────────────────────────────────────
+    # One cache entry per month (~5-6 GB, includes ~1 GB spacy models).
+    # Monthly rotation keeps
+    # dependencies reasonably fresh without per-commit cache churn.
+    # Uses explicit restore + save so the multi-GB upload runs as a
+    # visible mid-job step instead of in post-job cleanup (which
+    # cancel-in-progress can kill).
+    - name: Restore conda env
+      id: cache-conda
+      uses: actions/cache/restore@v4
+      with:
+        path: ./ci_env
+        key: conda-v2-${{ env.MONTH }}-main
+
+    - name: Create conda env
+      if: steps.cache-conda.outputs.cache-hit != 'true'
+      shell: bash
+      run: conda create -p ./ci_env python=3.12 ipython ffmpeg -y
+
+    - name: Install all packages
+      if: steps.cache-conda.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        source activate ./ci_env
+        # neuralset
+        cd neuralset-repo
+        pip install --config-settings editable_mode=strict -e .[dev,all]
+        # Spacy models used by tests (~560 MB each, ~1 GB total).
+        # Pre-installed to avoid flaky runtime downloads from GitHub.
+        python -m spacy download en_core_web_lg
+        python -m spacy download fr_core_news_lg
+        pip install numpy>=2.1
+        pip install transformers==4.41.0
+        cd ..
+        # neuralfetch
+        pip install --config-settings editable_mode=strict -e neuralfetch-repo
+        # neuraltrain
+        cd neuraltrain-repo
+        pip install --config-settings editable_mode=strict -e .[lightning,dev,models,metrics]
+        cd ..
+
+    - name: Save conda env cache (main only)
+      if: steps.cache-conda.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: ./ci_env
+        key: conda-v2-${{ env.MONTH }}-main
+
+    - name: Refresh editable installs (on cache hit)
+      if: steps.cache-conda.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        source activate ./ci_env
+        # Single invocation: resolves all dependencies in one pass and picks
+        # up new/updated packages from pyproject.toml without cache eviction.
+        pip install --config-settings editable_mode=strict \
+          -e neuralset-repo/.[dev,all] \
+          -e neuralfetch-repo/. \
+          -e neuraltrain-repo/.[lightning,dev,models]
+
+    - name: Print installed packages
+      shell: bash
+      run: |
+        source activate ./ci_env
+        pip freeze
+
+    # ── Data / model caches ──────────────────────────────────
+    # Rolling monthly key: refreshes on the 1st (drops stale models/data).
+    # No fallback — one slow re-download per month keeps caches clean.
+    # Bump v1 → v2 to force a clean slate.
+    # Skipped when restore-data-caches is 'false' (e.g. mypy-only jobs).
+    - name: Restore HuggingFace / TorchHub cache
+      if: inputs.restore-data-caches == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/huggingface
+          ~/.cache/torch/hub
+        key: models-v1-${{ env.MONTH }}
+
+    - name: Restore neuralset data cache
+      if: inputs.restore-data-caches == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/neuralset
+          ~/.mne
+        key: data-v1-${{ env.MONTH }}
+
+    - name: Print cache sizes
+      if: inputs.restore-data-caches == 'true'
+      shell: bash
+      run: |
+        du -h -d 1 ~/.cache/neuralset || true
+        du -h -d 2 ~/.cache/huggingface || true
+        du -h -d 2 ~/.cache/torch || true
