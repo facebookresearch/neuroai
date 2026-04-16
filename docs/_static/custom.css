@@ -844,6 +844,7 @@ button.copybtn.success::after {
 }
 
 .code-block-wrapper pre {
+    position: relative;
     margin: 0;
     padding: 0.8rem 1rem;
     font-size: 0.8rem;
@@ -2032,9 +2033,9 @@ article h1::after {
     position: absolute;
     bottom: 0;
     left: 0;
-    width: 60px;
+    width: 100%;
     height: 3px;
-    background: linear-gradient(90deg, #448aff, #6BB6FF);
+    background: linear-gradient(90deg, #448aff, #6BB6FF, transparent);
     border-radius: 2px;
 }
 /* Keep headerlink pilcrow visible */

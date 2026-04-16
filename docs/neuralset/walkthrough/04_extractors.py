@@ -143,6 +143,8 @@ print(f"First pulse only: {pulse_first(two_events, start=9.5, duration=2.0)}")
 # tensor whose shape doesn't depend on segment duration (most commonly
 # a 1-d vector, but the shape is arbitrary):
 
+# Requires: `pip install spacy` (or `pip install "neuralset[all]"`) and
+# `python -m spacy download en_core_web_lg`  — ~400 MB, auto-downloaded on first run.
 emb = ns.extractors.SpacyEmbedding(language="english", aggregation="mean")
 emb.prepare(two_events)
 static_result = emb(two_events, start=9.5, duration=2.0)
@@ -322,7 +324,7 @@ custom_events = ns.events.standardize_events(
                 type="Image",
                 start=2.0,
                 duration=1.0,
-                filepath="stim.png",
+                filepath="stim_*.png",  # glob pattern — file need not exist
                 timeline="run-01",
             ),
         ]

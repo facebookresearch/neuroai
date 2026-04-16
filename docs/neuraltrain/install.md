@@ -46,14 +46,14 @@ source .venv/bin/activate
 # from the repo root
 uv pip install -e 'neuraltrain-repo/.[dev]'
 
-# or, for Lightning + all model families:
-uv pip install -e 'neuraltrain-repo/.[dev,lightning,models]'
+# recommended: dev + all extras (models, metrics, lightning) — needed for all tutorials
+uv pip install -e 'neuraltrain-repo/.[dev,all]'
 ```
 
 **Step 3:** For strict type checking (optional):
 
 ```bash
-uv pip install --config-settings editable_mode=strict -e 'neuraltrain-repo/.[dev,lightning,models]'
+uv pip install --config-settings editable_mode=strict -e 'neuraltrain-repo/.[dev,all]'
 ```
 
 **Step 4:** Set up pre-commit hooks:
@@ -89,14 +89,14 @@ pip install uv
 # from the repo root
 uv pip install -e 'neuraltrain-repo/.[dev]'
 
-# or, for Lightning + all model families:
-uv pip install -e 'neuraltrain-repo/.[dev,lightning,models]'
+# recommended: dev + all extras (models, metrics, lightning) — needed for all tutorials
+uv pip install -e 'neuraltrain-repo/.[dev,all]'
 ```
 
 **Step 4:** For strict type checking (optional):
 
 ```bash
-uv pip install --config-settings editable_mode=strict -e 'neuraltrain-repo/.[dev,lightning,models]'
+uv pip install --config-settings editable_mode=strict -e 'neuraltrain-repo/.[dev,all]'
 ```
 
 **Step 5:** Set up pre-commit hooks:

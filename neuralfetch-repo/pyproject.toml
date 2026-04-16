@@ -20,6 +20,9 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 # Study auto-discovery by neuralset; value = scan root module path.
+[project.optional-dependencies]
+all = ["neuralset[all]", "matplotlib"]
+
 [project.entry-points."neuralset.studies"]
 neuralfetch = "neuralfetch"
 

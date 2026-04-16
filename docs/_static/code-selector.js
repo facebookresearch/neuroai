@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", function () {
         'stim = ns.extractors.SpacyEmbedding(\n' +
         '    language="english",\n' +
         '    aggregation="trigger",\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       eventType: "Word",
       isClassification: false,
@@ -205,7 +205,7 @@ document.addEventListener("DOMContentLoaded", function () {
         '    model_name="facebook/dinov2-small",\n' +
         '    imsize=518,\n' +
         '    aggregation="trigger",\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       eventType: "Image",
       isClassification: false,
@@ -217,7 +217,7 @@ document.addEventListener("DOMContentLoaded", function () {
         '    frequency=4,\n' +
         '    use_audio=False,\n' +
         '    aggregation="trigger",\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       eventType: "Video",
       isClassification: false,
@@ -254,9 +254,8 @@ document.addEventListener("DOMContentLoaded", function () {
         'neuro = ns.extractors.MegExtractor(\n' +
         '    frequency=120.0,\n' +
         '    filter=(0.5, 25.0),\n' +
-        '    scaler="RobustScaler",\n' +
-        '    clamp=16.0,\n' +
-        '    infra=cache,\n' +
+        '    allow_maxshield=True,\n' +
+        '    infra=infra,\n' +
         ')',
       start: "-0.1",
       duration: "0.5",
@@ -267,10 +266,7 @@ document.addEventListener("DOMContentLoaded", function () {
         'neuro = ns.extractors.EegExtractor(\n' +
         '    frequency=120.0,\n' +
         '    filter=(0.1, 75.0),\n' +
-        '    notch_filter=[50.0, 60.0],\n' +
-        '    scaler="RobustScaler",\n' +
-        '    clamp=20.0,\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       start: "-0.1",
       duration: "0.5",
@@ -283,9 +279,8 @@ document.addEventListener("DOMContentLoaded", function () {
         '    filter=(0.05, 20.0),\n' +
         '    reference="bipolar",\n' +
         '    picks=("seeg",),\n' +
-        '    notch_filter=50.0,\n' +
         '    drop_bads=True,\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       start: "-0.1",
       duration: "0.5",
@@ -295,7 +290,7 @@ document.addEventListener("DOMContentLoaded", function () {
       neuro:
         'neuro = ns.extractors.EmgExtractor(\n' +
         '    frequency=256.0,\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       start: "-0.1",
       duration: "0.5",
@@ -304,8 +299,8 @@ document.addEventListener("DOMContentLoaded", function () {
     fmri: {
       neuro:
         'neuro = ns.extractors.FmriExtractor(\n' +
-        '    offset=5,\n' +
-        '    infra=cache,\n' +
+        '    offset=5,  # 5s hemodynamic delay\n' +
+        '    infra=infra,\n' +
         ')',
       start: "0.0",
       duration: "2.0",
@@ -314,9 +309,9 @@ document.addEventListener("DOMContentLoaded", function () {
     fmri_proj: {
       neuro:
         'neuro = ns.extractors.FmriExtractor(\n' +
-        '    offset=5,\n' +
+        '    offset=5,  # 5s hemodynamic delay\n' +
         '    projection={"name": "SurfaceProjector", "mesh": "fsaverage5"},\n' +
-        '    infra=cache,\n' +
+        '    infra=infra,\n' +
         ')',
       start: "0.0",
       duration: "2.0",
@@ -351,8 +346,8 @@ document.addEventListener("DOMContentLoaded", function () {
       "import neuralset as ns",
       "from torch.utils.data import DataLoader",
       "",
-      "# Cache folder for study events and extractor outputs",
-      'cache = {"folder": ns.CACHE_FOLDER / "cache"}',
+      "# Infra: caching folder (cluster=None runs locally)",
+      'infra = {"folder": ns.CACHE_FOLDER / "cache"}',
       "",
       "# 1. Load study"
     ];
@@ -365,15 +360,13 @@ document.addEventListener("DOMContentLoaded", function () {
       "study = ns.Study(",
       '    name="' + studyName + '",',
       "    path=ns.CACHE_FOLDER,",
-      "    infra=cache,",
+      "    infra=infra,",
       ")",
       "study.download()",
     );
     lines.push(
       "events = study.run()",
       'print(events[["type", "start", "duration", "timeline"]].head(10))',
-      "subject = events.subject.unique()[0]",
-      "sub_events = events[events.subject == subject]",
       "",
       "# 2. Define extractors",
       dev.neuro,
@@ -388,9 +381,8 @@ document.addEventListener("DOMContentLoaded", function () {
     lines.push("    duration=" + dev.duration + ",");
     lines.push('    trigger_query=\'type=="' + tsk.eventType + '"\',');
     lines.push("    extractors=dict(neuro=neuro, stim=stim),");
-    lines.push("    drop_incomplete=True,");
     lines.push(")");
-    lines.push("dset = segmenter.apply(sub_events)");
+    lines.push("dset = segmenter.apply(events)  # fast: returns a lazy Dataset");
     lines.push("dset.prepare()  # pre-compute & cache extractor outputs");
     lines.push("");
     lines.push("# 4. Iterate with a DataLoader");
