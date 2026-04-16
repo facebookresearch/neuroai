@@ -403,13 +403,19 @@ def _get_model(model: str) -> tp.Any:
             # model lands in the current interpreter's venv, not the project default.
             # Replicate spacy's URL construction to bypass pip entirely.
             from spacy import about
-            from spacy.cli.download import get_compatibility, get_model_filename, get_version
+            from spacy.cli.download import (
+                get_compatibility,
+                get_model_filename,
+                get_version,
+            )
 
             compatibility = get_compatibility()
             version = get_version(model, compatibility)
             filename = get_model_filename(model, version, sdist=False)
             url = about.__download_url__ + "/" + filename
-            subprocess.check_call(["uv", "pip", "install", "--python", sys.executable, url])
+            subprocess.check_call(
+                ["uv", "pip", "install", "--python", sys.executable, url]
+            )
         else:
             import spacy.cli
 
