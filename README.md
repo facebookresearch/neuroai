@@ -41,6 +41,10 @@ Interactive quickstarts &nbsp;·&nbsp; step-by-step tutorials &nbsp;·&nbsp; API
 </p>
 </td></tr></table>
 
+<p align="center">
+  <img src="docs/_static/demo.gif" alt="neuroai code demo" width="900">
+</p>
+
 ---
 
 ## ⚡ Quickstart
@@ -67,12 +71,9 @@ events = study.events()
 segments = study.segments(events)
 ```
 
-<details>
-<summary><b>🎬 See it in action (GIF demo)</b></summary>
 <p align="center">
   <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="700">
 </p>
-</details>
 
 ## 📦 Packages
 
@@ -95,7 +96,7 @@ neuroai is a modular suite of three packages that snap together:
 <tr>
 <td width="33%" valign="top">
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png"><img src="docs/_static/neuralset_light.png" width="120" style="vertical-align: middle;"></picture> neuralset
+### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png"><img src="docs/_static/neuralset_light.png" width="240" style="vertical-align: middle;"></picture> neuralset
 
 Turn raw neuroimaging data into AI-ready datasets.
 
@@ -111,7 +112,7 @@ pip install neuralset
 </td>
 <td width="33%" valign="top">
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png"><img src="docs/_static/neuralfetch_light.png" width="120" style="vertical-align: middle;"></picture> neuralfetch
+### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png"><img src="docs/_static/neuralfetch_light.png" width="240" style="vertical-align: middle;"></picture> neuralfetch
 
 Access public brain datasets in one command.
 
@@ -127,7 +128,7 @@ pip install neuralfetch
 </td>
 <td width="33%" valign="top">
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png"><img src="docs/_static/neuraltrain_light.png" width="120" style="vertical-align: middle;"></picture> neuraltrain
+### <picture><source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png"><img src="docs/_static/neuraltrain_light.png" width="240" style="vertical-align: middle;"></picture> neuraltrain
 
 Deep learning for neuroimaging, batteries included.
 
