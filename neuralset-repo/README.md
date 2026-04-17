@@ -20,7 +20,9 @@ import neuralset as ns
 
 # Load a study and build events
 study = ns.Study(name="Mne2013Sample", path="./data")
-study.download()
+
+study.download() # ~ 1.6GB
+
 events = study.run()
 
 # Configure extractors

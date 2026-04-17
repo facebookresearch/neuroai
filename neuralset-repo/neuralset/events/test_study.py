@@ -472,7 +472,7 @@ def test_study_discovery(tmp_path: Path) -> None:
     """Step._discover_study triggers lazy import for unknown study names.
 
     Covers both Chain(steps=[study_dict]) and a bare study dict in an
-    ns.Step-typed pydantic field.  Runs in a subprocess so Gwilliams2022Neural
+    ns.Step-typed pydantic field.  Runs in a subprocess so Bel2026PetitListen
     is guaranteed not to have been imported by earlier tests.
     """
     code = "\n".join(
@@ -480,15 +480,15 @@ def test_study_discovery(tmp_path: Path) -> None:
             "import pydantic",
             "import neuralset as ns",
             "from neuralset.events import study",
-            "assert 'Gwilliams2022Neural' not in study.STUDIES, 'already loaded'",
+            "assert 'Bel2026PetitListen' not in study.STUDIES, 'already loaded'",
             # bare Step field
             "class Cfg(pydantic.BaseModel):",
             "    step: ns.Step",
-            f"cfg = Cfg(step=dict(name='Gwilliams2022Neural', path='{tmp_path}'))",
-            "assert type(cfg.step).__name__ == 'Gwilliams2022Neural'",
+            f"cfg = Cfg(step=dict(name='Bel2026PetitListen', path='{tmp_path}'))",
+            "assert type(cfg.step).__name__ == 'Bel2026PetitListen'",
             # Chain wrapping
-            f"c = ns.Chain(steps=[dict(name='Gwilliams2022Neural', path='{tmp_path}')])",
-            "assert type(c.steps[0]).__name__ == 'Gwilliams2022Neural'",
+            f"c = ns.Chain(steps=[dict(name='Bel2026PetitListen', path='{tmp_path}')])",
+            "assert type(c.steps[0]).__name__ == 'Bel2026PetitListen'",
         ]
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

@@ -292,8 +292,8 @@ def test_event_type_list() -> None:
         "Seizure",
         "Stimulus",
         # Study-specific
-        "SleepArousal",  # Ghassemi2018
-        "EpileptiformActivity",  # Harati2015
+        # "SleepArousal",  # Ghassemi2018
+        # "EpileptiformActivity",  # Harati2015 # TODO: put them back once we release the other datasets
     ]
     msg = f"Missing or additional event class detected, please update the list in {__file__}"
     msg += (
