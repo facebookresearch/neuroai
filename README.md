@@ -13,15 +13,13 @@
   <a href="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml"><img src="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://facebookresearch.github.io/neuroai/"><img src="https://img.shields.io/badge/docs-online-blue?logo=readthedocs&logoColor=white" alt="Documentation"></a>
   <a href="https://github.com/facebookresearch/neuroai/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.10%2B-blue?logo=python&logoColor=white" alt="Python 3.10+"></a>
-  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?logo=pytorch&logoColor=white" alt="PyTorch"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white" alt="Python 3.12+"></a>
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> &nbsp;·&nbsp;
   <a href="#packages">Packages</a> &nbsp;·&nbsp;
-  <a href="#development">Development</a> &nbsp;·&nbsp;
-  <a href="#contributing">Contributing</a>
+  <a href="#related-projects">Related projects</a> &nbsp;·&nbsp;
+  <a href="https://facebookresearch.github.io/neuroai/">Documentation</a>
 </p>
 
 ---
@@ -45,20 +43,6 @@ neuroai is a modular Python suite for brain-AI research. It covers the full pipe
 <p align="center">
   <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="720">
 </p>
-
----
-
-## Install
-
-<table align="center" width="80%"><tr><td align="center">
-
-```bash
-pip install neuralset neuralfetch neuraltrain
-```
-
-<sub>Python 3.10+ &nbsp;·&nbsp; requires PyTorch 2.0+</sub>
-
-</td></tr></table>
 
 ---
 
@@ -130,66 +114,10 @@ pip install neuraltrain
 
 ---
 
-## Project structure
-
-```
-neuroai/
-├── neuralset-repo/       # Core pipeline: events, extractors, transforms
-├── neuralfetch-repo/     # Dataset catalog and download
-├── neuraltrain-repo/     # Models, training loops, metrics
-└── docs/                 # Sphinx documentation
-```
-
----
-
-## Development
-
-```bash
-git clone https://github.com/facebookresearch/neuroai.git
-cd neuroai
-
-# Create a venv (uv recommended)
-uv venv .venv && source .venv/bin/activate
-uv pip install pip                             # needed for spacy model downloads
-
-# Install all packages in editable mode
-uv pip install -e 'neuralset-repo/.[dev,all]'
-uv pip install -e 'neuralfetch-repo/.'
-uv pip install -e 'neuraltrain-repo/.[dev,all]'
-
-# Verify
-pre-commit install
-pytest neuralset-repo/neuralset -x
-```
-
----
-
-## Contributing
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-```bash
-ruff check .          # lint
-ruff format .         # format
-mypy neuralset-repo/  # type check
-pytest -x             # test
-```
-
----
-
 ## Related projects
 
 - **[exca](https://facebookresearch.github.io/exca/)** — Execution & caching framework powering neuroai's compute graph
 - **[MNE-Python](https://mne.tools/)** — Electrophysiology analysis (used internally for MEG/EEG I/O)
-
----
-
-<details>
-<summary><b>Code demo</b></summary>
-<p align="center">
-  <img src="docs/_static/demo.gif" alt="neuroai code demo" width="700">
-</p>
-</details>
 
 ---
 
