@@ -55,8 +55,7 @@ extend = "../pyproject.toml"
   'hcp_utils',
   'nilearn',
   'moabb.datasets.utils', 'moabb.datasets.base', 'moabb.datasets.bnci.*', 'pymatreader',
-  'textgrids',
-  'nltk_contrib.textgrid',
+  'praatio', 'praatio.*',
   'sklearn.*', 'pooch', 'matio', 'matio.*',
   ]
   ignore_missing_imports = true

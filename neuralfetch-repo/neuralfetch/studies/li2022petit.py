@@ -44,7 +44,7 @@ class Li2022Petit(study.Study):
 
     Download Requirements:
         - OpenNeuro dataset: ds003643 (version 2.0.5 or later)
-        - openneuro-py, praat-textgrids
+        - openneuro-py, praatio
         - Transcript files must be manually obtained:
             * Contact neuralset maintainers for access
             * Files placed in: {path}/transcripts/lpp_{lang}_text.zip
@@ -88,7 +88,7 @@ class Li2022Petit(study.Study):
         "listening to 'The Little Prince' audiobook in their native language "
         "(French, English, Chinese)."
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py", "praat-textgrids")
+    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py", "praatio")
     dataset_id: tp.ClassVar[str] = "ds003643"
     TR_FMRI_S: tp.ClassVar[float] = 2.0
 
@@ -143,7 +143,7 @@ class Li2022Petit(study.Study):
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         """Load events"""
-        import textgrids as tg
+        from praatio import textgrid as ptg
 
         tl = timeline
         dl = self.path / "download"
@@ -156,8 +156,8 @@ class Li2022Petit(study.Study):
                 f"Missing TextGrid for {self.__class__.__name__}: {txt_grid}. "
                 "Please run study.download() first."
             )
-        textgrid = tg.TextGrid(txt_grid)
-        keys = list(textgrid)
+        tg = ptg.openTextgrid(str(txt_grid), includeEmptyIntervals=False)
+        keys = tg.tierNames
         if len(keys) > 1:
             raise RuntimeError(f"Only one key should be in textgrid, got {keys}")
         # fixes to match text and annotations
@@ -175,24 +175,30 @@ class Li2022Petit(study.Study):
         }
         wordseq: list[dict[str, tp.Any]] = []
         duplicated = "it the this that i i. they we he she you now and but so there five twenty phew good".split()
-        for i in textgrid[keys[0]]:
-            if i.text.strip() in ("", "#", "sil"):
+        for interval in tg.getTier(keys[0]).entries:
+            if interval.label.strip() in ("", "#", "sil"):
                 continue
             # duplicated words happen a lot (when missing new sentence character), merge them
-            if i.text in duplicated and wordseq:
-                if wordseq[-1]["text"] == i.text:
-                    wordseq[-1]["duration"] = i.xmax - wordseq[-1]["start"]
+            if interval.label in duplicated and wordseq:
+                if wordseq[-1]["text"] == interval.label:
+                    wordseq[-1]["duration"] = interval.end - wordseq[-1]["start"]
                     continue
             # add word
             text = (
-                repl.get(i.text, i.text)
+                repl.get(interval.label, interval.label)
                 .replace("`", "'")
                 .replace("«", "")
                 .replace("»", "")
             )
             if not text:
                 continue
-            wordseq.append({"text": text, "start": i.xmin, "duration": i.xmax - i.xmin})
+            wordseq.append(
+                {
+                    "text": text,
+                    "start": interval.start,
+                    "duration": interval.end - interval.start,
+                }
+            )
 
         events = pd.DataFrame(wordseq)
         events["type"] = "Word"
