@@ -20,23 +20,39 @@
 </p>
 
 <p align="center">
+  <a href="https://facebookresearch.github.io/neuroai/">Documentation</a> •
   <a href="#-quickstart">Quickstart</a> •
   <a href="#-packages">Packages</a> •
-  <a href="https://facebookresearch.github.io/neuroai/">Documentation</a> •
   <a href="#-contributing">Contributing</a>
 </p>
 
 ---
 
-<p align="center">
-  <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="700">
+<table align="center"><tr><td align="center">
+<h3>📖 <a href="https://facebookresearch.github.io/neuroai/">Explore the full documentation →</a></h3>
+<p>
+Interactive quickstarts &nbsp;·&nbsp; step-by-step tutorials &nbsp;·&nbsp; API reference<br>
+<sub>Pick a task, a modality, and a dataset — the docs generate the code for you.</sub>
 </p>
+<p>
+<a href="https://facebookresearch.github.io/neuroai/neuralset/index.html"><img src="https://img.shields.io/badge/neuralset-pipeline-448aff?style=for-the-badge&logo=databricks&logoColor=white" alt="neuralset docs"></a>&nbsp;
+<a href="https://facebookresearch.github.io/neuroai/neuralfetch/index.html"><img src="https://img.shields.io/badge/neuralfetch-datasets-34a853?style=for-the-badge&logo=databricks&logoColor=white" alt="neuralfetch docs"></a>&nbsp;
+<a href="https://facebookresearch.github.io/neuroai/neuraltrain/index.html"><img src="https://img.shields.io/badge/neuraltrain-models-ee4c2c?style=for-the-badge&logo=pytorch&logoColor=white" alt="neuraltrain docs"></a>
+</p>
+</td></tr></table>
+
+---
 
 ## ⚡ Quickstart
 
 ```bash
 pip install neuralset neuralfetch neuraltrain
 ```
+
+> **Running the tutorials?** Also install the extras:
+> ```bash
+> pip install 'neuralset[tutorials]'
+> ```
 
 ```python
 import neuralset as ns
@@ -51,10 +67,12 @@ events = study.events()
 segments = study.segments(events)
 ```
 
-> **Running the tutorials?** Also install the extras:
-> ```bash
-> pip install 'neuralset[tutorials]'
-> ```
+<details>
+<summary><b>🎬 See it in action (GIF demo)</b></summary>
+<p align="center">
+  <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="700">
+</p>
+</details>
 
 ## 📦 Packages
 
