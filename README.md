@@ -67,7 +67,7 @@ Each pipeline step maps to a dedicated package:
 </picture>
 <br><br>
 <strong>neuraltrain</strong><br>
-<sub>ConvNets, Transformers, losses,<br>metrics & fast multi-GPU training</sub>
+<sub>ConvNets, Transformers, losses,<br>metrics & lightning-fast multi-GPU training</sub>
 <br><br>
 </td>
 </tr>
