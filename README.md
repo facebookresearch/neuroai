@@ -116,8 +116,7 @@ pip install neuraltrain
 
 ## Related projects
 
-- **[exca](https://facebookresearch.github.io/exca/)** — Execution & caching framework powering neuroai's compute graph
-- **[MNE-Python](https://mne.tools/)** — Electrophysiology analysis (used internally for MEG/EEG I/O)
+- **[exca](https://facebookresearch.github.io/exca/)** — Execution & caching framework powering neuroai's backbone
 
 ---
 
