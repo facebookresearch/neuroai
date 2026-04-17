@@ -45,7 +45,7 @@ Each pipeline step maps to a dedicated package:
 </picture>
 <br><br>
 <strong>neuralfetch</strong><br>
-<sub>Download 19+ curated datasets from<br>OpenNeuro, DANDI, OSF, HuggingFace…</sub>
+<sub>Download 19+ curated datasets from<br>OpenNeuro, OSF, HuggingFace…</sub>
 <br><br>
 </td>
 <td align="center" width="33%">
