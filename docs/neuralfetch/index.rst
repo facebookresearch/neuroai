@@ -153,7 +153,10 @@ Pick a sample dataset and see the full fetch-to-events workflow.
      sel.addEventListener('change', update);
      // DOMContentLoaded may have already fired; call update() directly if so.
      if (document.readyState === 'loading') {
-       document.addEventListener('DOMContentLoaded', update);
+       document.addEventListener('DOMContentLoaded', function() {
+         // Deferred: ensure _highlightPy from pipeline-accordion.js is available
+         setTimeout(update, 0);
+       });
      } else {
        update();
      }
