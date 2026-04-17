@@ -37,7 +37,7 @@ Each pipeline step maps to a dedicated package:
 
 <table>
 <tr>
-<td align="center" width="36%">
+<td align="center" width="46%">
 <br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png">
@@ -48,7 +48,7 @@ Each pipeline step maps to a dedicated package:
 <sub>Download 19+ curated datasets from<br>OpenNeuro, OSF, HuggingFace…</sub>
 <br><br>
 </td>
-<td align="center" width="33%">
+<td align="center" width="46%">
 <br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png">
@@ -59,7 +59,7 @@ Each pipeline step maps to a dedicated package:
 <sub>Events, extractors, transforms &<br>segmentation into PyTorch datasets</sub>
 <br><br>
 </td>
-<td align="center" width="33%">
+<td align="center" width="46%">
 <br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png">
