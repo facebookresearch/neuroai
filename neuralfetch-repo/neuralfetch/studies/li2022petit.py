@@ -192,7 +192,13 @@ class Li2022Petit(study.Study):
             )
             if not text:
                 continue
-            wordseq.append({"text": text, "start": interval.start, "duration": interval.end - interval.start})
+            wordseq.append(
+                {
+                    "text": text,
+                    "start": interval.start,
+                    "duration": interval.end - interval.start,
+                }
+            )
 
         events = pd.DataFrame(wordseq)
         events["type"] = "Word"
