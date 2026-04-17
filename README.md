@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_light.png">
-    <img alt="neuroai" src="docs/_static/neuroai_light.png" width="180">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_anim_dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_anim_light.gif">
+    <img alt="neuroai" src="docs/_static/neuroai_anim_light.gif" width="280">
   </picture>
 </p>
 
@@ -50,29 +50,15 @@ neuroai is a modular Python suite for brain-AI research. It covers the full pipe
 
 ## Install
 
-<table width="100%">
-<tr>
-<td align="center" width="50%">
-
-**Core packages**
+<table align="center" width="80%"><tr><td align="center">
 
 ```bash
 pip install neuralset neuralfetch neuraltrain
 ```
 
-</td>
-<td align="center" width="50%">
+<sub>Python 3.10+ &nbsp;·&nbsp; requires PyTorch 2.0+</sub>
 
-**With extras**
-
-```bash
-pip install 'neuralset[tutorials]'   # spacy, matplotlib, soundfile
-pip install 'neuralset[all]'         # all optional extractors
-```
-
-</td>
-</tr>
-</table>
+</td></tr></table>
 
 ---
 
