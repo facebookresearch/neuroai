@@ -2,14 +2,12 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_light.png">
-    <img alt="neuroai" src="docs/_static/neuroai_light.png" width="160">
+    <img alt="neuroai" src="docs/_static/neuroai_light.png" width="180">
   </picture>
 </p>
 
-<p align="center">
-  <strong>The Python suite for brain data — from raw recordings to state-of-the-art decoding.</strong><br>
-  <sub>Simple. Fast. Robust. Scalable.</sub>
-</p>
+<h3 align="center">The Python suite for brain-AI research</h3>
+<p align="center"><sub>Simple &nbsp;·&nbsp; Fast &nbsp;·&nbsp; Robust &nbsp;·&nbsp; Scalable</sub></p>
 
 <p align="center">
   <a href="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml"><img src="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -20,88 +18,129 @@
 </p>
 
 <p align="center">
-  <a href="https://facebookresearch.github.io/neuroai/">Documentation</a> •
-  <a href="#install">Install</a> •
-  <a href="#packages">Packages</a> •
-  <a href="#development">Development</a> •
+  <a href="#install">Install</a> &nbsp;·&nbsp;
+  <a href="#packages">Packages</a> &nbsp;·&nbsp;
+  <a href="#development">Development</a> &nbsp;·&nbsp;
   <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
-## What is neuroai?
+neuroai is a modular Python suite for brain-AI research. It covers the full pipeline: accessing curated public brain datasets, building typed & cacheable feature pipelines across all recording modalities (MEG, EEG, fMRI, iEEG, EMG) and stimulus types (text, images, audio, video), and training deep-learning models — with a single unified interface.
 
-neuroai is a modular Python suite for neuroimaging research and AI. It handles the full pipeline: **downloading** public datasets, **loading and transforming** brain recordings (MEG, EEG, fMRI, iEEG, EMG) alongside stimuli (text, images, audio, video), and **training** deep-learning models — all with a unified, typed, cacheable interface.
-
-Each pipeline step maps to a dedicated package:
-
-<table>
-<tr>
-<td align="center" width="33%">
 <br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png">
-  <img src="docs/_static/neuralfetch_light.png" width="120">
-</picture>
-<br><br>
-<strong>neuralfetch</strong><br>
-<sub>Download 19+ curated datasets from<br>OpenNeuro, OSF, HuggingFace…</sub>
-<br><br>
-</td>
-<td align="center" width="33%">
-<br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png">
-  <img src="docs/_static/neuralset_light.png" width="120">
-</picture>
-<br><br>
-<strong>neuralset</strong><br>
-<sub>Events, extractors, transforms &<br>segmentation into PyTorch datasets</sub>
-<br><br>
-</td>
-<td align="center" width="33%">
-<br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png">
-  <img src="docs/_static/neuraltrain_light.png" width="120">
-</picture>
-<br><br>
-<strong>neuraltrain</strong><br>
-<sub>ConvNets, Transformers, losses,<br>metrics & fast multi-GPU training</sub>
-<br><br>
-</td>
-</tr>
-</table>
 
-> **📖 [Explore the full documentation →](https://facebookresearch.github.io/neuroai/)**
->
-> Interactive quickstarts, step-by-step tutorials, and complete API reference.
-> The docs generate ready-to-run code for any task × modality × dataset combination.
+<p align="center">
+  <a href="https://facebookresearch.github.io/neuroai/">
+    <img src="https://img.shields.io/badge/📖%20Explore%20the%20full%20documentation-facebookresearch.github.io%2Fneuroai-448aff?style=for-the-badge" alt="Explore the full documentation">
+  </a>
+</p>
+<p align="center">
+  <sub>Interactive quickstarts &nbsp;·&nbsp; Step-by-step tutorials &nbsp;·&nbsp; Complete API reference<br>
+  Pick a task, a modality, a dataset — the docs generate the code for you.</sub>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="720">
+</p>
 
 ---
 
 ## Install
 
+<table width="100%">
+<tr>
+<td align="center" width="50%">
+
+**Core packages**
+
 ```bash
 pip install neuralset neuralfetch neuraltrain
 ```
 
-Optional extras for tutorials and all extractors:
+</td>
+<td align="center" width="50%">
+
+**With extras**
 
 ```bash
 pip install 'neuralset[tutorials]'   # spacy, matplotlib, soundfile
 pip install 'neuralset[all]'         # all optional extractors
 ```
 
+</td>
+</tr>
+</table>
+
 ---
 
 ## Packages
 
-| Package | What it does | Install |
-|---------|-------------|---------|
-| **[neuralset](https://facebookresearch.github.io/neuroai/neuralset/index.html)** | Core pipeline: events, extractors, transforms, segmentation, dataloaders | `pip install neuralset` |
-| **[neuralfetch](https://facebookresearch.github.io/neuroai/neuralfetch/index.html)** | Public dataset catalog & download from 12+ sources | `pip install neuralfetch` |
-| **[neuraltrain](https://facebookresearch.github.io/neuroai/neuraltrain/index.html)** | Deep-learning models, training loops, losses & metrics (PyTorch + Lightning) | `pip install neuraltrain` |
+Each pipeline step maps to a dedicated package:
+
+<table width="100%">
+<tr>
+<td align="center" valign="top" width="33%">
+<br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png">
+  <img src="docs/_static/neuralfetch_light.png" width="120" alt="neuralfetch">
+</picture>
+<br><br>
+<strong><a href="https://facebookresearch.github.io/neuroai/neuralfetch/index.html">neuralfetch</a></strong><br><br>
+<sub>Access the world's curated brain datasets.<br>
+19+ studies from OpenNeuro, DANDI, OSF,<br>
+HuggingFace, Zenodo and more.</sub>
+<br><br>
+
+```bash
+pip install neuralfetch
+```
+
+<br>
+</td>
+<td align="center" valign="top" width="33%">
+<br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png">
+  <img src="docs/_static/neuralset_light.png" width="120" alt="neuralset">
+</picture>
+<br><br>
+<strong><a href="https://facebookresearch.github.io/neuroai/neuralset/index.html">neuralset</a></strong><br><br>
+<sub>Turn brain data into AI-ready features.<br>
+Events, extractors, transforms &amp;<br>
+segmentation into PyTorch datasets.</sub>
+<br><br>
+
+```bash
+pip install neuralset
+```
+
+<br>
+</td>
+<td align="center" valign="top" width="33%">
+<br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png">
+  <img src="docs/_static/neuraltrain_light.png" width="120" alt="neuraltrain">
+</picture>
+<br><br>
+<strong><a href="https://facebookresearch.github.io/neuroai/neuraltrain/index.html">neuraltrain</a></strong><br><br>
+<sub>Deep learning for the brain, supercharged.<br>
+ConvNets, Transformers, losses, metrics<br>
+&amp; multi-GPU training (PyTorch + Lightning).</sub>
+<br><br>
+
+```bash
+pip install neuraltrain
+```
+
+<br>
+</td>
+</tr>
+</table>
 
 ---
 
@@ -160,12 +199,9 @@ pytest -x             # test
 ---
 
 <details>
-<summary><b>Demo</b></summary>
+<summary><b>Code demo</b></summary>
 <p align="center">
   <img src="docs/_static/demo.gif" alt="neuroai code demo" width="700">
-</p>
-<p align="center">
-  <img src="docs/_static/neuralset.gif" alt="neuralset terminal demo" width="700">
 </p>
 </details>
 
@@ -175,11 +211,7 @@ pytest -x             # test
 
 This project is licensed under the [MIT License](LICENSE).
 
-### Third-Party Content
-
-References to third-party content from other locations are subject to
-their own licenses and you may have other legal obligations or
-restrictions that govern your use of that content.
+<sub>References to third-party content are subject to their own licenses.</sub>
 
 ---
 
