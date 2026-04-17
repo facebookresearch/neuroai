@@ -37,7 +37,7 @@ Each pipeline step maps to a dedicated package:
 
 <table>
 <tr>
-<td align="center" width="33%">
+<td align="center" width="36%">
 <br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png">
