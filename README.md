@@ -226,5 +226,5 @@ restrictions that govern your use of that content.
 ---
 
 <p align="center">
-  <sub>Built with ❤️ at <a href="https://ai.meta.com/">Meta AI</a> &amp; <a href="https://joliot.cea.fr/drf/joliot/en/Pages/research_entities/NeuroSpin.aspx">NeuroSpin</a></sub>
+  <sub>Built with ❤️ at <a href="https://ai.meta.com/">Meta AI</a>
 </p>
