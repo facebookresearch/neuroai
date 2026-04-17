@@ -1,13 +1,13 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_anim_dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_anim_light.gif">
-    <img alt="neuroai" src="docs/_static/neuroai_anim_light.gif" width="280">
-  </picture>
-</p>
+<h1 align="center">
+  <span style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 3em; color: #4169e1; letter-spacing: -1px;">neuroai</span>
+</h1>
 
-<h3 align="center">The Python suite for brain-AI research</h3>
-<p align="center"><sub>Simple &nbsp;·&nbsp; Fast &nbsp;·&nbsp; Robust &nbsp;·&nbsp; Scalable</sub></p>
+<p align="center">
+  <strong style="font-size: 1.15em; letter-spacing: 0.04em;">The Python suite for brain-AI research</strong>
+</p>
+<p align="center">
+  <b>Simple &nbsp;·&nbsp; Fast &nbsp;·&nbsp; Robust &nbsp;·&nbsp; Scalable</b>
+</p>
 
 <p align="center">
   <a href="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml"><img src="https://github.com/facebookresearch/neuroai/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -129,5 +129,9 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <sub>Built with ❤️ at <a href="https://ai.meta.com/">Meta AI</a></sub>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_anim_dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_anim_light.gif">
+    <img alt="neuroai" src="docs/_static/neuroai_anim_light.gif" width="200">
+  </picture>
 </p>
