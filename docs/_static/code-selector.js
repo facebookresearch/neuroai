@@ -330,19 +330,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Quickstart presets: each maps to a (task, device, study) triple
   var presets = {
-    "bel-language":       { taskKey: "language",            deviceKey: "meg",      study: "Bel2026PetitListenSample" },
-    "li2022-language":    { taskKey: "language",            deviceKey: "fmri_proj", study: "Li2022PetitSample" },
-    "grootswagers-image": { taskKey: "image",               deviceKey: "eeg",      study: "Grootswagers2022HumanSample" },
-    "allen-image":        { taskKey: "image",               deviceKey: "fmri",     study: "Allen2022MassiveSample" },
-    "fake-classif":       { taskKey: "word_classification", deviceKey: "fmri",     study: "Fake2025Fmri" },
+    "bel-language":       { taskKey: "language",            deviceKey: "meg",       study: "Bel2026PetitListenSample",       installDeps: "openneuro-py" },
+    "li2022-language":    { taskKey: "language",            deviceKey: "fmri_proj", study: "Li2022PetitSample",              installDeps: "openneuro-py praatio" },
+    "grootswagers-image": { taskKey: "image",               deviceKey: "eeg",      study: "Grootswagers2022HumanSample",    installDeps: "openneuro-py pyunpack boto3 osfclient" },
+    "allen-image":        { taskKey: "image",               deviceKey: "fmri",     study: "Allen2022MassiveSample",         installDeps: "awscli" },
+    "fake-classif":       { taskKey: "word_classification", deviceKey: "fmri",     study: "Fake2025Fmri",                   installDeps: "" },
   };
 
   var isQuickstart = !!document.querySelector('.code-selector[data-quickstart]');
 
   // ── Template builders ─────────────────────────────────────────────────
 
-  function buildDataBlock(tsk, dev, studyName) {
-    var lines = [
+  function buildDataBlock(tsk, dev, studyName, installDeps) {
+    var lines = [];
+    if (installDeps) {
+      lines.push("# First install study dependencies:");
+      lines.push("# pip install neuralfetch " + installDeps);
+      lines.push("");
+    }
+    lines.push(
       "import neuralset as ns",
       "from torch.utils.data import DataLoader",
       "",
@@ -350,7 +356,7 @@ document.addEventListener("DOMContentLoaded", function () {
       'infra = {"folder": ns.CACHE_FOLDER / "cache"}',
       "",
       "# 1. Load study"
-    ];
+    );
     if (studyName === "YourStudy") {
       lines.push(
         "# No built-in dataset for this task/device combo — replace 'YourStudy' below"
@@ -361,9 +367,13 @@ document.addEventListener("DOMContentLoaded", function () {
       '    name="' + studyName + '",',
       "    path=ns.CACHE_FOLDER,",
       "    infra=infra,",
-      ")",
-      "study.download()",
+      ")"
     );
+    if (studyName.indexOf("Fake") !== 0) {
+      lines.push("study.download()");
+    } else {
+      lines.push("# No download needed — Fake studies generate data on the fly");
+    }
     lines.push(
       "events = study.run()",
       'print(events[["type", "start", "duration", "timeline"]].head(10))',
@@ -516,23 +526,25 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function render() {
-    var tskKey, devKey, studyName;
+    var tskKey, devKey, studyName, installDeps;
 
     if (isQuickstart) {
       var p = presets[val("sel-preset")] || presets["bel-language"];
       tskKey = p.taskKey;
       devKey = p.deviceKey;
       studyName = p.study;
+      installDeps = p.installDeps || "";
     } else {
       tskKey = val("sel-task") || "language";
       devKey = val("sel-device") || "meg";
       studyName = (studyMap[tskKey] || {})[devKey] || "YourStudy";
+      installDeps = "";
     }
 
     var tsk = task[tskKey] || task.language;
     var dev = device[devKey] || device.meg;
 
-    var dataBlock = buildDataBlock(tsk, dev, studyName);
+    var dataBlock = buildDataBlock(tsk, dev, studyName, installDeps);
     dataEl.innerHTML = highlightPython(dataBlock);
     addCopyButton(dataEl, dataBlock);
 

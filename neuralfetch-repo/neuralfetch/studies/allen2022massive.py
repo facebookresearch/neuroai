@@ -161,6 +161,7 @@ class Allen2022Massive(study.Study):
         "scipy>=1.11.4",
         "h5py>=3.10.0",
         "requests>=2.31.0",
+        "awscli",
     )
 
     SESSIONS_PER_SUBJECT: tp.ClassVar[dict[int, int]] = {

@@ -22,6 +22,14 @@ dependencies = [
 # Study auto-discovery by neuralset; value = scan root module path.
 [project.optional-dependencies]
 all = ["neuralset[all]", "matplotlib"]
+quickstart = [
+  "openneuro-py",
+  "praatio",
+  "pyunpack",
+  "boto3",
+  "osfclient>=0.0.5",
+  "awscli",
+]
 
 [project.entry-points."neuralset.studies"]
 neuralfetch = "neuralfetch"
