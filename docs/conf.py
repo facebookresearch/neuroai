@@ -54,7 +54,19 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_design",
     "sphinx_gallery.gen_gallery",
+    "sphinxcontrib.autodoc_pydantic",
 ]
+
+# -- autodoc-pydantic: document pydantic fields (``extra``, ``start``, ...)
+# which vanilla autodoc skips because pydantic moves them out of ``__dict__``
+# into ``model_fields`` at class-creation time.
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_model_member_order = "bysource"
+autodoc_pydantic_field_list_validators = False
+autodoc_pydantic_field_show_constraints = False
 
 templates_path = ["_templates"]
 suppress_warnings = [
@@ -219,19 +231,35 @@ def _resolve_short_paths(app, env, node, contnode):
     for i in range(len(parts) - 1, 0, -1):
         try:
             obj = importlib.import_module(".".join(parts[:i]))
-        except ImportError:
+        except Exception:
+            # TypeError for empty/relative paths, ImportError for missing
+            # modules — both mean "this prefix is not importable, skip".
             continue
-        for part in parts[i:]:
-            obj = getattr(obj, part, None)
-            if obj is None:
-                return None
+        # Descend attributes. If we hit a class but the next part isn't a
+        # real class attribute (typical for pydantic fields, which live in
+        # ``model_fields`` — not ``__dict__`` — once the model is built),
+        # keep the leftover parts as a tail and resolve via the class's
+        # canonical module. The retry still needs an exact inventory hit,
+        # so genuine typos remain unresolved.
+        tail: list[str] = []
+        for j, part in enumerate(parts[i:]):
+            nxt = getattr(obj, part, None)
+            if nxt is None:
+                if isinstance(obj, type):
+                    tail = list(parts[i + j :])
+                    break
+                obj = None
+                break
+            obj = nxt
+        if obj is None:
+            continue  # fall back to a shorter module prefix
         mod = getattr(obj, "__module__", None)
-        if not mod or mod == ".".join(parts[:i]):
+        if not mod or (mod == ".".join(parts[:i]) and not tail):
             return None  # already at canonical module; nothing to retry
         # Methods/functions: ``__qualname__`` carries the class scope
         # (e.g. ``BaseExtractor.prepare``) that ``__module__`` alone lacks.
         qualname = getattr(obj, "__qualname__", ".".join(parts[i:]))
-        canonical = f"{mod}.{qualname}"
+        canonical = ".".join([f"{mod}.{qualname}", *tail])
         if canonical == ".".join(parts):
             return None
         return env.get_domain("py").resolve_xref(

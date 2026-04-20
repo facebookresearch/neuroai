@@ -74,6 +74,7 @@ dependencies = [
         "sphinx-copybutton",
         "sphinx-design",
         "sphinx-gallery",
+        "autodoc-pydantic>=2.2",
         'deepmultilingualpunctuation',
         # Release
         "build",
