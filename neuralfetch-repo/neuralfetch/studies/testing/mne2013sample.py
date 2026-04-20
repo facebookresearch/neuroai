@@ -57,8 +57,8 @@ class Mne2013Sample(study.Study):
         if not already present at the specified path.
         """
 
-        # This will download the dataset if not already present
-        path = self.path / "download"
+        # absolute: mne.datasets.sample.data_path nests relative paths
+        path = (self.path / "download").absolute()
         path.mkdir(parents=True, exist_ok=True)
         mne.datasets.sample.data_path(path, verbose=True)
 

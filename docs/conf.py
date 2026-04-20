@@ -6,13 +6,10 @@
 
 # Configuration file for the Sphinx documentation builder.
 
-# Ensure real packages take priority over docs/ subdirectory namespace packages.
-# The docs/neuralset/, docs/neuralfetch/, etc. directories are RST-only (no
-# __init__.py), but Python 3 treats them as namespace packages and they shadow
-# the real installed packages when Sphinx runs from docs/.  By inserting the
-# source repos at the front of sys.path the PathFinder will find the real
-# __init__.py first.
+# docs/neuralset/, docs/neuralfetch/, ... are RST-only but Python treats them
+# as namespace packages and shadows the installed ones — front-load real repos.
 import builtins
+import importlib
 import os
 import sys
 import typing
@@ -52,7 +49,24 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_design",
     "sphinx_gallery.gen_gallery",
+    "sphinxcontrib.autodoc_pydantic",
 ]
+
+# autodoc-pydantic: needed to document pydantic fields (``extra``, ``start``,
+# ...) which vanilla autodoc skips.
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_model_member_order = "bysource"
+autodoc_pydantic_field_list_validators = False
+autodoc_pydantic_field_show_constraints = False
+
+# Hide pydantic plumbing — global because autodoc-pydantic's stubs ignore
+# the template's ``:exclude-members:``.
+autodoc_default_options = {
+    "exclude-members": "model_post_init,model_fields,model_computed_fields,model_config",
+}
 
 templates_path = ["_templates"]
 suppress_warnings = [
@@ -149,27 +163,109 @@ intersphinx_mapping = {
     "scipy": ("https://scipy.github.io/devdocs/", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
     "torch": ("https://pytorch.org/docs/stable/", None),
+    "pandas": ("https://pandas.pydata.org/docs/", None),
+    "pydantic": ("https://docs.pydantic.dev/latest/", None),
+    "exca": ("https://facebookresearch.github.io/exca/", None),
 }
+
+# -- Nitpicky mode: flag unresolved cross-references ------------------------
+# Ignore patterns below are structural false positives (signature literals,
+# short unqualified names, third-party libs without intersphinx)
+nitpicky = True
+nitpick_ignore_regex = [
+    # (a) literal values misinterpreted as class refs from signature parsing
+    (r"py:class", r"^\w+\s*=.*"),  # keyword=value fragments
+    (r"py:class", r"^optional( .*)?$"),
+    (r"py:class", r"^[\"'].*"),  # quoted literals
+    (r"py:class", r"^\{.*"),  # dict/set literals
+    (r"py:class", r"^-?\d[\d._e+-]*$"),  # numeric literals
+    (r"py:class", r"^\.\.$"),
+    (r"py:class", r"^tp\.Literal$"),
+    # (b) malformed type annotations in docstrings (real Python refs never
+    # contain whitespace)
+    (r"py:class", r".*\s.*"),
+    # (c) short names lacking module context
+    (r"py:class", r"^(Tensor|Module|Path|PathLike|PIL\.Image)$"),
+    # (d) third-party libraries with no intersphinx inventory
+    # exca's `steps` module not yet in its published inventory (WIP upstream).
+    (r"py:class", r"^exca\.(Step|Chain|steps\..*)$"),
+    (r"py:class", r"^annotated_types\..*"),
+    (r"py:(class|func)", r"^huggingface_hub\..*"),
+    (r"py:class", r"^_?PydanticUndefined$"),
+    (r"py:class", r"^_PydanticGeneralMetadata$"),
+    # (e) private helpers referenced in public docstrings
+    (r"py:class", r".*\._[A-Za-z]\w*$"),
+]
 
 
 autosummary_generate = True
 
-# -- Shorten verbose default values in signatures ---------------------------
-import re
 
+def _resolve_short_paths(app, env, node, contnode):
+    """Retry unresolved py-refs using the target's canonical ``__module__``.
 
-def _shorten_signature(app, what, name, obj, options, signature, return_annotation):
-    if signature:
-        signature = re.sub(r"MapInfra\([^)]*\)", "MapInfra()", signature)
-    return signature, return_annotation
-
-
-def setup(app):
-    app.connect("autodoc-process-signature", _shorten_signature)
+    Docstrings routinely use short public paths (e.g. ``neuralset.events.Event``)
+    but autodoc registers symbols at their source module
+    (``neuralset.events.etypes.Event``), so such refs fail. This handler
+    imports the short path, discovers the canonical location, and retries
+    once. Genuine typos still fail.
+    """
+    if node.get("refdomain") != "py":
+        return None
+    original = node.get("reftarget", "")
+    parts = original.split(".")
+    # Rewrite source-file aliases (``tp.ClassVar`` → ``typing.ClassVar``).
+    if parts and parts[0] == "tp":
+        parts[0] = "typing"
+    # Walk the longest importable prefix, then descend attributes.
+    # e.g. ``neuralset.events.Event.from_dict`` → import ``neuralset.events``,
+    # getattr ``Event`` → class, getattr ``from_dict`` → method.
+    for i in range(len(parts) - 1, 0, -1):
+        try:
+            obj = importlib.import_module(".".join(parts[:i]))
+        except Exception:
+            continue  # prefix not importable (missing, relative, malformed)
+        # Pydantic fields aren't reachable via getattr (they live in
+        # ``model_fields``), so on a class keep the remainder as a tail and
+        # let autodoc-pydantic's inventory entry resolve it.
+        tail: list[str] = []
+        for j, part in enumerate(parts[i:]):
+            nxt = getattr(obj, part, None)
+            if nxt is None:
+                if isinstance(obj, type):
+                    tail = list(parts[i + j :])
+                    break
+                obj = None
+                break
+            obj = nxt
+        if obj is None:
+            continue  # fall back to a shorter module prefix
+        mod = getattr(obj, "__module__", None)
+        original_prefix = original.rsplit(".", len(parts) - i)[0]
+        if not mod or (mod == original_prefix and not tail):
+            return None  # already canonical; nothing to retry
+        # __qualname__ carries the class scope (``BaseExtractor.prepare``)
+        # that __module__ alone lacks.
+        qualname = getattr(obj, "__qualname__", ".".join(parts[i:]))
+        canonical = ".".join([f"{mod}.{qualname}", *tail])
+        if canonical == original:
+            return None
+        return env.get_domain("py").resolve_xref(
+            env,
+            node["refdoc"],
+            app.builder,
+            node["reftype"],
+            canonical,
+            node,
+            contnode,
+        )
+    return None
 
 
 def setup(app):
     from sphinx.events import EventListener
+
+    app.connect("missing-reference", _resolve_short_paths)
 
     listeners = app.events.listeners.get("autodoc-skip-member", [])
     for i, ev in enumerate(listeners):

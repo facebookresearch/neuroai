@@ -21,7 +21,7 @@ DataFrame; extractors read it to know *what* to extract and *when*.
 # An event has three core fields: ``start`` (seconds), ``duration``
 # (seconds), and ``timeline`` (which recording session it belongs to).
 # Concrete subclasses add modality-specific fields — for example a
-# :class:`~neuralset.events.Word` carries ``text``:
+# :class:`~neuralset.events.etypes.Word` carries ``text``:
 
 from neuralset.events import etypes
 
@@ -47,7 +47,7 @@ print(repr(word))
 #
 # The standard way to work with events is a **pandas DataFrame** where
 # each row is one event.  This is what :meth:`Study.run()
-# <neuralset.events.study.Study.run>` produces, but you can also
+# <neuralset.Study.run>` produces, but you can also
 # build one by hand:
 
 import pandas as pd

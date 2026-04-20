@@ -154,6 +154,23 @@ Each tutorial covers one stage of the training pipeline.
      <a href="auto_examples/data/01_data.html" class="page-nav-btn">Start: Data Pipeline &rarr;</a>
    </div>
 
+----
+
+Citation
+--------
+
+If you use ``neuraltrain`` in your research, please cite
+`A foundation model of vision, audition, and language for in-silico
+neuroscience <https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/>`_:
+
+.. code-block:: text
+
+   @article{dAscoli2026TribeV2,
+     title={A foundation model of vision, audition, and language for in-silico neuroscience},
+     author={d'Ascoli, St{\'e}phane and Rapin, J{\'e}r{\'e}my and Benchetrit, Yohann and Brooks, Teon and Begany, Katelyn and Raugel, Jos{\'e}phine and Banville, Hubert and King, Jean-R{\'e}mi},
+     year={2026}
+   }
+
 .. toctree::
    :maxdepth: 2
    :hidden:

@@ -291,16 +291,19 @@ def test_event_type_list() -> None:
         "Artifact",
         "Seizure",
         "Stimulus",
-        # Study-specific
-        # "SleepArousal",  # Ghassemi2018
-        # "EpileptiformActivity",  # Harati2015 # TODO: put them back once we release the other datasets
     ]
-    msg = f"Missing or additional event class detected, please update the list in {__file__}"
-    msg += (
-        " if this is an intended change, so as to reference existing event classes (but "
+    # only check event classes owned by neuroai packages
+    registered = {
+        name
+        for name, cls in ns.events.Event._CLASSES.items()
+        if cls.__module__.startswith(("neuralset", "neuralfetch", "neuraltrain"))
+    }
+    msg = (
+        f"Missing or additional event class detected, please update the list in {__file__} "
+        "if this is an intended change, so as to reference existing event classes "
+        "(but check beforehand if there is not already an existing equivalent class :) )"
     )
-    msg += "check beforehand if there is not already an existing equivalent class :) )"
-    assert set(existing) == set(ns.events.Event._CLASSES), msg
+    assert set(existing) == registered, msg
 
 
 def test_split_event(tmp_path: Path) -> None:

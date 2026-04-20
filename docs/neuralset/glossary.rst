@@ -17,7 +17,7 @@ See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit toge
       points to an externally hosted repository.
       All studies can share a single ``path`` — each resolves its own
       subfolder automatically.
-      → :class:`~neuralset.events.study.Study`
+      → :class:`~neuralset.Study`
       · :doc:`Tutorial <auto_examples/walkthrough/02_studies>`
 
    Timeline
@@ -32,7 +32,7 @@ See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit toge
       Concrete subclasses (``Meg``, ``Image``, ``Word``, ``Fmri``, …)
       add modality-specific fields.  Events are collected into a pandas
       DataFrame for bulk processing.
-      → :class:`~neuralset.events.etypes.Event`
+      → :class:`~neuralset.events.Event`
       · :doc:`Tutorial <auto_examples/walkthrough/01_events>`
 
    EventsTransform

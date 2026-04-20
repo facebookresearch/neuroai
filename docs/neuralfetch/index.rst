@@ -480,6 +480,14 @@ Sample datasets are available for immediate use — no large download required:
      <a href="samples.html" class="help-button"><i class="fas fa-flask"></i>&nbsp; View Sample Datasets</a>
    </div>
 
+----
+
+Citation
+--------
+
+See the :doc:`neuralset page </neuralset/index>` for the preferred
+citation (BibTeX at the bottom).
+
 .. toctree::
    :maxdepth: 2
    :hidden:
