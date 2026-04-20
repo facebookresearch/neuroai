@@ -18,11 +18,9 @@ pip install neuralset
 ```python
 import neuralset as ns
 
-# Load a study and build events
-study = ns.Study(name="Mne2013Sample", path="./data")
-
-study.download() # ~ 1.6GB
-
+# Load a study and download its data (MNE sample, ~1.6GB on first run).
+study = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER)
+study.download()
 events = study.run()
 
 # Configure extractors
@@ -31,7 +29,7 @@ meg = ns.extractors.MegExtractor(frequency=100.0, filter=(0.5, 30))
 # Segment around triggers and build a dataset
 segmenter = ns.Segmenter(
     extractors=dict(meg=meg),
-    trigger_query='type == "Word"',
+    trigger_query='type == "Stimulus"',
     start=-0.1, duration=0.5,
 )
 dataset = segmenter.apply(events)
@@ -42,16 +40,15 @@ batch = dataset.load_all()
 
 If you use `NeuralSet` in your research, please cite [NeuralSet: A High-Performing Python Package for Neuro-AI](https://kingjr.github.io/files/neuralset.pdf):
 
-
 ```bibtex
 @article{king2026neuralset,
   title   = {NeuralSet: A High-Performing Python Package for Neuro-AI},
   author  = {King, J-R. and Bel, C. and Evanson, L. and Gadonneix, J. and Houhamdi, S. and L{\'e}vy, J. and Raugel, J. and Santos Revilla, A. and Zhang, M. and Bonnaire, J. and Caucheteux, C. and D{\'e}fossez, A. and Desbordes, T. and Diego-Sim{\'o}n, P. and Khanna, S. and Millet, J. and Orhan, P. and Panchavati, S. and Ratouchniak, A. and Thual, A. and Brooks, T. and Begany, K. and Benchetrit, Y. and Careil, M. and Banville, H. and d'Ascoli, S. and Dahan, S. and Rapin, J.},
   year    = {2026},
-  url     = {https://kingjr.github.io/files/neuralset.pdf}
+  url     = {https://kingjr.github.io/files/neuralset.pdf},
+  note    = {Preprint; URL will be updated when the paper lands on arXiv}
 }
 ```
-
 
 ## Third-Party Content
 

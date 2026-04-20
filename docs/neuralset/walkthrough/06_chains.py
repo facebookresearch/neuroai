@@ -17,7 +17,7 @@ pipeline.
 # -----------
 #
 # Each step's output feeds into the next.  The first step is typically
-# a :class:`~neuralset.studies.Study`; subsequent steps are transforms.
+# a :class:`~neuralset.Study`; subsequent steps are transforms.
 
 import neuralset as ns
 from neuralset.events import transforms
