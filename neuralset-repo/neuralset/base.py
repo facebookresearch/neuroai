@@ -511,11 +511,11 @@ class Step(exca.steps.Step, _Module, discriminator_key="name"):
 
     Parameters
     ----------
-    infra : dict or exca.Infra, optional
-        A pydantic config defining caching and execution infrastructure.
-        It supports options like caching to disk (e.g. using the ``Cached`` backend)
-        and executing remotely on a cluster (e.g. via ``Slurm``).
-        For example: ``{"backend": "Cached", "folder": "~/.cache/neuralset"}``.
+    infra : exca.steps.Backend, optional
+        Caching and execution infrastructure. Supports caching to disk
+        (e.g. ``Cached`` backend) and executing remotely on a cluster
+        (e.g. ``Slurm``). Pydantic will coerce a dict, e.g.
+        ``{"backend": "Cached", "folder": "~/.cache/neuralset"}``.
     """
 
     # Chain.model_post_init reads this from the last step;
@@ -559,13 +559,11 @@ class Chain(exca.steps.Chain, Step):
 
     Parameters
     ----------
-    steps : list of dict or dict of str to dict
-        The ordered sequence of steps to execute. Since this is a pydantic config,
-        it is strongly recommended to pass a list of dictionaries rather than instantiated
-        objects (these dictionaries are coerced automatically). If a dict of dicts is provided,
-        the keys act as step names.
-    infra : dict or exca.Infra, optional
-        A pydantic config for caching and execution infrastructure inherited from ``Step``.
+    steps : list of Step or dict of str to Step
+        The ordered sequence of steps to execute. Pydantic will coerce each entry
+        from a dict (strongly recommended over instantiated objects for simplicity).
+    infra : exca.steps.Backend, optional
+        Caching and execution infrastructure inherited from ``Step``.
         If provided, it determines how the final output of the chain is cached
         (e.g. using the ``Cached`` backend) or executed remotely (e.g. via ``Slurm``).
 

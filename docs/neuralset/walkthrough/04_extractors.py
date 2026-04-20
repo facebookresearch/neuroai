@@ -174,7 +174,7 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 # ~~~~~~~~~~~~~~~~
 #
 # Neural recordings are handled by extractors inheriting from
-# :class:`~neuralset.extractors.neuro.MneRaw`. The processing pipeline
+# :class:`~neuralset.extractors.MneRaw`. The processing pipeline
 # includes channel picks, filtering, resampling, scaling, and baseline
 # correction — all configured through extractor parameters.
 #
@@ -194,25 +194,25 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 # .. warning::
 #
 #    Baseline correction is relative to the **segment start**,
-#    not the epoch onset. See :class:`~neuralset.extractors.neuro.MneRaw`
+#    not the epoch onset. See :class:`~neuralset.extractors.MneRaw`
 #    for details.
 
 # %%
 # iEEG
 # ~~~~~
 #
-# :class:`~neuralset.extractors.neuro.IeegExtractor` handles intracranial
+# :class:`~neuralset.extractors.IeegExtractor` handles intracranial
 # EEG (sEEG, ECoG). It supports bipolar referencing, where each channel
 # is referenced to the next electrode on the same shank. If a reference
 # electrode is missing, it silently falls back to the next available one.
-# See :class:`~neuralset.extractors.neuro.IeegExtractor` for channel
+# See :class:`~neuralset.extractors.IeegExtractor` for channel
 # naming conventions.
 
 # %%
 # fNIRS
 # ~~~~~~
 #
-# :class:`~neuralset.extractors.neuro.FnirsExtractor` implements a
+# :class:`~neuralset.extractors.FnirsExtractor` implements a
 # multi-step preprocessing pipeline controlled by boolean flags:
 #
 # 1. Convert to optical density
@@ -226,21 +226,33 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 # fMRI
 # ~~~~~
 #
-# :class:`~neuralset.extractors.neuro.Fmri` supports two mutually
-# exclusive modes:
+# :class:`~neuralset.extractors.FmriExtractor` supports two
+# mutually exclusive projection modes:
 #
 # - **mesh** — surface-based extraction
 # - **atlas** — parcellation-based extraction
 #
-# Additional parameters: ``space`` (e.g. ``"MNI152NLin2009cAsym"``),
-# ``confounds_strategy`` for nuisance regression, and ``offset`` to
-# account for hemodynamic delay.
+# Additional parameters: ``from_space`` to select the input space
+# (e.g. ``"MNI152NLin2009cAsym"``), ``cleaning`` for signal cleaning
+# (detrending, standardization, optional confound regression), and
+# ``offset`` to account for hemodynamic delay.
+
+fmri_study = ns.Study(
+    name="Test2023Fmri",  # synthetic study: random volumes (.5Hz, 20s)
+    path=ns.CACHE_FOLDER,
+    query="timeline_index < 1",  # only 1 timeline
+)
+fmri_events = fmri_study.run()
+
+fmri = ns.extractors.FmriExtractor()  # projection=None → raw volumetric
+fmri_sample = fmri(fmri_events, start=0.0, duration=2.0)
+print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 
 # %%
 # Text
 # ~~~~~
 #
-# :class:`~neuralset.extractors.text.HuggingFaceText` extracts
+# :class:`~neuralset.extractors.HuggingFaceText` extracts
 # contextualized embeddings from transformer models. It uses the
 # ``context`` field on Word events (populated by text transforms)
 # to provide surrounding context for each word.
@@ -258,18 +270,18 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 #        token_aggregation="mean",  # mean over subword tokens
 #    )
 #
-# :class:`~neuralset.extractors.text.SpacyEmbedding` provides lighter
+# :class:`~neuralset.extractors.SpacyEmbedding` provides lighter
 # static embeddings that don't require a GPU.
 
 # %%
 # Image
 # ~~~~~~
 #
-# :class:`~neuralset.extractors.image.HuggingFaceImage` extracts image
+# :class:`~neuralset.extractors.HuggingFaceImage` extracts image
 # embeddings using HuggingFace vision models (DINOv2, CLIP, etc.).
-# Classic feature extractors (:class:`~neuralset.extractors.image.RFFT2D`,
-# :class:`~neuralset.extractors.image.HOG`,
-# :class:`~neuralset.extractors.image.LBP`) are also available.
+# Classic feature extractors (:class:`~neuralset.extractors.RFFT2D`,
+# :class:`~neuralset.extractors.HOG`,
+# :class:`~neuralset.extractors.LBP`) are also available.
 #
 # .. note::
 #
@@ -282,9 +294,9 @@ print(f"MegExtractor(frequency=100): shape {sample.shape}  (channels x time)")
 #
 # For audio, **dedicated subclasses must be used** for specific models:
 #
-# - :class:`~neuralset.extractors.audio.Whisper` for OpenAI Whisper
-# - :class:`~neuralset.extractors.audio.SeamlessM4T` for Meta SeamlessM4T
-# - :class:`~neuralset.extractors.audio.Wav2VecBert` for Wav2Vec-BERT
+# - :class:`~neuralset.extractors.Whisper` for OpenAI Whisper
+# - :class:`~neuralset.extractors.SeamlessM4T` for Meta SeamlessM4T
+# - :class:`~neuralset.extractors.Wav2VecBert` for Wav2Vec-BERT
 #
 # Do **not** use the base ``HuggingFaceAudio`` class for these models —
 # they require model-specific preprocessing.

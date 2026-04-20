@@ -14,21 +14,16 @@ everything into batches — all lazy, typed with pydantic, and cacheable.
 
    pip install neuralset
 
-The base package includes the full pipeline — events, transforms, extractors,
-segmenters, and dataloaders. Some extractors require optional dependencies
-(e.g., ``transformers``, ``torchaudio``) which can be installed individually
-or all at once:
+To follow the tutorials and load curated datasets, add tutorial extras
+and :doc:`neuralfetch </neuralfetch/index>`:
 
 .. code-block:: bash
 
-   pip install 'neuralset[all]'
+   pip install 'neuralset[tutorials]' neuralfetch
 
-To access the curated catalog of public brain datasets, also install
-:doc:`neuralfetch </neuralfetch/index>`:
-
-.. code-block:: bash
-
-   pip install neuralfetch
+Heavier dependencies (e.g. ``transformers`` for text/image/etc feature
+extraction) live in ``[all]`` — see :doc:`Installation <install>` for
+the full breakdown.
 
 ----
 
@@ -208,6 +203,30 @@ Each tutorial walks through one building block of the pipeline.
      <a href="install.html" class="page-nav-btn page-nav-btn--outline">Installation &rarr;</a>
      <a href="auto_examples/walkthrough/index.html" class="page-nav-btn">Start Tutorials &rarr;</a>
    </div>
+
+----
+
+Citation
+--------
+
+.. code-block:: text
+
+   @misc{king2026neuralset,
+     title  = {NeuralSet: A High-Performing Python Package for Neuro-AI},
+     author = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
+               and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
+               and Raugel, Josephine and Santos Revilla, Andrea
+               and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
+               and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
+               and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
+               and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
+               and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
+               and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
+               and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
+     year   = {2026},
+     url    = {https://kingjr.github.io/files/neuralset.pdf},
+     note   = {Preprint; URL will be updated when the paper lands on arXiv}
+   }
 
 .. toctree::
    :maxdepth: 2
