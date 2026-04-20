@@ -1,12 +1,9 @@
 <h1 align="center">
-  <span style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 3em; color: #4169e1; letter-spacing: -1px;">neuroai</span>
+  <span style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 3em; color: #4169e1; letter-spacing: -1px;">Neuro AI</span>
 </h1>
 
 <p align="center">
-  <strong style="font-size: 1.15em; letter-spacing: 0.04em;">The Python suite for brain-AI research</strong>
-</p>
-<p align="center">
-  <b>Simple &nbsp;·&nbsp; Fast &nbsp;·&nbsp; Robust &nbsp;·&nbsp; Scalable</b>
+  <strong style="font-size: 1.15em; letter-spacing: 0.04em;">made easy</strong>
 </p>
 
 <p align="center">
@@ -16,101 +13,41 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white" alt="Python 3.12+"></a>
 </p>
 
-<p align="center">
-  <a href="#packages">Packages</a> &nbsp;·&nbsp;
-  <a href="#related-projects">Related projects</a> &nbsp;·&nbsp;
-  <a href="https://facebookresearch.github.io/neuroai/">Documentation</a>
-</p>
 
 ---
 
-neuroai is a modular Python suite for brain-AI research. It covers the full pipeline: accessing curated public brain datasets, building typed & cacheable feature pipelines across all recording modalities (MEG, EEG, fMRI, iEEG, EMG) and stimulus types (text, images, audio, video), and training deep-learning models — with a single unified interface.
 
-<br>
-
-<p align="center">
-  <a href="https://facebookresearch.github.io/neuroai/">
-    <img src="https://img.shields.io/badge/📖%20Explore%20the%20full%20documentation-facebookresearch.github.io%2Fneuroai-448aff?style=for-the-badge" alt="Explore the full documentation">
-  </a>
-</p>
-<p align="center">
-  <sub>Interactive quickstarts &nbsp;·&nbsp; Step-by-step tutorials &nbsp;·&nbsp; Complete API reference<br>
-  Pick a task, a modality, a dataset — the docs generate the code for you.</sub>
-</p>
-
-<br>
-
-<p align="center">
-  <img src="docs/_static/neuralset.gif" alt="neuralset demo" width="720">
-</p>
+See the [full documentation](https://facebookresearch.github.io/neuroai/) for interactive quickstarts, step-by-step tutorials, and the complete API reference.
 
 ---
 
 ## Packages
 
-Each pipeline step maps to a dedicated package:
+### [NeuralSet](https://facebookresearch.github.io/neuroai/neuralset/index.html)
 
-<table width="100%">
-<tr>
-<td align="center" valign="top" width="33%">
-<br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralfetch_dark.png">
-  <img src="docs/_static/neuralfetch_light.png" width="120" alt="neuralfetch">
-</picture>
-<br><br>
-<strong><a href="https://facebookresearch.github.io/neuroai/neuralfetch/index.html">neuralfetch</a></strong><br><br>
-<sub>Access the world's curated brain datasets.<br>
-19+ studies from OpenNeuro, DANDI, OSF,<br>
-HuggingFace, Zenodo and more.</sub>
-<br><br>
-
-```bash
-pip install neuralfetch
-```
-
-<br>
-</td>
-<td align="center" valign="top" width="33%">
-<br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuralset_dark.png">
-  <img src="docs/_static/neuralset_light.png" width="120" alt="neuralset">
-</picture>
-<br><br>
-<strong><a href="https://facebookresearch.github.io/neuroai/neuralset/index.html">neuralset</a></strong><br><br>
-<sub>Turn brain data into AI-ready features.<br>
-Events, extractors, transforms &amp;<br>
-segmentation into PyTorch datasets.</sub>
-<br><br>
+Build your efficient Neuro AI data loader.
 
 ```bash
 pip install neuralset
 ```
 
-<br>
-</td>
-<td align="center" valign="top" width="33%">
-<br>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuraltrain_dark.png">
-  <img src="docs/_static/neuraltrain_light.png" width="120" alt="neuraltrain">
-</picture>
-<br><br>
-<strong><a href="https://facebookresearch.github.io/neuroai/neuraltrain/index.html">neuraltrain</a></strong><br><br>
-<sub>Deep learning for the brain, supercharged.<br>
-ConvNets, Transformers, losses, metrics<br>
-&amp; multi-GPU training (PyTorch + Lightning).</sub>
-<br><br>
+
+### [NeuralFetch](https://facebookresearch.github.io/neuroai/neuralfetch/index.html)
+
+Fetch curated Neuro AI datasets.
+
+```bash
+pip install neuralfetch
+```
+
+
+### [NeuralTrain](https://facebookresearch.github.io/neuroai/neuraltrain/index.html)
+
+Train Neuro AI models at scale.
 
 ```bash
 pip install neuraltrain
 ```
-
-<br>
-</td>
-</tr>
-</table>
 
 ---
 
@@ -128,10 +65,16 @@ This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/neuroai_anim_dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/_static/neuroai_anim_light.gif">
-    <img alt="neuroai" src="docs/_static/neuroai_anim_light.gif" width="200">
-  </picture>
-</p>
+## Citation
+
+If you use `neuroai` in your research, please cite [NeuralSet: A High-Performing Python Package for Neuro-AI](https://kingjr.github.io/files/neuralset.pdf):
+
+```bibtex
+@article{king2026neuralset,
+  title   = {NeuralSet: A High-Performing Python Package for Neuro-AI},
+  author  = {King, J-R. and Bel, C. and Evanson, L. and Gadonneix, J. and Houhamdi, S. and L{\'e}vy, J. and Raugel, J. and Santos Revilla, A. and Zhang, M. and Bonnaire, J. and Caucheteux, C. and D{\'e}fossez, A. and Desbordes, T. and Diego-Sim{\'o}n, P. and Khanna, S. and Millet, J. and Orhan, P. and Panchavati, S. and Ratouchniak, A. and Thual, A. and Brooks, T. and Begany, K. and Benchetrit, Y. and Careil, M. and Banville, H. and d'Ascoli, S. and Dahan, S. and Rapin, J.},
+  year    = {2026},
+  url     = {https://kingjr.github.io/files/neuralset.pdf}
+}
+```
+
