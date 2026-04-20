@@ -4,7 +4,7 @@
 Studies
 =======
 
-A :class:`~neuralset.studies.Study` is an interface to an external dataset: it
+A :class:`~neuralset.Study` is an interface to an external dataset: it
 knows how to download data, iterate over recording sessions, and load
 events. Most built-in studies are registered through the
 `neuralfetch <https://github.com/facebookresearch/neuroai>`_ package — no data
@@ -168,7 +168,7 @@ print(f"With query: {events_q.timeline.nunique()} timelines, {len(events_q)} eve
 # Create Your Own (optional)
 # --------------------------
 #
-# To create a custom study, subclass :class:`~neuralset.studies.Study`
+# To create a custom study, subclass :class:`~neuralset.Study`
 # and implement ``iter_timelines()`` and ``_load_timeline_events()``.
 # If your data uses non-standard event types, define them as
 # :class:`~neuralset.events.Event` subclasses — they are automatically

@@ -13,7 +13,9 @@
 # source repos at the front of sys.path the PathFinder will find the real
 # __init__.py first.
 import builtins
+import importlib
 import os
+import re
 import sys
 import typing
 from typing import Dict  # noqa
@@ -176,6 +178,9 @@ nitpick_ignore_regex = [
     # (c) short names lacking module context
     (r"py:class", r"^(Tensor|Module|Path|PathLike|PIL\.Image)$"),
     # (d) third-party libraries with no intersphinx inventory
+    # exca's new `steps` module (Step, Chain, Backend, ...) is not yet
+    # published in exca's inventory (WIP upstream).
+    (r"py:class", r"^exca\.(Step|Chain|steps\..*)$"),
     (r"py:class", r"^annotated_types\..*"),
     (r"py:(class|func)", r"^huggingface_hub\..*"),
     (r"py:class", r"^_?PydanticUndefined$"),
@@ -188,7 +193,6 @@ nitpick_ignore_regex = [
 autosummary_generate = True
 
 # -- Shorten verbose default values in signatures ---------------------------
-import re
 
 
 def _shorten_signature(app, what, name, obj, options, signature, return_annotation):
@@ -197,12 +201,56 @@ def _shorten_signature(app, what, name, obj, options, signature, return_annotati
     return signature, return_annotation
 
 
-def setup(app):
-    app.connect("autodoc-process-signature", _shorten_signature)
+def _resolve_short_paths(app, env, node, contnode):
+    """Retry unresolved py-refs using the target's canonical ``__module__``.
+
+    Docstrings routinely use short public paths (e.g. ``neuralset.events.Event``)
+    but autodoc registers symbols at their source module
+    (``neuralset.events.etypes.Event``), so such refs fail. This handler
+    imports the short path, discovers the canonical location, and retries
+    once. Genuine typos still fail.
+    """
+    if node.get("refdomain") != "py":
+        return None
+    parts = node.get("reftarget", "").split(".")
+    # Try the longest importable module prefix, then descend attributes.
+    # e.g. ``neuralset.events.Event.from_dict`` → import ``neuralset.events``,
+    # getattr ``Event`` → class, getattr ``from_dict`` → method.
+    for i in range(len(parts) - 1, 0, -1):
+        try:
+            obj = importlib.import_module(".".join(parts[:i]))
+        except ImportError:
+            continue
+        for part in parts[i:]:
+            obj = getattr(obj, part, None)
+            if obj is None:
+                return None
+        mod = getattr(obj, "__module__", None)
+        if not mod or mod == ".".join(parts[:i]):
+            return None  # already at canonical module; nothing to retry
+        # Methods/functions: ``__qualname__`` carries the class scope
+        # (e.g. ``BaseExtractor.prepare``) that ``__module__`` alone lacks.
+        qualname = getattr(obj, "__qualname__", ".".join(parts[i:]))
+        canonical = f"{mod}.{qualname}"
+        if canonical == ".".join(parts):
+            return None
+        return env.get_domain("py").resolve_xref(
+            env,
+            node["refdoc"],
+            app.builder,
+            node["reftype"],
+            canonical,
+            node,
+            contnode,
+        )
+    return None
 
 
 def setup(app):
     from sphinx.events import EventListener
+
+    app.connect("autodoc-process-signature", _shorten_signature)
+    app.connect("missing-reference", _resolve_short_paths)
 
     listeners = app.events.listeners.get("autodoc-skip-member", [])
     for i, ev in enumerate(listeners):
