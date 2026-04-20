@@ -32,7 +32,7 @@ dependencies = [
         "soundfile",
         "spacy",
         "matplotlib",
-        "nilearn",  # required by FmriExtractor
+        "nilearn",
     ]
     all = [
         "neuralset[tutorials]",
