@@ -39,7 +39,7 @@ is bundled, only the code that accesses it.
 # Browsing the Catalog
 # --------------------
 #
-# :meth:`Study.catalog() <neuralset.events.study.Study.catalog>` returns
+# :meth:`Study.catalog() <neuralset.Study.catalog>` returns
 # all registered studies (from ``neuralfetch`` and any other installed
 # package):
 

@@ -47,7 +47,7 @@ print(repr(word))
 #
 # The standard way to work with events is a **pandas DataFrame** where
 # each row is one event.  This is what :meth:`Study.run()
-# <neuralset.events.study.Study.run>` produces, but you can also
+# <neuralset.Study.run>` produces, but you can also
 # build one by hand:
 
 import pandas as pd
