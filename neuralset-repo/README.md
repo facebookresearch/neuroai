@@ -38,22 +38,15 @@ batch = dataset.load_all()
 
 ## Citation
 
+If you use `NeuralSet` in your research, please cite [NeuralSet: A High-Performing Python Package for Neuro-AI](https://kingjr.github.io/files/neuralset.pdf):
+
 ```bibtex
-@misc{king2026neuralset,
-  title  = {NeuralSet: A High-Performing Python Package for Neuro-AI},
-  author = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
-            and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
-            and Raugel, Josephine and Santos Revilla, Andrea
-            and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
-            and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
-            and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
-            and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
-            and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
-            and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
-            and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
-  year   = {2026},
-  url    = {https://kingjr.github.io/files/neuralset.pdf},
-  note   = {Preprint; URL will be updated when the paper lands on arXiv}
+@article{king2026neuralset,
+  title   = {NeuralSet: A High-Performing Python Package for Neuro-AI},
+  author  = {King, J-R. and Bel, C. and Evanson, L. and Gadonneix, J. and Houhamdi, S. and L{\'e}vy, J. and Raugel, J. and Santos Revilla, A. and Zhang, M. and Bonnaire, J. and Caucheteux, C. and D{\'e}fossez, A. and Desbordes, T. and Diego-Sim{\'o}n, P. and Khanna, S. and Millet, J. and Orhan, P. and Panchavati, S. and Ratouchniak, A. and Thual, A. and Brooks, T. and Begany, K. and Benchetrit, Y. and Careil, M. and Banville, H. and d'Ascoli, S. and Dahan, S. and Rapin, J.},
+  year    = {2026},
+  url     = {https://kingjr.github.io/files/neuralset.pdf},
+  note    = {Preprint; URL will be updated when the paper lands on arXiv}
 }
 ```
 

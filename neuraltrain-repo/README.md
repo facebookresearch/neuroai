@@ -16,22 +16,13 @@ pip install neuraltrain
 
 ## Citation
 
+If you use `NeuralTrain` in your research, please cite [A foundation model of vision, audition, and language for in-silico neuroscience](https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/):
+
 ```bibtex
-@misc{king2026neuralset,
-  title  = {NeuralSet: A High-Performing Python Package for Neuro-AI},
-  author = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
-            and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
-            and Raugel, Josephine and Santos Revilla, Andrea
-            and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
-            and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
-            and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
-            and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
-            and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
-            and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
-            and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
-  year   = {2026},
-  url    = {https://kingjr.github.io/files/neuralset.pdf},
-  note   = {Preprint; URL will be updated when the paper lands on arXiv}
+@article{dAscoli2026TribeV2,
+  title={A foundation model of vision, audition, and language for in-silico neuroscience},
+  author={d'Ascoli, St{\'e}phane and Rapin, J{\'e}r{\'e}my and Benchetrit, Yohann and Brooks, Teon and Begany, Katelyn and Raugel, Jos{\'e}phine and Banville, Hubert and King, Jean-R{\'e}mi},
+  year={2026}
 }
 ```
 
