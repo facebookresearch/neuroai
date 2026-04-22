@@ -259,7 +259,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     contextualized: bool
         True by default, the context of the event is used to compute the embeddings.
     pretrained: bool or "part-reversal"
-        use pretrained model if True, untrained intial model if False, or custom
+        use pretrained model if True, untrained initial model if False, or custom
         scrambling of the model pretrained weights if "part-reveral"
 
     Note
@@ -490,7 +490,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
                 if self.device == "accelerate" and torch.cuda.is_available():
-                    # in case of multi-GPU models, explicitely empty cache "just in case"
+                    # in case of multi-GPU models, explicitly empty cache "just in case"
                     torch.cuda.empty_cache()
 
 

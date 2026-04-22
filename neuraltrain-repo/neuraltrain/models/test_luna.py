@@ -76,7 +76,8 @@ def test_wrapper_mapping():
 
     for v in mapping.values():
         assert v.startswith("model."), f"Expected 'model.' prefix, got {v!r}"
-    assert mapping["cross_attn.temparature"] == "model.cross_attn.temperature"
+    # Misspelled source key is intentional: tests the typo-fix mapping
+    assert mapping["cross_attn.temparature"] == "model.cross_attn.temperature"  # codespell:ignore temparature
 
 
 # ---------------------------------------------------------------------------

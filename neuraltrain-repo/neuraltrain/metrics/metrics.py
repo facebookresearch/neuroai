@@ -198,7 +198,7 @@ class Rank(torchmetrics.Metric):
         true_scores: torch.Tensor,
         retrieval_size: int | None,
     ) -> torch.Tensor:
-        """Average ranks obtained with stricly greater-than and greater-than-or-equals operations
+        """Average ranks obtained with strictly greater-than and greater-than-or-equals operations
         to account for repeated scores.
 
         E.g., the zero-based rank of prediction "1" in [0, 1, 1, 1, 2] will be 2 (instead of 1

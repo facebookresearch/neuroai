@@ -1605,7 +1605,7 @@ def test_hrf() -> None:
 
     # TODO add error if no prepare
 
-    # raise if events from heterogenous timelines
+    # raise if events from heterogeneous timelines
     # FIXME should be an error at BaseExtractor level
     # with pytest.raises(ValueError):
     #     hrf(events, start=5, duration=5.)
