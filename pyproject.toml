@@ -48,7 +48,11 @@ plugins = ["pydantic.mypy"]
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
-skip = '.git,.gitignore,.gitattributes,*.css'
+skip = '.git,.git-meta,.gitignore,.gitattributes,*.css'
 check-hidden = true
-# ignore-regex = ''
-# ignore-words-list = ''
+# Ignore URLs: URL paths may contain sequences that look like typos
+ignore-regex = 'https?://\S+'
+# fro: PyTorch Frobenius norm parameter, e.g. x.norm(p="fro")
+# toi, rouge: French words ("you", "red") used in accent-insensitive matching tests
+# fo: test timeline identifier string
+ignore-words-list = 'fro,toi,rouge,fo'
