@@ -45,3 +45,10 @@ known-first-party = ["neuralset", "neuraltrain", "neuralfetch"]
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
+
+[tool.codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = '.git,.gitignore,.gitattributes,*.css'
+check-hidden = true
+# ignore-regex = ''
+# ignore-words-list = ''
