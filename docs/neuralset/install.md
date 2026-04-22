@@ -31,7 +31,8 @@ pip install 'neuralset[all]'
 ```
 
 Key extras in `[all]` beyond `[tutorials]`: `transformers` (HuggingFace
-text/image/audio models), `torchaudio`, `torchvision`, `nilearn` (fMRI).
+text/image/audio models), `torchaudio`, `torchvision`, `pybids` (BIDS
+fMRI datasets).
 
 ## Developer Install
 

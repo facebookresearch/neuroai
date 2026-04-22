@@ -32,6 +32,7 @@ dependencies = [
         "soundfile",
         "spacy",
         "matplotlib",
+        "nilearn",
     ]
     all = [
         "neuralset[tutorials]",
@@ -43,7 +44,6 @@ dependencies = [
         "scikit-image",
         "opencv-python",
         "wordfreq",
-        "nilearn",
         "pybids",
     ]
     dev = [
@@ -74,6 +74,7 @@ dependencies = [
         "sphinx-copybutton",
         "sphinx-design",
         "sphinx-gallery",
+        "autodoc-pydantic>=2.2",
         'deepmultilingualpunctuation',
         # Release
         "build",
