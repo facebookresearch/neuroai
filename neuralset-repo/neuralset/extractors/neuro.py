@@ -306,7 +306,7 @@ class MneRaw(BaseExtractor):
 
     def prepare(self, obj: DataframeOrEventsOrSegments) -> None:
         """Specify how to load and preprocess the event.
-        Can be overriden by user.
+        Can be overridden by user.
         """
         events: list[etypes.MneRaw]
         events = self._event_types_helper.extract(obj)  # type: ignore

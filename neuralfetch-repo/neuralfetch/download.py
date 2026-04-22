@@ -584,7 +584,7 @@ class Datalad(BaseDownload):
         Parameters
             path: Path to store the dataset (will clone repo to that folder)
             url: Url of the datalad repository
-            threads: Number of threads to parallize dataset download
+            threads: Number of threads to parallelize dataset download
             folders: List of folders to clone explicitly (otherwise everything is cloned).
                 Contains a tuple of str and bool. Bool defines if str is a glob
         """
@@ -920,7 +920,7 @@ class Figshare(BaseDownload):
         file_info = []
 
         for i in item_ids:
-            # page_size set to arbritary high value to return items
+            # page_size set to arbitrary high value to return items
             r = requests.get(f"{BASE_URL}/articles/{i}/files?page_size=1000")
             file_metadata = json.loads(r.text)
             for j in file_metadata:

@@ -425,7 +425,7 @@ class SimilaritySplitter(base.BaseModel):
         return assigned_splits
 
     def compute_clusters(self, events: pd.DataFrame) -> pd.DataFrame:
-        """Filter events by the event types defined in the extractor and compute cluster assigments."""
+        """Filter events by the event types defined in the extractor and compute cluster assignments."""
         self.extractor.prepare(events)
         splitted_events = events[
             events["type"].isin(ev.EventTypesHelper(self.extractor.event_types).names)

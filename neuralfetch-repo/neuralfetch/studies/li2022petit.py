@@ -118,7 +118,7 @@ class Li2022Petit(study.Study):
             path = path / self.__class__.__name__
         client = download.Openneuro(study=dataset_id, dset_dir=path)
         client.download()
-        # TODO when available, automatize download of transcripts files
+        # TODO when available, automate download of transcripts files
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         if not self.path.exists():

@@ -80,7 +80,7 @@ def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) 
 
         sel = events.type == "a"
 
-        # Test case: find overlaping events
+        # Test case: find overlapping events
         found = seg.find_overlap(
             events=events, triggers=sel, duration=events.loc[sel].duration.item()
         )
