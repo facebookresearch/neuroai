@@ -18,6 +18,7 @@ dependencies = [
   "nibabel>=5.1.0",
   "tqdm>=4.65.0",
   "exca>=0.5.20",
+  "neuralfetch",
   "rapidfuzz",
   "packaging",
   "ujson",
