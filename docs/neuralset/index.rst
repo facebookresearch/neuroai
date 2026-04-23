@@ -14,8 +14,8 @@ everything into batches — all lazy, typed with pydantic, and cacheable.
 
    pip install neuralset
 
-To follow the tutorials and load curated datasets, add tutorial extras
-and :doc:`neuralfetch </neuralfetch/index>`:
+Add the ``tutorials`` extra for feature-extraction dependencies, as well as
+:doc:`neuralfetch </neuralfetch/index>` to experiment with curated public datasets:
 
 .. code-block:: bash
 

@@ -27,6 +27,10 @@ dependencies = [
   Source = "https://github.com/facebookresearch/neuroai"
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
+# Value: root module scanned for Study subclasses (see neuralset.events.study).
+[project.entry-points."neuralset.studies"]
+neuralset = "neuralset.events.testing"
+
 [project.optional-dependencies]
     tutorials = [
         "soundfile",
