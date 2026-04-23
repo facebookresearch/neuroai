@@ -1641,7 +1641,8 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
     # from_space="auto" + SurfaceProjector → prefers fsaverage
     _surf5: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
     feat = ns.extractors.FmriExtractor(projection=_surf5, from_space="auto")
-    relevant = feat._get_relevant_events(events, trigger=None)
+    window: tp.Any = dict(start=0.0, duration=1.0)  # dummy — we test space filtering
+    relevant = feat._get_relevant_events(events, trigger=None, **window)
     assert len(relevant) == 1
     ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
     assert ta.header is not None
@@ -1649,7 +1650,7 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
 
     # explicit from_space overrides
     feat = ns.extractors.FmriExtractor(from_space=mni)
-    relevant = feat._get_relevant_events(events, trigger=None)
+    relevant = feat._get_relevant_events(events, trigger=None, **window)
     assert len(relevant) == 1
     ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
     assert ta.header is not None and ta.header["space"] == mni
@@ -1657,7 +1658,7 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
     # single space + from_space=None → passes through
     feat = ns.extractors.FmriExtractor()
     single = [_mk(tmp_path, space="T1w")]
-    relevant = feat._get_relevant_events(single, trigger=None)
+    relevant = feat._get_relevant_events(single, trigger=None, **window)
     assert len(relevant) == 1
     ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
     assert ta.header is not None and ta.header["space"] == "T1w"
@@ -1665,12 +1666,12 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
     # multiple spaces + from_space=None → raises
     feat = ns.extractors.FmriExtractor()
     with pytest.raises(ValueError, match="Multiple spaces"):
-        feat._get_relevant_events(events, trigger=None)
+        feat._get_relevant_events(events, trigger=None, **window)
 
     # multiple spaces + from_space=None + projection → also raises (no silent auto)
     feat = ns.extractors.FmriExtractor(projection=_surf5)
     with pytest.raises(ValueError, match="Multiple spaces"):
-        feat._get_relevant_events(events, trigger=None)
+        feat._get_relevant_events(events, trigger=None, **window)
 
     # from_preproc filters
     mixed = [
@@ -1678,7 +1679,7 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
         _mk(tmp_path, space="T1w", preproc="fmriprep"),
     ]
     feat = ns.extractors.FmriExtractor(from_preproc="deepprep")
-    relevant = feat._get_relevant_events(mixed, trigger=None)
+    relevant = feat._get_relevant_events(mixed, trigger=None, **window)
     assert len(relevant) == 1
     ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
     assert ta.header is not None and ta.header["preproc"] == "deepprep"

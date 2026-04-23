@@ -233,7 +233,9 @@ class BaseExtractor(base._Module, base.NamedModel):
                 raise TypeError(msg)
             trigger = triggers[0]
 
-        ns_events = self._get_relevant_events(events, trigger)
+        ns_events = self._get_relevant_events(
+            events, trigger, start=start, duration=duration
+        )
 
         # If there is no valid event, return default values or raise error.
         if not ns_events:
@@ -294,8 +296,15 @@ class BaseExtractor(base._Module, base.NamedModel):
 
         return tensor
 
-    def _get_relevant_events(self, events: tp.Any, trigger: Event | None) -> list[Event]:
-        """Select only relevant events and convert them into ns.event.Event"""
+    def _get_relevant_events(
+        self,
+        events: tp.Any,
+        trigger: Event | None,
+        *,
+        start: float,
+        duration: float,
+    ) -> list[Event]:
+        """Select the extractor-relevant events for the segment window and aggregation."""
         # if trigger-aggregation, we only extract data from the trigger event
         if self.aggregation == "trigger":
             event_types = self._event_types_helper.classes
@@ -310,6 +319,16 @@ class BaseExtractor(base._Module, base.NamedModel):
         if ns_events and len(timelines := {e.timeline for e in ns_events}) > 1:
             msg = f"Multiple timelines {timelines} in events passed to extractor {self!r}: {ns_events}"
             raise ValueError(msg)
+
+        if self.aggregation != "trigger":
+            stop = start + duration
+            in_window = [
+                e for e in ns_events if e.start < stop and e.start + e.duration > start
+            ]
+            # fall back to full list when nothing overlaps, so raw-data events
+            # (Meg, Audio, Fmri) called outside their nominal range still reach
+            # the zero-fill in _tarrays_to_tensor (see test_first_samp).
+            ns_events = in_window or ns_events
 
         if self.aggregation in ("first", "trigger", "single"):
             if self.aggregation == "single" and len(ns_events) > 1:

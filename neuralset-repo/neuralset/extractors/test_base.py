@@ -214,6 +214,22 @@ def test_aggreg(aggreg: tp.Literal["first", "trigger"], expected: list[float]) -
     np.testing.assert_array_almost_equal(out, expected)
 
 
+def test_single_aggregation_scoped_to_window() -> None:
+    """``aggregation='single'`` counts events inside the segment window,
+    not across the whole input (typical when the caller passes a full
+    recording's DataFrame rather than a segment-scoped subset)."""
+    feat = Time(frequency=3, aggregation="single")
+    events = [
+        etypes.Image(start=s, duration=0.5, timeline="stuff", filepath=__file__)
+        for s in [0.0, 2.0, 4.0]
+    ]
+    # One overlaps [2, 3): picked, no raise.
+    feat(events, start=2.0, duration=1.0)
+    # Two overlap [0, 3): still ambiguous.
+    with pytest.raises(ValueError, match="expected only one"):
+        feat(events, start=0.0, duration=3.0)
+
+
 def test_trigger_outside_window() -> None:
     feat = ns.extractors.WordFrequency(aggregation="trigger")
     trigger = etypes.Word(text="Hello", start=0, duration=1, timeline="stuff")
