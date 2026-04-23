@@ -6,9 +6,10 @@ Studies
 
 A :class:`~neuralset.Study` is an interface to an external dataset: it
 knows how to download data, iterate over recording sessions, and load
-events. Most built-in studies are registered through the
-`neuralfetch <https://github.com/facebookresearch/neuroai>`_ package — no data
-is bundled, only the code that accesses it.
+events. A handful of synthetic/testing studies (``Fake2025Meg``, ``Mne2013Sample``,
+…) ship with neuralset; the full catalog of public datasets is provided
+by the `neuralfetch <https://github.com/facebookresearch/neuroai>`_
+package — no data is bundled, only the code that accesses it.
 
 .. note::
 
@@ -55,7 +56,7 @@ print(f"{len(all_studies)} studies available")
 # Instantiate a :class:`~neuralset.Study` by name.
 # ``Study(name="X", ...)`` automatically finds and returns the concrete
 # subclass ``X`` — it is equivalent to ``X(...)`` directly.
-# Available studies are registered through the ``neuralfetch`` package —
+# Public-data studies are registered through the ``neuralfetch`` package —
 # see the :doc:`neuralfetch documentation </neuralfetch/index>` for the full
 # catalog.
 #
