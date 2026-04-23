@@ -16,6 +16,8 @@ pip install neuralset
 ## Quick example
 
 ```python
+# First install study dependencies:
+# pip install neuralfetch
 import neuralset as ns
 
 # Load a study and download its data (MNE sample, ~1.6GB on first run).
