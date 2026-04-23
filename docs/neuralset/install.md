@@ -4,11 +4,14 @@
 ## Basic Install
 
 ```bash
-pip install neuralset neuralfetch
+pip install neuralset
 ```
 
-**neuralset** is the data pipeline. **neuralfetch** adds the dataset
-catalog — you need both to follow the tutorials.
+**neuralset** is the data pipeline and only ships with testing/synthetic studies. To load the full catalog of public datasets, also install :doc:`neuralfetch </neuralfetch/index>`:
+
+```bash
+pip install neuralfetch
+```
 
 Verify it works:
 
