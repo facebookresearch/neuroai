@@ -27,7 +27,7 @@ dependencies = [
   Source = "https://github.com/facebookresearch/neuroai"
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
-# Study auto-discovery: scan root for built-in testing fixtures.
+# Value: root module scanned for Study subclasses (see neuralset.events.study).
 [project.entry-points."neuralset.studies"]
 neuralset = "neuralset.events.testing"
 
