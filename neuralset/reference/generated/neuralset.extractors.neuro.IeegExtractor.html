@@ -1,0 +1,667 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html"><link rel="next" title="neuralset.extractors.neuro.MegExtractor" href="neuralset.extractors.neuro.MegExtractor.html"><link rel="prev" title="neuralset.extractors.neuro.HrfConvolve" href="neuralset.extractors.neuro.HrfConvolve.html">
+
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"><!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>neuralset.extractors.neuro.IeegExtractor - neuroai</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=2da93098" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=a3f93f39" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/conf.css?v=b3eb38f5" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  --admonition-font-size: 100%;
+  --admonition-title-font-size: 100%;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-admonition-title--note: #448aff;
+  --color-admonition-title-background--note: #448aff10;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">neuroai</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">neuroai</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="../../index.html">neuralset</a><input aria-label="Toggle navigation of neuralset" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../../install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../auto_examples/walkthrough/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/01_events.html">Events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/02_studies.html">Studies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/03_transforms.html">Transforms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/04_extractors.html">Extractors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/05_segmenter.html">Segmenter &amp; Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../auto_examples/walkthrough/06_chains.html">Chains</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../caching_and_cluster.html">Caching &amp; Cluster Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../encoding_decoding.html">Encoding &amp; Decoding</a></li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../reference.html">API</a><input aria-label="Toggle navigation of API" checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="neuralset.base.BaseModel.html">neuralset.base.BaseModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.base.Step.html">neuralset.base.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.base.Chain.html">neuralset.base.Chain</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.base.Frequency.html">neuralset.base.Frequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.base.TimedArray.html">neuralset.base.TimedArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.study.Study.html">neuralset.events.study.Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.study.SpecialLoader.html">neuralset.events.study.SpecialLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.study.StudyInfo.html">neuralset.events.study.StudyInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Action.html">neuralset.events.etypes.Action</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Artifact.html">neuralset.events.etypes.Artifact</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Audio.html">neuralset.events.etypes.Audio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Background.html">neuralset.events.etypes.Background</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.BaseDataEvent.html">neuralset.events.etypes.BaseDataEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.BaseSplittableEvent.html">neuralset.events.etypes.BaseSplittableEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.BaseText.html">neuralset.events.etypes.BaseText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.CategoricalEvent.html">neuralset.events.etypes.CategoricalEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Eeg.html">neuralset.events.etypes.Eeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Emg.html">neuralset.events.etypes.Emg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Event.html">neuralset.events.etypes.Event</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.EyeState.html">neuralset.events.etypes.EyeState</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Fmri.html">neuralset.events.etypes.Fmri</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Fnirs.html">neuralset.events.etypes.Fnirs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Ieeg.html">neuralset.events.etypes.Ieeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Image.html">neuralset.events.etypes.Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Keystroke.html">neuralset.events.etypes.Keystroke</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Meg.html">neuralset.events.etypes.Meg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.MneRaw.html">neuralset.events.etypes.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Phoneme.html">neuralset.events.etypes.Phoneme</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Seizure.html">neuralset.events.etypes.Seizure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Sentence.html">neuralset.events.etypes.Sentence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.SleepStage.html">neuralset.events.etypes.SleepStage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Spikes.html">neuralset.events.etypes.Spikes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Stimulus.html">neuralset.events.etypes.Stimulus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Text.html">neuralset.events.etypes.Text</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Video.html">neuralset.events.etypes.Video</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.etypes.Word.html">neuralset.events.etypes.Word</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.AlignEvents.html">neuralset.events.transforms.basic.AlignEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.ConfigureEventLoader.html">neuralset.events.transforms.basic.ConfigureEventLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.CreateColumn.html">neuralset.events.transforms.basic.CreateColumn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.QueryEvents.html">neuralset.events.transforms.basic.QueryEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.RemoveMissing.html">neuralset.events.transforms.basic.RemoveMissing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.basic.SelectIdx.html">neuralset.events.transforms.basic.SelectIdx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.EnsureTexts.html">neuralset.events.transforms.text.EnsureTexts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddConcatenationContext.html">neuralset.events.transforms.text.AddConcatenationContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddContextToWords.html">neuralset.events.transforms.text.AddContextToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddPartOfSpeech.html">neuralset.events.transforms.text.AddPartOfSpeech</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddPhonemes.html">neuralset.events.transforms.text.AddPhonemes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddSentenceToWords.html">neuralset.events.transforms.text.AddSentenceToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.text.AddSummary.html">neuralset.events.transforms.text.AddSummary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.splitting.AssignKSplits.html">neuralset.events.transforms.splitting.AssignKSplits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.splitting.AssignSentenceSplit.html">neuralset.events.transforms.splitting.AssignSentenceSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.splitting.AssignWordSplitAndContext.html">neuralset.events.transforms.splitting.AssignWordSplitAndContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.splitting.SklearnSplit.html">neuralset.events.transforms.splitting.SklearnSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.audio.ExtractAudioFromVideo.html">neuralset.events.transforms.audio.ExtractAudioFromVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.chunking.ChunkEvents.html">neuralset.events.transforms.chunking.ChunkEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.BaseExtractor.html">neuralset.extractors.base.BaseExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.BaseStatic.html">neuralset.extractors.base.BaseStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.EventDetector.html">neuralset.extractors.base.EventDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.EventField.html">neuralset.extractors.base.EventField</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.LabelEncoder.html">neuralset.extractors.base.LabelEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.base.Pulse.html">neuralset.extractors.base.Pulse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.ChannelPositions.html">neuralset.extractors.neuro.ChannelPositions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.EegExtractor.html">neuralset.extractors.neuro.EegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.EmgExtractor.html">neuralset.extractors.neuro.EmgExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.FmriExtractor.html">neuralset.extractors.neuro.FmriExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.FnirsExtractor.html">neuralset.extractors.neuro.FnirsExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.HrfConvolve.html">neuralset.extractors.neuro.HrfConvolve</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">neuralset.extractors.neuro.IeegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.MegExtractor.html">neuralset.extractors.neuro.MegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.MneRaw.html">neuralset.extractors.neuro.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.neuro.SpikesExtractor.html">neuralset.extractors.neuro.SpikesExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.HuggingFaceAudio.html">neuralset.extractors.audio.HuggingFaceAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.MelSpectrum.html">neuralset.extractors.audio.MelSpectrum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.SeamlessM4T.html">neuralset.extractors.audio.SeamlessM4T</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.SonarAudio.html">neuralset.extractors.audio.SonarAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.SpeechEnvelope.html">neuralset.extractors.audio.SpeechEnvelope</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.Wav2Vec.html">neuralset.extractors.audio.Wav2Vec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.Wav2VecBert.html">neuralset.extractors.audio.Wav2VecBert</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.audio.Whisper.html">neuralset.extractors.audio.Whisper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.HuggingFaceText.html">neuralset.extractors.text.HuggingFaceText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.SentenceTransformer.html">neuralset.extractors.text.SentenceTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.SonarEmbedding.html">neuralset.extractors.text.SonarEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.SpacyEmbedding.html">neuralset.extractors.text.SpacyEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.TfidfEmbedding.html">neuralset.extractors.text.TfidfEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.WordFrequency.html">neuralset.extractors.text.WordFrequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.text.WordLength.html">neuralset.extractors.text.WordLength</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.image.ColorHistogram.html">neuralset.extractors.image.ColorHistogram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.image.HOG.html">neuralset.extractors.image.HOG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.image.HuggingFaceImage.html">neuralset.extractors.image.HuggingFaceImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.image.LBP.html">neuralset.extractors.image.LBP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.image.RFFT2D.html">neuralset.extractors.image.RFFT2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.video.HuggingFaceVideo.html">neuralset.extractors.video.HuggingFaceVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.AggregatedExtractor.html">neuralset.extractors.meta.AggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.CroppedExtractor.html">neuralset.extractors.meta.CroppedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.ExtractorPCA.html">neuralset.extractors.meta.ExtractorPCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.HuggingFacePCA.html">neuralset.extractors.meta.HuggingFacePCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.TimeAggregatedExtractor.html">neuralset.extractors.meta.TimeAggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.extractors.meta.ToStatic.html">neuralset.extractors.meta.ToStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.segments.Segment.html">neuralset.segments.Segment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.dataloader.Segmenter.html">neuralset.dataloader.Segmenter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.dataloader.SegmentDataset.html">neuralset.dataloader.SegmentDataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.dataloader.Batch.html">neuralset.dataloader.Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.utils.DeterministicSplitter.html">neuralset.events.transforms.utils.DeterministicSplitter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.utils.chunk_events.html">neuralset.events.transforms.utils.chunk_events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="neuralset.events.transforms.splitting.SimilaritySplitter.html">neuralset.events.transforms.splitting.SimilaritySplitter</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../glossary.html">Glossary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../extending/contributing.html">Contributing</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuraltrain/index.html">neuraltrain</a><input aria-label="Toggle navigation of neuraltrain" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/tutorials.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/data/01_data.html">Data Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/models/02_models.html">Model Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/objectives/03_objectives.html">Metrics and Optimisation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/trainer/04_trainer.html">Trainer and Experiments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/project_example.html">Project Example</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseModelConfig.html">neuraltrain.models.base.BaseModelConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseLoss.html">neuraltrain.losses.base.BaseLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseTorchLoss.html">neuraltrain.losses.base.BaseTorchLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseMetric.html">neuraltrain.metrics.base.BaseMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseTorchMetric.html">neuraltrain.metrics.base.BaseTorchMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseOptimizer.html">neuraltrain.optimizers.base.BaseOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.LightningOptimizer.html">neuraltrain.optimizers.base.LightningOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchOptimizer.html">neuraltrain.optimizers.base.BaseTorchOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseLRScheduler.html">neuraltrain.optimizers.base.BaseLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchLRScheduler.html">neuraltrain.optimizers.base.BaseTorchLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseBrainDecodeModel.html">neuraltrain.models.base.BaseBrainDecodeModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConv.html">neuraltrain.models.simpleconv.SimpleConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvModel.html">neuraltrain.models.simpleconv.SimpleConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAgg.html">neuraltrain.models.simpleconv.SimpleConvTimeAgg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAggModel.html">neuraltrain.models.simpleconv.SimpleConvTimeAggModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConv.html">neuraltrain.models.simplerconv.SimplerConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConvModel.html">neuraltrain.models.simplerconv.SimplerConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.transformer.TransformerEncoder.html">neuraltrain.models.transformer.TransformerEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformer.html">neuraltrain.models.conv_transformer.ConvTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformerModel.html">neuraltrain.models.conv_transformer.ConvTransformerModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conformer.Conformer.html">neuraltrain.models.conformer.Conformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.Linear.html">neuraltrain.models.linear.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.LinearModel.html">neuraltrain.models.linear.LinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictor.html">neuraltrain.models.constant_predictor.ConstantPredictor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictorModel.html">neuraltrain.models.constant_predictor.ConstantPredictorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlp.html">neuraltrain.models.fmri_mlp.FmriMlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlpModel.html">neuraltrain.models.fmri_mlp.FmriMlpModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinear.html">neuraltrain.models.fmri_mlp.FmriLinear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinearModel.html">neuraltrain.models.fmri_mlp.FmriLinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.reve.NtReve.html">neuraltrain.models.reve.NtReve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.luna.NtLuna.html">neuraltrain.models.luna.NtLuna</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.labram.NtLabram.html">neuraltrain.models.labram.NtLabram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNet.html">neuraltrain.models.freqbandnet.FreqBandNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNetModel.html">neuraltrain.models.freqbandnet.FreqBandNetModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.green.Green.html">neuraltrain.models.green.Green</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.diffusion_prior.DiffusionPrior.html">neuraltrain.models.diffusion_prior.DiffusionPrior</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessor.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html">neuraltrain.models.common.SubjectLayers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html">neuraltrain.models.common.FourierEmb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html">neuraltrain.models.common.ChannelMerger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html">neuraltrain.models.common.Mlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html">neuraltrain.models.common.TemporalDownsampling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html">neuraltrain.models.common.LayerScale</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html">neuraltrain.models.common.NormDenormScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html">neuraltrain.models.common.ChannelDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html">neuraltrain.models.common.BahdanauAttention</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.MultiLoss.html">neuraltrain.losses.losses.MultiLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.ClipLoss.html">neuraltrain.losses.losses.ClipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.SigLipLoss.html">neuraltrain.losses.losses.SigLipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.OnlinePearsonCorr.html">neuraltrain.metrics.metrics.OnlinePearsonCorr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.Rank.html">neuraltrain.metrics.metrics.Rank</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAcc.html">neuraltrain.metrics.metrics.TopkAcc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAccFromScores.html">neuraltrain.metrics.metrics.TopkAccFromScores</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.ImageSimilarity.html">neuraltrain.metrics.metrics.ImageSimilarity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.GroupedMetric.html">neuraltrain.metrics.metrics.GroupedMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugment.html">neuraltrain.augmentations.augmentations.TrivialBrainAugment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig.html">neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFT.html">neuraltrain.augmentations.augmentations.BandstopFilterFFT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig.html">neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.ChannelsDropoutConfig.html">neuraltrain.augmentations.augmentations.ChannelsDropoutConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.FrequencyShiftConfig.html">neuraltrain.augmentations.augmentations.FrequencyShiftConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.GaussianNoiseConfig.html">neuraltrain.augmentations.augmentations.GaussianNoiseConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig.html">neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.run_grid.html">neuraltrain.utils.run_grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html">neuraltrain.utils.CsvLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html">neuraltrain.utils.WandbLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html">neuraltrain.utils.WandbInfra</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html">neuraltrain.utils.BaseExperiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html">neuraltrain.utils.StandardScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.TimedIterator.html">neuraltrain.utils.TimedIterator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.convert_to_pydantic.html">neuraltrain.utils.convert_to_pydantic</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuralfetch/index.html">neuralfetch</a><input aria-label="Toggle navigation of neuralfetch" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/auto_examples/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/01_plot_fetch_first_study.html">Fetch Your First Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/02_plot_study_anatomy.html">Anatomy of a Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/03_create_new_study.html">Creating Your Own Study</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/explore_datasets.html">Explore Brain Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/samples.html">Sample Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/contributing.html">Contributing: New Studies</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.BaseDownload.html">neuralfetch.download.BaseDownload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dandi.html">neuralfetch.download.Dandi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Eegdash.html">neuralfetch.download.Eegdash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Datalad.html">neuralfetch.download.Datalad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Donders.html">neuralfetch.download.Donders</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dryad.html">neuralfetch.download.Dryad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Figshare.html">neuralfetch.download.Figshare</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Huggingface.html">neuralfetch.download.Huggingface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Openneuro.html">neuralfetch.download.Openneuro</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Osf.html">neuralfetch.download.Osf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Physionet.html">neuralfetch.download.Physionet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Synapse.html">neuralfetch.download.Synapse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Zenodo.html">neuralfetch.download.Zenodo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.compute_study_info.html">neuralfetch.utils.compute_study_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.update_source_info.html">neuralfetch.utils.update_source_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.root_study_folder.html">neuralfetch.utils.root_study_folder</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/facebookresearch/neuroai/blob/main/docs/neuralset/reference/generated/neuralset.extractors.neuro.IeegExtractor.rst?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/facebookresearch/neuroai/edit/main/docs/neuralset/reference/generated/neuralset.extractors.neuro.IeegExtractor.rst" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <div class="autosummary-back-link docutils container">
+<p><a class="reference internal" href="../reference.html"><span class="doc">← Back to API reference</span></a></p>
+</div>
+<section id="neuralset-extractors-neuro-ieegextractor">
+<h1>neuralset.extractors.neuro.IeegExtractor<a class="headerlink" href="#neuralset-extractors-neuro-ieegextractor" title="Link to this heading">¶</a></h1>
+<dl class="py class pydantic_model">
+<dt class="sig sig-object py" id="neuralset.extractors.neuro.IeegExtractor">
+<em class="property"><span class="pre">pydantic</span> <span class="pre">model</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">neuralset.extractors.neuro.</span></span><span class="sig-name descname"><span class="pre">IeegExtractor</span></span><a class="reference internal" href="../../../_modules/neuralset/extractors/neuro.html#IeegExtractor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="reference external" href="https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/neuralset/extractors/neuro.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#neuralset.extractors.neuro.IeegExtractor" title="Link to this definition">¶</a></dt>
+<dd><p>Intracranial EEG feature extractor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>picks</strong> (<em>default =</em><em> (</em><em>&quot;seeg&quot;</em><em>, </em><em>&quot;ecog&quot;</em><em>, </em><em>)</em>) – pick “seeg” and “ecog” channels by default.</p></li>
+<li><p><strong>reference</strong> (<em>&quot;bipolar&quot;</em><em> or </em><em>None</em><em>, </em><em>default=None</em>) – If “bipolar”, applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
+Uses mne.set_bipolar_reference under the hood. <a class="reference internal" href="#ieeg1" id="id1"><span>[ieeg1]</span></a></p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Bipolar reference currently can only be applied to sEEG. It expects
+that the channels in raw.ch_names are ordered by probe,
+and with ascending order for each probe, and the names consists of
+the probe name followed by the position on the probe.
+eg: [‘OF1’, ‘OF2’, ‘OF3’, … , ‘OF12’, ‘OF13’, ‘OF14’, ‘H1’, ‘H2’,
+‘H3’, … , ‘H13’, ‘H14’, ‘H15’, …]</p>
+<p>WATCH-OUT: this will take the closest electrode on the probe,
+meaning that if the neighboring electrode is missing for some
+reason (eg: rejected before applying the reference) then the next
+electrode will be used for referencing.</p>
+<p class="rubric">References</p>
+<div role="list" class="citation-list">
+<div class="citation" id="ieeg1" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">ieeg1</a><span class="fn-bracket">]</span></span>
+<p><a class="reference external" href="https://mne.tools/stable/generated/mne.set_bipolar_reference.html">https://mne.tools/stable/generated/mne.set_bipolar_reference.html</a></p>
+</div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Fields<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.event_types" title="neuralset.extractors.neuro.IeegExtractor.event_types"><code class="xref py py-obj docutils literal notranslate"><span class="pre">event_types</span> <span class="pre">(Literal['Ieeg'])</span></code></a></p></li>
+<li><p><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.picks" title="neuralset.extractors.neuro.IeegExtractor.picks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">picks</span> <span class="pre">(tuple[str,</span> <span class="pre">...])</span></code></a></p></li>
+<li><p><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.reference" title="neuralset.extractors.neuro.IeegExtractor.reference"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reference</span> <span class="pre">(Literal['bipolar']</span> <span class="pre">|</span> <span class="pre">None)</span></code></a></p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute pydantic_field">
+<dt class="sig sig-object py" id="neuralset.extractors.neuro.IeegExtractor.event_types">
+<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">event_types</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'Ieeg'</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'Ieeg'</span></em><a class="reference external" href="https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/neuralset/extractors/neuro.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#neuralset.extractors.neuro.IeegExtractor.event_types" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute pydantic_field">
+<dt class="sig sig-object py" id="neuralset.extractors.neuro.IeegExtractor.picks">
+<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">picks</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('seeg',</span> <span class="pre">'ecog')</span></em><a class="reference external" href="https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/neuralset/extractors/neuro.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#neuralset.extractors.neuro.IeegExtractor.picks" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute pydantic_field">
+<dt class="sig sig-object py" id="neuralset.extractors.neuro.IeegExtractor.reference">
+<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">reference</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'bipolar'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="reference external" href="https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/neuralset/extractors/neuro.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#neuralset.extractors.neuro.IeegExtractor.reference" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="neuralset.extractors.neuro.IeegExtractor.requirements">
+<span class="sig-name descname"><span class="pre">requirements</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tp.ClassVar</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">()</span></em><a class="reference external" href="https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/neuralset/extractors/neuro.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#neuralset.extractors.neuro.IeegExtractor.requirements" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<div class="autosummary-back-link docutils container">
+<p><a class="reference internal" href="../reference.html"><span class="doc">← Back to API reference</span></a></p>
+</div>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="neuralset.extractors.neuro.MegExtractor.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">neuralset.extractors.neuro.MegExtractor</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="neuralset.extractors.neuro.HrfConvolve.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">neuralset.extractors.neuro.HrfConvolve</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; Meta Platforms, Inc. and affiliates
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/facebookresearch/neuroai" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">neuralset.extractors.neuro.IeegExtractor</a><ul>
+<li><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor"><code class="docutils literal notranslate"><span class="pre">IeegExtractor</span></code></a><ul>
+<li><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.event_types"><code class="docutils literal notranslate"><span class="pre">IeegExtractor.event_types</span></code></a></li>
+<li><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.picks"><code class="docutils literal notranslate"><span class="pre">IeegExtractor.picks</span></code></a></li>
+<li><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.reference"><code class="docutils literal notranslate"><span class="pre">IeegExtractor.reference</span></code></a></li>
+<li><a class="reference internal" href="#neuralset.extractors.neuro.IeegExtractor.requirements"><code class="docutils literal notranslate"><span class="pre">IeegExtractor.requirements</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=4ea706d9"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../../_static/pipeline-accordion.js?v=3528a9e4"></script>
+    <script src="../../../_static/code-selector.js?v=4968e69a"></script>
+    <script src="../../../_static/sidebar-nav.js?v=0e453ee9"></script>
+    </body>
+</html>

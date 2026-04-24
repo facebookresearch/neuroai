@@ -1,0 +1,1377 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"><!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>neuraltrain.models.common - neuroai</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=2da93098" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=a3f93f39" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/conf.css?v=b3eb38f5" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  --admonition-font-size: 100%;
+  --admonition-title-font-size: 100%;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-admonition-title--note: #448aff;
+  --color-admonition-title-background--note: #448aff10;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">neuroai</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">neuroai</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuralset/index.html">neuralset</a><input aria-label="Toggle navigation of neuralset" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/01_events.html">Events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/02_studies.html">Studies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/03_transforms.html">Transforms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/04_extractors.html">Extractors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/05_segmenter.html">Segmenter &amp; Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/06_chains.html">Chains</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/caching_and_cluster.html">Caching &amp; Cluster Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/encoding_decoding.html">Encoding &amp; Decoding</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralset/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.BaseModel.html">neuralset.base.BaseModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Step.html">neuralset.base.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Chain.html">neuralset.base.Chain</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Frequency.html">neuralset.base.Frequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.TimedArray.html">neuralset.base.TimedArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.Study.html">neuralset.events.study.Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.SpecialLoader.html">neuralset.events.study.SpecialLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.StudyInfo.html">neuralset.events.study.StudyInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Action.html">neuralset.events.etypes.Action</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Artifact.html">neuralset.events.etypes.Artifact</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Audio.html">neuralset.events.etypes.Audio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Background.html">neuralset.events.etypes.Background</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseDataEvent.html">neuralset.events.etypes.BaseDataEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseSplittableEvent.html">neuralset.events.etypes.BaseSplittableEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseText.html">neuralset.events.etypes.BaseText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.CategoricalEvent.html">neuralset.events.etypes.CategoricalEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Eeg.html">neuralset.events.etypes.Eeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Emg.html">neuralset.events.etypes.Emg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Event.html">neuralset.events.etypes.Event</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.EyeState.html">neuralset.events.etypes.EyeState</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Fmri.html">neuralset.events.etypes.Fmri</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Fnirs.html">neuralset.events.etypes.Fnirs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Ieeg.html">neuralset.events.etypes.Ieeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Image.html">neuralset.events.etypes.Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Keystroke.html">neuralset.events.etypes.Keystroke</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Meg.html">neuralset.events.etypes.Meg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.MneRaw.html">neuralset.events.etypes.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Phoneme.html">neuralset.events.etypes.Phoneme</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Seizure.html">neuralset.events.etypes.Seizure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Sentence.html">neuralset.events.etypes.Sentence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.SleepStage.html">neuralset.events.etypes.SleepStage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Spikes.html">neuralset.events.etypes.Spikes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Stimulus.html">neuralset.events.etypes.Stimulus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Text.html">neuralset.events.etypes.Text</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Video.html">neuralset.events.etypes.Video</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Word.html">neuralset.events.etypes.Word</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.AlignEvents.html">neuralset.events.transforms.basic.AlignEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.ConfigureEventLoader.html">neuralset.events.transforms.basic.ConfigureEventLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.CreateColumn.html">neuralset.events.transforms.basic.CreateColumn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.QueryEvents.html">neuralset.events.transforms.basic.QueryEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.RemoveMissing.html">neuralset.events.transforms.basic.RemoveMissing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.SelectIdx.html">neuralset.events.transforms.basic.SelectIdx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.EnsureTexts.html">neuralset.events.transforms.text.EnsureTexts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddConcatenationContext.html">neuralset.events.transforms.text.AddConcatenationContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddContextToWords.html">neuralset.events.transforms.text.AddContextToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddPartOfSpeech.html">neuralset.events.transforms.text.AddPartOfSpeech</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddPhonemes.html">neuralset.events.transforms.text.AddPhonemes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddSentenceToWords.html">neuralset.events.transforms.text.AddSentenceToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddSummary.html">neuralset.events.transforms.text.AddSummary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignKSplits.html">neuralset.events.transforms.splitting.AssignKSplits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignSentenceSplit.html">neuralset.events.transforms.splitting.AssignSentenceSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignWordSplitAndContext.html">neuralset.events.transforms.splitting.AssignWordSplitAndContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.SklearnSplit.html">neuralset.events.transforms.splitting.SklearnSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.audio.ExtractAudioFromVideo.html">neuralset.events.transforms.audio.ExtractAudioFromVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.chunking.ChunkEvents.html">neuralset.events.transforms.chunking.ChunkEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.BaseExtractor.html">neuralset.extractors.base.BaseExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.BaseStatic.html">neuralset.extractors.base.BaseStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.EventDetector.html">neuralset.extractors.base.EventDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.EventField.html">neuralset.extractors.base.EventField</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.LabelEncoder.html">neuralset.extractors.base.LabelEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.Pulse.html">neuralset.extractors.base.Pulse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.ChannelPositions.html">neuralset.extractors.neuro.ChannelPositions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.EegExtractor.html">neuralset.extractors.neuro.EegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.EmgExtractor.html">neuralset.extractors.neuro.EmgExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.FmriExtractor.html">neuralset.extractors.neuro.FmriExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.FnirsExtractor.html">neuralset.extractors.neuro.FnirsExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.HrfConvolve.html">neuralset.extractors.neuro.HrfConvolve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.IeegExtractor.html">neuralset.extractors.neuro.IeegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.MegExtractor.html">neuralset.extractors.neuro.MegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.MneRaw.html">neuralset.extractors.neuro.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.SpikesExtractor.html">neuralset.extractors.neuro.SpikesExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.HuggingFaceAudio.html">neuralset.extractors.audio.HuggingFaceAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.MelSpectrum.html">neuralset.extractors.audio.MelSpectrum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SeamlessM4T.html">neuralset.extractors.audio.SeamlessM4T</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SonarAudio.html">neuralset.extractors.audio.SonarAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SpeechEnvelope.html">neuralset.extractors.audio.SpeechEnvelope</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Wav2Vec.html">neuralset.extractors.audio.Wav2Vec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Wav2VecBert.html">neuralset.extractors.audio.Wav2VecBert</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Whisper.html">neuralset.extractors.audio.Whisper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.HuggingFaceText.html">neuralset.extractors.text.HuggingFaceText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SentenceTransformer.html">neuralset.extractors.text.SentenceTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SonarEmbedding.html">neuralset.extractors.text.SonarEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SpacyEmbedding.html">neuralset.extractors.text.SpacyEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.TfidfEmbedding.html">neuralset.extractors.text.TfidfEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.WordFrequency.html">neuralset.extractors.text.WordFrequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.WordLength.html">neuralset.extractors.text.WordLength</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.ColorHistogram.html">neuralset.extractors.image.ColorHistogram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.HOG.html">neuralset.extractors.image.HOG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.HuggingFaceImage.html">neuralset.extractors.image.HuggingFaceImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.LBP.html">neuralset.extractors.image.LBP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.RFFT2D.html">neuralset.extractors.image.RFFT2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.video.HuggingFaceVideo.html">neuralset.extractors.video.HuggingFaceVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.AggregatedExtractor.html">neuralset.extractors.meta.AggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.CroppedExtractor.html">neuralset.extractors.meta.CroppedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.ExtractorPCA.html">neuralset.extractors.meta.ExtractorPCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.HuggingFacePCA.html">neuralset.extractors.meta.HuggingFacePCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.TimeAggregatedExtractor.html">neuralset.extractors.meta.TimeAggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.ToStatic.html">neuralset.extractors.meta.ToStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.segments.Segment.html">neuralset.segments.Segment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.Segmenter.html">neuralset.dataloader.Segmenter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.SegmentDataset.html">neuralset.dataloader.SegmentDataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.Batch.html">neuralset.dataloader.Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.utils.DeterministicSplitter.html">neuralset.events.transforms.utils.DeterministicSplitter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.utils.chunk_events.html">neuralset.events.transforms.utils.chunk_events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.SimilaritySplitter.html">neuralset.events.transforms.splitting.SimilaritySplitter</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/glossary.html">Glossary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/extending/contributing.html">Contributing</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuraltrain/index.html">neuraltrain</a><input aria-label="Toggle navigation of neuraltrain" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/tutorials.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/data/01_data.html">Data Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/models/02_models.html">Model Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/objectives/03_objectives.html">Metrics and Optimisation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/trainer/04_trainer.html">Trainer and Experiments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/project_example.html">Project Example</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseModelConfig.html">neuraltrain.models.base.BaseModelConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseLoss.html">neuraltrain.losses.base.BaseLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseTorchLoss.html">neuraltrain.losses.base.BaseTorchLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseMetric.html">neuraltrain.metrics.base.BaseMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseTorchMetric.html">neuraltrain.metrics.base.BaseTorchMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseOptimizer.html">neuraltrain.optimizers.base.BaseOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.LightningOptimizer.html">neuraltrain.optimizers.base.LightningOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchOptimizer.html">neuraltrain.optimizers.base.BaseTorchOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseLRScheduler.html">neuraltrain.optimizers.base.BaseLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchLRScheduler.html">neuraltrain.optimizers.base.BaseTorchLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseBrainDecodeModel.html">neuraltrain.models.base.BaseBrainDecodeModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConv.html">neuraltrain.models.simpleconv.SimpleConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvModel.html">neuraltrain.models.simpleconv.SimpleConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAgg.html">neuraltrain.models.simpleconv.SimpleConvTimeAgg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAggModel.html">neuraltrain.models.simpleconv.SimpleConvTimeAggModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConv.html">neuraltrain.models.simplerconv.SimplerConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConvModel.html">neuraltrain.models.simplerconv.SimplerConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.transformer.TransformerEncoder.html">neuraltrain.models.transformer.TransformerEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformer.html">neuraltrain.models.conv_transformer.ConvTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformerModel.html">neuraltrain.models.conv_transformer.ConvTransformerModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conformer.Conformer.html">neuraltrain.models.conformer.Conformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.Linear.html">neuraltrain.models.linear.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.LinearModel.html">neuraltrain.models.linear.LinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictor.html">neuraltrain.models.constant_predictor.ConstantPredictor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictorModel.html">neuraltrain.models.constant_predictor.ConstantPredictorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlp.html">neuraltrain.models.fmri_mlp.FmriMlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlpModel.html">neuraltrain.models.fmri_mlp.FmriMlpModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinear.html">neuraltrain.models.fmri_mlp.FmriLinear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinearModel.html">neuraltrain.models.fmri_mlp.FmriLinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.reve.NtReve.html">neuraltrain.models.reve.NtReve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.luna.NtLuna.html">neuraltrain.models.luna.NtLuna</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.labram.NtLabram.html">neuraltrain.models.labram.NtLabram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNet.html">neuraltrain.models.freqbandnet.FreqBandNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNetModel.html">neuraltrain.models.freqbandnet.FreqBandNetModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.green.Green.html">neuraltrain.models.green.Green</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.diffusion_prior.DiffusionPrior.html">neuraltrain.models.diffusion_prior.DiffusionPrior</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessor.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html">neuraltrain.models.common.SubjectLayers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html">neuraltrain.models.common.FourierEmb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html">neuraltrain.models.common.ChannelMerger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html">neuraltrain.models.common.Mlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html">neuraltrain.models.common.TemporalDownsampling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html">neuraltrain.models.common.LayerScale</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html">neuraltrain.models.common.NormDenormScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html">neuraltrain.models.common.ChannelDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html">neuraltrain.models.common.BahdanauAttention</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.MultiLoss.html">neuraltrain.losses.losses.MultiLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.ClipLoss.html">neuraltrain.losses.losses.ClipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.SigLipLoss.html">neuraltrain.losses.losses.SigLipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.OnlinePearsonCorr.html">neuraltrain.metrics.metrics.OnlinePearsonCorr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.Rank.html">neuraltrain.metrics.metrics.Rank</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAcc.html">neuraltrain.metrics.metrics.TopkAcc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAccFromScores.html">neuraltrain.metrics.metrics.TopkAccFromScores</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.ImageSimilarity.html">neuraltrain.metrics.metrics.ImageSimilarity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.GroupedMetric.html">neuraltrain.metrics.metrics.GroupedMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugment.html">neuraltrain.augmentations.augmentations.TrivialBrainAugment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig.html">neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFT.html">neuraltrain.augmentations.augmentations.BandstopFilterFFT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig.html">neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.ChannelsDropoutConfig.html">neuraltrain.augmentations.augmentations.ChannelsDropoutConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.FrequencyShiftConfig.html">neuraltrain.augmentations.augmentations.FrequencyShiftConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.GaussianNoiseConfig.html">neuraltrain.augmentations.augmentations.GaussianNoiseConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig.html">neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.run_grid.html">neuraltrain.utils.run_grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html">neuraltrain.utils.CsvLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html">neuraltrain.utils.WandbLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html">neuraltrain.utils.WandbInfra</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html">neuraltrain.utils.BaseExperiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html">neuraltrain.utils.StandardScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.TimedIterator.html">neuraltrain.utils.TimedIterator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.convert_to_pydantic.html">neuraltrain.utils.convert_to_pydantic</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuralfetch/index.html">neuralfetch</a><input aria-label="Toggle navigation of neuralfetch" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/auto_examples/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/01_plot_fetch_first_study.html">Fetch Your First Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/02_plot_study_anatomy.html">Anatomy of a Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/03_create_new_study.html">Creating Your Own Study</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/explore_datasets.html">Explore Brain Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/samples.html">Sample Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/contributing.html">Contributing: New Studies</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.BaseDownload.html">neuralfetch.download.BaseDownload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dandi.html">neuralfetch.download.Dandi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Eegdash.html">neuralfetch.download.Eegdash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Datalad.html">neuralfetch.download.Datalad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Donders.html">neuralfetch.download.Donders</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dryad.html">neuralfetch.download.Dryad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Figshare.html">neuralfetch.download.Figshare</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Huggingface.html">neuralfetch.download.Huggingface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Openneuro.html">neuralfetch.download.Openneuro</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Osf.html">neuralfetch.download.Osf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Physionet.html">neuralfetch.download.Physionet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Synapse.html">neuralfetch.download.Synapse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Zenodo.html">neuralfetch.download.Zenodo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.compute_study_info.html">neuralfetch.utils.compute_study_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.update_source_info.html">neuralfetch.utils.update_source_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.root_study_folder.html">neuralfetch.utils.root_study_folder</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for neuraltrain.models.common</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright (c) Meta Platforms, Inc. and affiliates.</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This source code is licensed under the license found in the</span>
+<span class="c1"># LICENSE file in the root directory of this source tree.</span>
+
+<span class="sd">&quot;&quot;&quot;Common modules to be used with brain models.&quot;&quot;&quot;</span>
+
+<span class="c1"># pylint: disable=unused-variable</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">deque</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchvision.ops</span><span class="w"> </span><span class="kn">import</span> <span class="n">MLP</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">neuraltrain.models.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModelConfig</span>
+
+<span class="n">INVALID_POS_VALUE</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.1</span>  <span class="c1"># See ns.extractors.ChannelPositions.INVALID_VALUE</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">parse_bipolar_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Split a bipolar channel name into its anode and cathode.</span>
+
+<span class="sd">    Returns ``(&quot;Fp1&quot;, &quot;F3&quot;)`` for ``&quot;Fp1-F3&quot;``, or ``None`` when *name*</span>
+<span class="sd">    does not look like a bipolar pair (i.e. does not contain exactly one</span>
+<span class="sd">    hyphen separating two non-empty parts).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_temporal_adjustment</span><span class="p">(</span><span class="n">n_times</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">patch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute how to align *n_times* to a multiple of *patch_size*.</span>
+
+<span class="sd">    Returns ``(pad_right, truncate_right)`` -- at most one is non-zero.</span>
+
+<span class="sd">    * ``n_times &lt; patch_size`` -- pad to one full patch.</span>
+<span class="sd">    * ``n_times`` not divisible by ``patch_size`` -- truncate the remainder.</span>
+<span class="sd">    * Already aligned -- ``(0, 0)``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">n_times</span> <span class="o">&lt;</span> <span class="n">patch_size</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">patch_size</span> <span class="o">-</span> <span class="n">n_times</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="n">remainder</span> <span class="o">=</span> <span class="n">n_times</span> <span class="o">%</span> <span class="n">patch_size</span>
+    <span class="k">if</span> <span class="n">remainder</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="n">remainder</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_temporal_adjustment</span><span class="p">(</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="n">pad_right</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">truncate_right</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Zero-pad or truncate the last (time) dimension of *x*.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">pad_right</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">pad_right</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">truncate_right</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="n">truncate_right</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+
+<div class="viewcode-block" id="BahdanauAttention">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html#neuraltrain.models.common.BahdanauAttention">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BahdanauAttention</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bahdanau attention from [1]_.</span>
+
+<span class="sd">    Implementation inspired from pytorch&#39;s seq2seq tutorial:</span>
+<span class="sd">    https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html#the-decoder</span>
+
+<span class="sd">    .. [1] Bahdanau, Dzmitry, Kyunghyun Cho, and Yoshua Bengio. &quot;Neural machine translation by</span>
+<span class="sd">           jointly learning to align and translate.&quot; arXiv preprint arXiv:1409.0473 (2014).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">input_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Wa</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LazyLinear</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Ua</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LazyLinear</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Wa</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Ua</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Va</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">hidden_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BahdanauAttention.forward">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html#neuraltrain.models.common.BahdanauAttention.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">,</span> <span class="n">queries</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        keys:</span>
+<span class="sd">            Key tensor of shape (batch_size, n_features, n_times).</span>
+<span class="sd">        queries:</span>
+<span class="sd">            Optional query tensor of shape (batch_size, n_features, n_times).</span>
+<span class="sd">            If None, only keys are used.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="n">keys</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># (B, F, T) -&gt; (B, T, F)</span>
+        <span class="n">sum_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Wa</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">queries</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">queries</span> <span class="o">=</span> <span class="n">queries</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">queries</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">keys</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">sum_</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Ua</span><span class="p">(</span><span class="n">queries</span><span class="p">)</span>
+
+        <span class="n">scores</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Va</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">sum_</span><span class="p">))</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">context</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bmm</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">keys</span><span class="p">)</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># (B, 1, F) -&gt; (B, F, 1)</span>
+
+        <span class="k">return</span> <span class="n">context</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ChannelDropout">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html#neuraltrain.models.common.ChannelDropout">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ChannelDropout</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;See brainmagick.models.common.&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="ChannelDropout.forward">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html#neuraltrain.models.common.ChannelDropout.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="SubjectLayers">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html#neuraltrain.models.common.SubjectLayers">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SubjectLayers</span><span class="p">(</span><span class="n">BaseModelConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for per-subject linear projections.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    n_subjects : int</span>
+<span class="sd">        Number of subjects to allocate weight matrices for.</span>
+<span class="sd">    bias : bool</span>
+<span class="sd">        Include a bias term in each subject&#39;s projection.</span>
+<span class="sd">    init_id : bool</span>
+<span class="sd">        Initialize projection matrices to the identity (requires</span>
+<span class="sd">        ``in_channels == out_channels``).</span>
+<span class="sd">    mode : {&quot;gather&quot;, &quot;for_loop&quot;}</span>
+<span class="sd">        ``&quot;gather&quot;`` builds a ``(B, C_in, C_out)`` tensor via index_select</span>
+<span class="sd">        (fast but memory-heavy for large channel counts).  ``&quot;for_loop&quot;``</span>
+<span class="sd">        iterates over unique subjects (slower but lighter).</span>
+<span class="sd">    subject_dropout : float or None</span>
+<span class="sd">        Probability of replacing a subject index with a shared &quot;dropout</span>
+<span class="sd">        subject&quot; during training.  Required when *average_subjects* is True.</span>
+<span class="sd">    average_subjects : bool</span>
+<span class="sd">        At inference time, use the shared dropout-subject weights for all</span>
+<span class="sd">        examples.  Requires *subject_dropout* to be set.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">n_subjects</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span>
+    <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">init_id</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gather&quot;</span><span class="p">,</span> <span class="s2">&quot;for_loop&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;gather&quot;</span>
+    <span class="n">subject_dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">average_subjects</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="SubjectLayers.build">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html#neuraltrain.models.common.SubjectLayers.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">:</span>
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">SubjectLayersModel</span><span class="p">(</span><span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">SubjectLayersModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Per subject linear projection.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    in_channels :</span>
+<span class="sd">        Number of input channels.</span>
+<span class="sd">    out_channels :</span>
+<span class="sd">        Number of output channels.</span>
+<span class="sd">    n_subjects :</span>
+<span class="sd">        Number of subjects to initialize weights for.</span>
+<span class="sd">    bias:</span>
+<span class="sd">        If True, use a bias term.</span>
+<span class="sd">    init_id :</span>
+<span class="sd">        If True, initialize the projection matrices with the identity.</span>
+<span class="sd">    mode :</span>
+<span class="sd">        How to apply the linear projection. With &quot;gather&quot; (original implementation), a tensor of</span>
+<span class="sd">        shape (batch_size, in_channels, out_channels) containing the projection matrices for each</span>
+<span class="sd">        example in the batch is first created. This tensor can be very large when the number of</span>
+<span class="sd">        channels is high (e.g. when using on fMRI data with many input voxels). In this case, it</span>
+<span class="sd">        may be better to use &quot;for_loop&quot;: this will loop over each unique subject in the batch to</span>
+<span class="sd">        apply the projection separately.</span>
+<span class="sd">    subject_dropout :</span>
+<span class="sd">        If not None, probability with which a subject&#39;s index is replaced by a shared &quot;dropout</span>
+<span class="sd">        subject&quot; during training. An extra row is added to the weight matrix for this purpose.</span>
+<span class="sd">        Required when ``average_subjects`` is True.</span>
+<span class="sd">    average_subjects :</span>
+<span class="sd">        If True, use the shared dropout-subject weights for all examples (inference shortcut).</span>
+<span class="sd">        Requires ``subject_dropout`` to be set.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">n_subjects</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span><span class="p">,</span>
+        <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">init_id</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">mode</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;gather&quot;</span><span class="p">,</span> <span class="s2">&quot;for_loop&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;gather&quot;</span><span class="p">,</span>
+        <span class="n">subject_dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">average_subjects</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_subjects</span> <span class="o">=</span> <span class="n">n_subjects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">subject_dropout</span> <span class="o">=</span> <span class="n">subject_dropout</span>
+        <span class="n">num_weight_subjects</span> <span class="o">=</span> <span class="n">n_subjects</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">subject_dropout</span> <span class="k">else</span> <span class="n">n_subjects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">num_weight_subjects</span><span class="p">,</span> <span class="n">in_channels</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">num_weight_subjects</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">))</span> <span class="k">if</span> <span class="n">bias</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">init_id</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">in_channels</span> <span class="o">!=</span> <span class="n">out_channels</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;in_channels and out_channels must be the same for identity initialization.&quot;</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">data</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">in_channels</span><span class="p">)[</span><span class="kc">None</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">data</span><span class="p">[:]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">normal_</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">normal_</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">data</span> <span class="o">*=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">in_channels</span><span class="o">**</span><span class="mf">0.5</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">data</span> <span class="o">*=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">in_channels</span><span class="o">**</span><span class="mf">0.5</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">average_subjects</span> <span class="o">=</span> <span class="n">average_subjects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">mode</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>  <span class="c1"># (batch_size, in_channels) or (batch_size, in_channels, n_times)</span>
+        <span class="n">subjects</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>  <span class="c1"># (batch_size,)</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="p">):</span>  <span class="c1"># (batch_size, out_channels) or (batch_size, out_channels, n_times)</span>
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected shape (B, C, T) or (B, C), got </span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">has_time_dimension</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">has_time_dimension</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">T</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">N</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">average_subjects</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">subject_dropout</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;subject_dropout must be set to average subjects.&quot;</span><span class="p">)</span>
+            <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n_subjects</span><span class="p">]</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;bct,cd-&gt;bdt&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n_subjects</span><span class="p">]</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">out</span> <span class="k">if</span> <span class="n">has_time_dimension</span> <span class="k">else</span> <span class="n">out</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">subject_dropout</span><span class="p">:</span>
+                <span class="n">subject_dropout_mask</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">subjects</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">subjects</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                    <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">subject_dropout</span>
+                <span class="p">)</span>
+                <span class="n">subjects</span> <span class="o">=</span> <span class="n">subjects</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                <span class="n">subjects</span><span class="p">[</span><span class="n">subject_dropout_mask</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_subjects</span>
+            <span class="k">if</span> <span class="n">subjects</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">N</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Subject index </span><span class="si">{</span><span class="n">subjects</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">}</span><span class="s2"> out of range for </span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2"> weight slots&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;gather&quot;</span><span class="p">:</span>
+                <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">index_select</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">subjects</span><span class="o">.</span><span class="n">flatten</span><span class="p">())</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;bct,bcd-&gt;bdt&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">index_select</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">subjects</span><span class="o">.</span><span class="n">flatten</span><span class="p">())</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">B</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">T</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">subject</span> <span class="ow">in</span> <span class="n">subjects</span><span class="o">.</span><span class="n">unique</span><span class="p">():</span>
+                    <span class="n">mask</span> <span class="o">=</span> <span class="n">subjects</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="n">subject</span>
+                    <span class="n">out</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span>
+                        <span class="s2">&quot;bct,cd-&gt;bdt&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[</span><span class="n">subject</span><span class="p">]</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">out</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">[</span><span class="n">subject</span><span class="p">]</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span> <span class="k">if</span> <span class="n">has_time_dimension</span> <span class="k">else</span> <span class="n">out</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">S</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;SubjectLayersModel(</span><span class="si">{</span><span class="n">C</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">D</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">S</span><span class="si">}</span><span class="s2">)&quot;</span>
+
+
+<div class="viewcode-block" id="FourierEmb">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html#neuraltrain.models.common.FourierEmb">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FourierEmb</span><span class="p">(</span><span class="n">BaseModelConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for Fourier positional embedding.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    n_freqs :</span>
+<span class="sd">        Number of frequencies (harmonics) used to encode **one** dimension.</span>
+<span class="sd">    total_dim :</span>
+<span class="sd">        If provided instead of `n_freqs`, this will be used to compute the number of</span>
+<span class="sd">        frequencies following this relationship:</span>
+
+<span class="sd">            n_freqs = (total_dim / 2) ** (1 / n_dims)</span>
+
+<span class="sd">        If the resulting `n_freqs` is not an integer an exception will be raised.</span>
+<span class="sd">    n_dims :</span>
+<span class="sd">        Number of dimensions to embed. This should be 2 for 2D positions (e.g. MNE layouts) or 3</span>
+<span class="sd">        for 3D positions (e.g. MNE montages).</span>
+<span class="sd">    margin :</span>
+<span class="sd">        How much to extend the range of the embedding to avoid edge effects.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">n_freqs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="mi">12</span>
+    <span class="n">total_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">n_dims</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">margin</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.2</span>
+
+<div class="viewcode-block" id="FourierEmb.build">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html#neuraltrain.models.common.FourierEmb.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;FourierEmbModel&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_dim</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_freqs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">n_freqs</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">total_dim</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">n_freqs</span> <span class="o">-</span> <span class="nb">round</span><span class="p">(</span><span class="n">n_freqs</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mf">1e-6</span><span class="p">:</span>  <span class="c1"># Check if n_freqs is integer</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;(total_dim / 2) ** (1 / n_dims) must be an integer.&quot;</span><span class="p">)</span>
+            <span class="n">n_freqs</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">n_freqs</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_freqs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">total_dim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">n_freqs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_freqs</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Exactly one of n_freqs and total_dim must be provided.&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">FourierEmbModel</span><span class="p">(</span>
+            <span class="n">n_freqs</span><span class="o">=</span><span class="n">n_freqs</span><span class="p">,</span>
+            <span class="n">n_dims</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">,</span>
+            <span class="n">margin</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">margin</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">FourierEmbModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fourier positional embedding.</span>
+
+<span class="sd">    Unlike traditional embedding this is not using exponential periods for cosines and sinuses, but</span>
+<span class="sd">    typical `2 pi k` which can represent any function over [0, 1]. As this function would be</span>
+<span class="sd">    necessarily periodic, we take a bit of margin and do over e.g. [-0.2, 1.2].</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">n_freqs</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">n_dims</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">margin</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_freqs</span> <span class="o">=</span> <span class="n">n_freqs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span> <span class="o">=</span> <span class="n">n_dims</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">margin</span> <span class="o">=</span> <span class="n">margin</span>
+
+        <span class="c1"># Precompute sin/cos arguments</span>
+        <span class="n">freqs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">n_freqs</span><span class="p">)</span>
+        <span class="n">width</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">margin</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">freqs</span> <span class="o">/</span> <span class="n">width</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s2">&quot;pos&quot;</span><span class="p">,</span> <span class="n">pos</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">total_dim</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Total dimension of the embedding.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_freqs</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_outer_sum</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Outer sum between the last dimensions of `x`.</span>
+
+<span class="sd">        x.shape[-1] is expected to match the dimensions of the grid, between which the outer sum</span>
+<span class="sd">        is computed. For example, if x.shape[-1] == 2, the outer sum will be computed between the</span>
+<span class="sd">        last two dimensions of `x`, i.e. x[..., 0] and x[..., 1].</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">inds</span> <span class="o">=</span> <span class="n">deque</span><span class="p">([</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">][(</span><span class="o">...</span><span class="p">,)</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">inds</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">inds</span><span class="o">.</span><span class="n">rotate</span><span class="p">()</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">out</span> <span class="o">+</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">][(</span><span class="o">...</span><span class="p">,)</span> <span class="o">+</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">inds</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">positions</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute Fourier embedding for the given positions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        positions : Tensor</span>
+<span class="sd">            Coordinates of shape ``(..., D)`` where ``D`` equals *n_dims*.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="o">*</span><span class="n">O</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">if</span> <span class="n">D</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="si">}</span><span class="s2"> positions, got </span><span class="si">{</span><span class="n">D</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">positions</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">margin</span>
+        <span class="n">locs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;bcd,f-&gt;bcfd&quot;</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pos</span><span class="p">)</span>
+        <span class="n">loc_grid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_outer_sum</span><span class="p">(</span><span class="n">locs</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">*</span><span class="n">O</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">emb</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">loc_grid</span><span class="p">),</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">loc_grid</span><span class="p">),</span>
+            <span class="p">],</span>
+            <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">emb</span>
+
+
+<div class="viewcode-block" id="ChannelMerger">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html#neuraltrain.models.common.ChannelMerger">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ChannelMerger</span><span class="p">(</span><span class="n">BaseModelConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configuration for the ChannelMerger module.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    embed_ref :</span>
+<span class="sd">        Also embed the reference position, e.g. to enable handling bipolar channels. This requires</span>
+<span class="sd">        passing both `positions` and `ref_positions` to `forward()`.</span>
+<span class="sd">    dropout_around_channel :</span>
+<span class="sd">        If True, randomly sample a channel to apply dropout around. If False, randomly sample a</span>
+<span class="sd">        point in [0, 1] ^ D, where D is the number of dimensions (2 or 3), around which to apply</span>
+<span class="sd">        dropout.</span>
+<span class="sd">    unmerge :</span>
+<span class="sd">        If True, unmerge (rather than merge) channels. This is useful to compute the inverse</span>
+<span class="sd">        operation of a default `ChannelMerger`. In this case, the input to `forward()` should be of</span>
+<span class="sd">        shape (B, n_virtual_channels, T).</span>
+<span class="sd">    invalid_value :</span>
+<span class="sd">        If all position dimensions for a channel are equal to `invalid_value`, the channel will be</span>
+<span class="sd">        masked out. This is useful when examples within a batch contain different channels and</span>
+<span class="sd">        therefore some channels need to be ignored for some of the examples.</span>
+
+<span class="sd">        NOTE: `ns.extractors.ChannelPositions` defines this value as well.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">n_virtual_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">270</span>
+    <span class="n">fourier_emb_config</span><span class="p">:</span> <span class="n">FourierEmb</span> <span class="o">=</span> <span class="n">FourierEmb</span><span class="p">(</span>
+        <span class="n">n_freqs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">total_dim</span><span class="o">=</span><span class="mi">288</span><span class="p">,</span>
+        <span class="n">n_dims</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">dropout_around_channel</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">usage_penalty</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">n_subjects</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200</span>
+    <span class="n">per_subject</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">embed_ref</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">unmerge</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">invalid_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">INVALID_POS_VALUE</span>
+
+<div class="viewcode-block" id="ChannelMerger.build">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html#neuraltrain.models.common.ChannelMerger.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ChannelMergerModel&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ChannelMergerModel</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ChannelMergerModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``nn.Module`` implementation of :class:`ChannelMerger`.</span>
+
+<span class="sd">    Merges (or unmerges) channels via Fourier-embedding-based spatial attention.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">ChannelMerger</span> <span class="o">=</span> <span class="n">ChannelMerger</span><span class="p">()):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">fourier_emb_config</span><span class="o">.</span><span class="n">build</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="o">.</span><span class="n">n_dims</span>
+        <span class="n">pos_dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="o">.</span><span class="n">total_dim</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">pos_dim</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>  <span class="c1"># for mypy</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">per_subject</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">per_subject</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embed_ref</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">embed_ref</span>
+        <span class="n">n_params_pos_dim</span> <span class="o">=</span> <span class="n">pos_dim</span> <span class="o">*</span> <span class="mi">2</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed_ref</span> <span class="k">else</span> <span class="n">pos_dim</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">per_subject</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">heads</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span>
+                    <span class="n">config</span><span class="o">.</span><span class="n">n_subjects</span><span class="p">,</span> <span class="n">config</span><span class="o">.</span><span class="n">n_virtual_channels</span><span class="p">,</span> <span class="n">n_params_pos_dim</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">heads</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">n_virtual_channels</span><span class="p">,</span> <span class="n">n_params_pos_dim</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">invalid_value</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">invalid_value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="o">.</span><span class="n">data</span> <span class="o">/=</span> <span class="n">pos_dim</span><span class="o">**</span><span class="mf">0.5</span>  <span class="c1"># XXX Double check</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">dropout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dropout_around_channel</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">dropout_around_channel</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">usage_penalty</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">usage_penalty</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_penalty</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unmerge</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">unmerge</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">training_penalty</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_penalty</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="nb">next</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_weights</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">subject_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed_ref</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">:</span>
+                <span class="n">ref_pad</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">invalid_value</span><span class="p">,</span>
+                    <span class="n">dtype</span><span class="o">=</span><span class="n">positions</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                    <span class="n">device</span><span class="o">=</span><span class="n">positions</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">positions</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">positions</span><span class="p">,</span> <span class="n">ref_pad</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span> <span class="o">*</span> <span class="mi">2</span><span class="p">:</span>  <span class="c1"># type: ignore</span>
+                <span class="n">got</span> <span class="o">=</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;embed_ref needs </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> dims, got </span><span class="si">{</span><span class="n">got</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">embedding</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">positions</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">]),</span>  <span class="c1"># type: ignore</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">positions</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span> <span class="p">:]),</span>  <span class="c1"># type: ignore</span>
+                <span class="p">],</span>
+                <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="si">}</span><span class="s2"> spatial dimensions, got </span><span class="si">{</span><span class="n">positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="n">embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding</span><span class="p">(</span><span class="n">positions</span><span class="p">)</span>
+
+        <span class="n">score_offset</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">invalid_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">positions</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">invalid_value</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">score_offset</span> <span class="o">=</span> <span class="n">score_offset</span><span class="o">.</span><span class="n">masked_fill</span><span class="p">(</span><span class="n">invalid_mask</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;-inf&quot;</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmerge</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                    <span class="s2">&quot;Figure out how to apply dropout if unmerge=True&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout_around_channel</span><span class="p">:</span>
+                <span class="n">all_valid_positions</span> <span class="o">=</span> <span class="n">positions</span><span class="p">[</span><span class="o">~</span><span class="n">invalid_mask</span><span class="p">]</span>
+                <span class="n">ind</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">all_valid_positions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="mi">1</span><span class="p">,))[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">center_to_ban</span> <span class="o">=</span> <span class="n">all_valid_positions</span><span class="p">[</span><span class="n">ind</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">center_to_ban</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">radius_to_ban</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dropout</span>
+            <span class="n">banned</span> <span class="o">=</span> <span class="p">(</span><span class="n">positions</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_dims</span><span class="p">]</span> <span class="o">-</span> <span class="n">center_to_ban</span><span class="p">)</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span>
+                <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span>
+            <span class="p">)</span> <span class="o">&lt;=</span> <span class="n">radius_to_ban</span>
+            <span class="n">score_offset</span> <span class="o">=</span> <span class="n">score_offset</span><span class="o">.</span><span class="n">masked_fill</span><span class="p">(</span><span class="n">banned</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;-inf&quot;</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">per_subject</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">cout</span><span class="p">,</span> <span class="n">pos_dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">heads</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span>
+                <span class="mi">0</span><span class="p">,</span> <span class="n">subject_ids</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">cout</span><span class="p">,</span> <span class="n">pos_dim</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">heads</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">heads</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">scores</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">einsum</span><span class="p">(</span><span class="s2">&quot;bcd,bod-&gt;boc&quot;</span><span class="p">,</span> <span class="n">embedding</span><span class="p">,</span> <span class="n">heads</span><span class="p">)</span>
+        <span class="n">scores</span> <span class="o">+=</span> <span class="n">score_offset</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">unmerge</span><span class="p">:</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="n">scores</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">()</span>  <span class="c1"># Replace nans by 0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">meg</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">subject_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">positions</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply spatial attention on input.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        positions :</span>
+<span class="sd">            Normalized (x, y) coordinates for each channel in `meg`, of shape (B, C, 2).</span>
+<span class="sd">            If shape is (B, C, 4), the additional two coordinates per channel indicate the</span>
+<span class="sd">            position of the reference electrode. See `ns.extractors.ChannelPositions`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_weights</span><span class="p">(</span><span class="n">subject_ids</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">meg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">@</span> <span class="n">meg</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">usage_penalty</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+            <span class="n">usage</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_penalty</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">usage_penalty</span> <span class="o">*</span> <span class="n">usage</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">meg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+
+<div class="viewcode-block" id="LayerScale">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html#neuraltrain.models.common.LayerScale">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LayerScale</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Layer scale from [Touvron et al 2021] (https://arxiv.org/pdf/2103.17239.pdf).</span>
+<span class="sd">    This rescales diagonaly residual outputs close to 0 initially, then learnt.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">init</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">boost</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">channels</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">data</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">init</span> <span class="o">/</span> <span class="n">boost</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">boost</span> <span class="o">=</span> <span class="n">boost</span>
+
+<div class="viewcode-block" id="LayerScale.forward">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html#neuraltrain.models.common.LayerScale.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">boost</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">])</span> <span class="o">*</span> <span class="n">x</span></div>
+</div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">UnitNorm</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalize last dimension of tensor to have unit Frobenius norm.</span>
+
+<span class="sd">    Useful for parametrizing different normalization alternatives in `Mlp` below.</span>
+
+<span class="sd">    NOTE: `hidden_dim` argument included for consistency with other normalization layers (e.g.</span>
+<span class="sd">          BatchNorm).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="s2">&quot;fro&quot;</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Mean</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">keepdim</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keepdim</span> <span class="o">=</span> <span class="n">keepdim</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">keepdim</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="NormDenormScaler">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html#neuraltrain.models.common.NormDenormScaler">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">NormDenormScaler</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Norm-denorm scaler inspired by [1]_.</span>
+
+<span class="sd">    At inference time, this module applies z-score normalization of its input, followed by</span>
+<span class="sd">    de-normalization based on the statistics of the data seen at instantiation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x :</span>
+<span class="sd">        Data on which to fit the denormalizer, of shape (n_examples, n_features).</span>
+<span class="sd">    affine :</span>
+<span class="sd">        If True, de-normalize with the statistics of `x`.</span>
+
+<span class="sd">    References</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. [1] Ozcelik, Furkan, and Rufin VanRullen. &quot;Natural scene reconstruction from fMRI signals</span>
+<span class="sd">       using generative latent diffusion.&quot; Scientific Reports 13.1 (2023): 15666.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">affine</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tensor must be 2D (flattened), got ndim=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span>
+            <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">affine</span><span class="o">=</span><span class="n">affine</span><span class="p">,</span> <span class="n">track_running_stats</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-15</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">affine</span><span class="p">:</span>
+            <span class="c1"># Disable gradient as this is not currently intended to be finetuned</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="kc">False</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">correction</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<div class="viewcode-block" id="NormDenormScaler.forward">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html#neuraltrain.models.common.NormDenormScaler.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">scaler</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="Mlp">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html#neuraltrain.models.common.Mlp">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Mlp</span><span class="p">(</span><span class="n">BaseModelConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Multilayer perceptron, e.g. for use as projection head.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    Input size can be specified in the config or at build time.</span>
+<span class="sd">    Output size can be specified at build time through the `output_size` parameter: it will be</span>
+<span class="sd">    appended to `hidden_sizes` as the final layer.</span>
+<span class="sd">    When `hidden_sizes` is empty or None and `output_size` is given, `build()` returns a</span>
+<span class="sd">    single ``nn.Linear`` layer. When both are absent it returns ``nn.Identity``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">input_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">hidden_sizes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="n">norm_layer</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;layer&quot;</span><span class="p">,</span> <span class="s2">&quot;batch&quot;</span><span class="p">,</span> <span class="s2">&quot;instance&quot;</span><span class="p">,</span> <span class="s2">&quot;unit&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">activation_layer</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;relu&quot;</span><span class="p">,</span> <span class="s2">&quot;gelu&quot;</span><span class="p">,</span> <span class="s2">&quot;elu&quot;</span><span class="p">,</span> <span class="s2">&quot;prelu&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;relu&quot;</span>
+
+    <span class="n">bias</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">dropout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_norm_layer</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Type</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;batch&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">,</span>
+            <span class="s2">&quot;layer&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">,</span>
+            <span class="s2">&quot;instance&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">InstanceNorm1d</span><span class="p">,</span>
+            <span class="s2">&quot;unit&quot;</span><span class="p">:</span> <span class="n">UnitNorm</span><span class="p">,</span>
+            <span class="kc">None</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">kind</span><span class="p">]</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_activation_layer</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Type</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;gelu&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">,</span>
+            <span class="s2">&quot;relu&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span>
+            <span class="s2">&quot;elu&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span>
+            <span class="s2">&quot;prelu&quot;</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">PReLU</span><span class="p">,</span>
+            <span class="kc">None</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">kind</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Mlp.build">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html#neuraltrain.models.common.Mlp.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">input_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span> <span class="o">|</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span> <span class="o">|</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">:</span>
+        <span class="n">input_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_size</span> <span class="k">if</span> <span class="n">input_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">input_size</span>
+        <span class="k">if</span> <span class="n">input_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;input_size cannot be None.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_sizes</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">output_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">()</span>
+            <span class="k">return</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">input_size</span><span class="p">,</span> <span class="n">output_size</span><span class="p">)</span>
+
+        <span class="n">hidden_sizes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hidden_sizes</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">output_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">hidden_sizes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_size</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="n">input_size</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">hidden_sizes</span><span class="p">,</span>
+            <span class="n">norm_layer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_norm_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">norm_layer</span><span class="p">),</span>
+            <span class="n">activation_layer</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_activation_layer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">activation_layer</span><span class="p">),</span>
+            <span class="n">bias</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bias</span><span class="p">,</span>
+            <span class="n">dropout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dropout</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="TemporalDownsampling">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html#neuraltrain.models.common.TemporalDownsampling">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TemporalDownsampling</span><span class="p">(</span><span class="n">BaseModelConfig</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Temporal downsampling via a 2-D convolution over the time axis.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    kernel_size : int</span>
+<span class="sd">        Kernel height (time-axis) of the downsampling convolution.</span>
+<span class="sd">    stride : int</span>
+<span class="sd">        Stride along the time axis.</span>
+<span class="sd">    layer_norm : bool</span>
+<span class="sd">        Apply ``LayerNorm`` after the convolution.</span>
+<span class="sd">    layer_norm_affine : bool</span>
+<span class="sd">        Use learnable affine parameters in the ``LayerNorm``.</span>
+<span class="sd">    gelu : bool</span>
+<span class="sd">        Apply GELU activation after normalization.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">kernel_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">45</span>
+    <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">45</span>
+    <span class="n">layer_norm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">layer_norm_affine</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">gelu</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+
+<div class="viewcode-block" id="TemporalDownsampling.build">
+<a class="viewcode-back" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html#neuraltrain.models.common.TemporalDownsampling.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">TemporalDownsamplingModel</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="n">dim</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TemporalDownsamplingModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``nn.Module`` implementation of :class:`TemporalDownsampling`.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">config</span><span class="p">:</span> <span class="n">TemporalDownsampling</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="n">config</span> <span class="k">if</span> <span class="n">config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">TemporalDownsampling</span><span class="p">()</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">agg</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">stride</span><span class="o">=</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">,</span> <span class="n">elementwise_affine</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">layer_norm_affine</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">layer_norm</span>
+            <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gelu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">()</span> <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">gelu</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="c1"># x.shape expected to be (B, 1, T, F)</span>
+        <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input must be of shape (B, 1, T, F), got </span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_norm</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">gelu</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gelu</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; Meta Platforms, Inc. and affiliates
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/facebookresearch/neuroai" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=4ea706d9"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../../_static/pipeline-accordion.js?v=3528a9e4"></script>
+    <script src="../../../_static/code-selector.js?v=4968e69a"></script>
+    <script src="../../../_static/sidebar-nav.js?v=0e453ee9"></script>
+    </body>
+</html>

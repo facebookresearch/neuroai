@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.MegExtractor
+=======================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: MegExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.utils.StandardScaler
+================================
+
+.. currentmodule:: neuraltrain.utils
+
+.. autopydantic_model:: StandardScaler
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

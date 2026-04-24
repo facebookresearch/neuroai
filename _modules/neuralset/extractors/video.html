@@ -1,0 +1,1031 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"><!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>neuralset.extractors.video - neuroai</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=2da93098" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=d2d258e8" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=a3f93f39" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/conf.css?v=b3eb38f5" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  --admonition-font-size: 100%;
+  --admonition-title-font-size: 100%;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-admonition-title--note: #448aff;
+  --color-admonition-title-background--note: #448aff10;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">neuroai</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">neuroai</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuralset/index.html">neuralset</a><input aria-label="Toggle navigation of neuralset" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/01_events.html">Events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/02_studies.html">Studies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/03_transforms.html">Transforms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/04_extractors.html">Extractors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/05_segmenter.html">Segmenter &amp; Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/auto_examples/walkthrough/06_chains.html">Chains</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/caching_and_cluster.html">Caching &amp; Cluster Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/encoding_decoding.html">Encoding &amp; Decoding</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralset/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.BaseModel.html">neuralset.base.BaseModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Step.html">neuralset.base.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Chain.html">neuralset.base.Chain</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.Frequency.html">neuralset.base.Frequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.base.TimedArray.html">neuralset.base.TimedArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.Study.html">neuralset.events.study.Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.SpecialLoader.html">neuralset.events.study.SpecialLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.study.StudyInfo.html">neuralset.events.study.StudyInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Action.html">neuralset.events.etypes.Action</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Artifact.html">neuralset.events.etypes.Artifact</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Audio.html">neuralset.events.etypes.Audio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Background.html">neuralset.events.etypes.Background</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseDataEvent.html">neuralset.events.etypes.BaseDataEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseSplittableEvent.html">neuralset.events.etypes.BaseSplittableEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.BaseText.html">neuralset.events.etypes.BaseText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.CategoricalEvent.html">neuralset.events.etypes.CategoricalEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Eeg.html">neuralset.events.etypes.Eeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Emg.html">neuralset.events.etypes.Emg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Event.html">neuralset.events.etypes.Event</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.EyeState.html">neuralset.events.etypes.EyeState</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Fmri.html">neuralset.events.etypes.Fmri</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Fnirs.html">neuralset.events.etypes.Fnirs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Ieeg.html">neuralset.events.etypes.Ieeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Image.html">neuralset.events.etypes.Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Keystroke.html">neuralset.events.etypes.Keystroke</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Meg.html">neuralset.events.etypes.Meg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.MneRaw.html">neuralset.events.etypes.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Phoneme.html">neuralset.events.etypes.Phoneme</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Seizure.html">neuralset.events.etypes.Seizure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Sentence.html">neuralset.events.etypes.Sentence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.SleepStage.html">neuralset.events.etypes.SleepStage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Spikes.html">neuralset.events.etypes.Spikes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Stimulus.html">neuralset.events.etypes.Stimulus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Text.html">neuralset.events.etypes.Text</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Video.html">neuralset.events.etypes.Video</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.etypes.Word.html">neuralset.events.etypes.Word</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.AlignEvents.html">neuralset.events.transforms.basic.AlignEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.ConfigureEventLoader.html">neuralset.events.transforms.basic.ConfigureEventLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.CreateColumn.html">neuralset.events.transforms.basic.CreateColumn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.QueryEvents.html">neuralset.events.transforms.basic.QueryEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.RemoveMissing.html">neuralset.events.transforms.basic.RemoveMissing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.basic.SelectIdx.html">neuralset.events.transforms.basic.SelectIdx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.EnsureTexts.html">neuralset.events.transforms.text.EnsureTexts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddConcatenationContext.html">neuralset.events.transforms.text.AddConcatenationContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddContextToWords.html">neuralset.events.transforms.text.AddContextToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddPartOfSpeech.html">neuralset.events.transforms.text.AddPartOfSpeech</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddPhonemes.html">neuralset.events.transforms.text.AddPhonemes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddSentenceToWords.html">neuralset.events.transforms.text.AddSentenceToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.text.AddSummary.html">neuralset.events.transforms.text.AddSummary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignKSplits.html">neuralset.events.transforms.splitting.AssignKSplits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignSentenceSplit.html">neuralset.events.transforms.splitting.AssignSentenceSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignWordSplitAndContext.html">neuralset.events.transforms.splitting.AssignWordSplitAndContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.SklearnSplit.html">neuralset.events.transforms.splitting.SklearnSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.audio.ExtractAudioFromVideo.html">neuralset.events.transforms.audio.ExtractAudioFromVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.chunking.ChunkEvents.html">neuralset.events.transforms.chunking.ChunkEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.BaseExtractor.html">neuralset.extractors.base.BaseExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.BaseStatic.html">neuralset.extractors.base.BaseStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.EventDetector.html">neuralset.extractors.base.EventDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.EventField.html">neuralset.extractors.base.EventField</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.LabelEncoder.html">neuralset.extractors.base.LabelEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.base.Pulse.html">neuralset.extractors.base.Pulse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.ChannelPositions.html">neuralset.extractors.neuro.ChannelPositions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.EegExtractor.html">neuralset.extractors.neuro.EegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.EmgExtractor.html">neuralset.extractors.neuro.EmgExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.FmriExtractor.html">neuralset.extractors.neuro.FmriExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.FnirsExtractor.html">neuralset.extractors.neuro.FnirsExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.HrfConvolve.html">neuralset.extractors.neuro.HrfConvolve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.IeegExtractor.html">neuralset.extractors.neuro.IeegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.MegExtractor.html">neuralset.extractors.neuro.MegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.MneRaw.html">neuralset.extractors.neuro.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.neuro.SpikesExtractor.html">neuralset.extractors.neuro.SpikesExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.HuggingFaceAudio.html">neuralset.extractors.audio.HuggingFaceAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.MelSpectrum.html">neuralset.extractors.audio.MelSpectrum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SeamlessM4T.html">neuralset.extractors.audio.SeamlessM4T</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SonarAudio.html">neuralset.extractors.audio.SonarAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.SpeechEnvelope.html">neuralset.extractors.audio.SpeechEnvelope</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Wav2Vec.html">neuralset.extractors.audio.Wav2Vec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Wav2VecBert.html">neuralset.extractors.audio.Wav2VecBert</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.audio.Whisper.html">neuralset.extractors.audio.Whisper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.HuggingFaceText.html">neuralset.extractors.text.HuggingFaceText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SentenceTransformer.html">neuralset.extractors.text.SentenceTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SonarEmbedding.html">neuralset.extractors.text.SonarEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.SpacyEmbedding.html">neuralset.extractors.text.SpacyEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.TfidfEmbedding.html">neuralset.extractors.text.TfidfEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.WordFrequency.html">neuralset.extractors.text.WordFrequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.text.WordLength.html">neuralset.extractors.text.WordLength</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.ColorHistogram.html">neuralset.extractors.image.ColorHistogram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.HOG.html">neuralset.extractors.image.HOG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.HuggingFaceImage.html">neuralset.extractors.image.HuggingFaceImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.LBP.html">neuralset.extractors.image.LBP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.image.RFFT2D.html">neuralset.extractors.image.RFFT2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.video.HuggingFaceVideo.html">neuralset.extractors.video.HuggingFaceVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.AggregatedExtractor.html">neuralset.extractors.meta.AggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.CroppedExtractor.html">neuralset.extractors.meta.CroppedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.ExtractorPCA.html">neuralset.extractors.meta.ExtractorPCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.HuggingFacePCA.html">neuralset.extractors.meta.HuggingFacePCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.TimeAggregatedExtractor.html">neuralset.extractors.meta.TimeAggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.extractors.meta.ToStatic.html">neuralset.extractors.meta.ToStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.segments.Segment.html">neuralset.segments.Segment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.Segmenter.html">neuralset.dataloader.Segmenter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.SegmentDataset.html">neuralset.dataloader.SegmentDataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.dataloader.Batch.html">neuralset.dataloader.Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.utils.DeterministicSplitter.html">neuralset.events.transforms.utils.DeterministicSplitter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.utils.chunk_events.html">neuralset.events.transforms.utils.chunk_events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralset/reference/generated/neuralset.events.transforms.splitting.SimilaritySplitter.html">neuralset.events.transforms.splitting.SimilaritySplitter</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/glossary.html">Glossary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralset/extending/contributing.html">Contributing</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuraltrain/index.html">neuraltrain</a><input aria-label="Toggle navigation of neuraltrain" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/tutorials.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/data/01_data.html">Data Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/models/02_models.html">Model Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/objectives/03_objectives.html">Metrics and Optimisation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/auto_examples/trainer/04_trainer.html">Trainer and Experiments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuraltrain/project_example.html">Project Example</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuraltrain/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseModelConfig.html">neuraltrain.models.base.BaseModelConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseLoss.html">neuraltrain.losses.base.BaseLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseTorchLoss.html">neuraltrain.losses.base.BaseTorchLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseMetric.html">neuraltrain.metrics.base.BaseMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseTorchMetric.html">neuraltrain.metrics.base.BaseTorchMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseOptimizer.html">neuraltrain.optimizers.base.BaseOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.LightningOptimizer.html">neuraltrain.optimizers.base.LightningOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchOptimizer.html">neuraltrain.optimizers.base.BaseTorchOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseLRScheduler.html">neuraltrain.optimizers.base.BaseLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchLRScheduler.html">neuraltrain.optimizers.base.BaseTorchLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.base.BaseBrainDecodeModel.html">neuraltrain.models.base.BaseBrainDecodeModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConv.html">neuraltrain.models.simpleconv.SimpleConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvModel.html">neuraltrain.models.simpleconv.SimpleConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAgg.html">neuraltrain.models.simpleconv.SimpleConvTimeAgg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAggModel.html">neuraltrain.models.simpleconv.SimpleConvTimeAggModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConv.html">neuraltrain.models.simplerconv.SimplerConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConvModel.html">neuraltrain.models.simplerconv.SimplerConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.transformer.TransformerEncoder.html">neuraltrain.models.transformer.TransformerEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformer.html">neuraltrain.models.conv_transformer.ConvTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformerModel.html">neuraltrain.models.conv_transformer.ConvTransformerModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.conformer.Conformer.html">neuraltrain.models.conformer.Conformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.Linear.html">neuraltrain.models.linear.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.linear.LinearModel.html">neuraltrain.models.linear.LinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictor.html">neuraltrain.models.constant_predictor.ConstantPredictor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictorModel.html">neuraltrain.models.constant_predictor.ConstantPredictorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlp.html">neuraltrain.models.fmri_mlp.FmriMlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlpModel.html">neuraltrain.models.fmri_mlp.FmriMlpModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinear.html">neuraltrain.models.fmri_mlp.FmriLinear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinearModel.html">neuraltrain.models.fmri_mlp.FmriLinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.reve.NtReve.html">neuraltrain.models.reve.NtReve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.luna.NtLuna.html">neuraltrain.models.luna.NtLuna</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.labram.NtLabram.html">neuraltrain.models.labram.NtLabram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNet.html">neuraltrain.models.freqbandnet.FreqBandNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNetModel.html">neuraltrain.models.freqbandnet.FreqBandNetModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.green.Green.html">neuraltrain.models.green.Green</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.diffusion_prior.DiffusionPrior.html">neuraltrain.models.diffusion_prior.DiffusionPrior</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessor.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html">neuraltrain.models.common.SubjectLayers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html">neuraltrain.models.common.FourierEmb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html">neuraltrain.models.common.ChannelMerger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html">neuraltrain.models.common.Mlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html">neuraltrain.models.common.TemporalDownsampling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html">neuraltrain.models.common.LayerScale</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html">neuraltrain.models.common.NormDenormScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html">neuraltrain.models.common.ChannelDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html">neuraltrain.models.common.BahdanauAttention</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.MultiLoss.html">neuraltrain.losses.losses.MultiLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.ClipLoss.html">neuraltrain.losses.losses.ClipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.losses.losses.SigLipLoss.html">neuraltrain.losses.losses.SigLipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.OnlinePearsonCorr.html">neuraltrain.metrics.metrics.OnlinePearsonCorr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.Rank.html">neuraltrain.metrics.metrics.Rank</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAcc.html">neuraltrain.metrics.metrics.TopkAcc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAccFromScores.html">neuraltrain.metrics.metrics.TopkAccFromScores</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.ImageSimilarity.html">neuraltrain.metrics.metrics.ImageSimilarity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.GroupedMetric.html">neuraltrain.metrics.metrics.GroupedMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugment.html">neuraltrain.augmentations.augmentations.TrivialBrainAugment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig.html">neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFT.html">neuraltrain.augmentations.augmentations.BandstopFilterFFT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig.html">neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.ChannelsDropoutConfig.html">neuraltrain.augmentations.augmentations.ChannelsDropoutConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.FrequencyShiftConfig.html">neuraltrain.augmentations.augmentations.FrequencyShiftConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.GaussianNoiseConfig.html">neuraltrain.augmentations.augmentations.GaussianNoiseConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig.html">neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.run_grid.html">neuraltrain.utils.run_grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html">neuraltrain.utils.CsvLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html">neuraltrain.utils.WandbLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html">neuraltrain.utils.WandbInfra</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html">neuraltrain.utils.BaseExperiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html">neuraltrain.utils.StandardScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.TimedIterator.html">neuraltrain.utils.TimedIterator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuraltrain/reference/generated/neuraltrain.utils.convert_to_pydantic.html">neuraltrain.utils.convert_to_pydantic</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../neuralfetch/index.html">neuralfetch</a><input aria-label="Toggle navigation of neuralfetch" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/auto_examples/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/01_plot_fetch_first_study.html">Fetch Your First Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/02_plot_study_anatomy.html">Anatomy of a Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/auto_examples/03_create_new_study.html">Creating Your Own Study</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/explore_datasets.html">Explore Brain Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/samples.html">Sample Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../neuralfetch/contributing.html">Contributing: New Studies</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../neuralfetch/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.BaseDownload.html">neuralfetch.download.BaseDownload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dandi.html">neuralfetch.download.Dandi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Eegdash.html">neuralfetch.download.Eegdash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Datalad.html">neuralfetch.download.Datalad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Donders.html">neuralfetch.download.Donders</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Dryad.html">neuralfetch.download.Dryad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Figshare.html">neuralfetch.download.Figshare</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Huggingface.html">neuralfetch.download.Huggingface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Openneuro.html">neuralfetch.download.Openneuro</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Osf.html">neuralfetch.download.Osf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Physionet.html">neuralfetch.download.Physionet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Synapse.html">neuralfetch.download.Synapse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.download.Zenodo.html">neuralfetch.download.Zenodo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.compute_study_info.html">neuralfetch.utils.compute_study_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.update_source_info.html">neuralfetch.utils.update_source_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../neuralfetch/reference/generated/neuralfetch.utils.root_study_folder.html">neuralfetch.utils.root_study_folder</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for neuralset.extractors.video</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright (c) Meta Platforms, Inc. and affiliates.</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This source code is licensed under the license found in the</span>
+<span class="c1"># LICENSE file in the root directory of this source tree.</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tp</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">exca</span><span class="w"> </span><span class="kn">import</span> <span class="n">MapInfra</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">neuralset</span><span class="w"> </span><span class="kn">import</span> <span class="n">base</span> <span class="k">as</span> <span class="n">nsbase</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">neuralset.events</span><span class="w"> </span><span class="kn">import</span> <span class="n">etypes</span> <span class="k">as</span> <span class="n">evts</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">neuralset.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ignore_all</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseExtractor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.image</span><span class="w"> </span><span class="kn">import</span> <span class="n">HuggingFaceImage</span><span class="p">,</span> <span class="n">_fix_pixel_values</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+<span class="c1"># activate with:</span>
+<span class="c1"># logging.getLogger(&quot;neuralset&quot;).setLevel(logging.DEBUG)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_VideoImage</span><span class="p">(</span><span class="n">evts</span><span class="o">.</span><span class="n">Image</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Image event wrapper for extracting individual frames from a video.</span>
+
+<span class="sd">    This class extends the base Image event to enable frame-by-frame processing</span>
+<span class="sd">    of videos. It extracts a single frame at a specified time point and presents</span>
+<span class="sd">    it as an Image event.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    start : float, default=0.0</span>
+<span class="sd">        The start time of the image event.</span>
+<span class="sd">    timeline : str, default=&quot;fake&quot;</span>
+<span class="sd">        Timeline identifier for the image event. Uses &quot;fake&quot; since this is a virtual</span>
+<span class="sd">        event derived from video data rather than an original image event.</span>
+<span class="sd">    video : moviepy.editor.VideoFileClip</span>
+<span class="sd">        The loaded video object from which to extract frames. Should be a MoviePy</span>
+<span class="sd">        VideoFileClip instance with frame extraction capabilities.</span>
+<span class="sd">    time : float, default=0.0</span>
+<span class="sd">        The exact timestamp (in seconds) within the video at which to extract</span>
+<span class="sd">        the frame. Must be within [0, video.duration].</span>
+<span class="sd">    duration : float, default=1.0</span>
+<span class="sd">        The nominal duration of the image event (in seconds). By convention, it is set to 1.</span>
+<span class="sd">    filepath : str, default=&quot;&quot;</span>
+<span class="sd">        Auto-generated filepath identifier for caching purposes. Automatically</span>
+<span class="sd">        constructed as &quot;{video_filename}:{time:.3f}&quot; to ensure unique cache keys</span>
+<span class="sd">        for each frame.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">start</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">timeline</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fake&quot;</span>
+    <span class="n">duration</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">video</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span>
+    <span class="n">time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">filepath</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">model_post_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log__</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">filepath</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Filepath is automatically filled&quot;</span><span class="p">)</span>
+        <span class="c1"># create a custom filepath for caching</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">filepath</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">filename</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">model_post_init</span><span class="p">(</span><span class="n">log__</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">PIL</span>  <span class="c1"># noqa</span>
+
+        <span class="c1"># may require: pip install moviepy==2.0.0.dev2</span>
+        <span class="k">with</span> <span class="n">ignore_all</span><span class="p">():</span>
+            <span class="n">img</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">video</span><span class="o">.</span><span class="n">get_frame</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">img</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;uint8&quot;</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">resamp_first_dim</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">new_first_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">new_first_dim</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">data</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">julius</span>
+
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">&quot;Resampling video embedding from </span><span class="si">%s</span><span class="s2"> samples to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">new_first_dim</span>
+    <span class="p">)</span>
+    <span class="n">resample</span> <span class="o">=</span> <span class="n">julius</span><span class="o">.</span><span class="n">resample</span><span class="o">.</span><span class="n">ResampleFrac</span><span class="p">(</span>
+        <span class="n">old_sr</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">new_sr</span><span class="o">=</span><span class="n">new_first_dim</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">dims</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">T</span><span class="p">):</span>
+        <span class="n">dims</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">resample</span><span class="p">(</span><span class="n">dim</span><span class="o">.</span><span class="n">float</span><span class="p">()))</span>
+    <span class="c1"># TODO: stack an extra frame here?</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">dims</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+
+<div class="viewcode-block" id="HuggingFaceVideo">
+<a class="viewcode-back" href="../../../neuralset/reference/generated/neuralset.extractors.video.HuggingFaceVideo.html#neuralset.extractors.video.HuggingFaceVideo">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">HuggingFaceVideo</span><span class="p">(</span><span class="n">BaseExtractor</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Extract video features using a HuggingFace transformer model.</span>
+
+<span class="sd">    This feature extractor supports two processing modes:</span>
+
+<span class="sd">    1. **Image-based processing**: When using an image model, videos are sampled</span>
+<span class="sd">       at the specified frequency and each frame is processed independently.</span>
+
+<span class="sd">    2. **Video-based processing**: When using a native video model (e.g., VideoMAE,</span>
+<span class="sd">       XClip), videos are divided into clips of `clip_duration` seconds at the</span>
+<span class="sd">       specified frequency. Each clip is processed by the video model, and features</span>
+<span class="sd">       are aggregated over time.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    image : HuggingFaceImage, default=HuggingFaceImage(model_name=&quot;MCG-NJU/videomae-base&quot;)</span>
+<span class="sd">        Image or video feature extractor configuration. If `image.model_name` refers</span>
+<span class="sd">        to an image model (e.g., ViT), frames are extracted and processed independently.</span>
+<span class="sd">        If it&#39;s a video model, clips are processed using the native video architecture.</span>
+<span class="sd">    use_audio : bool, default=True</span>
+<span class="sd">        Whether to include audio alongside video frames during feature extraction.</span>
+<span class="sd">        Only applicable for models that support multimodal inputs (e.g., LLaVA-Video).</span>
+<span class="sd">    clip_duration : float | None, default=None</span>
+<span class="sd">        Duration (in seconds) of video sub-clips to process. If None, defaults to</span>
+<span class="sd">        one timestep (1 / frequency).</span>
+<span class="sd">    max_imsize : int | None, default=None</span>
+<span class="sd">        Maximum image dimension for downsampling before processing. Useful for</span>
+<span class="sd">        memory-constrained scenarios. For example, Phi-4 downsizes to 448×448</span>
+<span class="sd">        before tokenization.</span>
+<span class="sd">    layer_type : str, default=&quot;&quot;</span>
+<span class="sd">        Specific layer extraction mode for certain models.</span>
+<span class="sd">        For XClip: Use &quot;mit&quot; to extract from Multi-frame Integration Transformer</span>
+<span class="sd">        layers instead of vision backbone layers.</span>
+<span class="sd">        For LLaVA models: Must be a prompt string containing the ``&lt;video&gt;`` token</span>
+<span class="sd">        (e.g., ``&quot;&lt;|user|&gt;&lt;video&gt;&lt;|end|&gt;&lt;|assistant|&gt;&quot;``).</span>
+
+<span class="sd">        .. note:: The pipe characters in the example are literal LLaVA tokens.</span>
+<span class="sd">    num_frames : int | None, default=None</span>
+<span class="sd">        Number of frames to pass to the video model per clip. If None, uses the</span>
+<span class="sd">        model&#39;s default frame count (e.g., 16 for VideoMAE, 8 for XClip, 64 for VJepa2).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">event_types</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;Video&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Video&quot;</span>
+    <span class="c1"># class attributes</span>
+    <span class="n">requirements</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">ClassVar</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;torchvision&gt;=0.15.2&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;julius&gt;=0.2.7&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">image</span><span class="p">:</span> <span class="n">HuggingFaceImage</span> <span class="o">=</span> <span class="n">HuggingFaceImage</span><span class="p">(</span>
+        <span class="n">model_name</span><span class="o">=</span><span class="s2">&quot;MCG-NJU/videomae-base&quot;</span><span class="p">,</span>
+        <span class="n">infra</span><span class="o">=</span><span class="n">MapInfra</span><span class="p">(</span><span class="n">keep_in_ram</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+        <span class="n">imsize</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># type: ignore[arg-type]</span>
+    <span class="p">)</span>
+    <span class="n">use_audio</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">clip_duration</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">max_imsize</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">layer_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">infra</span><span class="p">:</span> <span class="n">MapInfra</span> <span class="o">=</span> <span class="n">MapInfra</span><span class="p">(</span>
+        <span class="n">timeout_min</span><span class="o">=</span><span class="mi">120</span><span class="p">,</span>
+        <span class="n">gpus_per_node</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">cpus_per_task</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="n">min_samples_per_job</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span>
+        <span class="n">version</span><span class="o">=</span><span class="s2">&quot;v5&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">model_post_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">log__</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">model_post_init</span><span class="p">(</span><span class="n">log__</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">infra</span><span class="o">.</span><span class="n">keep_in_ram</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;video.image.infra.keep_in_ram must be False to avoid overload&quot;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;folder&quot;</span><span class="p">,</span> <span class="s2">&quot;cluster&quot;</span><span class="p">]:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">infra</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">val</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;image.infra.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> must be None, (got </span><span class="si">{</span><span class="n">val</span><span class="si">!r}</span><span class="s2">)&quot;</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">model_name</span>
+        <span class="k">if</span> <span class="s2">&quot;video&quot;</span> <span class="ow">in</span> <span class="n">model</span> <span class="ow">and</span> <span class="s2">&quot;videomae&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">model</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;Currently unclear if this supports any video model but videomae model&quot;</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="n">_HFVideoModel</span><span class="o">.</span><span class="n">check_layer_type</span><span class="p">(</span><span class="n">layer_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="n">model</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">model_post_init</span><span class="p">(</span><span class="n">log__</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_exclude_from_cache_uid</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">ex</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_exclude_from_cache_uid</span><span class="p">()</span>
+        <span class="n">im_ex</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">_exclude_from_cache_uid</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">ex</span> <span class="o">+</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;image.</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">im_ex</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_data_from_image_model</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">evts</span><span class="o">.</span><span class="n">Video</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Iterator</span><span class="p">[</span><span class="n">nsbase</span><span class="o">.</span><span class="n">TimedArray</span><span class="p">]:</span>
+        <span class="c1"># read all videos of the events</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;config&quot;</span><span class="p">,</span> <span class="nb">object</span><span class="p">())</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;vision_config&quot;</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>  <span class="c1"># xclip</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;num_frames&quot;</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">model_name</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> seems to be a video model, but treated as image&quot;</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Computing video latents&quot;</span><span class="p">):</span>
+            <span class="n">video</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="n">n_frames</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">duration</span> <span class="o">*</span> <span class="n">video</span><span class="o">.</span><span class="n">fps</span><span class="p">)</span>
+            <span class="n">freq</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">frequency</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span> <span class="o">==</span> <span class="s2">&quot;native&quot;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span>
+            <span class="n">expect_frames</span> <span class="o">=</span> <span class="n">nsbase</span><span class="o">.</span><span class="n">Frequency</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span><span class="o">.</span><span class="n">to_ind</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Loaded Video (duration </span><span class="si">%s</span><span class="s2">s at </span><span class="si">%s</span><span class="s2">fps, </span><span class="si">%s</span><span class="s2"> frames of shape </span><span class="si">%s</span><span class="s2">):</span><span class="se">\n</span><span class="s2"> </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">video</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span>
+                <span class="n">video</span><span class="o">.</span><span class="n">fps</span><span class="p">,</span>
+                <span class="n">n_frames</span><span class="p">,</span>
+                <span class="nb">tuple</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">size</span><span class="p">),</span>
+                <span class="n">event</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">times</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">video</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">expect_frames</span><span class="p">)</span>
+            <span class="c1"># TODO warn about aspect ratio? resize leads to aspect ratio 1:1</span>
+            <span class="n">ims</span> <span class="o">=</span> <span class="p">[</span><span class="n">_VideoImage</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">times</span><span class="p">]</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">([])</span>
+            <span class="c1"># pylint: disable=protected-access</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">embd</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+                <span class="n">tqdm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">_get_data</span><span class="p">(</span><span class="n">ims</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="n">leave</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">k</span><span class="p">:</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="o">*</span><span class="n">embd</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Created Tensor with size </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                <span class="n">output</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">(</span><span class="n">embd</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Finished encoding video at video frame rate&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">)</span><span class="si">}</span><span class="s2"> frames, got </span><span class="si">{</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="c1"># resample full output</span>
+            <span class="k">if</span> <span class="nb">abs</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">expect_frames</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># some flexibility allowed</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">resamp_first_dim</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">expect_frames</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Resampled video embeddings at frequency </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span><span class="p">)</span>
+            <span class="c1"># set first (time) dim to last</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">output</span><span class="o">.</span><span class="n">dim</span><span class="p">()))</span> <span class="o">+</span> <span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">freq</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">frequency</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span> <span class="o">==</span> <span class="s2">&quot;native&quot;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span>
+            <span class="k">yield</span> <span class="n">nsbase</span><span class="o">.</span><span class="n">TimedArray</span><span class="p">(</span>
+                <span class="n">data</span><span class="o">=</span><span class="n">output</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+                <span class="n">frequency</span><span class="o">=</span><span class="n">freq</span><span class="p">,</span>
+                <span class="n">start</span><span class="o">=</span><span class="n">nsbase</span><span class="o">.</span><span class="n">_UNSET_START</span><span class="p">,</span>
+                <span class="n">duration</span><span class="o">=</span><span class="n">event</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_timed_arrays</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">evts</span><span class="o">.</span><span class="n">Video</span><span class="p">],</span> <span class="n">start</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">duration</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Iterable</span><span class="p">[</span><span class="n">nsbase</span><span class="o">.</span><span class="n">TimedArray</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">event</span><span class="p">,</span> <span class="n">ta</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">events</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_data</span><span class="p">(</span><span class="n">events</span><span class="p">)):</span>
+            <span class="n">sub</span> <span class="o">=</span> <span class="n">ta</span><span class="o">.</span><span class="n">with_start</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">start</span><span class="p">)</span><span class="o">.</span><span class="n">overlap</span><span class="p">(</span><span class="n">start</span><span class="o">=</span><span class="n">start</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">cache_n_layers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">sub</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">_aggregate_layers</span><span class="p">(</span><span class="n">sub</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">sub</span>
+
+    <span class="nd">@infra</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+        <span class="n">item_uid</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">_splittable_event_uid</span><span class="p">(),</span>
+        <span class="n">exclude_from_cache_uid</span><span class="o">=</span><span class="s2">&quot;method:_exclude_from_cache_uid&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">events</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">evts</span><span class="o">.</span><span class="n">Video</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Iterator</span><span class="p">[</span><span class="n">nsbase</span><span class="o">.</span><span class="n">TimedArray</span><span class="p">]:</span>
+        <span class="c1"># read all videos of the events</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;neuralset&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">DEBUG</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">z</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">model_name</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="n">_HFVideoModel</span><span class="o">.</span><span class="n">MODELS</span><span class="p">):</span>
+            <span class="k">yield from</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_data_from_image_model</span><span class="p">(</span><span class="n">events</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="n">model</span> <span class="o">=</span> <span class="n">_HFVideoModel</span><span class="p">(</span>
+            <span class="n">model_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">model_name</span><span class="p">,</span>
+            <span class="n">pretrained</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">pretrained</span><span class="p">,</span>
+            <span class="n">layer_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span><span class="p">,</span>
+            <span class="n">num_frames</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_frames</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">model</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
+            <span class="c1"># may already be dispatched (with &quot;accelerate&quot;)</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="c1"># videomae = 16 frames</span>
+        <span class="c1"># xclip = 8 or 16 frames (unclear)</span>
+        <span class="n">freq</span> <span class="o">=</span> <span class="n">events</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">frequency</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span> <span class="o">==</span> <span class="s2">&quot;native&quot;</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span>
+        <span class="n">T</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">freq</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_duration</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">clip_duration</span>
+        <span class="n">subtimes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">k</span> <span class="o">/</span> <span class="n">model</span><span class="o">.</span><span class="n">num_frames</span> <span class="o">*</span> <span class="n">T</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">num_frames</span><span class="p">))</span>
+        <span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">events</span><span class="p">:</span>
+            <span class="n">video</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="n">audio</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">audio</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_audio</span> <span class="k">else</span> <span class="kc">None</span>
+
+            <span class="n">freq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequency</span> <span class="o">!=</span> <span class="s2">&quot;native&quot;</span> <span class="k">else</span> <span class="n">event</span><span class="o">.</span><span class="n">frequency</span>
+            <span class="n">expect_frames</span> <span class="o">=</span> <span class="n">nsbase</span><span class="o">.</span><span class="n">Frequency</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span><span class="o">.</span><span class="n">to_ind</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">duration</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Loaded Video (duration </span><span class="si">%s</span><span class="s2">s at </span><span class="si">%s</span><span class="s2">fps, shape </span><span class="si">%s</span><span class="s2">):</span><span class="se">\n</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">video</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span>
+                <span class="n">video</span><span class="o">.</span><span class="n">fps</span><span class="p">,</span>
+                <span class="nb">tuple</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">size</span><span class="p">),</span>
+                <span class="n">event</span><span class="o">.</span><span class="n">filepath</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># time at end of sample:</span>
+            <span class="n">times</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">video</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span> <span class="n">expect_frames</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
+            <span class="c1"># samples the frames in-between the main frequency</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+            <span class="c1"># pylint: disable=protected-access</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="n">total</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">),</span> <span class="n">desc</span><span class="o">=</span><span class="s2">&quot;Encoding video&quot;</span><span class="p">):</span>
+                <span class="n">ims</span> <span class="o">=</span> <span class="p">[</span><span class="n">_VideoImage</span><span class="p">(</span><span class="n">video</span><span class="o">=</span><span class="n">video</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">t</span> <span class="o">-</span> <span class="n">t2</span><span class="p">))</span> <span class="k">for</span> <span class="n">t2</span> <span class="ow">in</span> <span class="n">subtimes</span><span class="p">]</span>
+                <span class="n">audio_clip</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">audio</span><span class="o">.</span><span class="n">subclipped</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">t</span> <span class="o">-</span> <span class="n">T</span><span class="p">),</span> <span class="n">t</span><span class="p">)</span> <span class="k">if</span> <span class="n">audio</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="p">)</span>
+                <span class="n">pil_imgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ims</span><span class="p">]</span>
+                <span class="c1"># resize if images are too big</span>
+                <span class="k">if</span> <span class="n">pil_imgs</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_imsize</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">factor</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">pil_imgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">size</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_imsize</span>
+                    <span class="k">if</span> <span class="n">factor</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                        <span class="n">size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span> <span class="o">/</span> <span class="n">factor</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">pil_imgs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+                        <span class="n">pil_imgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">pi</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">size</span><span class="p">)</span> <span class="k">for</span> <span class="n">pi</span> <span class="ow">in</span> <span class="n">pil_imgs</span><span class="p">]</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pi</span><span class="p">)</span> <span class="k">for</span> <span class="n">pi</span> <span class="ow">in</span> <span class="n">pil_imgs</span><span class="p">])</span>
+                <span class="n">t_embd</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict_hidden_states</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">audio_clip</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">t_embd</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found several batches: </span><span class="si">{</span><span class="n">t_embd</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">t_embd</span> <span class="o">=</span> <span class="n">t_embd</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># aggregate_tokens works on non-batched-data</span>
+                <span class="n">embd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">_aggregate_tokens</span><span class="p">(</span><span class="n">t_embd</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">cache_n_layers</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">embd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image</span><span class="o">.</span><span class="n">_aggregate_layers</span><span class="p">(</span><span class="n">embd</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">output</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">times</span><span class="p">),)</span> <span class="o">+</span> <span class="n">embd</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Created Tensor with size </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                <span class="n">output</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">embd</span>
+            <span class="n">video</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="c1"># set first (time) dim to last</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">output</span><span class="o">.</span><span class="n">ndim</span><span class="p">))</span> <span class="o">+</span> <span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="k">yield</span> <span class="n">nsbase</span><span class="o">.</span><span class="n">TimedArray</span><span class="p">(</span>
+                <span class="n">data</span><span class="o">=</span><span class="n">output</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+                <span class="n">frequency</span><span class="o">=</span><span class="n">freq</span><span class="p">,</span>
+                <span class="n">start</span><span class="o">=</span><span class="n">nsbase</span><span class="o">.</span><span class="n">_UNSET_START</span><span class="p">,</span>
+                <span class="n">duration</span><span class="o">=</span><span class="n">event</span><span class="o">.</span><span class="n">duration</span><span class="p">,</span>
+            <span class="p">)</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_HFVideoModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrapper that provides a unified interface for loading and using various HuggingFace</span>
+<span class="sd">    video models</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    model_name : str</span>
+<span class="sd">        HuggingFace model identifier.</span>
+<span class="sd">        The model will be loaded from the HuggingFace Hub. Please note that you may have to install additional dependencies to load it correctly.</span>
+<span class="sd">    pretrained : bool, default=True</span>
+<span class="sd">        Whether to load pretrained weights. If False, initializes the model with</span>
+<span class="sd">        random weights from the model configuration.</span>
+<span class="sd">    layer_type: str, default=&quot;&quot;</span>
+<span class="sd">        Specific layer extraction mode for certain models:</span>
+<span class="sd">        - For XClip: Use &quot;mit&quot; to extract from Multi-frame Integration Transformer</span>
+<span class="sd">          layers instead of vision backbone layers.</span>
+<span class="sd">        - For LLaVA models: Must be a prompt string containing the &quot;&lt;video&gt;&quot; token</span>
+<span class="sd">          (e.g., &quot;&lt;|user|&gt;&lt;video&gt;&lt;|end|&gt;&lt;|assistant|&gt;&quot;).</span>
+<span class="sd">    num_frames : int | None, default=None</span>
+<span class="sd">        Number of frames to pass to the video model per clip. If None, uses the</span>
+<span class="sd">        model&#39;s default frame count (e.g., 16 for VideoMAE, 8 for XClip, 64 for VJepa2).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">MODELS</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="s2">&quot;vjepa2&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;videomae&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;microsoft/xclip&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;google/vivit&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;facebook/timesformer&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;LLaVA-NeXT-Video&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;LLaVA-Video&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Phi-4&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># language + video models https://arxiv.org/pdf/2405.21075</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">pretrained</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">layer_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">z</span> <span class="ow">in</span> <span class="n">model_name</span> <span class="k">for</span> <span class="n">z</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">MODELS</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="n">model_name</span><span class="si">!r}</span><span class="s2"> is not supported&quot;</span><span class="p">)</span>
+        <span class="n">Model</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span>  <span class="c1"># ignore typing as we&#39;ll override the imports</span>
+        <span class="n">Processor</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModel</span> <span class="k">as</span> <span class="n">Model</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoProcessor</span> <span class="k">as</span> <span class="n">Processor</span>
+
+        <span class="n">extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">processor_extra</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;do_rescale&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+        <span class="k">if</span> <span class="s2">&quot;google/vivit&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">VivitImageProcessor</span> <span class="k">as</span> <span class="n">Processor</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">VivitModel</span> <span class="k">as</span> <span class="n">Model</span>  <span class="c1"># type: ignore</span>
+        <span class="k">if</span> <span class="s2">&quot;LLaVA&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlavaNextVideoForConditionalGeneration</span> <span class="k">as</span> <span class="n">Model</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlavaNextVideoProcessor</span> <span class="k">as</span> <span class="n">Processor</span>
+
+            <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;torch_dtype&quot;</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">}</span>
+            <span class="k">if</span> <span class="s2">&quot;34B&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+                <span class="n">extra</span><span class="p">[</span><span class="s2">&quot;device_map&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span>  <span class="c1"># uses accelerate</span>
+        <span class="k">if</span> <span class="s2">&quot;Phi-4&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span> <span class="k">as</span> <span class="n">Model</span>
+
+            <span class="n">extra</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;_attn_implementation&quot;</span><span class="p">:</span> <span class="s2">&quot;eager&quot;</span><span class="p">,</span> <span class="s2">&quot;trust_remote_code&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+            <span class="n">processor_extra</span><span class="p">[</span><span class="s2">&quot;trust_remote_code&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="s2">&quot;vjepa2&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoVideoProcessor</span> <span class="k">as</span> <span class="n">Processor</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="n">output_hidden_states</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">extra</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pretrained</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">Model</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="c1"># use do_rescale=True -&gt; don&#39;t use totensor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processor</span> <span class="o">=</span> <span class="n">Processor</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name</span><span class="p">,</span> <span class="o">**</span><span class="n">processor_extra</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span> <span class="o">=</span> <span class="n">model_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span> <span class="o">=</span> <span class="n">layer_type</span>
+        <span class="k">if</span> <span class="s2">&quot;llava&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="n">max_frames</span> <span class="o">=</span> <span class="mi">16</span>  <span class="c1"># any number works</span>
+        <span class="k">elif</span> <span class="s2">&quot;vjepa2&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="n">max_frames</span> <span class="o">=</span> <span class="mi">64</span>
+        <span class="k">elif</span> <span class="s2">&quot;Phi-4&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="p">:</span>
+            <span class="n">max_frames</span> <span class="o">=</span> <span class="mi">4</span>  <span class="c1"># TODO: make this flexible?</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">config</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s2">&quot;vision_config&quot;</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>  <span class="c1"># xclip</span>
+            <span class="n">max_frames</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">num_frames</span>
+        <span class="k">if</span> <span class="n">num_frames</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">num_frames</span> <span class="o">=</span> <span class="n">max_frames</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">num_frames</span> <span class="o">=</span> <span class="n">num_frames</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_frames</span> <span class="o">&gt;</span> <span class="n">max_frames</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> only seems to supports </span><span class="si">{</span><span class="n">max_frames</span><span class="si">}</span><span class="s2"> frames, got </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_frames</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">check_layer_type</span><span class="p">(</span><span class="n">layer_type</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_layer_type</span><span class="p">(</span><span class="n">layer_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="s2">&quot;xclip&quot;</span> <span class="ow">in</span> <span class="n">model_name</span> <span class="ow">and</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;mit&quot;</span><span class="p">:</span>
+            <span class="k">return</span>  <span class="c1"># is ok</span>
+        <span class="k">if</span> <span class="s2">&quot;llava&quot;</span> <span class="ow">in</span> <span class="n">model_name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="k">if</span> <span class="s2">&quot;&lt;video&gt;&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">layer_type</span><span class="p">:</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;For </span><span class="si">{</span><span class="n">model_name</span><span class="si">!r}</span><span class="s2">, layer_type must be a prompt with the &lt;video&gt; token</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="c1"># note: best aggregation was: mean</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+            <span class="k">return</span>  <span class="c1"># all good</span>
+        <span class="k">if</span> <span class="n">layer_type</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No layer type available for </span><span class="si">{</span><span class="n">model_name</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">images</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">audio</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">:</span>
+        <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;return_tensors&quot;</span><span class="p">:</span> <span class="s2">&quot;pt&quot;</span><span class="p">}</span>
+        <span class="n">field</span> <span class="o">=</span> <span class="s2">&quot;images&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;xclip&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="p">:</span>
+            <span class="n">field</span> <span class="o">=</span> <span class="s2">&quot;videos&quot;</span>
+        <span class="k">elif</span> <span class="s2">&quot;llava&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+            <span class="n">field</span> <span class="o">=</span> <span class="s2">&quot;videos&quot;</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span>
+        <span class="k">elif</span> <span class="s2">&quot;vjepa2&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="p">:</span>
+            <span class="n">field</span> <span class="o">=</span> <span class="s2">&quot;videos&quot;</span>
+            <span class="k">del</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="s2">&quot;Phi-4&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">PIL</span>
+
+            <span class="n">images</span> <span class="o">=</span> <span class="p">[</span><span class="n">PIL</span><span class="o">.</span><span class="n">Image</span><span class="o">.</span><span class="n">fromarray</span><span class="p">(</span><span class="n">img</span><span class="p">)</span> <span class="k">for</span> <span class="n">img</span> <span class="ow">in</span> <span class="n">images</span><span class="p">]</span>  <span class="c1"># type: ignore</span>
+            <span class="n">field</span> <span class="o">=</span> <span class="s2">&quot;images&quot;</span>
+            <span class="n">prompt</span> <span class="o">=</span> <span class="s2">&quot;&lt;|user|&gt;&quot;</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">images</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">prompt</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&lt;|image_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">|&gt;&quot;</span>
+            <span class="k">if</span> <span class="n">audio</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;audios&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[(</span><span class="n">audio</span><span class="o">.</span><span class="n">to_soundarray</span><span class="p">(),</span> <span class="n">audio</span><span class="o">.</span><span class="n">fps</span><span class="p">)]</span>  <span class="c1"># type: ignore</span>
+                <span class="n">prompt</span> <span class="o">+=</span> <span class="s2">&quot;&lt;|audio_1|&gt;&quot;</span>
+            <span class="n">prompt</span> <span class="o">+=</span> <span class="s2">&quot;&lt;|end|&gt;&lt;|assistant|&gt;&quot;</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">prompt</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="n">field</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">images</span><span class="p">)</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">processor</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># prevent nans (happening for uniform images)</span>
+        <span class="n">_fix_pixel_values</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="n">inputs</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">inference_mode</span><span class="p">():</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">pred</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">predict_hidden_states</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">images</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">audio</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="n">pred</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">audio</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;xclip&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="p">:</span>
+            <span class="c1"># MIT: Multi-frame Integration Transformer</span>
+            <span class="n">is_mit</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span> <span class="o">==</span> <span class="s2">&quot;mit&quot;</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">mit_output</span> <span class="k">if</span> <span class="n">is_mit</span> <span class="k">else</span> <span class="n">pred</span><span class="o">.</span><span class="n">vision_model_output</span>
+            <span class="c1"># [8, 13, 197, 768] for vision model, [1, 2, 8, 512] for mit model</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">pred</span><span class="o">.</span><span class="n">hidden_states</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">states</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="k">if</span> <span class="s2">&quot;xclip&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_type</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="p">[[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span>  <span class="c1"># last batch/timepoint only</span>
+        <span class="k">return</span> <span class="n">out</span>  <span class="c1"># B x L x ...</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; Meta Platforms, Inc. and affiliates
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/facebookresearch/neuroai" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=4ea706d9"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../../_static/pipeline-accordion.js?v=3528a9e4"></script>
+    <script src="../../../_static/code-selector.js?v=4968e69a"></script>
+    <script src="../../../_static/sidebar-nav.js?v=0e453ee9"></script>
+    </body>
+</html>

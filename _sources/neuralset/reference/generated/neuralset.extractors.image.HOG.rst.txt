@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.image.HOG
+==============================
+
+.. currentmodule:: neuralset.extractors.image
+
+.. autopydantic_model:: HOG
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
