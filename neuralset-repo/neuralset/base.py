@@ -519,19 +519,19 @@ class Step(exca.steps.Step, _Module, discriminator_key="name"):
     """
 
     # Cache format; read by exca (>=0.5.23) or written to infra below.
-    _CACHE_TYPE: tp.ClassVar[str | None] = None
+    CACHE_TYPE: tp.ClassVar[str | None] = None
 
     def model_post_init(self, __context: tp.Any) -> None:
         super().model_post_init(__context)
-        # exca >=0.5.23 cascades _CACHE_TYPE itself; older needs manual propagation.
-        if hasattr(exca.steps.Step, "_CACHE_TYPE"):
+        # exca >=0.5.23 cascades CACHE_TYPE itself; older needs manual propagation.
+        if hasattr(exca.steps.Step, "CACHE_TYPE"):
             return
         if (
-            self._CACHE_TYPE is not None
+            self.CACHE_TYPE is not None
             and self.infra is not None
             and self.infra.cache_type is None
         ):
-            self.infra.cache_type = self._CACHE_TYPE
+            self.infra.cache_type = self.CACHE_TYPE
 
     @pydantic.model_validator(mode="wrap")
     @classmethod
@@ -585,7 +585,7 @@ class Chain(exca.steps.Chain, Step):
 
     def model_post_init(self, __context: tp.Any) -> None:
         super().model_post_init(__context)
-        if hasattr(exca.steps.Step, "_CACHE_TYPE"):
+        if hasattr(exca.steps.Step, "CACHE_TYPE"):
             return  # cache propagation handled by exca itself (>=0.5.23)
         # Chain output matches last step: use its cache format (instance > class default).
         if self.infra is not None and self.infra.cache_type is None:
@@ -597,4 +597,4 @@ class Chain(exca.steps.Chain, Step):
                 if last.infra is not None and last.infra.cache_type is not None:
                     self.infra.cache_type = last.infra.cache_type
                 else:
-                    self.infra.cache_type = last._CACHE_TYPE
+                    self.infra.cache_type = last.CACHE_TYPE
