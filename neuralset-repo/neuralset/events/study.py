@@ -208,7 +208,7 @@ class EventsTransform(base.Step):
                 return events[events["type"] == "Audio"]
     """
 
-    _DEFAULT_CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
+    CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: tp.Any) -> None:
@@ -284,7 +284,7 @@ class Study(base.Step):
 
     """
 
-    _DEFAULT_CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
+    CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
 
     path: Path
     infra_timelines: exca.MapInfra = exca.MapInfra(cluster="processpool")
