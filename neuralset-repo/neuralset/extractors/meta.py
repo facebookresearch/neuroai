@@ -111,7 +111,7 @@ class AggregatedExtractor(base.BaseExtractor):
     event_types: str | tuple[str, ...] = "Event"
     extractors: list[base.BaseExtractor]
     extractor_aggregation: tp.Literal["cat", "stack", "mean", "sum"] = "cat"
-    frequency: tp.Literal["native"] = "native"  # defered to sub-extractors
+    frequency: tp.Literal["native"] = "native"  # deferred to sub-extractors
 
     def model_post_init(self, log__: tp.Any) -> None:
         """Check that extractors are all static or all dynamic."""
@@ -335,7 +335,7 @@ class HuggingFacePCA(ExtractorPCA):
                 layers.append(pca.fit_transform(layer))
                 del layer  # free memory if need be
             embds.clear()
-            # avoid keeping files open, explicitely delete cache
+            # avoid keeping files open, explicitly delete cache
             del feat.infra._state.cache_dict
             del feat
         # back to N * Layer * prod(*Embd)
