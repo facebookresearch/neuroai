@@ -189,12 +189,7 @@ document.addEventListener("DOMContentLoaded", function () {
   var task = {
     language: {
       installComment: '# Requires: `pip install spacy` (or `pip install "neuralset[all]"`) and `python -m spacy download en_core_web_md`',
-      stim:
-        'stim = ns.extractors.SpacyEmbedding(\n' +
-        '    language="english",\n' +
-        '    aggregation="trigger",\n' +
-        '    infra=infra,\n' +
-        ')',
+      stim: 'stim = ns.extractors.SpacyEmbedding(language="english", aggregation="trigger", infra=infra)',
       eventType: "Word",
       isClassification: false,
     },
@@ -262,12 +257,7 @@ document.addEventListener("DOMContentLoaded", function () {
       timeSelection: "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz",
     },
     eeg: {
-      neuro:
-        'neuro = ns.extractors.EegExtractor(\n' +
-        '    frequency=120.0,\n' +
-        '    filter=(0.1, 75.0),\n' +
-        '    infra=infra,\n' +
-        ')',
+      neuro: 'neuro = ns.extractors.EegExtractor(frequency=120.0, filter=(0.1, 75.0), infra=infra)',
       start: "-0.1",
       duration: "0.5",
       timeSelection: "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz",
@@ -287,21 +277,13 @@ document.addEventListener("DOMContentLoaded", function () {
       timeSelection: "X_neuro = neuro_arr[:, :, 40]  # t = 300 ms at 100 Hz",
     },
     emg: {
-      neuro:
-        'neuro = ns.extractors.EmgExtractor(\n' +
-        '    frequency=256.0,\n' +
-        '    infra=infra,\n' +
-        ')',
+      neuro: 'neuro = ns.extractors.EmgExtractor(frequency=256.0, infra=infra)',
       start: "-0.1",
       duration: "0.5",
       timeSelection: "X_neuro = neuro_arr[:, :, 102]  # t = 300 ms at 256 Hz",
     },
     fmri: {
-      neuro:
-        'neuro = ns.extractors.FmriExtractor(\n' +
-        '    offset=5,  # 5s hemodynamic delay\n' +
-        '    infra=infra,\n' +
-        ')',
+      neuro: 'neuro = ns.extractors.FmriExtractor(offset=5, infra=infra)  # offset=5 for 5s HRF delay',
       start: "0.0",
       duration: "2.0",
       timeSelection: "X_neuro = neuro_arr[:, :, 0]   # single TR",
