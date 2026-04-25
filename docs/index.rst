@@ -4,6 +4,8 @@
    neuralset/index
    neuraltrain/index
    neuralfetch/index
+   Exca <https://facebookresearch.github.io/exca/>
+
 
 .. raw:: html
 
@@ -42,15 +44,15 @@
      })();
      </script>
      <p style="margin-top: 1rem; font-size: 0.9em;">
-       New here? Start with <a href="neuralset/index.html" style="color: var(--color-brand-primary); font-weight: 600; text-decoration: none;">neuralset</a> — the core data pipeline.
+       New here? Start with <a href="neuralset/index.html" style="color: var(--color-brand-primary); font-weight: 600; text-decoration: none;">NeuralSet</a> — the core data pipeline.
      </p>
    </div>
 
    <!-- Packages as card layout -->
    <div class="packages-cards-container">
      <p style="text-align: center; color: var(--color-foreground-muted); margin-bottom: 2rem; font-size: 0.95em;">
-       <strong>Each pipeline step maps to a Python package</strong> — neuralfetch handles data discovery,
-       neuralset loads & transforms, and neuraltrain trains models.
+       <strong>Each pipeline step maps to a Python package</strong> — NeuralFetch handles data discovery,
+       NeuralSet loads & transforms, and NeuralTrain trains models.
      </p>
      <div class="packages-cards">
     
@@ -83,11 +85,11 @@
          </a>
        </div>
 
-       <!-- exca -->
+       <!-- Exca -->
        <div class="package-card-wrapper">
          <a href="https://facebookresearch.github.io/exca/" class="package-card" target="_blank">
            <div class="package-card-icon"><i class="fas fa-cog"></i></div>
-           <div class="package-card-name">exca</div>
+           <div class="package-card-name">Exca</div>
            <div class="package-card-tagline">Caching & remote compute infrastructure.</div>
          </a>
        </div>

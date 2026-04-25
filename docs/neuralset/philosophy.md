@@ -4,11 +4,11 @@ orphan: true
 
 # Philosophy
 
-Design principles behind neuralset.
+Design principles behind NeuralSet.
 
 ## Pydantic Everywhere
 
-neuralset uses [pydantic](https://docs.pydantic.dev/) as the backbone for
+NeuralSet uses [pydantic](https://docs.pydantic.dev/) as the backbone for
 every configurable object: Events, Studies, Extractors, Segmenters, and
 Transforms are all `BaseModel` subclasses.
 
@@ -28,7 +28,7 @@ in a pandas DataFrame where each row is a validated event.
 
 ## exca — Caching and Infrastructure
 
-neuralset relies on [`exca`](https://facebookresearch.github.io/exca/) for
+NeuralSet relies on [`exca`](https://facebookresearch.github.io/exca/) for
 caching expensive computation and for submitting work to compute clusters.
 
 **What caching does.** When an extractor's `prepare(events)` is called, it
@@ -56,7 +56,7 @@ full API reference.
 
 ## Lazy Loading
 
-neuralset keeps everything **lightweight** until you actually need the data:
+NeuralSet keeps everything **lightweight** until you actually need the data:
 
 - A Study's `run()` returns a pandas DataFrame of event metadata — no
   raw signals are loaded.
@@ -75,7 +75,7 @@ pass.
 
 ## Modularity
 
-The neuralset pipeline is built from four composable building blocks:
+The NeuralSet pipeline is built from four composable building blocks:
 
 | Component | Role |
 |-----------|------|

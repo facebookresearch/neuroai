@@ -170,7 +170,7 @@ neuroscience <https://ai.meta.com/research/publications/a-foundation-model-of-vi
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: neuraltrain
+   :caption: NeuralTrain
 
    Installation <install>
    Tutorials <tutorials>

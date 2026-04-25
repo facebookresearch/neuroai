@@ -231,7 +231,7 @@ Citation
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: neuralset
+   :caption: NeuralSet
 
    Installation <install>
    Tutorials <auto_examples/walkthrough/index>

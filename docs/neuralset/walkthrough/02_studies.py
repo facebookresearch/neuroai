@@ -7,8 +7,8 @@ Studies
 A :class:`~neuralset.Study` is an interface to an external dataset: it
 knows how to download data, iterate over recording sessions, and load
 events. A handful of synthetic/testing studies (``Fake2025Meg``, ``Mne2013Sample``,
-…) ship with neuralset; the full catalog of public datasets is provided
-by the `neuralfetch <https://github.com/facebookresearch/neuroai>`_
+…) ship with NeuralSet; the full catalog of public datasets is provided
+by the `NeuralFetch <https://github.com/facebookresearch/neuroai>`_
 package — no data is bundled, only the code that accesses it.
 
 .. note::
@@ -57,7 +57,7 @@ print(f"{len(all_studies)} studies available")
 # ``Study(name="X", ...)`` automatically finds and returns the concrete
 # subclass ``X`` — it is equivalent to ``X(...)`` directly.
 # Public-data studies are registered through the ``neuralfetch`` package —
-# see the :doc:`neuralfetch documentation </neuralfetch/index>` for the full
+# see the :doc:`NeuralFetch documentation </neuralfetch/index>` for the full
 # catalog.
 #
 # Call ``run()`` to load all timelines and concatenate them into a
@@ -228,8 +228,8 @@ print(custom_events[["type", "start", "identity", "expression", "timeline"]].to_
 
 # %%
 # For a full worked example with real MEG data, channel positions, and
-# neuralfetch integration, see the
-# :doc:`neuralfetch extending tutorial </neuralfetch/auto_examples/03_create_new_study>`.
+# NeuralFetch integration, see the
+# :doc:`NeuralFetch extending tutorial </neuralfetch/auto_examples/03_create_new_study>`.
 
 # %%
 # Next Steps
