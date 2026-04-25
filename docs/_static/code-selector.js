@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   var dataEl = document.getElementById("code-data");
   var sklearnEl = document.getElementById("code-sklearn");
+  var installEl = document.getElementById("code-install");
   if (!dataEl) {
     console.warn("Code selector: Required elements not found");
     return;
@@ -184,6 +185,33 @@ document.addEventListener("DOMContentLoaded", function () {
     return out;
   }
 
+  function highlightBash(code) {
+    var i = 0;
+    var n = code.length;
+    var out = "";
+    while (i < n) {
+      var ch = code[i];
+      if (ch === "#") {
+        var cStart = i;
+        while (i < n && code[i] !== "\n") i += 1;
+        out += wrapToken("highlight-comment", code.slice(cStart, i));
+        continue;
+      }
+      if (ch === "'" || ch === '"') {
+        var quote = ch;
+        var sStart = i;
+        i += 1;
+        while (i < n && code[i] !== quote) i += 1;
+        if (i < n) i += 1;
+        out += wrapToken("highlight-string", code.slice(sStart, i));
+        continue;
+      }
+      out += escapeHtml(ch);
+      i += 1;
+    }
+    return out;
+  }
+
   // ── Task configs ──────────────────────────────────────────────────────
 
   var task = {
@@ -314,17 +342,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // ── Template builders ─────────────────────────────────────────────────
 
-  function buildDataBlock(tsk, dev, studyName, installDeps) {
-    var lines = [];
+  function buildInstallBlock(tsk, installDeps) {
     var pkg = tsk.pipExtras ? "'neuralset[" + tsk.pipExtras + "]'" : "neuralset";
     var pipParts = [pkg, "neuralfetch"];
     if (installDeps) pipParts.push(installDeps);
-    lines.push("# Setup (run once):");
-    lines.push("#   pip install " + pipParts.join(" "));
-    if (tsk.postInstall) {
-      lines.push("#   " + tsk.postInstall);
-    }
-    lines.push("");
+    var lines = ["pip install " + pipParts.join(" ")];
+    if (tsk.postInstall) lines.push(tsk.postInstall);
+    return lines.join("\n");
+  }
+
+  function buildDataBlock(tsk, dev, studyName) {
+    var lines = [];
     lines.push(
       "import neuralset as ns",
       "from torch.utils.data import DataLoader",
@@ -520,7 +548,13 @@ document.addEventListener("DOMContentLoaded", function () {
     var tsk = task[tskKey] || task.language;
     var dev = device[devKey] || device.meg;
 
-    var dataBlock = buildDataBlock(tsk, dev, studyName, installDeps);
+    if (installEl) {
+      var installBlock = buildInstallBlock(tsk, installDeps);
+      installEl.innerHTML = highlightBash(installBlock);
+      addCopyButton(installEl, installBlock);
+    }
+
+    var dataBlock = buildDataBlock(tsk, dev, studyName);
     dataEl.innerHTML = highlightPython(dataBlock);
     addCopyButton(dataEl, dataBlock);
 

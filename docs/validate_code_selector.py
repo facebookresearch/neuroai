@@ -54,7 +54,10 @@ global.document = {
 """
 
 NODE_POSTLUDE = r"""
-const { task, device, studyMap, presets, buildDataBlock, buildSklearnBlock } = global.__cs;
+const {
+  task, device, studyMap, presets,
+  buildInstallBlock, buildDataBlock, buildSklearnBlock,
+} = global.__cs;
 const fs = require('fs');
 
 const out = { combos: [] };
@@ -68,7 +71,8 @@ for (const [tkey, tsk] of Object.entries(task)) {
       out.combos.push({
         kind: 'selector', taskKey: tkey, deviceKey: dkey, direction: dir,
         study, installDeps: '',
-        dataBlock: buildDataBlock(tsk, dev, study, ''),
+        installBlock: buildInstallBlock(tsk, ''),
+        dataBlock: buildDataBlock(tsk, dev, study),
         sklearnBlock: buildSklearnBlock(tsk, dev, dir),
       });
     }
@@ -83,7 +87,8 @@ for (const [pkey, p] of Object.entries(presets)) {
     out.combos.push({
       kind: 'preset', preset: pkey, taskKey: p.taskKey, deviceKey: p.deviceKey,
       direction: dir, study: p.study, installDeps: p.installDeps || '',
-      dataBlock: buildDataBlock(tsk, dev, p.study, p.installDeps || ''),
+      installBlock: buildInstallBlock(tsk, p.installDeps || ''),
+      dataBlock: buildDataBlock(tsk, dev, p.study),
       sklearnBlock: buildSklearnBlock(tsk, dev, dir),
     });
   }
@@ -110,7 +115,7 @@ def render_all_blocks() -> dict:
         r"render\(\);\s*\}\);\s*$",
         "render();\n"
         "  global.__cs = { task, device, studyMap, presets, "
-        "buildDataBlock, buildSklearnBlock };\n"
+        "buildInstallBlock, buildDataBlock, buildSklearnBlock };\n"
         "});\n",
         src,
     )

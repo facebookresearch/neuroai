@@ -20,10 +20,10 @@ the full breakdown.
 Quick start
 ----------
 
-Pick an example to see the code (the install command is inlined as a comment
-at the top of the snippet). The first time you run it, it will be slow
-(data downloading, cache preparation, etc.) — but then lightning fast, even
-as you change parameters (e.g. segment duration).
+Pick an example to see the code. Copy the setup commands into your
+terminal first, then run the Python snippet. The first time you run it,
+it will be slow (data downloading, cache preparation, etc.) — but then
+lightning fast, even as you change parameters (e.g. segment duration).
 
 .. raw:: html
 
@@ -40,6 +40,13 @@ as you change parameters (e.g. segment duration).
            <option value="fake-classif">🏷️ Classification + fMRI</option>
          </select>
        </label>
+     </div>
+
+     <div class="code-block-wrapper">
+       <div class="code-block-label">
+         <i class="fas fa-download"></i> Setup (run once in your terminal)
+       </div>
+       <pre><code id="code-install" class="language-bash"></code></pre>
      </div>
 
      <div class="code-block-wrapper">
