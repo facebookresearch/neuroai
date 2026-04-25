@@ -2,8 +2,8 @@
    :hidden:
 
    neuralset/index
-   neuraltrain/index
    neuralfetch/index
+   neuraltrain/index
    Exca <https://facebookresearch.github.io/exca/>
 
 
