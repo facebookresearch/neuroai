@@ -1,7 +1,7 @@
 Explore Brain Datasets
 ======================
 
-Browse all brain datasets accessible through neuralfetch. Filter by modality
+Browse all brain datasets accessible through NeuralFetch. Filter by modality
 and click column headers to sort. Datasets with a **▶ sample** badge have a
 ready-to-run lightweight version — see :doc:`samples`.
 

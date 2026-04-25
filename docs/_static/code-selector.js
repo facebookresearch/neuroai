@@ -1,33 +1,37 @@
-/* code-selector.js — Interactive code builder for encoding/decoding page.
-   Assembles two code blocks (data-loading + sklearn) from the current
-   dropdown selection (task × direction × device).                         */
+/* code-selector.js — Interactive code builder for the quickstart and the
+   encoding/decoding page. Renders three blocks (install, data-loading,
+   sklearn) from the current dropdown selection (task × direction × device).
 
-document.addEventListener("DOMContentLoaded", function () {
+   The extractor configs live in code-selector-data.json so a tiny pytest
+   (docs/test_code_selector.py) can validate them without a JS engine. */
 
-  var dataEl = document.getElementById("code-data");
-  var sklearnEl = document.getElementById("code-sklearn");
-  if (!dataEl) {
-    console.warn("Code selector: Required elements not found");
-    return;
-  }
+(function () {
+  // Resolve the JSON URL relative to this script so it works on any page.
+  // document.currentScript only returns this script while it is being
+  // executed at the top level — capture it now, before DOMContentLoaded.
+  var DATA_URL = (function () {
+    var s = document.currentScript;
+    if (!s) {
+      var tags = document.querySelectorAll('script[src*="code-selector.js"]');
+      s = tags[tags.length - 1];
+    }
+    return s
+      ? s.src.replace(/code-selector\.js[^/]*$/, "code-selector-data.json")
+      : "_static/code-selector-data.json";
+  })();
 
-  console.log("Code selector: Initialized successfully");
-
-  // ── Copy button functionality ─────────────────────────────────────────
+  // ── Copy button ─────────────────────────────────────────────────────────
   function addCopyButton(element, content) {
     var wrapper = element.parentElement;
     var existingButton = wrapper.querySelector('.copy-btn');
-    if (existingButton) {
-      existingButton.remove();
-    }
+    if (existingButton) existingButton.remove();
 
     var copyButton = document.createElement('button');
     copyButton.className = 'copy-btn';
     copyButton.innerHTML = '<i class="fas fa-copy"></i>';
     copyButton.title = 'Copy code';
 
-    copyButton.addEventListener('click', function() {
-      // Create a temporary textarea with plain text (no HTML)
+    copyButton.addEventListener('click', function () {
       var textarea = document.createElement('textarea');
       textarea.value = content;
       document.body.appendChild(textarea);
@@ -35,11 +39,10 @@ document.addEventListener("DOMContentLoaded", function () {
       document.execCommand('copy');
       document.body.removeChild(textarea);
 
-      // Visual feedback
       var originalHTML = copyButton.innerHTML;
       copyButton.innerHTML = 'Copied ⚡🧠';
       copyButton.classList.add('copied');
-      setTimeout(function() {
+      setTimeout(function () {
         copyButton.innerHTML = originalHTML;
         copyButton.classList.remove('copied');
       }, 1500);
@@ -48,7 +51,7 @@ document.addEventListener("DOMContentLoaded", function () {
     wrapper.appendChild(copyButton);
   }
 
-  // ── Safe Python syntax highlighting (no HTML corruption) ─────────────────
+  // ── Safe Python syntax highlighting (no HTML corruption) ────────────────
   function escapeHtml(s) {
     return s
       .replace(/&/g, "&amp;")
@@ -60,17 +63,9 @@ document.addEventListener("DOMContentLoaded", function () {
     return '<span class="' + cls + '">' + escapeHtml(text) + '</span>';
   }
 
-  function isWordChar(ch) {
-    return /[A-Za-z0-9_]/.test(ch);
-  }
-
-  function isDigit(ch) {
-    return /[0-9]/.test(ch);
-  }
-
-  function isNameStart(ch) {
-    return /[A-Za-z_]/.test(ch);
-  }
+  function isWordChar(ch) { return /[A-Za-z0-9_]/.test(ch); }
+  function isDigit(ch) { return /[0-9]/.test(ch); }
+  function isNameStart(ch) { return /[A-Za-z_]/.test(ch); }
 
   var PY_KEYWORDS = {
     "import": true, "from": true, "as": true, "def": true, "class": true,
@@ -184,170 +179,19 @@ document.addEventListener("DOMContentLoaded", function () {
     return out;
   }
 
-  // ── Task configs ──────────────────────────────────────────────────────
+  // ── Template builders ────────────────────────────────────────────────────
 
-  var task = {
-    language: {
-      installComment: '# Requires: `pip install spacy` (or `pip install "neuralset[all]"`) and `python -m spacy download en_core_web_md`',
-      stim:
-        'stim = ns.extractors.SpacyEmbedding(\n' +
-        '    language="english",\n' +
-        '    aggregation="trigger",\n' +
-        '    infra=infra,\n' +
-        ')',
-      eventType: "Word",
-      isClassification: false,
-    },
-    image: {
-      installComment: '# Requires: `pip install transformers` (or `pip install "neuralset[all]"`)',
-      stim:
-        'stim = ns.extractors.HuggingFaceImage(\n' +
-        '    model_name="facebook/dinov2-small",\n' +
-        '    imsize=518,\n' +
-        '    aggregation="trigger",\n' +
-        '    infra=infra,\n' +
-        ')',
-      eventType: "Image",
-      isClassification: false,
-    },
-    video: {
-      installComment: '# Requires: `pip install transformers` (or `pip install "neuralset[all]"`)',
-      stim:
-        'stim = ns.extractors.HuggingFaceVideo(\n' +
-        '    frequency=4,\n' +
-        '    use_audio=False,\n' +
-        '    aggregation="trigger",\n' +
-        '    infra=infra,\n' +
-        ')',
-      eventType: "Video",
-      isClassification: false,
-    },
-    classification: {
-      stim:
-        'stim = ns.extractors.LabelEncoder(\n' +
-        '    event_types="Stimulus",\n' +
-        '    event_field="description",\n' +
-        '    return_one_hot=True,\n' +
-        '    aggregation="first",\n' +
-        ')',
-      eventType: "Stimulus",
-      isClassification: true,
-    },
-    word_classification: {
-      stim:
-        'stim = ns.extractors.LabelEncoder(\n' +
-        '    event_types="Word",\n' +
-        '    event_field="text",\n' +
-        '    return_one_hot=True,\n' +
-        '    aggregation="first",\n' +
-        ')',
-      eventType: "Word",
-      isClassification: true,
-    },
-  };
+  function buildInstallBlock(tsk, installDeps) {
+    var pkg = tsk.pipExtras ? "'neuralset[" + tsk.pipExtras + "]'" : "neuralset";
+    var pipParts = [pkg, "neuralfetch"];
+    if (installDeps) pipParts.push(installDeps);
+    var lines = ["pip install " + pipParts.join(" ")];
+    if (tsk.postInstall) lines.push(tsk.postInstall);
+    return lines.join("\n");
+  }
 
-  // ── Device configs ────────────────────────────────────────────────────
-
-  var device = {
-    meg: {
-      neuro:
-        'neuro = ns.extractors.MegExtractor(\n' +
-        '    frequency=120.0,\n' +
-        '    filter=(0.5, 25.0),\n' +
-        '    allow_maxshield=True,\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "-0.1",
-      duration: "0.5",
-      timeSelection: "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz",
-    },
-    eeg: {
-      neuro:
-        'neuro = ns.extractors.EegExtractor(\n' +
-        '    frequency=120.0,\n' +
-        '    filter=(0.1, 75.0),\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "-0.1",
-      duration: "0.5",
-      timeSelection: "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz",
-    },
-    ieeg: {
-      neuro:
-        'neuro = ns.extractors.IeegExtractor(\n' +
-        '    frequency=100.0,\n' +
-        '    filter=(0.05, 20.0),\n' +
-        '    reference="bipolar",\n' +
-        '    picks=("seeg",),\n' +
-        '    drop_bads=True,\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "-0.1",
-      duration: "0.5",
-      timeSelection: "X_neuro = neuro_arr[:, :, 40]  # t = 300 ms at 100 Hz",
-    },
-    emg: {
-      neuro:
-        'neuro = ns.extractors.EmgExtractor(\n' +
-        '    frequency=256.0,\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "-0.1",
-      duration: "0.5",
-      timeSelection: "X_neuro = neuro_arr[:, :, 102]  # t = 300 ms at 256 Hz",
-    },
-    fmri: {
-      neuro:
-        'neuro = ns.extractors.FmriExtractor(\n' +
-        '    offset=5,  # 5s hemodynamic delay\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "0.0",
-      duration: "2.0",
-      timeSelection: "X_neuro = neuro_arr[:, :, 0]   # single TR",
-    },
-    fmri_proj: {
-      neuro:
-        'neuro = ns.extractors.FmriExtractor(\n' +
-        '    offset=5,  # 5s hemodynamic delay\n' +
-        '    projection={"name": "SurfaceProjector", "mesh": "fsaverage5"},\n' +
-        '    infra=infra,\n' +
-        ')',
-      start: "0.0",
-      duration: "2.0",
-      timeSelection: "X_neuro = neuro_arr[:, :, 0]   # single TR",
-    },
-  };
-
-  // ── Study mapping (task × device) ─────────────────────────────────────
-
-  var studyMap = {
-    language: { meg: "Gwilliams2022Neural", eeg: "Broderick2018Ephys", fmri: "Nastase2021Narratives", ieeg: "Zada2025Podcast", emg: "Sivakumar2024Emg2qwerty" },
-    image:    { meg: "Hebart2023ThingsMeg",   eeg: "Gifford2022Large",   fmri: "Hebart2023ThingsBold", ieeg: "YourStudy", emg: "YourStudy" },
-    video:    { meg: "YourStudy",     eeg: "Liu2024Eeg2video",       fmri: "Lahner2024Modeling", ieeg: "YourStudy", emg: "YourStudy" },
-    classification: { meg: "Mne2013Sample", eeg: "Cho2017Supporting", fmri: "YourStudy", ieeg: "YourStudy", emg: "Sivakumar2024Emg2qwerty" },
-  };
-
-  // Quickstart presets: each maps to a (task, device, study) triple
-  var presets = {
-    "bel-language":       { taskKey: "language",            deviceKey: "meg",       study: "Bel2026PetitListenSample",       installDeps: "openneuro-py" },
-    "li2022-language":    { taskKey: "language",            deviceKey: "fmri_proj", study: "Li2022PetitSample",              installDeps: "openneuro-py praatio" },
-    "grootswagers-image": { taskKey: "image",               deviceKey: "eeg",      study: "Grootswagers2022HumanSample",    installDeps: "openneuro-py pyunpack boto3 osfclient" },
-    "allen-image":        { taskKey: "image",               deviceKey: "fmri",     study: "Allen2022MassiveSample",         installDeps: "awscli" },
-    "fake-classif":       { taskKey: "word_classification", deviceKey: "fmri",     study: "Fake2025Fmri",                   installDeps: "" },
-  };
-
-  var isQuickstart = !!document.querySelector('.code-selector[data-quickstart]');
-
-  // ── Template builders ─────────────────────────────────────────────────
-
-  function buildDataBlock(tsk, dev, studyName, installDeps) {
+  function buildDataBlock(tsk, dev, studyName) {
     var lines = [];
-    if (installDeps) {
-      lines.push("# First install study dependencies:");
-      lines.push("# pip install neuralfetch " + installDeps);
-      lines.push("");
-    }
     lines.push(
       "import neuralset as ns",
       "from torch.utils.data import DataLoader",
@@ -380,10 +224,9 @@ document.addEventListener("DOMContentLoaded", function () {
       "",
       "# 2. Define extractors",
       dev.neuro,
-      ""
+      "",
+      tsk.stim
     );
-    if (tsk.installComment) lines.push(tsk.installComment);
-    lines.push(tsk.stim);
     lines.push("");
     lines.push("# 3. Segment into a Dataset");
     lines.push("segmenter = ns.dataloader.Segmenter(");
@@ -402,8 +245,6 @@ document.addEventListener("DOMContentLoaded", function () {
     lines.push("    break");
     return lines.join("\n");
   }
-
-  // ── sklearn block ─────────────────────────────────────────────────────
 
   function buildSklearnBlock(tsk, dev, dir) {
     var isDecoding = (dir === "decoding");
@@ -518,50 +359,77 @@ document.addEventListener("DOMContentLoaded", function () {
     ].join("\n");
   }
 
-  // ── Rendering ─────────────────────────────────────────────────────────
+  // ── Initialization: fetch data, then wire up dropdowns ──────────────────
 
-  function val(id) {
-    var el = document.getElementById(id);
-    return el ? el.value : null;
-  }
-
-  function render() {
-    var tskKey, devKey, studyName, installDeps;
-
-    if (isQuickstart) {
-      var p = presets[val("sel-preset")] || presets["bel-language"];
-      tskKey = p.taskKey;
-      devKey = p.deviceKey;
-      studyName = p.study;
-      installDeps = p.installDeps || "";
-    } else {
-      tskKey = val("sel-task") || "language";
-      devKey = val("sel-device") || "meg";
-      studyName = (studyMap[tskKey] || {})[devKey] || "YourStudy";
-      installDeps = "";
+  document.addEventListener("DOMContentLoaded", function () {
+    var dataEl = document.getElementById("code-data");
+    var sklearnEl = document.getElementById("code-sklearn");
+    var installEl = document.getElementById("code-install");
+    if (!dataEl) {
+      console.warn("Code selector: Required elements not found");
+      return;
     }
 
-    var tsk = task[tskKey] || task.language;
-    var dev = device[devKey] || device.meg;
+    fetch(DATA_URL)
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        var isQuickstart = !!document.querySelector('.code-selector[data-quickstart]');
 
-    var dataBlock = buildDataBlock(tsk, dev, studyName, installDeps);
-    dataEl.innerHTML = highlightPython(dataBlock);
-    addCopyButton(dataEl, dataBlock);
+        function val(id) {
+          var el = document.getElementById(id);
+          return el ? el.value : null;
+        }
 
-    if (sklearnEl) {
-      var dir = val("sel-direction") || "decoding";
-      var sklearnBlock = buildSklearnBlock(tsk, dev, dir);
-      sklearnEl.innerHTML = highlightPython(sklearnBlock);
-      addCopyButton(sklearnEl, sklearnBlock);
-    }
-  }
+        function render() {
+          var tskKey, devKey, studyName, installDeps;
 
-  // ── Dropdown handlers ─────────────────────────────────────────────────
+          if (isQuickstart) {
+            var p = data.presets[val("sel-preset")] || data.presets["bel-language"];
+            tskKey = p.taskKey;
+            devKey = p.deviceKey;
+            studyName = p.study;
+            installDeps = p.installDeps || "";
+          } else {
+            tskKey = val("sel-task") || "language";
+            devKey = val("sel-device") || "meg";
+            studyName = (data.studyMap[tskKey] || {})[devKey] || "YourStudy";
+            installDeps = "";
+          }
 
-  ["sel-task", "sel-direction", "sel-device", "sel-preset"].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) el.addEventListener("change", render);
+          var tsk = data.task[tskKey] || data.task.language;
+          var dev = data.device[devKey] || data.device.meg;
+
+          if (installEl) {
+            var installBlock = buildInstallBlock(tsk, installDeps);
+            installEl.textContent = installBlock;
+            addCopyButton(installEl, installBlock);
+          }
+
+          var dataBlock = buildDataBlock(tsk, dev, studyName);
+          dataEl.innerHTML = highlightPython(dataBlock);
+          addCopyButton(dataEl, dataBlock);
+
+          if (sklearnEl) {
+            var dir = val("sel-direction") || "decoding";
+            var sklearnBlock = buildSklearnBlock(tsk, dev, dir);
+            sklearnEl.innerHTML = highlightPython(sklearnBlock);
+            addCopyButton(sklearnEl, sklearnBlock);
+          }
+        }
+
+        ["sel-task", "sel-direction", "sel-device", "sel-preset"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener("change", render);
+        });
+
+        console.log("Code selector: Initialized successfully");
+        render();
+      })
+      .catch(function (e) {
+        console.error("Code selector: failed to load " + DATA_URL, e);
+      });
   });
-
-  render();
-});
+})();
