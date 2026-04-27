@@ -142,20 +142,11 @@ def _resolve_study(name: str = "") -> tp.Type["Study"] | None:
         _scan_package_for_studies(Path(pkg.__file__).parent, pkg_name, name)
     cls = STUDIES.get(name)
     if name and cls is None:
-        pkgs = _get_study_packages()
-        if pkgs:
-            scanned = ", ".join(pkgs)
-            msg = (
-                f"Study {name!r} not found (scanned: {scanned}). "
-                f"Import the module that defines it before use."
-            )
-        else:
-            msg = (
-                f"Study {name!r} not found. "
-                f"Install neuralfetch (pip install neuralfetch) "
-                f"or import the module that defines it before use."
-            )
-        raise ImportError(msg)
+        scanned = ", ".join(_get_study_packages())
+        hint = "import the module that defines it before use"
+        if importlib.util.find_spec("neuralfetch") is None:
+            hint = f"run `pip install neuralfetch` for public-data studies, or {hint}"
+        raise ImportError(f"Study {name!r} not found (scanned: {scanned}), {hint}.")
     return cls
 
 
@@ -217,7 +208,7 @@ class EventsTransform(base.Step):
                 return events[events["type"] == "Audio"]
     """
 
-    _DEFAULT_CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
+    CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: tp.Any) -> None:
@@ -293,7 +284,7 @@ class Study(base.Step):
 
     """
 
-    _DEFAULT_CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
+    CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
 
     path: Path
     infra_timelines: exca.MapInfra = exca.MapInfra(cluster="processpool")

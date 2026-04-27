@@ -1650,13 +1650,20 @@ class FmriExtractor(BaseExtractor):
         return resamp_data, new_trs
 
     def _get_relevant_events(
-        self, events: tp.Any, trigger: etypes.Event | None
+        self,
+        events: tp.Any,
+        trigger: etypes.Event | None,
+        *,
+        start: float,
+        duration: float,
     ) -> list[etypes.Event]:
         """Filter Fmri events by preproc/space, then delegate aggregation to base."""
         fmri_events = self._auto_filter_fmri_events(
             self._event_types_helper.extract(events),  # type: ignore[arg-type]
         )
-        return super()._get_relevant_events(fmri_events, trigger)
+        return super()._get_relevant_events(
+            fmri_events, trigger, start=start, duration=duration
+        )
 
     def _preprocess_event(self, event: etypes.Fmri) -> FmriTimedArray:
         rec = event.read()

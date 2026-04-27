@@ -749,7 +749,7 @@ class Stimulus(CategoricalEvent):
 
     See Also
     --------
-    neuralfetch.studies.testing.mne2013sample : Example usage
+    neuralset.events.testing.mne2013sample : Example usage
 
     Examples
     --------
