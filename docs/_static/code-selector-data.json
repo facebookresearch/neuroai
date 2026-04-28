@@ -1,0 +1,84 @@
+{
+  "task": {
+    "language": {
+      "pipExtras": "all",
+      "postInstall": "python -m spacy download en_core_web_md  # for SpacyEmbedding",
+      "stim": "stim = ns.extractors.SpacyEmbedding(aggregation=\"trigger\", infra=infra)",
+      "eventType": "Word",
+      "isClassification": false
+    },
+    "image": {
+      "pipExtras": "all",
+      "stim": "stim = ns.extractors.HuggingFaceImage(\n    model_name=\"facebook/dinov2-small\",\n    imsize=518,\n    aggregation=\"trigger\",\n    infra=infra,\n)",
+      "eventType": "Image",
+      "isClassification": false
+    },
+    "video": {
+      "pipExtras": "all",
+      "stim": "stim = ns.extractors.HuggingFaceVideo(\n    frequency=4,\n    use_audio=False,\n    aggregation=\"trigger\",\n    infra=infra,\n)",
+      "eventType": "Video",
+      "isClassification": false
+    },
+    "classification": {
+      "stim": "stim = ns.extractors.LabelEncoder(\n    event_types=\"Stimulus\",\n    event_field=\"description\",\n    return_one_hot=True,\n    aggregation=\"first\",\n)",
+      "eventType": "Stimulus",
+      "isClassification": true
+    },
+    "word_classification": {
+      "stim": "stim = ns.extractors.LabelEncoder(\n    event_types=\"Word\",\n    event_field=\"text\",\n    return_one_hot=True,\n    aggregation=\"first\",\n)",
+      "eventType": "Word",
+      "isClassification": true
+    }
+  },
+  "device": {
+    "meg": {
+      "neuro": "neuro = ns.extractors.MegExtractor(frequency=120.0, filter=(0.5, 25.0), infra=infra)",
+      "start": "-0.1",
+      "duration": "0.5",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz"
+    },
+    "eeg": {
+      "neuro": "neuro = ns.extractors.EegExtractor(frequency=120.0, filter=(0.1, 75.0), infra=infra)",
+      "start": "-0.1",
+      "duration": "0.5",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 48]  # t = 300 ms at 120 Hz"
+    },
+    "ieeg": {
+      "neuro": "neuro = ns.extractors.IeegExtractor(\n    frequency=100.0,\n    filter=(0.05, 20.0),\n    reference=\"bipolar\",\n    picks=(\"seeg\",),\n    drop_bads=True,\n    infra=infra,\n)",
+      "start": "-0.1",
+      "duration": "0.5",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 40]  # t = 300 ms at 100 Hz"
+    },
+    "emg": {
+      "neuro": "neuro = ns.extractors.EmgExtractor(frequency=256.0, infra=infra)",
+      "start": "-0.1",
+      "duration": "0.5",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 102]  # t = 300 ms at 256 Hz"
+    },
+    "fmri": {
+      "neuro": "neuro = ns.extractors.FmriExtractor(offset=5, infra=infra)  # offset=5 for 5s HRF delay",
+      "start": "0.0",
+      "duration": "2.0",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 0]   # single TR"
+    },
+    "fmri_proj": {
+      "neuro": "neuro = ns.extractors.FmriExtractor(offset=5, infra=infra)",
+      "start": "0.0",
+      "duration": "2.0",
+      "timeSelection": "X_neuro = neuro_arr[:, :, 0]   # single TR"
+    }
+  },
+  "studyMap": {
+    "language": {"meg": "Gwilliams2022Neural", "eeg": "Broderick2018Ephys", "fmri": "Nastase2021Narratives", "ieeg": "Zada2025Podcast", "emg": "Sivakumar2024Emg2qwerty"},
+    "image": {"meg": "Hebart2023ThingsMeg", "eeg": "Gifford2022Large", "fmri": "Hebart2023ThingsBold", "ieeg": "YourStudy", "emg": "YourStudy"},
+    "video": {"meg": "YourStudy", "eeg": "Liu2024Eeg2video", "fmri": "Lahner2024Modeling", "ieeg": "YourStudy", "emg": "YourStudy"},
+    "classification": {"meg": "Mne2013Sample", "eeg": "Cho2017Supporting", "fmri": "YourStudy", "ieeg": "YourStudy", "emg": "Sivakumar2024Emg2qwerty"}
+  },
+  "presets": {
+    "bel-language":       {"taskKey": "language",            "deviceKey": "meg",       "study": "Bel2026PetitListenSample",    "installDeps": "openneuro-py"},
+    "li2022-language":    {"taskKey": "language",            "deviceKey": "fmri_proj", "study": "Li2022PetitSample",           "installDeps": "openneuro-py praatio"},
+    "grootswagers-image": {"taskKey": "image",               "deviceKey": "eeg",       "study": "Grootswagers2022HumanSample", "installDeps": "openneuro-py pyunpack boto3 osfclient"},
+    "allen-image":        {"taskKey": "image",               "deviceKey": "fmri",      "study": "Allen2022MassiveSample",      "installDeps": "awscli"},
+    "fake-classif":       {"taskKey": "word_classification", "deviceKey": "fmri",      "study": "Fake2025Fmri",                "installDeps": ""}
+  }
+}

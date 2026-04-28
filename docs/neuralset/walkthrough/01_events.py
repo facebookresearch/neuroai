@@ -4,7 +4,7 @@
 Events
 ======
 
-In neuralset, **everything is an event**: a word displayed on screen,
+In NeuralSet, **everything is an event**: a word displayed on screen,
 an MEG recording, an fMRI scan, a button press — each is represented
 as an :class:`~neuralset.events.Event` with a position in time.
 
@@ -77,7 +77,7 @@ print(f"{len(words)} word events")
 # Event Types
 # -----------
 #
-# neuralset ships with many event subclasses covering neural recordings,
+# NeuralSet ships with many event subclasses covering neural recordings,
 # stimuli, text, and annotations.  The hierarchy lets you filter by a
 # parent class to match all its children (e.g. filtering for ``MneRaw``
 # matches ``Meg``, ``Eeg``, ``Ieeg``, etc.).

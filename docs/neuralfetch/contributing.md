@@ -2,20 +2,20 @@
 # Contributing: Onboarding a New Study
 
 This guide walks you through adding a new study (dataset) to
-**neuralfetch** — the curated catalog of public brain datasets used by
-neuralset.
+**NeuralFetch** — the curated catalog of public brain datasets used by
+NeuralSet.
 
 ```{tip}
 For general contributing guidelines (fork/PR workflow, pre-commit hooks,
-code quality), see the [neuralset contributing guide](../neuralset/extending/contributing.md).
+code quality), see the [NeuralSet contributing guide](../neuralset/extending/contributing.md).
 ```
 
 ## Overview
 
 Adding a study involves four steps:
 
-1. **Upload your data** to a public repository supported by neuralfetch.
-2. **Create the study class** following the neuralfetch format.
+1. **Upload your data** to a public repository supported by NeuralFetch.
+2. **Create the study class** following the NeuralFetch format.
 3. **Validate and test** the study locally.
 4. **Open a Pull Request** for review.
 
@@ -23,7 +23,7 @@ Adding a study involves four steps:
 
 ## 1. Upload Data
 
-neuralfetch supports downloading from many public data repositories.
+NeuralFetch supports downloading from many public data repositories.
 Choose the one that best fits your data:
 
 | Repository | Best for | Link |
@@ -185,9 +185,9 @@ so populating `_info` is what enables test coverage.
 
 - [Create Your Own Study tutorial](auto_examples/03_create_new_study) —
   step-by-step Sphinx Gallery tutorial with runnable code.
-- [neuralset contributing guide](../neuralset/extending/contributing.md) —
+- [NeuralSet contributing guide](../neuralset/extending/contributing.md) —
   general coding standards, pre-commit hooks, fork/PR workflow.
-- [neuralfetch download helpers](reference/reference) —
+- [NeuralFetch download helpers](reference/reference) —
   API reference for `download.Openneuro`, `download.Osf`,
   and all other download backends.
 

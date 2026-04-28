@@ -46,7 +46,7 @@ uv venv .venv
 source .venv/bin/activate
 ```
 
-**Step 2:** Install neuralfetch in editable mode:
+**Step 2:** Install NeuralFetch in editable mode:
 
 ```bash
 # from the repo root
@@ -86,7 +86,7 @@ conda install pip
 pip install uv
 ```
 
-**Step 3:** Install neuralfetch in editable mode:
+**Step 3:** Install NeuralFetch in editable mode:
 
 ```bash
 # from the repo root

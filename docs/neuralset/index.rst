@@ -1,36 +1,34 @@
-neuralset
+NeuralSet
 =========
 
-.. raw:: html
+**NeuralSet** turns raw neural recordings and stimuli into PyTorch-ready
+datasets. 
 
-   <p class="landing-badge landing-badge--hero"><i class="fas fa-database"></i><span>neuralset</span></p>
-
-**neuralset** turns raw neural recordings and stimuli into PyTorch-ready
-datasets. Define a study, load events into a flat DataFrame, apply
-transforms, extract features with configurable extractors, and segment
-everything into batches — all lazy, typed with pydantic, and cacheable.
+Quick install
+-------------
 
 .. code-block:: bash
 
    pip install neuralset
 
-Add the ``tutorials`` extra for feature-extraction dependencies, as well as
-:doc:`neuralfetch </neuralfetch/index>` to experiment with curated public datasets:
+Heavier dependencies (e.g. ``transformers`` for text/image/etc feature
+extraction) can be pre-installed with: 
 
 .. code-block:: bash
 
-   pip install 'neuralset[tutorials]' neuralfetch
+  pip install neuralset[all]
 
-Heavier dependencies (e.g. ``transformers`` for text/image/etc feature
-extraction) live in ``[all]`` — see :doc:`Installation <install>` for
-the full breakdown.
+see :doc:`Installation <install>` for the full breakdown.
 
 ----
 
-Quickstart
+Quick start
 ----------
 
-From study to PyTorch batch — pick an example to see the code.
+Pick an example to see the code. Copy the setup commands into your
+terminal first, then run the Python snippet. The first time you run it,
+it will be slow (data downloading, cache preparation, etc.) — but then
+lightning fast, even as you change parameters (e.g. segment duration).
 
 .. raw:: html
 
@@ -40,13 +38,20 @@ From study to PyTorch batch — pick an example to see the code.
        <label class="selector-item">
          <span class="selector-label">📋 Example</span>
          <select id="sel-preset">
-           <option value="bel-language" selected>🗣️ Language + MEG — Bel2026PetitListenSample</option>
-           <option value="li2022-language">🗣️ Language + fMRI — Li2022PetitSample</option>
-           <option value="grootswagers-image">🖼️ Image + EEG — Grootswagers2022HumanSample</option>
-           <option value="allen-image">🖼️ Image + fMRI — Allen2022MassiveSample</option>
-           <option value="fake-classif">🏷️ Classification + fMRI — Fake2025Fmri (no download)</option>
+           <option value="bel-language" selected>🗣️ Language + MEG</option>
+           <option value="li2022-language">🗣️ Language + fMRI</option>
+           <option value="grootswagers-image">🖼️ Image + EEG</option>
+           <option value="allen-image">🖼️ Image + fMRI</option>
+           <option value="fake-classif">🏷️ Classification + fMRI</option>
          </select>
        </label>
+     </div>
+
+     <div class="code-block-wrapper">
+       <div class="code-block-label">
+         <i class="fas fa-download"></i> Setup (run once in your terminal)
+       </div>
+       <pre><code id="code-install" class="language-bash"></code></pre>
      </div>
 
      <div class="code-block-wrapper">
@@ -63,7 +68,7 @@ From study to PyTorch batch — pick an example to see the code.
 Tutorials
 ---------
 
-Each tutorial walks through one building block of the pipeline.
+Each tutorial walks through one building block of the NeuralSet pipeline.
 
 .. raw:: html
 
@@ -231,7 +236,7 @@ Citation
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: neuralset
+   :caption: NeuralSet
 
    Installation <install>
    Tutorials <auto_examples/walkthrough/index>
@@ -244,5 +249,6 @@ Citation
    :caption: Reference
 
    API <reference/reference>
+   Philosophy <philosophy>
    Glossary <glossary>
    Contributing <extending/contributing.md>

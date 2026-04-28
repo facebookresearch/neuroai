@@ -1,7 +1,7 @@
 Tutorials
 =========
 
-Three tutorials cover the full neuralfetch workflow — from discovering
+Three tutorials cover the full NeuralFetch workflow — from discovering
 public datasets to fetching your first study and building your own.
 
 .. raw:: html

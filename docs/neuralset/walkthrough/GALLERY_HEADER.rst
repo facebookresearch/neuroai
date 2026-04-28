@@ -1,6 +1,6 @@
 .. _walkthrough:
 
-Tutorials: the neuralset pipeline
+Tutorials: the NeuralSet pipeline
 ==================================
 
 Each tutorial covers one step of the pipeline — from

@@ -40,7 +40,7 @@ uv venv .venv
 source .venv/bin/activate
 ```
 
-**Step 2:** Install neuraltrain in editable mode:
+**Step 2:** Install NeuralTrain in editable mode:
 
 ```bash
 # from the repo root
@@ -83,7 +83,7 @@ conda install pip
 pip install uv
 ```
 
-**Step 3:** Install neuraltrain in editable mode:
+**Step 3:** Install NeuralTrain in editable mode:
 
 ```bash
 # from the repo root

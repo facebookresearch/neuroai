@@ -1,25 +1,25 @@
-neuralfetch
+NeuralFetch
 ===========
 
-.. raw:: html
-
-   <p class="landing-badge landing-badge--hero"><i class="fas fa-download"></i><span>neuralfetch</span></p>
-
-**One interface to fetch neuroimaging datasets from OpenNeuro, DANDI, OSF,
+**Fetch curated datasets from OpenNeuro, DANDI, OSF,
 HuggingFace, Zenodo, and more — into a unified events DataFrame ready for
-neuralset.**
+NeuralSet.**
+
+Quick install
+-------------
+
 
 .. code-block:: bash
 
    pip install neuralfetch
 
-Installing neuralfetch automatically registers all curated studies in
-neuralset's catalog — no extra imports needed.
+Installing NeuralFetch automatically registers all curated studies in
+NeuralSet's catalog — no extra imports needed.
 
 ----
 
-Quickstart
-----------
+Quick start
+-----------
 
 Pick a sample dataset and see the full fetch-to-events workflow.
 
@@ -30,10 +30,10 @@ Pick a sample dataset and see the full fetch-to-events workflow.
        <label class="selector-item">
          <span class="selector-label">📋 Dataset</span>
          <select id="sel-nh-preset">
-           <option value="listen-meg" selected>🗣️ Language + MEG — Bel2026PetitListenSample</option>
-           <option value="images-eeg">🖼️ Images + EEG — Grootswagers2022HumanSample</option>
-           <option value="language-fmri">📖 Language + fMRI — Li2022PetitSample</option>
-           <option value="images-fmri">🖼️ Images + fMRI — Allen2022MassiveSample</option>
+           <option value="listen-meg" selected>🗣️ Language + MEG</option>
+           <option value="images-eeg">🖼️ Images + EEG</option>
+           <option value="language-fmri">📖 Language + fMRI</option>
+           <option value="images-fmri">🖼️ Images + fMRI</option>
          </select>
        </label>
      </div>
@@ -168,7 +168,7 @@ Pick a sample dataset and see the full fetch-to-events workflow.
 Tutorials
 ---------
 
-Each tutorial walks through one building block of the neuralfetch pipeline.
+Each tutorial walks through one building block of the NeuralFetch pipeline.
 
 .. raw:: html
 
@@ -244,7 +244,7 @@ Each tutorial walks through one building block of the neuralfetch pipeline.
 How It Works
 ------------
 
-neuralfetch connects to **12 public repositories** through a pluggable backend
+NeuralFetch connects to **12 public repositories** through a pluggable backend
 system and returns the same tidy events DataFrame regardless of the source.
 
 .. raw:: html
@@ -265,11 +265,11 @@ system and returns the same tidy events DataFrame regardless of the source.
        <span class="hub-source"><i class="fas fa-archive"></i> Zenodo</span>
      </div>
      <div class="hub-arrows">↓ ↓ ↓ ↓ ↓</div>
-     <div class="hub-center"><i class="fas fa-download"></i> neuralfetch</div>
+     <div class="hub-center"><i class="fas fa-download"></i> NeuralFetch</div>
      <div class="hub-arrow-down">↓</div>
      <div class="hub-output">
        <i class="fas fa-table"></i>
-       neuralset <code>Events DataFrame</code>
+       NeuralSet <code>Events DataFrame</code>
      </div>
    </div>
 
@@ -299,7 +299,7 @@ session information — regardless of where the data came from.
 Supported Data Sources
 ----------------------
 
-neuralfetch downloads datasets from **12 public repositories** through a
+NeuralFetch downloads datasets from **12 public repositories** through a
 pluggable backend system.  Each backend handles authentication, pagination,
 and format differences so your code doesn't have to.
 
@@ -424,7 +424,7 @@ across modalities using standard pandas operations.
 Supported Datasets
 ------------------
 
-neuralfetch provides **interfaces to public datasets** spanning six recording modalities, with new datasets added regularly:
+NeuralFetch provides **interfaces to public datasets** spanning six recording modalities, with new datasets added regularly:
 
 .. list-table::
    :widths: 15 15 70
@@ -485,13 +485,13 @@ Sample datasets are available for immediate use — no large download required:
 Citation
 --------
 
-See the :doc:`neuralset page </neuralset/index>` for the preferred
+See the :doc:`NeuralSet page </neuralset/index>` for the preferred
 citation (BibTeX at the bottom).
 
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: neuralfetch
+   :caption: NeuralFetch
 
    install
    Tutorials <auto_examples/index>

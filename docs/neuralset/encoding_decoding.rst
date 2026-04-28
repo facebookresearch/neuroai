@@ -43,6 +43,13 @@ direction below to generate the code.
 
      <div class="code-block-wrapper">
        <div class="code-block-label">
+         <i class="fas fa-download"></i> <strong>Setup:</strong> run once in your terminal
+       </div>
+       <pre><code id="code-install" class="language-bash"></code></pre>
+     </div>
+
+     <div class="code-block-wrapper">
+       <div class="code-block-label">
          <i class="fas fa-database"></i> <strong>Step 1:</strong> Load study data & configure extractors
        </div>
        <pre><code id="code-data" class="language-python"></code></pre>

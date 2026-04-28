@@ -1,7 +1,7 @@
-# Contributing to neuralset
+# Contributing to NeuralSet
 
 Thanks for your interest in contributing! Before diving in, see the
-[design philosophy](../philosophy.md) for the principles behind neuralset's
+[design philosophy](../philosophy.md) for the principles behind NeuralSet's
 API (pydantic everywhere, lazy evaluation, the event abstraction).
 
 ## Ways to Contribute

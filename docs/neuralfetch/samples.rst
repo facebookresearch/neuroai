@@ -144,7 +144,7 @@ on a laptop.
 
      <p style="font-size:.83rem;color:var(--color-foreground-secondary);margin-top:.7rem;">
        Looking for full analysis pipelines? See the
-       <a href="/neuralset/index.html">neuralset</a> walkthrough tutorials.
+       <a href="/neuralset/index.html">NeuralSet</a> walkthrough tutorials.
      </p>
 
    </div>
