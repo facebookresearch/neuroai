@@ -30,7 +30,7 @@ This tutorial covers:
 #
 # The example project defines a ``Data`` pydantic model with four fields:
 #
-# - ``study``: a neuralset ``Step`` (usually a chain of study + split)
+# - ``study``: a NeuralSet ``Step`` (usually a chain of study + split)
 # - ``segmenter``: a ``ns.dataloader.Segmenter`` with extractors
 #   and the segment window
 # - ``batch_size`` and ``num_workers``
@@ -114,7 +114,7 @@ for section, value in default_data_config.items():
 # The Segmenter
 # -------------
 #
-# The ``Segmenter`` is the neuralset object that turns an events
+# The ``Segmenter`` is the NeuralSet object that turns an events
 # DataFrame into a ``SegmentDataset``. It holds extractors, a trigger
 # query, and the segment time window. Let's instantiate one:
 

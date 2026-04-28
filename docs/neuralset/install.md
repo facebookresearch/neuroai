@@ -7,18 +7,7 @@
 pip install neuralset
 ```
 
-**neuralset** is the data pipeline and only ships with testing/synthetic studies. To load the full catalog of public datasets, also install :doc:`neuralfetch </neuralfetch/index>`:
-
-```bash
-pip install neuralfetch
-```
-
-Verify it works:
-
-```python
-import neuralset as ns
-print(ns.Study.catalog())
-```
+**NeuralSet** is the data pipeline and only ships with testing/synthetic studies. To load the full catalog of public datasets, also install {doc}`NeuralFetch </neuralfetch/index>`.
 
 To follow the tutorials (which use spacy embeddings and audio data):
 
@@ -26,16 +15,13 @@ To follow the tutorials (which use spacy embeddings and audio data):
 pip install 'neuralset[tutorials]'
 ```
 
-Some extractors require heavier dependencies. Install everything at once
+Some extractors require heavier dependencies. Pre-install everything at once
 with:
 
 ```bash
 pip install 'neuralset[all]'
 ```
 
-Key extras in `[all]` beyond `[tutorials]`: `transformers` (HuggingFace
-text/image/audio models), `torchaudio`, `torchvision`, `pybids` (BIDS
-fMRI datasets).
 
 ## Developer Install
 

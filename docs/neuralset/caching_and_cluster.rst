@@ -1,7 +1,7 @@
 Caching & Cluster Execution
 ===========================
 
-neuralset pipelines involve expensive computation — loading neural
+NeuralSet pipelines involve expensive computation — loading neural
 recordings, running deep models on every stimulus, aligning timelines.
 The :term:`infra` parameter adds **disk caching** and optional **cluster
 dispatch** to any pipeline component.  Three infra types handle different
@@ -104,7 +104,7 @@ caching each result independently.  It supports batch dispatch
 TaskInfra
 ---------
 
-neuraltrain experiments use ``TaskInfra``.  It caches a **complete
+NeuralTrain experiments use ``TaskInfra``.  It caches a **complete
 computation** — unlike ``MapInfra`` it does not iterate over items.  It
 supports Slurm job arrays for parameter sweeps.
 
@@ -128,7 +128,7 @@ supports Slurm job arrays for parameter sweeps.
 
 ----
 
-In neuralset
+In NeuralSet
 ------------
 
 Studies — Backend + MapInfra
@@ -235,10 +235,10 @@ Local caching, then scaling to a cluster:
 
 ----
 
-neuraltrain experiments
+NeuralTrain experiments
 -----------------------
 
-neuraltrain uses ``TaskInfra`` for full training runs.
+NeuralTrain uses ``TaskInfra`` for full training runs.
 :class:`~neuraltrain.utils.BaseExperiment` provides the base pattern:
 
 .. code-block:: python
@@ -361,7 +361,7 @@ Quick reference
    * - :term:`EventsTransform`
      - ``Backend``
      - ``{"backend": "Cached", "folder": "/cache"}``
-   * - neuraltrain experiment
+   * - NeuralTrain experiment
      - ``TaskInfra``
      - ``{"folder": "/results", "cluster": "slurm"}``
 
