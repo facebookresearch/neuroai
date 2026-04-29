@@ -280,7 +280,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         gpus_per_node=1,
         cpus_per_task=10,
         min_samples_per_job=4096,
-        version="v6",
+        version="v7",
     )
 
     # extractor attributes
@@ -290,8 +290,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
 
     # initialized later
     _model: nn.Module = pydantic.PrivateAttr()
-    _tokenizer: nn.Module = pydantic.PrivateAttr()
-    _pad_id: int = pydantic.PrivateAttr()
+    _tokenizer: tp.Any = pydantic.PrivateAttr()
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -323,9 +322,12 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             kwargs: dict[str, tp.Any] = {}
             if self.model_name.lower().startswith("microsoft/phi"):
                 kwargs["trust_remote_code"] = True
-            # make sure to truncate on the left side!
+            # pinned for `_get_data`'s slicing: target at tail, pads trailing
             self._tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name, truncation_side="left", **kwargs
+                self.model_name,
+                truncation_side="left",
+                padding_side="right",
+                **kwargs,
             )
             # tokens
             if self._tokenizer.pad_token is None:
@@ -334,7 +336,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 # self._model.resize_token_embeddings(len(self._tokenizer))
                 # simpler to use existing EOS token:
                 self._tokenizer.pad_token = self._tokenizer.eos_token
-            self._pad_id = self._tokenizer.eos_token_id  # type: ignore
             try:
                 self._model = self._load_model()
             except Exception as e:
@@ -379,7 +380,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         return model
 
     @property
-    def tokenizer(self) -> nn.Module:
+    def tokenizer(self) -> tp.Any:
         self.model
         return self._tokenizer
 
@@ -452,16 +453,18 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 hidden_states = torch.stack([layer.cpu() for layer in states])
                 n_layers, n_batch, n_tokens, n_dims = hidden_states.shape  # noqa
 
+                # attention_mask is the model's truth, hoisted to one device sync per batch
+                n_pads_per_row: list[int] = (
+                    (inputs["attention_mask"] == 0).sum(dim=1).tolist()
+                )
+
                 # -- for each target word, remove padding, and select target tokens
                 for i, target_word in enumerate(target_words):
                     # select batch element
                     hidden_state = hidden_states[:, i]  # n_layers x tokens x embd
 
-                    # count number of pads
-                    n_pads = sum(inputs["input_ids"][i].cpu().numpy() == self._pad_id)
-
-                    # remove pads
-                    if n_pads:
+                    n_pads = n_pads_per_row[i]
+                    if n_pads > 0:
                         hidden_state = hidden_state[:, :-n_pads]
 
                     # select tokens that belong to the target word
@@ -470,11 +473,11 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         # the prefix token count to get the target word's tokens
                         prefix = context[i][: -len(target_word)].rstrip()
                         n_prefix = (
-                            len(self.tokenizer.encode(prefix, add_special_tokens=False))  # type: ignore[operator]
+                            len(self.tokenizer.encode(prefix, add_special_tokens=False))
                             if prefix
                             else 0
                         )
-                        n_target = n_tokens - n_pads - n_prefix
+                        n_target = hidden_state.shape[1] - n_prefix
                         word_state = hidden_state[:, -max(1, n_target) :]
                     else:
                         word_state = hidden_state
