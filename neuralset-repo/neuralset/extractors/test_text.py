@@ -309,6 +309,41 @@ def test_contextualized_token_slicing(word_text: str, n_target_tokens: int) -> N
     assert out.shape == (n_target_tokens, 768)
 
 
+def test_batched_target_slice_excludes_pads() -> None:
+    """A word's contextualized output must not depend on what it's batched with."""
+    extractor = text.HuggingFaceText(
+        aggregation="sum",
+        contextualized=True,
+        token_aggregation="sum",
+        model_name="openai-community/gpt2",
+        device="cpu",
+        batch_size=2,
+    )
+    # alone vs batched would otherwise hit the same MapInfra cache entry
+    extractor.infra.keep_in_ram = False
+
+    short = etypes.Word(text="ce", start=0, duration=1, timeline="x", context="ce")
+    long_ctx = (
+        "Once upon a time in a faraway kingdom there lived a small fox who "
+        "loved to wander through the dense forest looking for berries "
+    ) * 3
+    long = etypes.Word(
+        text="afternoon",
+        start=1,
+        duration=1,
+        timeline="x",
+        context=long_ctx + " afternoon",
+    )
+
+    short_alone = np.asarray(list(extractor._get_data([short]))[0])
+    long_alone = np.asarray(list(extractor._get_data([long]))[0])
+    short_batched, long_batched = (
+        np.asarray(x) for x in extractor._get_data([short, long])
+    )
+    np.testing.assert_allclose(short_batched, short_alone, rtol=1e-3, atol=1e-3)
+    np.testing.assert_allclose(long_batched, long_alone, rtol=1e-3, atol=1e-3)
+
+
 def test_part_reversal() -> None:
     ref = np.random.rand(2, 3, 4)
     x = torch.from_numpy(np.array(ref, copy=True))
