@@ -74,7 +74,8 @@ def _set_dir_permissions(path: Path) -> None:
                     skipped += 1
                     continue
                 os.chmod(item, 0o777)
-            except PermissionError:
+            # FileNotFoundError for broken symlinks: partial Datalad download
+            except (PermissionError, FileNotFoundError):
                 logger.debug("Cannot chmod %s (not owner), skipping.", item)
                 skipped += 1
     if skipped:
