@@ -339,10 +339,6 @@ class BaseDownload(_Module):
         raise NotImplementedError
 
 
-class Wildcard(BaseModel):
-    folder: str
-
-
 class S3(BaseDownload):
     """Download files from an S3 bucket via ``boto3``.
 
@@ -536,8 +532,8 @@ class Datalad(BaseDownload):
         URL of the DataLad repository to clone.
     threads : int
         Number of parallel download threads for ``datalad get`` (default: 1).
-    folders : list of str or Wildcard
-        Directories or glob patterns to retrieve after cloning.  When empty,
+    paths : list of str
+        paths or glob patterns to retrieve after cloning.  When empty,
         all content is retrieved via ``datalad get "*"``.
     """
 
@@ -546,8 +542,8 @@ class Datalad(BaseDownload):
     repo_url: str
     # number of threads used for the datalad operations
     threads: int = 1
-    # list of folders (or wildcards) to actually clone
-    folders: list[str | Wildcard] = []
+    # list of path to actually fetch
+    paths: list[str] = []
 
     @pydantic.computed_field  # type: ignore
     @property
@@ -557,23 +553,6 @@ class Datalad(BaseDownload):
         if Path(repo_name).suffix == ".git":
             repo_name = repo_name[:-4]
         return repo_name
-
-    def _datalad(self, cmd: str, path: Path | str) -> None:
-        # TODO: do not use subprocess
-        proc = subprocess.run(
-            cmd, cwd=str(path), capture_output=True, text=True, shell=True
-        )
-        if "install(error)" in proc.stdout:
-            logging.warning("Potential error in datalad clone:\n> %s", proc.stdout)
-        if proc.stderr:
-            # NOTE: stderr might be populated even in success case
-            logging.warning("Potential error in datalad clone:\n> %s", proc.stderr)
-            # raise RuntimeError(f"Clone Failed: {proc.stderr}")
-
-    def _dl_item(self, cur_path: Path | str) -> None:
-        threads_ = "" if self.threads > 1 else f" -J {self.threads}"
-        cmd = f'datalad get "{cur_path}"{threads_}'
-        self._datalad(cmd, self._dl_dir / self.repo_name)
 
     def _download(self) -> None:
         """Downloads data from datalab
@@ -588,30 +567,24 @@ class Datalad(BaseDownload):
             folders: List of folders to clone explicitly (otherwise everything is cloned).
                 Contains a tuple of str and bool. Bool defines if str is a glob
         """
+        import datalad.api as dlad
         # clone repo
-        self._datalad(f"datalad clone {self.repo_url}", self._dl_dir)
+        clone_res = dlad.clone(source=self.repo_url, path=self._dl_dir)
 
-        # expand folders
-        folders = self.folders if self.folders else [Wildcard(folder="*")]
+        expanded_paths = []
+        # expand paths
+        if len(self.paths) < 1:
+            expanded_paths = ['.']
+        else:
+            for path in self.paths:
+                if '*' in path:
+                    expanded_paths.extend(self._dl_dir.glob(path))
+                else:
+                    expanded_paths.append(self._dl_dir/path)
+        logging.debug("Downloading %s", expanded_paths)
+        clone_res.get(expanded_paths, jobs=self.threads)
 
-        all_folders: list[Path] = []
-        for folder in folders:
-            if isinstance(folder, Wildcard):
-                all_folders += [
-                    Path(str(p))
-                    for p in glob(str(self._dl_dir / self.repo_name / folder.folder))
-                ]
-            else:
-                all_folders += [self._dl_dir / self.repo_name / folder]  # type: ignore
-        print(f"Loading {len(all_folders)} folders: ", all_folders)
-
-        # download
-        for item in tqdm(all_folders, desc=f"Downloading {self.study}", ncols=100):
-            if not item.is_dir():
-                continue
-            self._dl_item(item)
-
-        print("\nDownloaded Dataset")
+        logging.info("Downloaded Dataset in %s", self._dl_dir)
 
 
 class Donders(BaseDownload):
