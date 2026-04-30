@@ -373,6 +373,71 @@ def ensure_imagenet22k(
     return imagenet_path
 
 
+_THINGS_LICENSE_URL: str = "https://osf.io/jum2f/files/j6a3m"
+_THINGS_PASSWORD_FILE: str = "password_images.txt"
+
+
+def _get_things_password_cache_path() -> Path:
+    """Path where the THINGS-images password is cached in the user's config dir."""
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    config_dir = Path(xdg) if xdg else Path.home() / ".config"
+    return config_dir / "neuralfetch" / ".things_images_password"
+
+
+def _prompt_things_password() -> str:
+    """Interactively prompt the user to accept the THINGS licence and enter the password.
+
+    The password is cached in ``~/.config/neuralfetch/.things_images_password`` so
+    subsequent calls (and other THINGS studies) do not need to prompt again.
+    """
+    cache_path = _get_things_password_cache_path()
+
+    # Check env var first
+    password = os.environ.get("NEURALFETCH_THINGS_PASSWORD")
+    if password:
+        return password
+
+    # Check cache
+    if cache_path.exists():
+        cached = cache_path.read_text().strip()
+        if cached:
+            logger.info("THINGS-images password loaded from cache.")
+            return cached
+
+    # Need interactive terminal
+    if not sys.stdin or not getattr(sys.stdin, "isatty", lambda: False)():
+        raise RuntimeError(
+            "THINGS-images requires accepting a licence agreement.\n"
+            "Please run study.download() in an interactive terminal first so the "
+            "password can be entered and cached, then resubmit your batch job.\n"
+            "Alternatively, set the NEURALFETCH_THINGS_PASSWORD environment variable."
+        )
+
+    print(
+        "\n"
+        "THINGS-images licence agreement\n"
+        "================================\n"
+        "The THINGS-images dataset requires accepting a licence before downloading.\n"
+        f"1. Open the following URL in your browser:\n   {_THINGS_LICENSE_URL}\n"
+        f"2. Accept the licence and download '{_THINGS_PASSWORD_FILE}'.\n"
+        "3. Enter the password from that file below.\n"
+    )
+
+    import getpass
+
+    password = getpass.getpass("THINGS-images password: ").strip()
+    if not password:
+        raise ValueError("Password cannot be empty.")
+
+    # Cache it
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(password + "\n")
+    cache_path.chmod(0o600)
+    logger.info(f"THINGS-images password cached at {cache_path}")
+    print("Password cached. Future downloads will not require re-entry.\n")
+    return password
+
+
 def download_things_images(
     study_path: Path,
     fail_on_error: bool = False,
@@ -401,13 +466,7 @@ def download_things_images(
 
     logger.warning(f"THINGS-images not found at expected location: {things_images_path}")
 
-    password = os.environ.get("NEURALFETCH_THINGS_PASSWORD")
-    if password is None:
-        raise RuntimeError(
-            "THINGS-images requires accepting a licence agreement.\n"
-            "Please export NEURALFETCH_THINGS_PASSWORD=<pwd> where the password can be found "
-            "in password_images.txt at https://osf.io/jum2f/files/52wrx"
-        )
+    password = _prompt_things_password()
 
     zip_url = "https://files.osf.io/v1/resources/jum2f/providers/osfstorage/670d6f7dbce84f4a7bb9371b"
     print("\nDownloading images_THINGS.zip...")
