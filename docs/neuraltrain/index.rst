@@ -1,14 +1,10 @@
-neuraltrain
+NeuralTrain
 ===========
 
-.. raw:: html
+NeuralTrain allows training PyTorch models on NeuralSet datasets at scale.
 
-   <p class="landing-badge landing-badge--hero"><i class="fas fa-dumbbell"></i><span>neuraltrain</span></p>
-
-**neuraltrain** turns ``neuralset`` datasets into trained PyTorch models.
-Define models, losses, metrics, and optimizers as typed pydantic configs,
-wrap them in an experiment, and launch local runs or Slurm sweeps -- all
-serializable, validated, and reproducible.
+Quick install
+-------------
 
 .. code-block:: bash
 
@@ -22,8 +18,8 @@ For the full model zoo, Lightning support, and dev tools:
 
 ----
 
-Quickstart
-----------
+Quick start
+-----------
 
 Define training pieces as config objects, then build concrete PyTorch modules
 at runtime.
@@ -86,7 +82,7 @@ Each tutorial covers one stage of the training pipeline.
        <div class="pipeline-vcard-icon"><i class="fas fa-layer-group"></i></div>
        <div class="pipeline-vcard-body">
          <div class="pipeline-vcard-title">Data</div>
-         <div class="pipeline-vcard-desc">Use neuralset studies and a Segmenter to build train/val/test loaders.</div>
+         <div class="pipeline-vcard-desc">Use NeuralSet studies and a Segmenter to build train/val/test loaders.</div>
          <div class="pipeline-sub-links">
            <a class="pipeline-sub-link pipeline-accordion-toggle" href="#" data-target="acc-nt-data">Snippet</a>
            <a class="pipeline-sub-link" href="auto_examples/data/01_data.html">Tutorial</a>
@@ -159,7 +155,7 @@ Each tutorial covers one stage of the training pipeline.
 Citation
 --------
 
-If you use ``neuraltrain`` in your research, please cite
+If you use ``NeuralTrain`` in your research, please cite
 `A foundation model of vision, audition, and language for in-silico
 neuroscience <https://ai.meta.com/research/publications/a-foundation-model-of-vision-audition-and-language-for-in-silico-neuroscience/>`_:
 
@@ -174,7 +170,7 @@ neuroscience <https://ai.meta.com/research/publications/a-foundation-model-of-vi
 .. toctree::
    :maxdepth: 2
    :hidden:
-   :caption: neuraltrain
+   :caption: NeuralTrain
 
    Installation <install>
    Tutorials <tutorials>

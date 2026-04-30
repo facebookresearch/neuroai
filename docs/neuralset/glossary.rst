@@ -1,7 +1,7 @@
 Glossary
 ========
 
-Key concepts in the neuralset pipeline, from data source to batched tensors.
+Key concepts in the NeuralSet pipeline, from data source to batched tensors.
 See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit together.
 
 ----
@@ -112,7 +112,7 @@ See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit toge
       :term:`Chains <Chain>` (whole-step caching), ``MapInfra`` on
       :term:`extractors <Extractor>` and ``Study.infra_timelines``
       (per-item caching and batch dispatch), ``TaskInfra`` on
-      neuraltrain experiments (full computation and job arrays).
+      NeuralTrain experiments (full computation and job arrays).
       · :doc:`Caching & Cluster Execution <caching_and_cluster>`
 
 .. raw:: html

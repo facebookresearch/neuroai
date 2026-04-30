@@ -415,6 +415,7 @@ def download_things_images(
 
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
+    tmp_path.unlink()
 
     try:
         download_file(zip_url, tmp_path, show_progress=True)

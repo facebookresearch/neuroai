@@ -1,6 +1,6 @@
 .. _neuraltrain_tutorials:
 
-Tutorials: the neuraltrain pipeline
+Tutorials: the NeuralTrain pipeline
 ====================================
 
 Each tutorial covers one stage of the training pipeline -- from
@@ -14,7 +14,7 @@ code you can run and modify.
        <div class="pipeline-vcard-icon"><i class="fas fa-layer-group"></i></div>
        <div class="pipeline-vcard-body">
          <div class="pipeline-vcard-title">Data</div>
-         <div class="pipeline-vcard-desc">Use neuralset studies and a Segmenter to build train/val/test loaders.</div>
+         <div class="pipeline-vcard-desc">Use NeuralSet studies and a Segmenter to build train/val/test loaders.</div>
          <div class="pipeline-sub-links">
            <a class="pipeline-sub-link pipeline-accordion-toggle" href="#" data-target="acc-data">Snippet</a>
            <a class="pipeline-sub-link" href="auto_examples/data/01_data.html">Tutorial</a>
