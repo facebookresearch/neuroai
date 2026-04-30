@@ -10,6 +10,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import requests
 
@@ -82,6 +83,99 @@ def test_study_info(name: str, tmp_path: Path) -> None:
             f" update_source_info('{name}')\""
         )
         raise AssertionError(msg)
+
+
+# ---------------------------------------------------------------------------
+# Grootswagers2022HumanSample — regression test for missing image filepaths
+# ---------------------------------------------------------------------------
+
+
+def _make_fake_tsv(path: Path, stim_paths: list[str]) -> None:
+    """Write a minimal events TSV that _load_timeline_events can parse."""
+    rows = [
+        {"onset": i * 0.1, "duration": 0.05, "stim": s} for i, s in enumerate(stim_paths)
+    ]
+    pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
+
+
+def _grootswagers_study(tmp_path: Path):
+    from neuralfetch.studies.grootswagers2022human import Grootswagers2022HumanSample
+
+    return Grootswagers2022HumanSample(path=tmp_path / "Grootswagers2022HumanSample")
+
+
+def test_format_img_path_prepare(tmp_path: Path) -> None:
+    """_format_img_path resolves to prepare/ when the file exists there."""
+    study = _grootswagers_study(tmp_path)
+    img = study.path / "prepare" / "contact_lens" / "contact_lens_08s.jpg"
+    img.parent.mkdir(parents=True)
+    img.write_bytes(b"")
+    result = study._format_img_path("stimuli/contact_lens/contact_lens_08s.jpg")
+    assert result == str(img)
+    assert Path(result).exists()
+
+
+def test_format_img_path_things_fallback(tmp_path: Path) -> None:
+    """_format_img_path falls back to ../THINGS-images/ when prepare/ is missing."""
+    study = _grootswagers_study(tmp_path)
+    things_img = (
+        study.path / ".." / "THINGS-images" / "contact_lens" / "contact_lens_08s.jpg"
+    ).resolve()
+    things_img.parent.mkdir(parents=True)
+    things_img.write_bytes(b"")
+    result = study._format_img_path("stimuli/contact_lens/contact_lens_08s.jpg")
+    assert Path(result).exists()
+    assert "THINGS-images" in result
+
+
+def test_format_img_path_missing_raises(tmp_path: Path) -> None:
+    """_format_img_path raises RuntimeError when the file is in neither location."""
+    study = _grootswagers_study(tmp_path)
+    with pytest.raises(RuntimeError, match="does not exist"):
+        study._format_img_path("stimuli/contact_lens/contact_lens_08s.jpg")
+
+
+def test_sample_load_timeline_events_absolute_paths(tmp_path: Path) -> None:
+    """_load_timeline_events must return absolute, existing filepaths (regression for #27).
+
+    Before the fix, the sample stored raw TSV paths like
+    'stimuli/contact_lens/contact_lens_08s.jpg' — not absolute paths —
+    causing FileNotFoundError downstream.
+    """
+
+    study = _grootswagers_study(tmp_path)
+    sub = "01"
+    eeg_folder = study.path / "download" / f"sub-{sub}" / "eeg"
+    eeg_folder.mkdir(parents=True)
+
+    stim_paths = [
+        "stimuli/contact_lens/contact_lens_08s.jpg",
+        "stimuli/airliner/airliner_01s.jpg",
+    ]
+
+    # Create fake image files in THINGS-images (where sample downloads them)
+    for sp in stim_paths:
+        parts = sp.split("/")
+        img = (study.path / ".." / "THINGS-images" / parts[1] / parts[2]).resolve()
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"fake")
+
+    # Create fake EEG vhdr file (filepath checked by iter_timelines)
+    vhdr = eeg_folder / f"sub-{sub}_task-rsvp_eeg.vhdr"
+    vhdr.write_text("")
+
+    # Create TSV events file
+    tsv = eeg_folder / f"sub-{sub}_task-rsvp_events.tsv"
+    _make_fake_tsv(tsv, stim_paths)
+
+    events = study._load_timeline_events({"subject": "1"})
+    images = events.loc[events.type == "Image"]
+
+    # All filepaths must be absolute and point to existing files
+    for fp in images.filepath:
+        p = Path(fp)
+        assert p.is_absolute(), f"filepath is not absolute: {fp}"
+        assert p.exists(), f"filepath does not exist: {fp}"
 
 
 _FAKE_STUDY_SOURCE = """\
