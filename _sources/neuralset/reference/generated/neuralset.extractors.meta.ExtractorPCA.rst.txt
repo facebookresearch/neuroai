@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.meta.ExtractorPCA
+======================================
+
+.. currentmodule:: neuralset.extractors.meta
+
+.. autopydantic_model:: ExtractorPCA
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

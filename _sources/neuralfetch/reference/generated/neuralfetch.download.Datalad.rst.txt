@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Datalad
+============================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Datalad
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.HuggingFaceText
+=========================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: HuggingFaceText
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

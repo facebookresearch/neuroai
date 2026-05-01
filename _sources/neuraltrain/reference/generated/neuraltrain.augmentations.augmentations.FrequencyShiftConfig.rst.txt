@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.augmentations.augmentations.FrequencyShiftConfig
+============================================================
+
+.. currentmodule:: neuraltrain.augmentations.augmentations
+
+.. autopydantic_model:: FrequencyShiftConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

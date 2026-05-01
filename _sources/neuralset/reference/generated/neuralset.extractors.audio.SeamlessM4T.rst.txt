@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.SeamlessM4T
+======================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: SeamlessM4T
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

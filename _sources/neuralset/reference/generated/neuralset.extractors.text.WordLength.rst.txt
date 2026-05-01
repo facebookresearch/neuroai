@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.WordLength
+====================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: WordLength
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

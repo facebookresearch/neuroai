@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.utils.chunk\_events
+===============================================
+
+.. currentmodule:: neuralset.events.transforms.utils
+
+.. autofunction:: chunk_events
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

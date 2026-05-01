@@ -1,0 +1,1127 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <link rel="shortcut icon" href="../../_static/favicon.ico"><!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>neuraltrain.utils - neuroai</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=2da93098" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery.css?v=fd6457a4" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=a3f93f39" />
+    <link rel="stylesheet" type="text/css" href="../../_static/conf.css?v=b3eb38f5" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #ffffff;
+  --color-code-foreground: black;
+  --admonition-font-size: 100%;
+  --admonition-title-font-size: 100%;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-admonition-title--note: #448aff;
+  --color-admonition-title-background--note: #448aff10;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #272822;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #448aff;
+  --color-brand-content: #448aff;
+  --color-announcement-background: #935610;
+  --color-announcement-text: #FFFFFF;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">neuroai</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">neuroai</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../neuralset/index.html">NeuralSet</a><input aria-label="Toggle navigation of NeuralSet" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/01_events.html">Events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/02_studies.html">Studies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/03_transforms.html">Transforms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/04_extractors.html">Extractors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/05_segmenter.html">Segmenter &amp; Dataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/auto_examples/walkthrough/06_chains.html">Chains</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/caching_and_cluster.html">Caching &amp; Cluster Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/encoding_decoding.html">Encoding &amp; Decoding</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuralset/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.base.BaseModel.html">neuralset.base.BaseModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.base.Step.html">neuralset.base.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.base.Chain.html">neuralset.base.Chain</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.base.Frequency.html">neuralset.base.Frequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.base.TimedArray.html">neuralset.base.TimedArray</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.study.Study.html">neuralset.events.study.Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.study.SpecialLoader.html">neuralset.events.study.SpecialLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.study.StudyInfo.html">neuralset.events.study.StudyInfo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Action.html">neuralset.events.etypes.Action</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Artifact.html">neuralset.events.etypes.Artifact</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Audio.html">neuralset.events.etypes.Audio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Background.html">neuralset.events.etypes.Background</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.BaseDataEvent.html">neuralset.events.etypes.BaseDataEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.BaseSplittableEvent.html">neuralset.events.etypes.BaseSplittableEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.BaseText.html">neuralset.events.etypes.BaseText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.CategoricalEvent.html">neuralset.events.etypes.CategoricalEvent</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Eeg.html">neuralset.events.etypes.Eeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Emg.html">neuralset.events.etypes.Emg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Event.html">neuralset.events.etypes.Event</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.EyeState.html">neuralset.events.etypes.EyeState</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Fmri.html">neuralset.events.etypes.Fmri</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Fnirs.html">neuralset.events.etypes.Fnirs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Ieeg.html">neuralset.events.etypes.Ieeg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Image.html">neuralset.events.etypes.Image</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Keystroke.html">neuralset.events.etypes.Keystroke</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Meg.html">neuralset.events.etypes.Meg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.MneRaw.html">neuralset.events.etypes.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Phoneme.html">neuralset.events.etypes.Phoneme</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Seizure.html">neuralset.events.etypes.Seizure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Sentence.html">neuralset.events.etypes.Sentence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.SleepStage.html">neuralset.events.etypes.SleepStage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Spikes.html">neuralset.events.etypes.Spikes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Stimulus.html">neuralset.events.etypes.Stimulus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Text.html">neuralset.events.etypes.Text</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Video.html">neuralset.events.etypes.Video</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.etypes.Word.html">neuralset.events.etypes.Word</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.AlignEvents.html">neuralset.events.transforms.basic.AlignEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.ConfigureEventLoader.html">neuralset.events.transforms.basic.ConfigureEventLoader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.CreateColumn.html">neuralset.events.transforms.basic.CreateColumn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.QueryEvents.html">neuralset.events.transforms.basic.QueryEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.RemoveMissing.html">neuralset.events.transforms.basic.RemoveMissing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.basic.SelectIdx.html">neuralset.events.transforms.basic.SelectIdx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.EnsureTexts.html">neuralset.events.transforms.text.EnsureTexts</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddConcatenationContext.html">neuralset.events.transforms.text.AddConcatenationContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddContextToWords.html">neuralset.events.transforms.text.AddContextToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddPartOfSpeech.html">neuralset.events.transforms.text.AddPartOfSpeech</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddPhonemes.html">neuralset.events.transforms.text.AddPhonemes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddSentenceToWords.html">neuralset.events.transforms.text.AddSentenceToWords</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.text.AddSummary.html">neuralset.events.transforms.text.AddSummary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignKSplits.html">neuralset.events.transforms.splitting.AssignKSplits</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignSentenceSplit.html">neuralset.events.transforms.splitting.AssignSentenceSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.splitting.AssignWordSplitAndContext.html">neuralset.events.transforms.splitting.AssignWordSplitAndContext</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.splitting.SklearnSplit.html">neuralset.events.transforms.splitting.SklearnSplit</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.audio.ExtractAudioFromVideo.html">neuralset.events.transforms.audio.ExtractAudioFromVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.chunking.ChunkEvents.html">neuralset.events.transforms.chunking.ChunkEvents</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.BaseExtractor.html">neuralset.extractors.base.BaseExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.BaseStatic.html">neuralset.extractors.base.BaseStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.EventDetector.html">neuralset.extractors.base.EventDetector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.EventField.html">neuralset.extractors.base.EventField</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.LabelEncoder.html">neuralset.extractors.base.LabelEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.base.Pulse.html">neuralset.extractors.base.Pulse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.ChannelPositions.html">neuralset.extractors.neuro.ChannelPositions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.EegExtractor.html">neuralset.extractors.neuro.EegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.EmgExtractor.html">neuralset.extractors.neuro.EmgExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.FmriExtractor.html">neuralset.extractors.neuro.FmriExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.FnirsExtractor.html">neuralset.extractors.neuro.FnirsExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.HrfConvolve.html">neuralset.extractors.neuro.HrfConvolve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.IeegExtractor.html">neuralset.extractors.neuro.IeegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.MegExtractor.html">neuralset.extractors.neuro.MegExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.MneRaw.html">neuralset.extractors.neuro.MneRaw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.neuro.SpikesExtractor.html">neuralset.extractors.neuro.SpikesExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.HuggingFaceAudio.html">neuralset.extractors.audio.HuggingFaceAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.MelSpectrum.html">neuralset.extractors.audio.MelSpectrum</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.SeamlessM4T.html">neuralset.extractors.audio.SeamlessM4T</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.SonarAudio.html">neuralset.extractors.audio.SonarAudio</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.SpeechEnvelope.html">neuralset.extractors.audio.SpeechEnvelope</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.Wav2Vec.html">neuralset.extractors.audio.Wav2Vec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.Wav2VecBert.html">neuralset.extractors.audio.Wav2VecBert</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.audio.Whisper.html">neuralset.extractors.audio.Whisper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.HuggingFaceText.html">neuralset.extractors.text.HuggingFaceText</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.SentenceTransformer.html">neuralset.extractors.text.SentenceTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.SonarEmbedding.html">neuralset.extractors.text.SonarEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.SpacyEmbedding.html">neuralset.extractors.text.SpacyEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.TfidfEmbedding.html">neuralset.extractors.text.TfidfEmbedding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.WordFrequency.html">neuralset.extractors.text.WordFrequency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.text.WordLength.html">neuralset.extractors.text.WordLength</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.image.ColorHistogram.html">neuralset.extractors.image.ColorHistogram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.image.HOG.html">neuralset.extractors.image.HOG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.image.HuggingFaceImage.html">neuralset.extractors.image.HuggingFaceImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.image.LBP.html">neuralset.extractors.image.LBP</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.image.RFFT2D.html">neuralset.extractors.image.RFFT2D</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.video.HuggingFaceVideo.html">neuralset.extractors.video.HuggingFaceVideo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.AggregatedExtractor.html">neuralset.extractors.meta.AggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.CroppedExtractor.html">neuralset.extractors.meta.CroppedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.ExtractorPCA.html">neuralset.extractors.meta.ExtractorPCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.HuggingFacePCA.html">neuralset.extractors.meta.HuggingFacePCA</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.TimeAggregatedExtractor.html">neuralset.extractors.meta.TimeAggregatedExtractor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.extractors.meta.ToStatic.html">neuralset.extractors.meta.ToStatic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.segments.Segment.html">neuralset.segments.Segment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.dataloader.Segmenter.html">neuralset.dataloader.Segmenter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.dataloader.SegmentDataset.html">neuralset.dataloader.SegmentDataset</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.dataloader.Batch.html">neuralset.dataloader.Batch</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.utils.DeterministicSplitter.html">neuralset.events.transforms.utils.DeterministicSplitter</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.utils.chunk_events.html">neuralset.events.transforms.utils.chunk_events</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralset/reference/generated/neuralset.events.transforms.splitting.SimilaritySplitter.html">neuralset.events.transforms.splitting.SimilaritySplitter</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/philosophy.html">Philosophy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/glossary.html">Glossary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralset/extending/contributing.html">Contributing</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../neuralfetch/index.html">NeuralFetch</a><input aria-label="Toggle navigation of NeuralFetch" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralfetch/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuralfetch/auto_examples/index.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/auto_examples/01_plot_fetch_first_study.html">Fetch Your First Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/auto_examples/02_plot_study_anatomy.html">Anatomy of a Study</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/auto_examples/03_create_new_study.html">Creating Your Own Study</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralfetch/explore_datasets.html">Explore Brain Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralfetch/samples.html">Sample Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuralfetch/contributing.html">Contributing: New Studies</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuralfetch/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.BaseDownload.html">neuralfetch.download.BaseDownload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Dandi.html">neuralfetch.download.Dandi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Eegdash.html">neuralfetch.download.Eegdash</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Datalad.html">neuralfetch.download.Datalad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Donders.html">neuralfetch.download.Donders</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Dryad.html">neuralfetch.download.Dryad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Figshare.html">neuralfetch.download.Figshare</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Huggingface.html">neuralfetch.download.Huggingface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Openneuro.html">neuralfetch.download.Openneuro</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Osf.html">neuralfetch.download.Osf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Physionet.html">neuralfetch.download.Physionet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Synapse.html">neuralfetch.download.Synapse</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.download.Zenodo.html">neuralfetch.download.Zenodo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.utils.compute_study_info.html">neuralfetch.utils.compute_study_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.utils.update_source_info.html">neuralfetch.utils.update_source_info</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuralfetch/reference/generated/neuralfetch.utils.root_study_folder.html">neuralfetch.utils.root_study_folder</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../neuraltrain/index.html">NeuralTrain</a><input aria-label="Toggle navigation of NeuralTrain" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../neuraltrain/install.html">Installation</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuraltrain/tutorials.html">Tutorials</a><input aria-label="Toggle navigation of Tutorials" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/auto_examples/data/01_data.html">Data Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/auto_examples/models/02_models.html">Model Configs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/auto_examples/objectives/03_objectives.html">Metrics and Optimisation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/auto_examples/trainer/04_trainer.html">Trainer and Experiments</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../neuraltrain/project_example.html">Project Example</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../neuraltrain/reference/reference.html">API</a><input aria-label="Toggle navigation of API" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.base.BaseModelConfig.html">neuraltrain.models.base.BaseModelConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseLoss.html">neuraltrain.losses.base.BaseLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.losses.base.BaseTorchLoss.html">neuraltrain.losses.base.BaseTorchLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseMetric.html">neuraltrain.metrics.base.BaseMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.base.BaseTorchMetric.html">neuraltrain.metrics.base.BaseTorchMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseOptimizer.html">neuraltrain.optimizers.base.BaseOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.optimizers.base.LightningOptimizer.html">neuraltrain.optimizers.base.LightningOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchOptimizer.html">neuraltrain.optimizers.base.BaseTorchOptimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseLRScheduler.html">neuraltrain.optimizers.base.BaseLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.optimizers.base.BaseTorchLRScheduler.html">neuraltrain.optimizers.base.BaseTorchLRScheduler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.base.BaseBrainDecodeModel.html">neuraltrain.models.base.BaseBrainDecodeModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConv.html">neuraltrain.models.simpleconv.SimpleConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvModel.html">neuraltrain.models.simpleconv.SimpleConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAgg.html">neuraltrain.models.simpleconv.SimpleConvTimeAgg</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simpleconv.SimpleConvTimeAggModel.html">neuraltrain.models.simpleconv.SimpleConvTimeAggModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConv.html">neuraltrain.models.simplerconv.SimplerConv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.simplerconv.SimplerConvModel.html">neuraltrain.models.simplerconv.SimplerConvModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.transformer.TransformerEncoder.html">neuraltrain.models.transformer.TransformerEncoder</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformer.html">neuraltrain.models.conv_transformer.ConvTransformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.conv_transformer.ConvTransformerModel.html">neuraltrain.models.conv_transformer.ConvTransformerModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.conformer.Conformer.html">neuraltrain.models.conformer.Conformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.linear.Linear.html">neuraltrain.models.linear.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.linear.LinearModel.html">neuraltrain.models.linear.LinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictor.html">neuraltrain.models.constant_predictor.ConstantPredictor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.constant_predictor.ConstantPredictorModel.html">neuraltrain.models.constant_predictor.ConstantPredictorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlp.html">neuraltrain.models.fmri_mlp.FmriMlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriMlpModel.html">neuraltrain.models.fmri_mlp.FmriMlpModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinear.html">neuraltrain.models.fmri_mlp.FmriLinear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.fmri_mlp.FmriLinearModel.html">neuraltrain.models.fmri_mlp.FmriLinearModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.reve.NtReve.html">neuraltrain.models.reve.NtReve</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.luna.NtLuna.html">neuraltrain.models.luna.NtLuna</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.labram.NtLabram.html">neuraltrain.models.labram.NtLabram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNet.html">neuraltrain.models.freqbandnet.FreqBandNet</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.freqbandnet.FreqBandNetModel.html">neuraltrain.models.freqbandnet.FreqBandNetModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.green.Green.html">neuraltrain.models.green.Green</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.diffusion_prior.DiffusionPrior.html">neuraltrain.models.diffusion_prior.DiffusionPrior</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessor.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel.html">neuraltrain.models.preprocessor.OnTheFlyPreprocessorModel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.SubjectLayers.html">neuraltrain.models.common.SubjectLayers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.FourierEmb.html">neuraltrain.models.common.FourierEmb</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelMerger.html">neuraltrain.models.common.ChannelMerger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.Mlp.html">neuraltrain.models.common.Mlp</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.TemporalDownsampling.html">neuraltrain.models.common.TemporalDownsampling</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.LayerScale.html">neuraltrain.models.common.LayerScale</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.NormDenormScaler.html">neuraltrain.models.common.NormDenormScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.ChannelDropout.html">neuraltrain.models.common.ChannelDropout</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.models.common.BahdanauAttention.html">neuraltrain.models.common.BahdanauAttention</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.losses.losses.MultiLoss.html">neuraltrain.losses.losses.MultiLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.losses.losses.ClipLoss.html">neuraltrain.losses.losses.ClipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.losses.losses.SigLipLoss.html">neuraltrain.losses.losses.SigLipLoss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.OnlinePearsonCorr.html">neuraltrain.metrics.metrics.OnlinePearsonCorr</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.Rank.html">neuraltrain.metrics.metrics.Rank</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAcc.html">neuraltrain.metrics.metrics.TopkAcc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.TopkAccFromScores.html">neuraltrain.metrics.metrics.TopkAccFromScores</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.ImageSimilarity.html">neuraltrain.metrics.metrics.ImageSimilarity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.metrics.metrics.GroupedMetric.html">neuraltrain.metrics.metrics.GroupedMetric</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugment.html">neuraltrain.augmentations.augmentations.TrivialBrainAugment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig.html">neuraltrain.augmentations.augmentations.TrivialBrainAugmentConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFT.html">neuraltrain.augmentations.augmentations.BandstopFilterFFT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig.html">neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.ChannelsDropoutConfig.html">neuraltrain.augmentations.augmentations.ChannelsDropoutConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.FrequencyShiftConfig.html">neuraltrain.augmentations.augmentations.FrequencyShiftConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.GaussianNoiseConfig.html">neuraltrain.augmentations.augmentations.GaussianNoiseConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig.html">neuraltrain.augmentations.augmentations.SmoothTimeMaskConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.run_grid.html">neuraltrain.utils.run_grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html">neuraltrain.utils.CsvLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html">neuraltrain.utils.WandbLoggerConfig</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html">neuraltrain.utils.WandbInfra</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html">neuraltrain.utils.BaseExperiment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html">neuraltrain.utils.StandardScaler</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.TimedIterator.html">neuraltrain.utils.TimedIterator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../neuraltrain/reference/generated/neuraltrain.utils.convert_to_pydantic.html">neuraltrain.utils.convert_to_pydantic</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference external" href="https://facebookresearch.github.io/exca/">Exca</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for neuraltrain.utils</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright (c) Meta Platforms, Inc. and affiliates.</span>
+<span class="c1"># All rights reserved.</span>
+<span class="c1">#</span>
+<span class="c1"># This source code is licensed under the license found in the</span>
+<span class="c1"># LICENSE file in the root directory of this source tree.</span>
+
+<span class="sd">&quot;&quot;&quot;Utility scripts.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">collections</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pickle</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">prod</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">warnings</span><span class="w"> </span><span class="kn">import</span> <span class="n">warn</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">exca</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pydantic</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">submitit</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">create_model</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">neuraltrain.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+
+
+<div class="viewcode-block" id="convert_to_pydantic">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.convert_to_pydantic.html#neuraltrain.utils.convert_to_pydantic">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">convert_to_pydantic</span><span class="p">(</span>
+    <span class="n">class_to_convert</span><span class="p">:</span> <span class="nb">type</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">parent_class</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">exclude_from_build</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pydantic</span><span class="o">.</span><span class="n">BaseModel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Converts any class into a pydantic BaseModel. Initialize the class</span>
+<span class="sd">    with the &#39;self.build()&#39; method</span>
+
+<span class="sd">    If parent_class inherits from exca.helpers.DiscriminatedModel, the name</span>
+<span class="sd">    field is not added as it&#39;s handled automatically by DiscriminatedModel.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Get the constructor of the class</span>
+    <span class="n">init</span> <span class="o">=</span> <span class="n">class_to_convert</span><span class="o">.</span><span class="fm">__init__</span>  <span class="c1"># type: ignore</span>
+
+    <span class="c1"># Inspect signature</span>
+    <span class="n">sig</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">init</span><span class="p">)</span>
+    <span class="n">empty</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">empty</span>
+
+    <span class="k">if</span> <span class="s2">&quot;name&quot;</span> <span class="ow">in</span> <span class="n">sig</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Cannot convert class with attribute &#39;name&#39; to pydantic&quot;</span><span class="p">)</span>
+
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">k</span><span class="p">:</span> <span class="p">(</span>
+            <span class="n">v</span><span class="o">.</span><span class="n">annotation</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">annotation</span> <span class="o">!=</span> <span class="n">empty</span> <span class="k">else</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">,</span>
+            <span class="n">v</span><span class="o">.</span><span class="n">default</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">default</span> <span class="o">!=</span> <span class="n">empty</span> <span class="k">else</span> <span class="o">...</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">sig</span><span class="o">.</span><span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">&quot;self&quot;</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)</span>
+    <span class="p">}</span>
+
+    <span class="c1"># add name for pydantic.discriminator (unless using DiscriminatedModel)</span>
+    <span class="n">fields</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="n">name</span><span class="p">))</span>
+    <span class="c1"># Check if parent uses DiscriminatedModel (which handles &#39;name&#39; automatically)</span>
+    <span class="k">if</span> <span class="n">parent_class</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">parent_class</span><span class="p">,</span> <span class="n">exca</span><span class="o">.</span><span class="n">helpers</span><span class="o">.</span><span class="n">DiscriminatedModel</span><span class="p">):</span>
+            <span class="k">del</span> <span class="n">fields</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>  <span class="c1"># must not be added anymore</span>
+
+    <span class="c1"># Create the Pydantic model class dynamically</span>
+    <span class="n">Builder</span> <span class="o">=</span> <span class="n">create_model</span><span class="p">(</span>  <span class="c1"># type: ignore</span>
+        <span class="n">name</span><span class="p">,</span>
+        <span class="n">__base__</span><span class="o">=</span><span class="n">parent_class</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">fields</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">Builder</span><span class="o">.</span><span class="n">_cls</span> <span class="o">=</span> <span class="n">class_to_convert</span>  <span class="c1"># type: ignore</span>
+
+    <span class="c1"># Define a build method to instantiate the original class</span>
+    <span class="k">if</span> <span class="n">exclude_from_build</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">exclude_from_build</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_method</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">BaseModel</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">field</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">type</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span><span class="o">.</span><span class="n">model_fields</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">field</span> <span class="o">!=</span> <span class="s2">&quot;name&quot;</span> <span class="ow">and</span> <span class="n">field</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">exclude_from_build</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">instance</span><span class="o">.</span><span class="n">_cls</span><span class="p">(</span><span class="o">**</span><span class="n">params</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+
+    <span class="c1"># Bind the build method to Builder instances using MethodType</span>
+    <span class="nb">setattr</span><span class="p">(</span><span class="n">Builder</span><span class="p">,</span> <span class="s2">&quot;build&quot;</span><span class="p">,</span> <span class="n">build_method</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Builder</span>  <span class="c1"># type: ignore[return-value]</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">all_subclasses</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get all subclasses of cls recursively.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">__subclasses__</span><span class="p">())</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">__subclasses__</span><span class="p">()</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">all_subclasses</span><span class="p">(</span><span class="n">c</span><span class="p">)]</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="BaseExperiment">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html#neuraltrain.utils.BaseExperiment">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BaseExperiment</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Base experiment class which require an infra and a &#39;run&#39; method.&quot;&quot;&quot;</span>
+
+    <span class="n">infra</span><span class="p">:</span> <span class="n">exca</span><span class="o">.</span><span class="n">TaskInfra</span> <span class="o">=</span> <span class="n">exca</span><span class="o">.</span><span class="n">TaskInfra</span><span class="p">()</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_exclude_from_cls_uid</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+<div class="viewcode-block" id="BaseExperiment.run">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.BaseExperiment.html#neuraltrain.utils.BaseExperiment.run">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="run_grid">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.run_grid.html#neuraltrain.utils.run_grid">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">run_grid</span><span class="p">(</span>
+    <span class="n">exp_cls</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Type</span><span class="p">[</span><span class="n">BaseExperiment</span><span class="p">],</span>
+    <span class="n">exp_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">base_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">],</span>
+    <span class="n">grid</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span>
+    <span class="n">n_randomly_sampled</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">job_name_keys</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">combinatorial</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">dry_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">debug</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">infra_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;retry&quot;</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">exca</span><span class="o">.</span><span class="n">ConfDict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run grid over provided experiment.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    exp_cls :</span>
+<span class="sd">        Experiment class to instantiate with `grid`. Must have an `infra` attribute, which will be</span>
+<span class="sd">        updated when instantiating the different experiments of the grid.</span>
+<span class="sd">    exp_name :</span>
+<span class="sd">        Name of the base experiment to run.</span>
+<span class="sd">    grid :</span>
+<span class="sd">        Dictionary containing values to perform the sweep on.</span>
+<span class="sd">    n_randomly_sampled :</span>
+<span class="sd">        If provided, number of randomly sampled configurations from the grid. If None, run full</span>
+<span class="sd">        grid. See `random_state` parameter to seed the sampling.</span>
+<span class="sd">    base_config :</span>
+<span class="sd">        Base configuration to update.</span>
+<span class="sd">    job_name_keys :</span>
+<span class="sd">       Flattened config key(s) to update with the experiment-specific &#39;job_name&#39; variable. E.g.,</span>
+<span class="sd">       can be used to pass the job name to a wandb logger.</span>
+<span class="sd">    combinatorial :</span>
+<span class="sd">        If True, run grid over all possible combinations of the grid. If False, run each parameter</span>
+<span class="sd">        change individually.</span>
+<span class="sd">    overwrite :</span>
+<span class="sd">        If True, delete existing experiment-specific folder.</span>
+<span class="sd">    dry_run :</span>
+<span class="sd">        If True, do not add tasks to the infra.</span>
+<span class="sd">    debug :</span>
+<span class="sd">        If True, bypass the infra.cluster and run the first experiment only locally. This is useful</span>
+<span class="sd">        for quick sanity checking of the experiment configuration.</span>
+<span class="sd">    infra_mode :</span>
+<span class="sd">        Whether to rerun existing or failed experiments.</span>
+<span class="sd">        - cached: cache is returned if available (error or not),</span>
+<span class="sd">                otherwise computed (and cached)</span>
+<span class="sd">        - retry: cache is returned if available except if it&#39;s an error,</span>
+<span class="sd">                otherwise (re)computed (and cached)</span>
+<span class="sd">        - force: cache is ignored, and result is (re)computed (and cached)</span>
+<span class="sd">    random_state :</span>
+<span class="sd">        Random state for random sampling of the grid.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list :</span>
+<span class="sd">        List of config dictionaries used for each experiment of the grid.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">job_array_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">dry_run</span> <span class="ow">or</span> <span class="n">debug</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">importlib.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">version</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">packaging.version</span><span class="w"> </span><span class="kn">import</span> <span class="n">Version</span>
+
+        <span class="k">if</span> <span class="n">Version</span><span class="p">(</span><span class="n">version</span><span class="p">(</span><span class="s2">&quot;exca&quot;</span><span class="p">))</span> <span class="o">&lt;</span> <span class="n">Version</span><span class="p">(</span><span class="s2">&quot;0.4.5&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ImportError</span><span class="p">(</span><span class="s2">&quot;`dry_run` requires `exca&gt;=0.4.5` to be installed.&quot;</span><span class="p">)</span>
+        <span class="n">job_array_kwargs</span><span class="p">[</span><span class="s2">&quot;allow_empty&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">if</span> <span class="n">random_state</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">n_randomly_sampled</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">warn</span><span class="p">(</span>
+            <span class="s2">&quot;`random_state` is provided but `n_randomly_sampled` is None. &quot;</span>
+            <span class="s2">&quot;`random_state` will be ignored.&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Update savedir of experiment infra</span>
+    <span class="n">base_config</span><span class="p">[</span><span class="s2">&quot;infra&quot;</span><span class="p">][</span><span class="s2">&quot;job_name&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exp_name</span>
+    <span class="n">base_folder</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">base_config</span><span class="p">[</span><span class="s2">&quot;infra&quot;</span><span class="p">][</span><span class="s2">&quot;folder&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Grid values must be lists.&quot;</span><span class="p">)</span>
+
+    <span class="n">task</span><span class="p">:</span> <span class="n">BaseExperiment</span> <span class="o">=</span> <span class="n">exp_cls</span><span class="p">(</span>
+        <span class="o">**</span><span class="n">base_config</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">n_randomly_sampled</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">n_randomly_sampled</span> <span class="o">&gt;</span> <span class="n">prod</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;n_randomly_sampled is larger than the grid size.&quot;</span><span class="p">)</span>
+        <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">random_state</span><span class="p">)</span>
+        <span class="n">grid_product</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_randomly_sampled</span><span class="p">)</span>
+        <span class="p">]</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">combinatorial</span><span class="p">:</span>
+            <span class="n">grid_product</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+                <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">grid</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">v</span><span class="p">))</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">grid</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">grid_product</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">{</span><span class="n">param</span><span class="p">:</span> <span class="n">value</span><span class="p">}</span> <span class="k">for</span> <span class="n">param</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">grid</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span>
+            <span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Launching </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">grid_product</span><span class="p">)</span><span class="si">}</span><span class="s2"> tasks&quot;</span><span class="p">)</span>
+
+    <span class="n">out_configs</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">tmp</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">infra</span><span class="o">.</span><span class="n">clone_obj</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="s2">&quot;infra.mode&quot;</span><span class="p">:</span> <span class="n">infra_mode</span><span class="p">})</span>
+    <span class="k">with</span> <span class="n">tmp</span><span class="o">.</span><span class="n">infra</span><span class="o">.</span><span class="n">job_array</span><span class="p">(</span><span class="o">**</span><span class="n">job_array_kwargs</span><span class="p">)</span> <span class="k">as</span> <span class="n">tasks</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">params</span> <span class="ow">in</span> <span class="n">grid_product</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">exca</span><span class="o">.</span><span class="n">ConfDict</span><span class="p">(</span><span class="n">base_config</span><span class="p">)</span>
+            <span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+            <span class="n">uid_suffix</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">to_uid</span><span class="p">()[</span><span class="o">-</span><span class="mi">8</span><span class="p">:]</span>
+            <span class="n">job_name</span> <span class="o">=</span> <span class="n">exca</span><span class="o">.</span><span class="n">ConfDict</span><span class="p">(</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">to_uid</span><span class="p">()[:</span><span class="o">-</span><span class="mi">8</span><span class="p">]</span> <span class="o">+</span> <span class="n">uid_suffix</span>
+
+            <span class="n">folder</span> <span class="o">=</span> <span class="n">base_folder</span> <span class="o">/</span> <span class="n">exp_name</span> <span class="o">/</span> <span class="n">job_name</span>
+            <span class="k">if</span> <span class="n">folder</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>  <span class="c1"># FIXME: adapt to checkpointing</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2"> already exists.&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">overwrite</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">dry_run</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deleting </span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+                    <span class="n">folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">()</span>
+
+            <span class="c1"># Update infra and logger</span>
+            <span class="n">config</span><span class="p">[</span><span class="s2">&quot;infra.folder&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">job_name_keys</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">job_name_keys</span><span class="p">:</span>
+                    <span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">job_name</span><span class="p">)})</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">dry_run</span><span class="p">:</span>
+                <span class="n">task_</span> <span class="o">=</span> <span class="n">exp_cls</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">debug</span><span class="p">:</span>
+                    <span class="n">task_</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+                    <span class="n">out_configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+                    <span class="k">break</span>
+                <span class="n">tasks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">task_</span><span class="p">)</span>
+
+            <span class="n">out_configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Done.&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">out_configs</span></div>
+
+
+
+<div class="viewcode-block" id="CsvLoggerConfig">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html#neuraltrain.utils.CsvLoggerConfig">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CsvLoggerConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Pydantic configuration for torch-lightning&#39;s CSVLogger.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="s2">&quot;lightning_logs&quot;</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">flush_logs_every_n_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+
+<div class="viewcode-block" id="CsvLoggerConfig.build">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.CsvLoggerConfig.html#neuraltrain.utils.CsvLoggerConfig.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">save_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">lightning.pytorch.loggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">CSVLogger</span>
+
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">CSVLogger</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="n">save_dir</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="WandbLoggerConfig">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html#neuraltrain.utils.WandbLoggerConfig">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WandbLoggerConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Pydantic configuration for torch-lightning&#39;s wandb logger.</span>
+<span class="sd">    See https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.WandbLogger.html.</span>
+<span class="sd">    If you want to resume a run, you can use the `id` field to specify the run id, either in the config or in the `build` method.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># core fields</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">group</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">entity</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">project</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="c1"># extra fields</span>
+    <span class="n">offline</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="nb">dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">anonymous</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">log_model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">experiment</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">resume</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;allow&quot;</span><span class="p">,</span> <span class="s2">&quot;never&quot;</span><span class="p">,</span> <span class="s2">&quot;must&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;allow&quot;</span>
+
+    <span class="c1"># pylint: disable=redefined-builtin</span>
+<div class="viewcode-block" id="WandbLoggerConfig.build">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbLoggerConfig.html#neuraltrain.utils.WandbLoggerConfig.build">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">save_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">xp_config</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="n">pydantic</span><span class="o">.</span><span class="n">BaseModel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">run_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">offline</span><span class="p">:</span>
+            <span class="n">login_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="s2">&quot;X&quot;</span> <span class="o">*</span> <span class="mi">40</span><span class="p">}</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">login_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;host&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">}</span>  <span class="c1"># type: ignore</span>
+        <span class="n">wandb</span><span class="o">.</span><span class="n">login</span><span class="p">(</span><span class="o">**</span><span class="n">login_kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">lightning.pytorch.loggers</span><span class="w"> </span><span class="kn">import</span> <span class="n">WandbLogger</span>
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">xp_config</span><span class="p">,</span> <span class="n">pydantic</span><span class="o">.</span><span class="n">BaseModel</span><span class="p">):</span>
+            <span class="n">xp_config</span> <span class="o">=</span> <span class="n">xp_config</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="n">config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">run_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">config</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">run_id</span>
+        <span class="k">del</span> <span class="n">config</span><span class="p">[</span><span class="s2">&quot;host&quot;</span><span class="p">]</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">WandbLogger</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="p">,</span> <span class="n">save_dir</span><span class="o">=</span><span class="n">save_dir</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">xp_config</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">experiment</span><span class="o">.</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;_dummy&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># To launch initialization</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c1"># Crashes if called in a second process, e.g. with DDP</span>
+        <span class="k">return</span> <span class="n">logger</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="WandbInfra">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html#neuraltrain.utils.WandbInfra">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WandbInfra</span><span class="p">(</span><span class="n">exca</span><span class="o">.</span><span class="n">TaskInfra</span><span class="p">):</span>
+    <span class="n">wandb_config</span><span class="p">:</span> <span class="n">WandbLoggerConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">model_post_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">__context</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">model_post_init</span><span class="p">(</span><span class="n">__context</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># pylint: disable=attribute-defined-outside-init</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">group</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_wandb_uid</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">uid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">group</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">uid</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uid</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">bad_char</span> <span class="ow">in</span> <span class="s2">&quot;/:,=[]</span><span class="si">{}</span><span class="s2">()&quot;</span><span class="p">:</span>
+            <span class="n">uid</span> <span class="o">=</span> <span class="n">uid</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">bad_char</span><span class="p">,</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">uid</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_run_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_run_method</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">wandb</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+                    <span class="n">project</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">project</span><span class="p">,</span>
+                    <span class="n">entity</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">entity</span><span class="p">,</span>
+                    <span class="n">group</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">group</span><span class="p">,</span>
+                    <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="p">)</span> <span class="k">as</span> <span class="n">run</span><span class="p">:</span>
+                    <span class="n">artifact</span> <span class="o">=</span> <span class="n">wandb</span><span class="o">.</span><span class="n">Artifact</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_wandb_uid</span><span class="p">(),</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;pkl&quot;</span><span class="p">)</span>
+                    <span class="n">wandb_folder</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">uid_folder</span><span class="p">()</span> <span class="o">/</span> <span class="s2">&quot;wandb&quot;</span>
+                    <span class="n">wandb_folder</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">wandb_folder</span> <span class="o">/</span> <span class="s2">&quot;output.pkl&quot;</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                        <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">(</span><span class="n">uid</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">exclude_defaults</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">to_yaml</span><span class="p">(</span>
+                        <span class="n">wandb_folder</span> <span class="o">/</span> <span class="s2">&quot;config.yaml&quot;</span>
+                    <span class="p">)</span>
+                    <span class="n">fnames</span> <span class="o">=</span> <span class="p">[</span><span class="n">wandb_folder</span> <span class="o">/</span> <span class="s2">&quot;config.yaml&quot;</span><span class="p">,</span> <span class="n">wandb_folder</span> <span class="o">/</span> <span class="s2">&quot;output.pkl&quot;</span><span class="p">]</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">env</span> <span class="o">=</span> <span class="n">submitit</span><span class="o">.</span><span class="n">JobEnvironment</span><span class="p">()</span>
+                        <span class="n">fnames</span> <span class="o">+=</span> <span class="p">[</span><span class="n">env</span><span class="o">.</span><span class="n">paths</span><span class="o">.</span><span class="n">stderr</span><span class="p">,</span> <span class="n">env</span><span class="o">.</span><span class="n">paths</span><span class="o">.</span><span class="n">stdout</span><span class="p">]</span>
+                    <span class="k">except</span><span class="p">:</span>
+                        <span class="k">pass</span>  <span class="c1"># Not running in submitit</span>
+                    <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">fnames</span><span class="p">:</span>
+                        <span class="n">artifact</span><span class="o">.</span><span class="n">add_file</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                    <span class="n">run</span><span class="o">.</span><span class="n">log_artifact</span><span class="p">(</span><span class="n">artifact</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Uploaded to wandb: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_wandb_uid</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="p">(</span><span class="n">wandb_folder</span> <span class="o">/</span> <span class="s2">&quot;output.pkl&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+            <span class="k">except</span> <span class="n">wandb</span><span class="o">.</span><span class="n">errors</span><span class="o">.</span><span class="n">CommError</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Could not connect to wandb. Skipping upload&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+<div class="viewcode-block" id="WandbInfra.download">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.WandbInfra.html#neuraltrain.utils.WandbInfra.download">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">download</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;v0&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Any</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">uid_folder</span><span class="p">()</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>  <span class="c1"># type: ignore</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Folder </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">uid_folder</span><span class="p">()</span><span class="si">}</span><span class="s2"> already exists.&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;wandb_config must be provided to download artifacts from wandb.&quot;</span>
+            <span class="p">)</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+
+        <span class="k">with</span> <span class="n">wandb</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+            <span class="n">project</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">project</span><span class="p">,</span> <span class="n">entity</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">wandb_config</span><span class="o">.</span><span class="n">entity</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">run</span><span class="p">:</span>
+            <span class="n">artifact</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">use_artifact</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_wandb_uid</span><span class="p">()</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">artifact</span><span class="o">.</span><span class="n">download</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uid_folder</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">artifact</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_constant_feature</span><span class="p">(</span>
+    <span class="n">var</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">mean</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Detect if a extractor is indistinguishable from a constant extractor (on torch Tensors).</span>
+
+<span class="sd">    See `sklearn.preprocessing._data._is_constant_feature`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">eps</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
+    <span class="n">upper_bound</span> <span class="o">=</span> <span class="n">n_samples</span> <span class="o">*</span> <span class="n">eps</span> <span class="o">*</span> <span class="n">var</span> <span class="o">+</span> <span class="p">(</span><span class="n">n_samples</span> <span class="o">*</span> <span class="n">mean</span> <span class="o">*</span> <span class="n">eps</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">var</span> <span class="o">&lt;=</span> <span class="n">upper_bound</span>
+
+
+<div class="viewcode-block" id="StandardScaler">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html#neuraltrain.utils.StandardScaler">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StandardScaler</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Standard scaler that can be fitted by batch and handles 2-dimensional extractors.&quot;&quot;&quot;</span>
+
+    <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Dimension across which the statistics should be computed</span>
+
+    <span class="c1"># Internal</span>
+    <span class="n">_mean</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_var</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_scale</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_original_shape</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_n_samples_seen</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_var</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_scale</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_original_shape</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_n_samples_seen</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_transpose_flatten</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Transpose and flatten to have (n_total_examples, n_latent_dims).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">X</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_original_shape</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">]</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">(</span><span class="n">end_dim</span><span class="o">=-</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">X</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_unflatten_untranspose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_original_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">unflatten</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">sizes</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_original_shape</span><span class="p">)</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">X</span>
+
+<div class="viewcode-block" id="StandardScaler.partial_fit">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html#neuraltrain.utils.StandardScaler.partial_fit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">partial_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StandardScaler</span><span class="p">:</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transpose_flatten</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_samples_seen</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># Update mean</span>
+        <span class="n">previous_mean</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span>
+        <span class="p">)</span>
+        <span class="n">batch_mean</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span> <span class="o">=</span> <span class="p">(</span><span class="n">m</span> <span class="o">/</span> <span class="p">(</span><span class="n">m</span> <span class="o">+</span> <span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="n">previous_mean</span> <span class="o">+</span> <span class="p">(</span><span class="n">n</span> <span class="o">/</span> <span class="p">(</span><span class="n">m</span> <span class="o">+</span> <span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="n">batch_mean</span>
+
+        <span class="c1"># Update variance</span>
+        <span class="n">previous_var</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">device</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_var</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_var</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_var</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">(</span><span class="n">m</span> <span class="o">/</span> <span class="p">(</span><span class="n">m</span> <span class="o">+</span> <span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="n">previous_var</span>
+            <span class="o">+</span> <span class="p">(</span><span class="n">n</span> <span class="o">/</span> <span class="p">(</span><span class="n">m</span> <span class="o">+</span> <span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="n">X</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="o">+</span> <span class="p">(</span><span class="n">m</span> <span class="o">*</span> <span class="n">n</span> <span class="o">/</span> <span class="p">(</span><span class="n">m</span> <span class="o">+</span> <span class="n">n</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">previous_mean</span> <span class="o">-</span> <span class="n">batch_mean</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="p">)</span>
+        <span class="n">scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_var</span><span class="o">.</span><span class="n">sqrt</span><span class="p">()</span>  <span class="c1"># type: ignore</span>
+
+        <span class="c1"># Compute near-constant mask to avoid scaling by 0</span>
+        <span class="n">constant_mask</span> <span class="o">=</span> <span class="n">_is_constant_feature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_var</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_n_samples_seen</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="n">scale</span><span class="p">[</span><span class="n">constant_mask</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_scale</span> <span class="o">=</span> <span class="n">scale</span>  <span class="c1"># type: ignore</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_n_samples_seen</span> <span class="o">+=</span> <span class="n">n</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="StandardScaler.fit">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html#neuraltrain.utils.StandardScaler.fit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StandardScaler</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reset</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">partial_fit</span><span class="p">(</span><span class="n">X</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StandardScaler.transform">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.StandardScaler.html#neuraltrain.utils.StandardScaler.transform">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transpose_flatten</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="p">(</span><span class="n">X</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mean</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">))</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scale</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unflatten_untranspose</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">X</span></div>
+</div>
+
+
+
+<span class="n">X</span> <span class="o">=</span> <span class="n">tp</span><span class="o">.</span><span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;X&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="TimedIterator">
+<a class="viewcode-back" href="../../neuraltrain/reference/generated/neuraltrain.utils.TimedIterator.html#neuraltrain.utils.TimedIterator">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TimedIterator</span><span class="p">(</span><span class="n">tp</span><span class="o">.</span><span class="n">Generic</span><span class="p">[</span><span class="n">X</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Keeps last fetch durations of the iterator, as well as last call to call</span>
+<span class="sd">    durations.</span>
+<span class="sd">    This is handy to investigate ratio spent in a dataloader compared to the whole</span>
+<span class="sd">    training loop.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    iterable: iterable</span>
+<span class="sd">        The iterable to analyze, ususally a torch Dataloader</span>
+<span class="sd">    store_last: int</span>
+<span class="sd">        maximum number of durations to keep in memory</span>
+
+<span class="sd">    Note</span>
+<span class="sd">    ----</span>
+<span class="sd">    estimated_ratio is based on mean values, you may want check</span>
+<span class="sd">    - last_calls: last durations of the iterable call</span>
+<span class="sd">    - last_loops: last durations of the full loop back to the iterable</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">iterable</span><span class="p">:</span> <span class="n">tp</span><span class="o">.</span><span class="n">Iterable</span><span class="p">[</span><span class="n">X</span><span class="p">],</span> <span class="n">store_last</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterable</span> <span class="o">=</span> <span class="n">iterable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_iterable</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_calls</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">(</span><span class="n">maxlen</span><span class="o">=</span><span class="n">store_last</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_loops</span><span class="p">:</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">deque</span><span class="p">(</span><span class="n">maxlen</span><span class="o">=</span><span class="n">store_last</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_call_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__next__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">X</span><span class="p">:</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_calls</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_call_time</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_loops</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t0</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_call_time</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_call_time</span> <span class="o">=</span> <span class="n">t0</span>
+        <span class="k">return</span> <span class="n">x</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_iterable</span><span class="p">)</span>  <span class="c1"># type: ignore</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">estimated_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_calls</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_loops</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">tp</span><span class="o">.</span><span class="n">Iterator</span><span class="p">[</span><span class="n">X</span><span class="p">]:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_iterator</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_iterable</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_calls</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_loops</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; Meta Platforms, Inc. and affiliates
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/facebookresearch/neuroai" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=4ea706d9"></script>
+    <script src="../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../_static/pipeline-accordion.js?v=3528a9e4"></script>
+    <script src="../../_static/code-selector.js?v=fb28f3d3"></script>
+    <script src="../../_static/sidebar-nav.js?v=0e453ee9"></script>
+    </body>
+</html>

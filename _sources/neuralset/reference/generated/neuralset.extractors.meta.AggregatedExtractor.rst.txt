@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.meta.AggregatedExtractor
+=============================================
+
+.. currentmodule:: neuralset.extractors.meta
+
+.. autopydantic_model:: AggregatedExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

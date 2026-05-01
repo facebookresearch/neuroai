@@ -1,0 +1,435 @@
+/* code-selector.js — Interactive code builder for the quickstart and the
+   encoding/decoding page. Renders three blocks (install, data-loading,
+   sklearn) from the current dropdown selection (task × direction × device).
+
+   The extractor configs live in code-selector-data.json so a tiny pytest
+   (docs/test_code_selector.py) can validate them without a JS engine. */
+
+(function () {
+  // Resolve the JSON URL relative to this script so it works on any page.
+  // document.currentScript only returns this script while it is being
+  // executed at the top level — capture it now, before DOMContentLoaded.
+  var DATA_URL = (function () {
+    var s = document.currentScript;
+    if (!s) {
+      var tags = document.querySelectorAll('script[src*="code-selector.js"]');
+      s = tags[tags.length - 1];
+    }
+    return s
+      ? s.src.replace(/code-selector\.js[^/]*$/, "code-selector-data.json")
+      : "_static/code-selector-data.json";
+  })();
+
+  // ── Copy button ─────────────────────────────────────────────────────────
+  function addCopyButton(element, content) {
+    var wrapper = element.parentElement;
+    var existingButton = wrapper.querySelector('.copy-btn');
+    if (existingButton) existingButton.remove();
+
+    var copyButton = document.createElement('button');
+    copyButton.className = 'copy-btn';
+    copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+    copyButton.title = 'Copy code';
+
+    copyButton.addEventListener('click', function () {
+      var textarea = document.createElement('textarea');
+      textarea.value = content;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      var originalHTML = copyButton.innerHTML;
+      copyButton.innerHTML = 'Copied ⚡🧠';
+      copyButton.classList.add('copied');
+      setTimeout(function () {
+        copyButton.innerHTML = originalHTML;
+        copyButton.classList.remove('copied');
+      }, 1500);
+    });
+
+    wrapper.appendChild(copyButton);
+  }
+
+  // ── Safe Python syntax highlighting (no HTML corruption) ────────────────
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function wrapToken(cls, text) {
+    return '<span class="' + cls + '">' + escapeHtml(text) + '</span>';
+  }
+
+  function isWordChar(ch) { return /[A-Za-z0-9_]/.test(ch); }
+  function isDigit(ch) { return /[0-9]/.test(ch); }
+  function isNameStart(ch) { return /[A-Za-z_]/.test(ch); }
+
+  var PY_KEYWORDS = {
+    "import": true, "from": true, "as": true, "def": true, "class": true,
+    "if": true, "elif": true, "else": true, "for": true, "in": true,
+    "while": true, "try": true, "except": true, "finally": true, "with": true,
+    "return": true, "yield": true, "lambda": true, "and": true, "or": true,
+    "not": true, "is": true, "None": true, "True": true, "False": true,
+    "break": true, "continue": true, "pass": true, "global": true, "nonlocal": true
+  };
+
+  var PY_BUILTINS = {
+    "print": true, "len": true, "range": true, "enumerate": true, "zip": true,
+    "map": true, "filter": true, "sum": true, "max": true, "min": true,
+    "abs": true, "round": true, "type": true, "isinstance": true, "hasattr": true,
+    "getattr": true, "setattr": true, "dict": true, "list": true, "tuple": true,
+    "set": true, "str": true, "int": true, "float": true, "bool": true
+  };
+
+  function highlightPython(code) {
+    var i = 0;
+    var n = code.length;
+    var out = "";
+
+    while (i < n) {
+      var ch = code[i];
+
+      if (ch === "#") {
+        var cStart = i;
+        while (i < n && code[i] !== "\n") i += 1;
+        out += wrapToken("highlight-comment", code.slice(cStart, i));
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        var quote = ch;
+        var sStart = i;
+        i += 1;
+        while (i < n) {
+          var cur = code[i];
+          if (cur === "\\") {
+            i += 2;
+            continue;
+          }
+          if (cur === quote) {
+            i += 1;
+            break;
+          }
+          i += 1;
+        }
+        out += wrapToken("highlight-string", code.slice(sStart, i));
+        continue;
+      }
+
+      if ((ch === "f" || ch === "b" || ch === "r" || ch === "u" || ch === "F" || ch === "B" || ch === "R" || ch === "U") && i + 1 < n && (code[i + 1] === '"' || code[i + 1] === "'")) {
+        var pStart = i;
+        var pQuote = code[i + 1];
+        i += 2;
+        while (i < n) {
+          var pCur = code[i];
+          if (pCur === "\\") {
+            i += 2;
+            continue;
+          }
+          if (pCur === pQuote) {
+            i += 1;
+            break;
+          }
+          i += 1;
+        }
+        out += wrapToken("highlight-string", code.slice(pStart, i));
+        continue;
+      }
+
+      if (isNameStart(ch)) {
+        var wStart = i;
+        i += 1;
+        while (i < n && isWordChar(code[i])) i += 1;
+        var word = code.slice(wStart, i);
+
+        if (PY_KEYWORDS[word]) {
+          out += wrapToken("highlight-keyword", word);
+          continue;
+        }
+        if (PY_BUILTINS[word]) {
+          out += wrapToken("highlight-builtin", word);
+          continue;
+        }
+
+        var j = i;
+        while (j < n && /\s/.test(code[j])) j += 1;
+        if (j < n && code[j] === "(") {
+          out += wrapToken("highlight-function", word);
+        } else {
+          out += escapeHtml(word);
+        }
+        continue;
+      }
+
+      if (isDigit(ch) || (ch === "." && i + 1 < n && isDigit(code[i + 1]))) {
+        var numStart = i;
+        i += 1;
+        while (i < n && /[0-9.]/.test(code[i])) i += 1;
+        out += wrapToken("highlight-number", code.slice(numStart, i));
+        continue;
+      }
+
+      out += escapeHtml(ch);
+      i += 1;
+    }
+
+    return out;
+  }
+
+  // ── Template builders ────────────────────────────────────────────────────
+
+  function buildInstallBlock(tsk, installDeps) {
+    var pkg = tsk.pipExtras ? "'neuralset[" + tsk.pipExtras + "]'" : "neuralset";
+    var pipParts = [pkg, "neuralfetch"];
+    if (installDeps) pipParts.push(installDeps);
+    var lines = ["pip install " + pipParts.join(" ")];
+    if (tsk.postInstall) lines.push(tsk.postInstall);
+    return lines.join("\n");
+  }
+
+  function buildDataBlock(tsk, dev, studyName) {
+    var lines = [];
+    lines.push(
+      "import neuralset as ns",
+      "from torch.utils.data import DataLoader",
+      "",
+      "# Infra: caching folder (cluster=None runs locally)",
+      'infra = {"folder": ns.CACHE_FOLDER / "cache"}',
+      "",
+      "# 1. Load study"
+    );
+    if (studyName === "YourStudy") {
+      lines.push(
+        "# No built-in dataset for this task/device combo — replace 'YourStudy' below"
+      );
+    }
+    lines.push(
+      "study = ns.Study(",
+      '    name="' + studyName + '",',
+      "    path=ns.CACHE_FOLDER,",
+      "    infra=infra,",
+      ")"
+    );
+    if (studyName.indexOf("Fake") !== 0) {
+      lines.push("study.download()");
+    } else {
+      lines.push("# No download needed — Fake studies generate data on the fly");
+    }
+    lines.push(
+      "events = study.run()",
+      'print(events[["type", "start", "duration", "timeline"]].head(10))',
+      "",
+      "# 2. Define extractors",
+      dev.neuro,
+      "",
+      tsk.stim
+    );
+    lines.push("");
+    lines.push("# 3. Segment into a Dataset");
+    lines.push("segmenter = ns.dataloader.Segmenter(");
+    lines.push("    start=" + dev.start + ",");
+    lines.push("    duration=" + dev.duration + ",");
+    lines.push('    trigger_query=\'type=="' + tsk.eventType + '"\',');
+    lines.push("    extractors=dict(neuro=neuro, stim=stim),");
+    lines.push(")");
+    lines.push("dset = segmenter.apply(events)  # fast: returns a lazy Dataset");
+    lines.push("dset.prepare()  # pre-compute & cache extractor outputs");
+    lines.push("");
+    lines.push("# 4. Iterate with a DataLoader");
+    lines.push("loader = DataLoader(dset, batch_size=32, shuffle=True, collate_fn=dset.collate_fn)");
+    lines.push("for batch in loader:");
+    lines.push('    print(f"neuro: {batch.data[\'neuro\'].shape}, stim: {batch.data[\'stim\'].shape}")');
+    lines.push("    break");
+    return lines.join("\n");
+  }
+
+  function buildSklearnBlock(tsk, dev, dir) {
+    var isDecoding = (dir === "decoding");
+
+    if (tsk.isClassification && isDecoding) {
+      return buildClassificationDecodingBlock(dev);
+    }
+    if (tsk.isClassification && !isDecoding) {
+      return buildClassificationEncodingBlock(dev);
+    }
+    return buildRegressionBlock(dev, isDecoding);
+  }
+
+  function buildRegressionBlock(dev, isDecoding) {
+    var comment = isDecoding
+      ? "# Decoding: predict stimulus features from brain activity"
+      : "# Encoding: predict brain activity from stimulus features";
+    var xy = isDecoding
+      ? "X, y = X_neuro, stim_arr"
+      : "X, y = stim_arr, X_neuro";
+
+    return [
+      "import numpy as np",
+      "from scipy.stats import pearsonr",
+      "from sklearn.linear_model import RidgeCV",
+      "from sklearn.preprocessing import StandardScaler",
+      "from sklearn.pipeline import make_pipeline",
+      "from sklearn.model_selection import KFold",
+      "",
+      "# Load all data as numpy arrays",
+      "batch = dset.load_all()",
+      'neuro_arr = batch.data["neuro"].numpy()',
+      'stim_arr  = batch.data["stim"].numpy()',
+      "",
+      "# Select single time point",
+      dev.timeSelection,
+      "",
+      comment,
+      xy,
+      "",
+      "model = make_pipeline(StandardScaler(), RidgeCV(alphas=np.logspace(-3, 8, 100)))",
+      "correlations = []",
+      "for train, test in KFold(n_splits=5, shuffle=True, random_state=0).split(X):",
+      "    model.fit(X[train], y[train])",
+      "    y_pred = model.predict(X[test])",
+      "    y_true = y[test]",
+      "    r = [pearsonr(t, p)[0] for t, p in zip(y_true.T, y_pred.T)]",
+      "    correlations.append(np.mean(r))",
+      'print(f"Mean Pearson r = {np.mean(correlations):.3f}")',
+    ].join("\n");
+  }
+
+  function buildClassificationDecodingBlock(dev) {
+    return [
+      "import numpy as np",
+      "from sklearn.linear_model import RidgeClassifierCV",
+      "from sklearn.preprocessing import StandardScaler",
+      "from sklearn.pipeline import make_pipeline",
+      "from sklearn.model_selection import StratifiedKFold",
+      "from sklearn.metrics import balanced_accuracy_score",
+      "",
+      "# Load all data as numpy arrays",
+      "batch = dset.load_all()",
+      'neuro_arr = batch.data["neuro"].numpy()',
+      'stim_arr  = batch.data["stim"].numpy().ravel()',
+      "",
+      "# Select single time point",
+      dev.timeSelection,
+      "",
+      "# Decoding: predict stimulus class from brain activity",
+      "X, y = X_neuro, stim_arr",
+      "",
+      "model = make_pipeline(StandardScaler(), RidgeClassifierCV(alphas=np.logspace(-3, 8, 100)))",
+      "scores = []",
+      "for train, test in StratifiedKFold(n_splits=5, shuffle=True, random_state=0).split(X, y):",
+      "    model.fit(X[train], y[train])",
+      "    y_pred = model.predict(X[test])",
+      "    scores.append(balanced_accuracy_score(y[test], y_pred))",
+      'print(f"Mean balanced accuracy = {np.mean(scores):.3f}")',
+    ].join("\n");
+  }
+
+  function buildClassificationEncodingBlock(dev) {
+    return [
+      "import numpy as np",
+      "from scipy.stats import pearsonr",
+      "from sklearn.linear_model import RidgeCV",
+      "from sklearn.preprocessing import StandardScaler",
+      "from sklearn.pipeline import make_pipeline",
+      "from sklearn.model_selection import KFold",
+      "",
+      "# Load all data as numpy arrays",
+      "batch = dset.load_all()",
+      'neuro_arr = batch.data["neuro"].numpy()',
+      'stim_arr  = batch.data["stim"].numpy().ravel()',
+      "",
+      "# Select single time point",
+      dev.timeSelection,
+      "",
+      "# Encoding: predict brain activity from stimulus class",
+      "X, y = stim_arr.reshape(-1, 1).astype(float), X_neuro",
+      "",
+      "model = make_pipeline(StandardScaler(), RidgeCV(alphas=np.logspace(-3, 8, 100)))",
+      "correlations = []",
+      "for train, test in KFold(n_splits=5, shuffle=True, random_state=0).split(X):",
+      "    model.fit(X[train], y[train])",
+      "    y_pred = model.predict(X[test])",
+      "    y_true = y[test]",
+      "    r = [pearsonr(t, p)[0] for t, p in zip(y_true.T, y_pred.T)]",
+      "    correlations.append(np.mean(r))",
+      'print(f"Mean Pearson r = {np.mean(correlations):.3f}")',
+    ].join("\n");
+  }
+
+  // ── Initialization: fetch data, then wire up dropdowns ──────────────────
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var dataEl = document.getElementById("code-data");
+    var sklearnEl = document.getElementById("code-sklearn");
+    var installEl = document.getElementById("code-install");
+    if (!dataEl) {
+      console.warn("Code selector: Required elements not found");
+      return;
+    }
+
+    fetch(DATA_URL)
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        var isQuickstart = !!document.querySelector('.code-selector[data-quickstart]');
+
+        function val(id) {
+          var el = document.getElementById(id);
+          return el ? el.value : null;
+        }
+
+        function render() {
+          var tskKey, devKey, studyName, installDeps;
+
+          if (isQuickstart) {
+            var p = data.presets[val("sel-preset")] || data.presets["bel-language"];
+            tskKey = p.taskKey;
+            devKey = p.deviceKey;
+            studyName = p.study;
+            installDeps = p.installDeps || "";
+          } else {
+            tskKey = val("sel-task") || "language";
+            devKey = val("sel-device") || "meg";
+            studyName = (data.studyMap[tskKey] || {})[devKey] || "YourStudy";
+            installDeps = "";
+          }
+
+          var tsk = data.task[tskKey] || data.task.language;
+          var dev = data.device[devKey] || data.device.meg;
+
+          if (installEl) {
+            var installBlock = buildInstallBlock(tsk, installDeps);
+            installEl.textContent = installBlock;
+            addCopyButton(installEl, installBlock);
+          }
+
+          var dataBlock = buildDataBlock(tsk, dev, studyName);
+          dataEl.innerHTML = highlightPython(dataBlock);
+          addCopyButton(dataEl, dataBlock);
+
+          if (sklearnEl) {
+            var dir = val("sel-direction") || "decoding";
+            var sklearnBlock = buildSklearnBlock(tsk, dev, dir);
+            sklearnEl.innerHTML = highlightPython(sklearnBlock);
+            addCopyButton(sklearnEl, sklearnBlock);
+          }
+        }
+
+        ["sel-task", "sel-direction", "sel-device", "sel-preset"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener("change", render);
+        });
+
+        console.log("Code selector: Initialized successfully");
+        render();
+      })
+      .catch(function (e) {
+        console.error("Code selector: failed to load " + DATA_URL, e);
+      });
+  });
+})();

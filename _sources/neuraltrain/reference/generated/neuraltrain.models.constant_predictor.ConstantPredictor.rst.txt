@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.constant\_predictor.ConstantPredictor
+========================================================
+
+.. currentmodule:: neuraltrain.models.constant_predictor
+
+.. autopydantic_model:: ConstantPredictor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
