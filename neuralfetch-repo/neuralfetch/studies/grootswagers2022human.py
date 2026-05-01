@@ -122,6 +122,12 @@ class Grootswagers2022Human(study.Study):
         category = Path(img_path).parent.name
         out = self.path / "prepare" / category / filename
         if not out.exists():
+            # Fall back to the shared THINGS-images directory (used by sample datasets)
+            shared = (self.path / ".." / "THINGS-images" / category / filename).resolve(
+                strict=False
+            )
+            if shared.exists():
+                return str(shared)
             raise RuntimeError(f"Output path does not exist: {out}")
         return str(out)
 
@@ -256,7 +262,7 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
         events_file = folder / f"{subj_str}_task-rsvp_events.tsv"
         events = pd.read_csv(events_file, sep="\t")
 
-        events["filepath"] = events.stim.astype(str).str.replace("\\", "/", regex=False)
+        events["filepath"] = events.stim.apply(self._format_img_path)
         events["category"] = events.filepath.apply(lambda x: Path(x).parent.name)
         events["type"] = "Image"
         sfreq = 1e3
