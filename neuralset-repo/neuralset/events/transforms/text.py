@@ -438,7 +438,7 @@ class AddSummary(EventsTransform):
         Simply return the summary, without any introduction.
         """
         messages = [
-            {"role": "system", "content": "You are a professionnal text summarizer."},
+            {"role": "system", "content": "You are a professional text summarizer."},
             {"role": "user", "content": prompt + text},
         ]
         outputs = self.pipeline(
