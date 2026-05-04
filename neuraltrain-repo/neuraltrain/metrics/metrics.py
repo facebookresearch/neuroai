@@ -136,6 +136,64 @@ class OnlinePearsonCorr(torchmetrics.regression.PearsonCorrCoef):
         super().reset()
 
 
+class NormalizedRMSE(torchmetrics.regression.MeanSquaredError):
+    """Root-mean-squared error divided by the standard deviation of the targets.
+
+    Official metric of Challenge 2 of the NeurIPS 2025 EEG Foundation Challenge
+    (https://eeg2025.github.io/). Extends ``torchmetrics.MeanSquaredError`` and
+    inherits its running-sum RMSE accumulation; on top of that, we accumulate
+    first and second moments of the targets so that ``std`` is computed over the
+    full epoch's targets rather than per-batch.
+
+    Parameters
+    ----------
+    num_outputs : int
+        Number of outputs. Forwarded to ``MeanSquaredError`` and used to size
+        the target-moment buffers.
+    """
+
+    higher_is_better: bool = False
+
+    def __init__(self, num_outputs: int = 1) -> None:
+        super().__init__(squared=False, num_outputs=num_outputs)
+        self.add_state(
+            "target_sum",
+            default=torch.zeros(num_outputs),
+            dist_reduce_fx="sum",
+        )
+        self.add_state(
+            "target_sq_sum",
+            default=torch.zeros(num_outputs),
+            dist_reduce_fx="sum",
+        )
+        self.add_state(
+            "n_target",
+            default=torch.tensor(0),
+            dist_reduce_fx="sum",
+        )
+        self.target_sum: torch.Tensor
+        self.target_sq_sum: torch.Tensor
+        self.n_target: torch.Tensor
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
+        super().update(preds, target)
+        t = target.detach()
+        if t.ndim == 1:
+            t = t.unsqueeze(-1)
+        t = t.reshape(-1, t.shape[-1]).to(self.target_sum.dtype)
+        self.target_sum = self.target_sum + t.sum(dim=0)
+        self.target_sq_sum = self.target_sq_sum + (t**2).sum(dim=0)
+        self.n_target = self.n_target + t.shape[0]
+
+    def compute(self) -> torch.Tensor:
+        rmse = super().compute()
+        n = self.n_target.to(self.target_sum.dtype).clamp(min=1)
+        mean = self.target_sum / n
+        var = (self.target_sq_sum / n) - mean**2
+        std = torch.sqrt(torch.clamp(var, min=0.0))
+        return rmse / std
+
+
 class Rank(torchmetrics.Metric):
     """Rank of predictions based on a retrieval set, using cosine similarity.
 

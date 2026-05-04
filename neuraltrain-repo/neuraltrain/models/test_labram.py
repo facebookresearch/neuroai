@@ -103,23 +103,39 @@ def test_wrapper_heterogeneous_batch_uses_intersection():
 
 @requires_labram_channel_order
 def test_build_channel_remapping():
-    """Identity, case-insensitive, unknown-excluded, and explicit mapping."""
-    # Known channels map to themselves
-    remap = NtLabram()._build_channel_remapping(["Fp1", "Cz", "O2"])
-    assert remap == {"Fp1": "Fp1", "Cz": "Cz", "O2": "O2"}
+    """Identity, case-insensitive, unknown-excluded, and explicit mapping.
 
-    # Case-insensitive match
-    remap = NtLabram()._build_channel_remapping(["fp1", "cZ"])
-    assert "fp1" in remap and "cZ" in remap
+    Case-2 (direct case-insensitive) matches map to LABRAM_CHANNEL_ORDER's
+    canonical (uppercase) form, so the wrapper hands braindecode names that
+    already match its internal table.
+    """
+    # Direct case-2 match: dataset-cased names map to LABRAM-cased canonical.
+    remap, positionless = NtLabram()._build_channel_remapping(["Fp1", "Cz", "O2"])
+    assert remap == {"Fp1": "FP1", "Cz": "CZ", "O2": "O2"}
+    assert positionless == set()
+
+    # Case-insensitive match still resolves, output is canonical.
+    remap, positionless = NtLabram()._build_channel_remapping(["fp1", "cZ"])
+    assert remap == {"fp1": "FP1", "cZ": "CZ"}
+    assert positionless == set()
 
     # Unknown channels excluded
-    remap = NtLabram()._build_channel_remapping(["Fp1", "NONEXISTENT"])
-    assert "Fp1" in remap and "NONEXISTENT" not in remap
+    remap, positionless = NtLabram()._build_channel_remapping(["Fp1", "NONEXISTENT"])
+    assert remap == {"Fp1": "FP1"}
+    assert positionless == set()
 
-    # Explicit mapping overrides name matching
+    # Explicit mapping overrides name matching; explicit entries are
+    # treated as positionless because they typically denote channel
+    # systems whose montage positions cannot be resolved.
     cfg = NtLabram(channel_mapping={"E1": "FP1", "Fp1": "FP2"})
-    remap = cfg._build_channel_remapping(["E1", "Fp1", "Cz"])
-    assert remap == {"E1": "FP1", "Fp1": "FP2", "Cz": "Cz"}
+    remap, positionless = cfg._build_channel_remapping(["E1", "Fp1", "Cz"])
+    assert remap == {"E1": "FP1", "Fp1": "FP2", "Cz": "CZ"}
+    assert positionless == {"E1", "Fp1"}
+
+    # Bipolar fallback channels are positionless.
+    remap, positionless = NtLabram()._build_channel_remapping(["Fp1-F3", "Cz"])
+    assert remap == {"Fp1-F3": "FP1", "Cz": "CZ"}
+    assert positionless == {"Fp1-F3"}
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +150,9 @@ def test_build_with_chs_info_returns_wrapper():
     model = cfg.build(n_chans=len(CH_NAMES), n_times=200, n_outputs=2, chs_info=chs_info)
 
     assert isinstance(model, _LabramChannelWrapper)
-    assert model._union_ch_names == CH_NAMES
+    # Each CH_NAME is in LABRAM_CHANNEL_ORDER; the wrapper stores the
+    # LABRAM-cased canonical for every union channel.
+    assert model._labram_names == [n.upper() for n in CH_NAMES]
 
 
 def test_build_without_chs_info_returns_raw_model():

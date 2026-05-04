@@ -1515,7 +1515,9 @@ class FmriExtractor(BaseExtractor):
             self._padding = self.padding
         if not self.projection and self.infra.folder is not None:
             logger.warning(
-                f"{self.name}: volumetric fMRI (with projection=None) should not be cached: preprocessing should be fast, and caching will use too much disk space. Please set infra.folder=None"
+                f"{self.name}: caching volumetric fMRI data (projection=None)"
+                " may consume significant disk space. Consider setting"
+                " infra.folder=None if preprocessing speed is sufficient for your workflow."
             )
 
     def _exclude_from_cache_uid(self) -> list[str]:
@@ -1924,6 +1926,8 @@ class ChannelPositions(BaseStatic):
                 parts = ch_name.split("-", 1)
                 ch_names.append(parts[0])
                 ch_names.append(parts[1] if len(parts) == 2 else "")
+            elif ch_name in pos_mapping:
+                ch_names.append(ch_name)
             else:
                 ch_names.append(ch_name.split("-")[0])
         valid_inds = [i for i, n in enumerate(ch_names) if n in pos_mapping]

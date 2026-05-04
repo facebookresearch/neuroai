@@ -58,6 +58,16 @@ def test_study_info(name: str, tmp_path: Path) -> None:
         actual = utils.compute_study_info(name, folder)
     except requests.exceptions.ConnectionError:
         pytest.skip(f"Network error loading {name}")
+    except ModuleNotFoundError as e:
+        pytest.skip(f"Missing optional dependency for {name}: {e}")
+    except FileNotFoundError as e:
+        pytest.skip(f"Data not available locally for {name}: {e}")
+    except RuntimeError as e:
+        # MOABB and other backends can raise RuntimeError when a licence
+        # agreement must be accepted before the data can be downloaded.
+        if "licence" in str(e).lower() or "license" in str(e).lower():
+            pytest.skip(f"Licence not accepted for {name}: {e}")
+        raise
     mismatches: list[str] = []
     for key, val in actual.items():
         exp = getattr(study._info, key)

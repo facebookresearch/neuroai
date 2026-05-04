@@ -87,24 +87,8 @@ class NtLuna(BaseBrainDecodeModel):
         supports the ``filename`` kwarg in ``from_pretrained``.
     """
 
-    _MODEL_CLASS: tp.ClassVar[tp.Any] = None  # resolved lazily; see _ensure_model_class
+    _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.LUNA"
     pretrained_filename: str | None = None
-
-    @classmethod
-    def _ensure_model_class(cls) -> None:
-        """Resolve ``_MODEL_CLASS`` on first use.
-
-        Must also be called in ``build()`` because ``model_post_init`` is not
-        invoked after submitit deserialization on SLURM workers.
-        """
-        if cls._MODEL_CLASS is None:
-            import braindecode.models
-
-            cls._MODEL_CLASS = braindecode.models.LUNA
-
-    def model_post_init(self, __context__: tp.Any) -> None:
-        type(self)._ensure_model_class()
-        super().model_post_init(__context__)
 
     def build(
         self,
@@ -113,7 +97,6 @@ class NtLuna(BaseBrainDecodeModel):
         n_outputs: int | None = None,
         **kwargs: tp.Any,
     ) -> nn.Module:
-        type(self)._ensure_model_class()
         build_kwargs: dict[str, tp.Any] = {}
         if n_chans is not None:
             build_kwargs["n_chans"] = n_chans

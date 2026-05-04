@@ -35,7 +35,7 @@ dependencies = [
         "openai-clip",
     ]
     lightning = [  # For use with pytorch-lightning and wandb
-        "lightning>=2.0.8",
+        "lightning>=2.0.8,<=2.6.1",
         "wandb>=0.15.11",
     ]
     dev = [

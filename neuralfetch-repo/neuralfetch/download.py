@@ -281,6 +281,33 @@ def download_and_extract(
         raise
 
 
+def run_parallel(
+    fetch_fn: tp.Callable,
+    jobs: list[tuple],
+    nworkers: int,
+) -> None:
+    """Run ``fetch_fn(*job)`` for each job, in parallel using a thread pool.
+
+    Parameters
+    ----------
+    fetch_fn : callable
+        Function to call for each job.  Must accept the unpacked elements of
+        each ``jobs`` tuple as positional arguments.
+    jobs : list of tuple
+        Each tuple is unpacked and passed to ``fetch_fn``.
+    nworkers : int
+        Maximum number of worker threads.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not jobs:
+        return
+    with ThreadPoolExecutor(max_workers=nworkers) as pool:
+        futures = {pool.submit(fetch_fn, *job): job for job in jobs}
+        for future in as_completed(futures):
+            future.result()
+
+
 class BaseDownload(_Module):
     """Abstract base class for all neuralfetch download backends.
 
@@ -327,7 +354,7 @@ class BaseDownload(_Module):
         if self.get_success_file().exists() and not overwrite:
             return
         self._check_requirements()
-        print(f"Downloading {self.study} to {self._dl_dir}...")
+        print(f"Downloading {Path(self.dset_dir).name} to {self._dl_dir}...")
 
         self._download()
         self.get_success_file().write_text("success")
@@ -362,9 +389,6 @@ class S3(BaseDownload):
     profile : str or None
         Named AWS profile from ``~/.aws/config``.  Affects region,
         endpoint, and credential resolution for the boto3 session.
-    files : list[str]
-        Explicit S3 keys to download (relative to bucket root). When
-        provided, only these keys are fetched instead of listing by prefix.
     files_with_destinations : list[tuple[str, str]]
         Pairs of ``(s3_key, local_path)`` for downloads that map S3 keys
         to arbitrary local paths rather than mirroring the S3 prefix
@@ -391,7 +415,6 @@ class S3(BaseDownload):
     prefix: str = ""
     anonymous: bool = True
     profile: str | None = None
-    files: list[str] = []
     files_with_destinations: list[tuple[str, str]] = []
     output_dir: PathLike | None = None
     aws_access_key_id: str | None = None
@@ -433,8 +456,6 @@ class S3(BaseDownload):
 
         if self.files_with_destinations:
             jobs = self._resolve_mapped()
-        elif self.files:
-            jobs = self._resolve_keys()
         else:
             jobs = self._resolve_prefix(bucket)
 
@@ -453,15 +474,6 @@ class S3(BaseDownload):
             jobs.append((s3_key, local_path))
         return jobs
 
-    def _resolve_keys(self) -> list[tuple[str, Path]]:
-        jobs: list[tuple[str, Path]] = []
-        for s3_key in self.files:
-            target = self._out / s3_key
-            if self.skip_existing and target.exists():
-                continue
-            jobs.append((s3_key, target))
-        return jobs
-
     def _resolve_prefix(self, bucket: tp.Any) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for obj in bucket.objects.filter(Prefix=self.prefix):
@@ -477,27 +489,12 @@ class S3(BaseDownload):
         return jobs
 
     def _download_parallel(self, bucket: tp.Any, jobs: list[tuple[str, Path]]) -> None:
-        if not jobs:
-            return
-
         def _fetch(s3_key: str, local_path: Path) -> None:
             local_path.parent.mkdir(parents=True, exist_ok=True)
             logger.debug("Downloading s3://%s/%s -> %s", self.bucket, s3_key, local_path)
             bucket.download_file(s3_key, str(local_path))
 
-        if self.nworkers <= 1:
-            for s3_key, local_path in jobs:
-                _fetch(s3_key, local_path)
-        else:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-
-            with ThreadPoolExecutor(max_workers=self.nworkers) as pool:
-                futures = {
-                    pool.submit(_fetch, s3_key, local_path): s3_key
-                    for s3_key, local_path in jobs
-                }
-                for future in as_completed(futures):
-                    future.result()
+        run_parallel(_fetch, jobs, self.nworkers)
 
 
 class Dandi(BaseDownload):
@@ -933,6 +930,172 @@ class Figshare(BaseDownload):
                 headers=api_call_headers,
             )
             open(self._dl_dir / k["name"], "wb").write(response.content)
+
+
+globus_msg = """Globus authentication requires a service-account client ID and secret.
+
+How to register a Globus service account:
+    1. Log in at https://app.globus.org/settings/developers.
+    2. Click "Register a service account or application credential for automation".
+    3. Pick (or create) a project, then name your app (e.g. "neuralfetch").
+    4. Copy the generated Client UUID.
+    5. Under "Client Secrets", click "Add Client Secret" and copy the value
+       (shown only once).
+    6. Export NEURALFETCH_GLOBUS_CLIENT_ID and NEURALFETCH_GLOBUS_CLIENT_SECRET.
+    7. Grant the service-account identity (<client_id>@clients.auth.globus.org)
+       read permission on the target Globus Collection (handled by the
+       collection owner, one-time).
+"""
+
+
+class Globus(BaseDownload):
+    """Download datasets from a Globus Collection over HTTPS.
+
+    Uses the ``globus-sdk`` service-account (confidential client) flow
+    via the OAuth2 ``client_credentials`` grant, then streams files over
+    HTTPS from the collection's HTTPS server.
+
+    Environment Variables
+    ---------------------
+    NEURALFETCH_GLOBUS_CLIENT_ID
+        UUID of a Globus service account registered by the user at
+        https://app.globus.org/settings/developers.  Required.
+    NEURALFETCH_GLOBUS_CLIENT_SECRET
+        Client secret generated for that service account.  Required.
+
+    Parameters
+    ----------
+    study : str
+        Directory on the collection to pull, e.g. ``"/bn/99/97/38/r/"``.
+        This directory is walked recursively and every file under it is
+        downloaded into ``_dl_dir``, mirroring the remote layout.  Also
+        used (with ``/`` stripped) as the tag for the success file, so
+        ``"/bn/99/97/38/r/"`` becomes ``bn999738r``.
+    collection_id : str
+        UUID of the Globus Collection exposing the dataset.
+    nworkers : int
+        Number of parallel HTTPS download threads (default 4).
+    skip_existing : bool
+        If True (default), skip files that already exist locally.
+    """
+
+    requirements: tp.ClassVar[tuple[str, ...]] = ("globus-sdk>=4.5",)
+
+    collection_id: str
+    nworkers: int = 4
+    skip_existing: bool = True
+
+    _client_id: str = pydantic.PrivateAttr()
+    _client_secret: str = pydantic.PrivateAttr()
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        client_id = os.environ.get("NEURALFETCH_GLOBUS_CLIENT_ID")
+        client_secret = os.environ.get("NEURALFETCH_GLOBUS_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            raise RuntimeError(
+                "Globus service-account credentials are required.\n"
+                "Please export NEURALFETCH_GLOBUS_CLIENT_ID and "
+                "NEURALFETCH_GLOBUS_CLIENT_SECRET.\n" + globus_msg
+            )
+        self._client_id = client_id
+        self._client_secret = client_secret
+
+    def get_success_file(self) -> Path:
+        """Override to sanitize ``/`` in ``self.study`` (a POSIX path)."""
+        cls_name = self.__class__.__name__.lower()
+        tag = self.study.replace("/", "") or "root"
+        return self._dl_dir / f"{cls_name}_{tag}_success_download.txt"
+
+    def _build_app(self) -> tp.Any:
+        """Construct a ``globus_sdk.ClientApp`` with the required scopes."""
+        import globus_sdk
+        from globus_sdk.scopes import GCSCollectionScopes
+        from globus_sdk.token_storage import MemoryTokenStorage
+
+        # Service-account tokens are cheap to re-mint on every run, and
+        # sharing a disk cache across cluster jobs causes races.
+        config = globus_sdk.GlobusAppConfig(token_storage=MemoryTokenStorage())
+        app = globus_sdk.ClientApp(
+            "neuralfetch",
+            client_id=self._client_id,
+            client_secret=self._client_secret,
+            config=config,
+        )
+        collection_scopes = GCSCollectionScopes(self.collection_id)
+        # Only the `https` scope is needed for HTTPS streaming from a GCS
+        # collection.  `data_access` is an admin-configured per-collection
+        # scope used by mapped collections to grant per-user POSIX access
+        # -- it is not defined on public guest collections (e.g. Deep Blue),
+        # and Globus Auth rejects the token request with UNKNOWN_SCOPE_ERROR
+        # if we ask for it.  Private mapped collections that need it should
+        # be added via a future `extra_collection_scopes` hook.
+        app.add_scope_requirements(
+            {
+                globus_sdk.TransferClient.resource_server: (
+                    globus_sdk.TransferClient.scopes.all
+                ),
+                collection_scopes.resource_server: [collection_scopes.https],
+            }
+        )
+        return app
+
+    def _resolve_walk(self, tc: tp.Any) -> list[tuple[str, Path]]:
+        jobs: list[tuple[str, Path]] = []
+        root = self.study.rstrip("/") or "/"
+        stack: list[str] = [root]
+        while stack:
+            cur = stack.pop()
+            # Trailing slash is required by GCS HTTPS endpoints to treat the
+            # path as a directory listing; without it some servers return the
+            # entry for the directory itself rather than its contents.
+            for entry in tc.operation_ls(self.collection_id, path=cur + "/"):
+                name = entry["name"]
+                full = f"{cur}/{name}"
+                etype = entry["type"]
+                if etype == "dir":
+                    stack.append(full)
+                elif etype == "file":
+                    rel = full[len(root) :].lstrip("/")
+                    local_path = self._dl_dir / rel
+                    if self.skip_existing and local_path.exists():
+                        continue
+                    jobs.append((full, local_path))
+        return jobs
+
+    def _download(self) -> None:
+        import globus_sdk
+
+        app = self._build_app()
+        tc = globus_sdk.TransferClient(app=app)
+
+        endpoint = tc.get_endpoint(self.collection_id)
+        https_server = endpoint.get("https_server")
+        if not https_server:
+            raise RuntimeError(
+                f"Collection {self.collection_id} does not expose an HTTPS "
+                "server; enable HTTPS on the Globus Connect Server collection."
+            )
+        https_base = str(https_server).rstrip("/")
+        headers = {
+            "Authorization": app.get_authorizer(
+                self.collection_id
+            ).get_authorization_header()
+        }
+
+        jobs = self._resolve_walk(tc)
+
+        if not jobs:
+            print(f"Nothing to download for {self.study}")
+            return
+
+        def _fetch(remote: str, local_path: Path) -> None:
+            url = https_base + (remote if remote.startswith("/") else f"/{remote}")
+            logger.debug("Downloading %s -> %s", url, local_path)
+            download_file(url, local_path, headers=headers, show_progress=True)
+
+        run_parallel(_fetch, jobs, self.nworkers)
+        print(f"\nDownloaded {len(jobs)} files for {self.study}")
 
 
 class Huggingface(BaseDownload):

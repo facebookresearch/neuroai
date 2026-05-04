@@ -65,6 +65,7 @@ extend = "../pyproject.toml"
   'moabb.datasets.utils', 'moabb.datasets.base', 'moabb.datasets.bnci.*', 'pymatreader',
   'praatio', 'praatio.*',
   'sklearn.*', 'pooch', 'matio', 'matio.*',
+  'globus_sdk', 'globus_sdk.*',
   ]
   ignore_missing_imports = true
 

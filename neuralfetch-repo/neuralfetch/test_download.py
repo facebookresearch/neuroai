@@ -39,6 +39,7 @@ _EXTRA_KWARGS: dict[str, dict[str, tp.Any]] = {
     "Huggingface": {"org": "abc"},
     "Dryad": {"doi": "12.3456/dryad.abcdefghijk", "token": "fake-token"},
     "Eegdash": {"database": "eegdash"},
+    "Globus": {"collection_id": "00000000-0000-0000-0000-000000000000"},
 }
 
 
@@ -47,6 +48,10 @@ _ENV_VARS: dict[str, dict[str, str]] = {
     "Donders": {
         "NEURALFETCH_DONDERS_USER": "fake-user",
         "NEURALFETCH_DONDERS_PASSWORD": "fake-pass",
+    },
+    "Globus": {
+        "NEURALFETCH_GLOBUS_CLIENT_ID": "fake-client-id",
+        "NEURALFETCH_GLOBUS_CLIENT_SECRET": "fake-client-secret",
     },
 }
 
@@ -161,6 +166,24 @@ def test_dryad_missing_token_raises(tmp_path: Path) -> None:
             study="test",
             doi="12.3456/dryad.abcdefghijk",
             dset_dir=tmp_path / "dryad",
+        )
+
+
+def test_globus_missing_credentials_raises(tmp_path: Path) -> None:
+    """Globus raises RuntimeError at construction when credentials env vars are missing."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("NEURALFETCH_GLOBUS_CLIENT_ID", "NEURALFETCH_GLOBUS_CLIENT_SECRET")
+    }
+    with (
+        patch.dict(os.environ, env, clear=True),
+        pytest.raises(RuntimeError, match="service-account credentials are required"),
+    ):
+        download.Globus(
+            study="test",
+            dset_dir=tmp_path / "globus",
+            collection_id="00000000-0000-0000-0000-000000000000",
         )
 
 
