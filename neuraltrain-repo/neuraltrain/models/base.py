@@ -24,6 +24,16 @@ class BaseModelConfig(helpers.DiscriminatedModel, discriminator_key="name"):
 class BaseBrainDecodeModel(BaseModelConfig):
     """Base class for braindecode model configurations.
 
+    Subclasses set ``_MODEL_CLASS_PATH`` (e.g.
+    ``"braindecode.models.Labram"``) to resolve the underlying class lazily,
+    avoiding an unconditional braindecode import at module load time.
+    Subclasses that need custom resolution (e.g. optional-dependency
+    handling) can instead override ``_ensure_model_class`` directly.
+
+    The dynamic registration in :func:`_register_braindecode_models` sets
+    ``_MODEL_CLASS`` directly at import time for the common braindecode
+    models, which short-circuits the lazy path.
+
     Attributes
     ----------
     kwargs : dict
@@ -36,15 +46,37 @@ class BaseBrainDecodeModel(BaseModelConfig):
         ``_MODEL_CLASS.from_pretrained()`` instead of the regular constructor.
     """
 
-    _MODEL_CLASS: tp.ClassVar[tp.Any]
+    _MODEL_CLASS: tp.ClassVar[tp.Any] = None
+    _MODEL_CLASS_PATH: tp.ClassVar[str | None] = None
     kwargs: dict[str, tp.Any] = {}
     from_pretrained_name: str | None = None
 
+    @classmethod
+    def _ensure_model_class(cls) -> None:
+        """Resolve ``_MODEL_CLASS`` on first use.
+
+        Called from both ``model_post_init`` and ``build`` because
+        submitit deserialization on SLURM workers does not invoke
+        ``model_post_init``.
+        """
+        if cls._MODEL_CLASS is not None:
+            return
+        if cls._MODEL_CLASS_PATH is None:
+            raise RuntimeError(
+                f"{cls.__name__} has neither `_MODEL_CLASS` nor `_MODEL_CLASS_PATH` set."
+            )
+        import importlib
+
+        module_name, attr = cls._MODEL_CLASS_PATH.rsplit(".", 1)
+        cls._MODEL_CLASS = getattr(importlib.import_module(module_name), attr)
+
     def model_post_init(self, __context__: tp.Any) -> None:
+        type(self)._ensure_model_class()
         super().model_post_init(__context__)
         helpers.validate_kwargs(self._MODEL_CLASS, self.kwargs)
 
     def build(self, **kwargs: tp.Any) -> nn.Module:
+        type(self)._ensure_model_class()
         if overlap := set(self.kwargs) & set(kwargs):
             raise ValueError(
                 f"Build kwargs overlap with config kwargs for keys: {overlap}."

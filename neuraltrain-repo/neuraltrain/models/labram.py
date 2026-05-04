@@ -37,13 +37,24 @@ logger = logging.getLogger(__name__)
 class _LabramChannelWrapper(nn.Module):
     """Wraps a braindecode ``Labram`` to resolve channel names at forward time.
 
-    At each forward call the wrapper inspects the per-sample
-    ``channel_positions`` tensor (produced by the ``ChannelPositions``
-    extractor) to determine which channels are valid (i.e. not marked with the
-    sentinel ``CHANNEL_POSITIONS_INVALID_VALUE``).  The corresponding channel
-    names are looked up from the stored union channel list, remapped to LaBraM
-    channel names using a precomputed dictionary, and finally passed to the
-    inner model via its ``ch_names`` argument.
+    Channel handling is precomputed in union-channel order:
+
+    * ``_labram_names`` -- the LaBraM-cased name to forward to the inner
+      model for each union channel (channels with no LaBraM mapping fall
+      back to their original name and are dropped by braindecode's
+      case-insensitive ``ch_names`` matching).
+    * ``_positionless_mask`` -- a boolean buffer marking channels that have
+      a valid LaBraM mapping but no montage position (bipolar derivations
+      resolved via anode fallback, or channels added via an explicit
+      ``channel_mapping``).  These are kept regardless of their per-sample
+      ``channel_positions`` row, so e.g. SleepEDF's bipolar ``Fpz-Cz`` or
+      Geodesic E-numbers reach LaBraM even when ``set_montage`` could not
+      assign them coordinates.
+
+    At forward time the per-sample mask ``(channel_positions != sentinel)``
+    is OR-combined with ``_positionless_mask`` and intersected across the
+    batch (LaBraM's ``ch_names`` is per-batch, so heterogeneous batches
+    fall back to the channels valid in every sample).
 
     Parameters
     ----------
@@ -53,13 +64,16 @@ class _LabramChannelWrapper(nn.Module):
         Ordered channel names from the dataset union (matching the channel
         dimension of the input tensor).
     ch_name_to_labram : dict mapping str to str
-        Precomputed mapping from dataset channel names to LaBraM channel
-        names.  Channels that already match (case-insensitively) may map to
-        themselves.
-    pad_right : int
-        Number of zero-padding samples to add on the right.
-    truncate_right : int
-        Number of samples to truncate from the right.
+        Mapping from dataset channel names to LaBraM channel names, as
+        returned by :meth:`NtLabram._build_channel_remapping`.  Channels not
+        in this dict are forwarded with their original name and dropped by
+        braindecode's case-insensitive ``ch_names`` matching.
+    positionless_ch_names : set of str, optional
+        Subset of ``ch_name_to_labram`` keys whose channels are not expected
+        to carry montage positions.  Defaults to an empty set.
+    pad_right, truncate_right : int
+        Time-axis padding/truncation applied just before the inner model
+        (see :func:`apply_temporal_adjustment`).
     """
 
     def __init__(
@@ -67,15 +81,26 @@ class _LabramChannelWrapper(nn.Module):
         model: nn.Module,
         union_ch_names: list[str],
         ch_name_to_labram: dict[str, str],
+        positionless_ch_names: set[str] | None = None,
         pad_right: int = 0,
         truncate_right: int = 0,
     ) -> None:
         super().__init__()
         self.model = model
-        self._union_ch_names = union_ch_names
-        self._ch_name_to_labram = ch_name_to_labram
         self._pad_right = pad_right
         self._truncate_right = truncate_right
+
+        positionless = set(positionless_ch_names) if positionless_ch_names else set()
+        self._labram_names: list[str] = [
+            ch_name_to_labram.get(name, name) for name in union_ch_names
+        ]
+        self.register_buffer(
+            "_positionless_mask",
+            torch.tensor(
+                [name in positionless for name in union_ch_names],
+                dtype=torch.bool,
+            ),
+        )
 
     def forward(self, x: torch.Tensor, channel_positions: torch.Tensor) -> torch.Tensor:
         """Forward pass with dynamic channel selection.
@@ -85,26 +110,20 @@ class _LabramChannelWrapper(nn.Module):
         x : (B, n_channels, n_times)
         channel_positions : (B, n_channels, n_spatial_dims)
         """
-        valid_mask = (channel_positions != INVALID_POS_VALUE).any(
-            dim=-1
-        )  # (B, n_channels)
+        valid = (channel_positions != INVALID_POS_VALUE).any(dim=-1)
+        valid = valid | self._positionless_mask  # type: ignore[operator]
+        # Intersect across the batch: braindecode's ``ch_names`` is per-batch.
+        common = valid.all(dim=0)
 
-        # Use the intersection of valid channels across the batch so that
-        # recordings with slightly different channel sets can coexist.
-        common_mask = valid_mask.all(dim=0)  # (n_channels,)
+        indices = common.nonzero(as_tuple=True)[0].tolist()
+        ch_names = [self._labram_names[i] for i in indices]
 
-        valid_indices = common_mask.nonzero(as_tuple=True)[0].tolist()
-        valid_ch_names = [self._union_ch_names[i] for i in valid_indices]
-        remapped_names = [
-            self._ch_name_to_labram.get(name, name) for name in valid_ch_names
-        ]
-
-        x_valid = x[:, common_mask, :]
+        x_valid = x[:, common, :]
         x_valid = apply_temporal_adjustment(
             x_valid, self._pad_right, self._truncate_right
         )
 
-        return self.model(x_valid, ch_names=remapped_names, return_all_tokens=True)
+        return self.model(x_valid, ch_names=ch_names, return_all_tokens=True)
 
 
 class NtLabram(BaseBrainDecodeModel):
@@ -129,62 +148,65 @@ class NtLabram(BaseBrainDecodeModel):
         E-number to 10-10).
     """
 
-    _MODEL_CLASS: tp.ClassVar[tp.Any] = None  # resolved lazily; see _ensure_model_class
+    _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.Labram"
     chs_info_required: tp.ClassVar[bool] = True
     needs_n_times: tp.ClassVar[bool] = True
     channel_mapping: dict[str, str] | None = None
 
-    @classmethod
-    def _ensure_model_class(cls) -> None:
-        """Resolve ``_MODEL_CLASS`` on first use.
-
-        Must also be called in ``build()`` because ``model_post_init`` is not
-        invoked after submitit deserialization on SLURM workers.
-        """
-        if cls._MODEL_CLASS is None:
-            import braindecode.models
-
-            cls._MODEL_CLASS = braindecode.models.Labram
-
-    def model_post_init(self, __context__: tp.Any) -> None:
-        type(self)._ensure_model_class()
-        super().model_post_init(__context__)
-
     def _build_channel_remapping(
         self,
         union_ch_names: list[str],
-    ) -> dict[str, str]:
+    ) -> tuple[dict[str, str], set[str]]:
         """Build a mapping from dataset channel names to LaBraM channel names.
 
         Mapping priority (per channel):
 
         1. ``self.channel_mapping`` (explicit user override)
         2. Direct case-insensitive name match against
-           ``LABRAM_CHANNEL_ORDER`` -- the name is kept as-is (braindecode
-           handles the case-insensitive lookup internally)
+           ``LABRAM_CHANNEL_ORDER`` -- the dataset name maps to the
+           canonical LABRAM-cased version.
         3. Bipolar fallback -- for names like ``"Fp1-F3"``, try matching the
-           anode (``"Fp1"``) against ``LABRAM_CHANNEL_ORDER``
+           anode (``"Fp1"``) against ``LABRAM_CHANNEL_ORDER``.
 
-        Returns a dict mapping every matched union channel name to its LaBraM
-        counterpart.  Channels that cannot be mapped are **not** included in
-        the returned dict (they will be passed through as-is and handled by
-        braindecode's ``on_unknown_chs`` policy).
+        Returns
+        -------
+        remap : dict
+            Mapping from every matched union channel name to its LaBraM
+            counterpart (always in ``LABRAM_CHANNEL_ORDER`` casing for cases
+            2 and 3; whatever the user supplied for case 1).  Channels that
+            cannot be mapped are **not** included (they will be passed
+            through as-is and handled by braindecode's ``on_unknown_chs``
+            policy).
+        positionless : set
+            Subset of ``remap`` keys for channels that are not expected to
+            carry montage positions -- i.e. those resolved via the bipolar
+            anode fallback (case 3) or explicit user ``channel_mapping``
+            (case 1).  Regular case-insensitive matches (case 2) are excluded
+            because such channels do have known positions and should be gated
+            by the per-sample position validity check at forward time.
         """
         from braindecode.models.labram import LABRAM_CHANNEL_ORDER
 
         labram_upper = {ch.upper(): ch for ch in LABRAM_CHANNEL_ORDER}
 
         result: dict[str, str] = {}
+        positionless: set[str] = set()
         n_bipolar_fallback = 0
         for name in union_ch_names:
             if self.channel_mapping and name in self.channel_mapping:
                 result[name] = self.channel_mapping[name]
-            elif name.upper() in labram_upper:
-                result[name] = name
-            else:
-                pair = parse_bipolar_name(name)
-                if pair is not None and pair[0].upper() in labram_upper:
-                    result[name] = labram_upper[pair[0].upper()]
+                positionless.add(name)
+                continue
+            canonical = labram_upper.get(name.upper())
+            if canonical is not None:
+                result[name] = canonical
+                continue
+            pair = parse_bipolar_name(name)
+            if pair is not None:
+                anode_canonical = labram_upper.get(pair[0].upper())
+                if anode_canonical is not None:
+                    result[name] = anode_canonical
+                    positionless.add(name)
                     n_bipolar_fallback += 1
 
         if n_bipolar_fallback:
@@ -193,7 +215,7 @@ class NtLabram(BaseBrainDecodeModel):
                 n_bipolar_fallback,
             )
 
-        return result
+        return result, positionless
 
     @staticmethod
     def _adapt_pretrained_dimensions(model: nn.Module, n_times: int) -> tuple[int, int]:
@@ -214,6 +236,24 @@ class NtLabram(BaseBrainDecodeModel):
 
         Returns ``(pad_right, truncate_right)`` -- exactly one is non-zero.
         """
+        # Adaptation reaches into private braindecode internals; guard the
+        # attributes we touch so a future braindecode rename surfaces here
+        # rather than as a confusing forward-time error.
+        for attr in ("patch_size", "n_times", "patch_embed"):
+            if not hasattr(model, attr):
+                raise AttributeError(
+                    f"NtLabram._adapt_pretrained_dimensions: braindecode "
+                    f"Labram has no attribute {attr!r}.  Has braindecode's "
+                    f"internal layout changed?"
+                )
+        patch_embed_first = model.patch_embed[0]  # type: ignore[index]
+        if not hasattr(patch_embed_first, "n_patchs"):
+            raise AttributeError(
+                "NtLabram._adapt_pretrained_dimensions: "
+                "model.patch_embed[0] has no attribute 'n_patchs'.  Has "
+                "braindecode's internal layout changed?"
+            )
+
         patch_size: int = model.patch_size  # type: ignore[assignment]
 
         pad_right, truncate_right = compute_temporal_adjustment(n_times, patch_size)
@@ -237,7 +277,7 @@ class NtLabram(BaseBrainDecodeModel):
             )
 
         actual_n_patches = effective_n_times // patch_size
-        pretrained_n_patches: int = model.patch_embed[0].n_patchs  # type: ignore[index,union-attr]
+        pretrained_n_patches: int = patch_embed_first.n_patchs  # type: ignore[assignment]
 
         if actual_n_patches == pretrained_n_patches:
             return pad_right, truncate_right
@@ -275,8 +315,8 @@ class NtLabram(BaseBrainDecodeModel):
 
         model._n_times = effective_n_times  # type: ignore[assignment]
         model.n_path = actual_n_patches  # type: ignore[assignment]
-        model.patch_embed[0].n_patchs = actual_n_patches  # type: ignore[index,union-attr]
-        model.patch_embed[0].n_times = effective_n_times  # type: ignore[index,union-attr]
+        patch_embed_first.n_patchs = actual_n_patches  # type: ignore[assignment]
+        patch_embed_first.n_times = effective_n_times  # type: ignore[assignment,union-attr]
 
         return pad_right, truncate_right
 
@@ -288,14 +328,15 @@ class NtLabram(BaseBrainDecodeModel):
         chs_info: list[dict[str, tp.Any]] | None = None,
         **kwargs: tp.Any,
     ) -> nn.Module:
-        type(self)._ensure_model_class()
-
         # Precompute channel remapping
         ch_name_to_labram: dict[str, str] = {}
+        positionless_ch_names: set[str] = set()
         union_ch_names: list[str] = []
         if chs_info is not None:
             union_ch_names = [ch["ch_name"] for ch in chs_info]
-            ch_name_to_labram = self._build_channel_remapping(union_ch_names)
+            ch_name_to_labram, positionless_ch_names = self._build_channel_remapping(
+                union_ch_names
+            )
 
         pad_right = 0
         truncate_right = 0
@@ -320,6 +361,7 @@ class NtLabram(BaseBrainDecodeModel):
                 model,
                 union_ch_names,
                 ch_name_to_labram,
+                positionless_ch_names=positionless_ch_names,
                 pad_right=pad_right,
                 truncate_right=truncate_right,
             )

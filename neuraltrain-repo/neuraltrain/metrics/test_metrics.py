@@ -6,16 +6,32 @@
 
 import typing as tp
 
+import numpy as np
 import pydantic
 import pytest
 import torch
-from sklearn.metrics import balanced_accuracy_score
+from sklearn.metrics import balanced_accuracy_score, root_mean_squared_error
 from torchmetrics import PearsonCorrCoef
 
 from neuraltrain.metrics import BaseMetric
 
 from . import metrics
 from .base import Accuracy, GroupedMetric  # type: ignore[attr-defined]
+
+
+def _clip_importable() -> bool:
+    """Whether ``openai-clip`` (and its ``pkg_resources`` dep) can be imported."""
+    try:
+        import clip  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_requires_clip = pytest.mark.skipif(
+    not _clip_importable(),
+    reason="openai-clip not importable in this environment",
+)
 
 
 @pytest.mark.parametrize("dim", [0, 1])
@@ -116,6 +132,49 @@ def test_pearson_corr_constant_value(dim: int):
     metric = metrics.OnlinePearsonCorr(dim=dim)
     out = metric(y_pred, y_true)
     assert torch.isnan(out).all()
+
+
+@pytest.mark.parametrize("num_outputs", [1, 3])
+def test_normalized_rmse_matches_reference(num_outputs: int) -> None:
+    """NormalizedRMSE equals RMSE(y, y_hat) / std(y) over the full epoch."""
+    torch.manual_seed(0)
+    batches = [
+        (torch.rand(b, num_outputs), torch.rand(b, num_outputs)) for b in (7, 5, 11)
+    ]
+    if num_outputs == 1:
+        batches = [(p.squeeze(-1), t.squeeze(-1)) for p, t in batches]
+
+    metric = metrics.NormalizedRMSE(num_outputs=num_outputs)
+    for preds, target in batches:
+        metric.update(preds, target)
+    out = metric.compute()
+
+    all_preds = torch.cat([p.reshape(-1, num_outputs) for p, _ in batches], dim=0).numpy()
+    all_target = torch.cat(
+        [t.reshape(-1, num_outputs) for _, t in batches], dim=0
+    ).numpy()
+    expected = np.array(
+        [
+            root_mean_squared_error(all_target[:, i], all_preds[:, i])
+            / np.std(all_target[:, i])
+            for i in range(num_outputs)
+        ]
+    )
+    expected_tensor = torch.from_numpy(expected).float()
+    if num_outputs == 1:
+        expected_tensor = expected_tensor.squeeze()
+    assert torch.allclose(out.float(), expected_tensor, atol=1e-5)
+
+
+def test_normalized_rmse_reset() -> None:
+    """reset() zeroes both the RMSE state and the target-moment state."""
+    metric = metrics.NormalizedRMSE()
+    metric.update(torch.tensor([1.0, 2.0]), torch.tensor([0.0, 3.0]))
+    assert metric.n_target.item() == 2
+    metric.reset()
+    assert metric.n_target.item() == 0
+    assert torch.equal(metric.target_sum, torch.zeros(1))
+    assert torch.equal(metric.target_sq_sum, torch.zeros(1))
 
 
 @pytest.mark.parametrize("reduction", ["median", "mean", "std"])
@@ -238,7 +297,7 @@ class Xp(pydantic.BaseModel):
 @pytest.mark.parametrize(
     "metric_cfg, perfect_res_lower_bound, perfect_res_upper_bound",
     [
-        (
+        pytest.param(
             {
                 "log_name": "clip",
                 "name": "ImageSimilarity",
@@ -247,6 +306,7 @@ class Xp(pydantic.BaseModel):
             },
             1.0,
             None,
+            marks=_requires_clip,
         ),
         (
             {

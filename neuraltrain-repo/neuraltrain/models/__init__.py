@@ -8,9 +8,9 @@
 from . import bendr as _bendr  # noqa: F401
 from . import common as _common  # noqa: F401
 from . import conformer as _conformer  # noqa: F401
-from . import constant_predictor as _constant_predictor  # noqa: F401
 from . import conv_transformer as _conv_transformer  # noqa: F401
 from . import diffusion_prior as _diffusion_prior  # noqa: F401
+from . import dummy_predictor as _dummy_predictor  # noqa: F401
 from . import fmri_mlp as _fmri_mlp  # noqa: F401
 from . import freqbandnet as _freqbandnet  # noqa: F401
 from . import green as _green  # noqa: F401

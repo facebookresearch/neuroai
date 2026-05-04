@@ -8,23 +8,25 @@
 
 Includes the following adaptations over the raw braindecode BENDR model:
 
-* **Channel name remapping** -- an explicit ``channel_mapping`` dict maps
-  dataset channel names to the 19 standard 10/20 channel names that BENDR
-  expects (matching the original DN3 ``deep1010`` mapping).  Channels whose
-  names already match (case-insensitively) need no entry.  Missing channels
-  are zero-filled; surplus channels are discarded.
-* **Relative amplitude channel** -- the 20th input channel reproduces the
-  per-window relative amplitude signal from the BENDR paper: a constant
-  value ``(max(window) - min(window)) / R_ds`` broadcast over the time
-  dimension, where ``R_ds`` is an approximate global amplitude range.
-* **Integrated MinMaxScaler** -- per-window min-max normalisation to
-  ``[-1, 1]`` is applied inside the wrapper (before the amplitude channel
-  is appended), so that the ``OnTheFlyPreprocessor`` does **not** need a
-  separate scaler.
-* **All-tokens output** -- the wrapper returns the full contextualiser
-  token sequence ``(B, T+1, D)`` instead of just the CLS token, letting
-  the ``DownstreamWrapper`` handle aggregation consistently with other
-  foundation models.
+* **Global per-window min-max scaling** to ``[-1, 1]`` (single ``(min, max)``
+  pair across channels and time), matching the original BENDR pretraining
+  recipe (DN3 ``MappingDeep1010``).  Per-channel scaling would destroy
+  inter-channel amplitude relationships, which BENDR's channel-unmixed 1D
+  convolutional feature encoder relies on.
+* **Relative amplitude 20th channel** ``2 * (clamp(window_range / R, 1.0) - 0.5)``
+  producing values in ``[-1, 1]``, reproducing the DN3 ``MappingDeep1010``
+  20th channel from the BENDR paper.
+* **All-tokens output** -- the wrapper returns the full contextualiser token
+  sequence ``(B, T+1, D)`` instead of just the CLS token, letting the
+  :class:`DownstreamWrapper` handle aggregation (e.g. ``aggregation: "mean"``)
+  consistently with other foundation models (CBraMod, LaBraM, LUNA, REVE).
+
+Channel remapping is **not** handled here: the downstream wrapper's
+``channel_adapter_config`` (a learned ``Conv1d(kernel_size=1)`` projection,
+see :class:`neuralbench.modules.ChannelProjection`) is expected to project from
+arbitrary input channels to the 19 channels BENDR consumes.  This mirrors
+BIOT's handling and avoids the information loss of zero-filling missing
+standard 10/20 channels.
 """
 
 import logging
@@ -34,33 +36,9 @@ import torch
 from torch import nn
 
 from .base import BaseBrainDecodeModel
-from .common import parse_bipolar_name
 
 logger = logging.getLogger(__name__)
 
-# 19 standard 10/20 EEG channels in the order BENDR's encoder expects,
-# matching the DN3 deep1010 reduced channel set used for pretraining.
-BENDR_CHANNEL_ORDER: list[str] = [
-    "Fp1",
-    "Fp2",
-    "F7",
-    "F3",
-    "Fz",
-    "F4",
-    "F8",
-    "T7",
-    "C3",
-    "Cz",
-    "C4",
-    "T8",
-    "P7",
-    "P3",
-    "Pz",
-    "P4",
-    "P8",
-    "O1",
-    "O2",
-]
 
 # Approximate global amplitude range (max - min over the entire pretraining
 # dataset) used as the denominator for the relative-amplitude 20th channel.
@@ -69,74 +47,29 @@ BENDR_CHANNEL_ORDER: list[str] = [
 # The exact value is not critical; it acts as a normalising constant.
 _DEFAULT_AMPLITUDE_RANGE: float = 4861.0
 
-_BENDR_UPPER_TO_IDX: dict[str, int] = {
-    ch.upper(): i for i, ch in enumerate(BENDR_CHANNEL_ORDER)
-}
-
-
-def _build_channel_indices(
-    union_ch_names: list[str],
-    channel_mapping: dict[str, str] | None,
-) -> list[tuple[int, int]]:
-    """Map dataset channel names to BENDR channel-order indices.
-
-    Returns a list of ``(dataset_idx, bendr_idx)`` pairs for every dataset
-    channel that could be resolved.  Channels not in the mapping or not
-    matching any of the 19 standard names are silently skipped.
-    """
-    pairs: list[tuple[int, int]] = []
-    n_mapped = 0
-    n_bipolar = 0
-    for ds_idx, name in enumerate(union_ch_names):
-        resolved = channel_mapping.get(name, name) if channel_mapping else name
-        upper = resolved.upper()
-        if upper in _BENDR_UPPER_TO_IDX:
-            pairs.append((ds_idx, _BENDR_UPPER_TO_IDX[upper]))
-            if channel_mapping and name in channel_mapping:
-                n_mapped += 1
-            continue
-        bp = parse_bipolar_name(resolved)
-        if bp is not None and bp[0].upper() in _BENDR_UPPER_TO_IDX:
-            pairs.append((ds_idx, _BENDR_UPPER_TO_IDX[bp[0].upper()]))
-            n_bipolar += 1
-
-    if n_mapped:
-        logger.info("Mapped %d channel(s) via explicit channel_mapping.", n_mapped)
-    if n_bipolar:
-        logger.info("Mapped %d bipolar channel(s) via anode fallback.", n_bipolar)
-
-    matched = {p[1] for p in pairs}
-    missing = [
-        BENDR_CHANNEL_ORDER[i]
-        for i in range(len(BENDR_CHANNEL_ORDER))
-        if i not in matched
-    ]
-    if missing:
-        logger.warning(
-            "BENDR: %d of 19 standard channels missing (will be zero-filled): %s",
-            len(missing),
-            missing,
-        )
-    logger.info(
-        "[BENDR_CHANNELS] n_dataset=%d  n_resolved=%d/19",
-        len(union_ch_names),
-        len(matched),
-    )
-    return pairs
+# Number of EEG channels the pretrained BENDR encoder expects (before the
+# internal relative-amplitude channel is appended).
+BENDR_N_EEG_CHANNELS: int = 19
 
 
 class _BendrAllTokensWrapper(nn.Module):
-    """Wraps a braindecode ``BENDR`` to add channel mapping, MinMaxScaler,
-    relative amplitude channel, and all-tokens output.
+    """Wraps a braindecode ``BENDR`` to add MinMax preprocessing,
+    the relative-amplitude 20th channel, and an all-tokens output.
+
+    The input is assumed to already be an EEG tensor with
+    ``BENDR_N_EEG_CHANNELS`` (19) channels (produced by an upstream
+    ``channel_adapter``).  The wrapper:
+
+    1. Computes a global ``(min, max)`` per window across channels+time.
+    2. Scales the 19 EEG channels to ``[-1, 1]``.
+    3. Appends a 20th amplitude channel ``2 * (clamp(window_range / R, 1.0) - 0.5)``.
+    4. Runs the BENDR encoder + contextualizer.
+    5. Returns the full contextualiser token sequence ``(B, T+1, D)``.
 
     Parameters
     ----------
     model : nn.Module
         A braindecode ``BENDR`` model instance (with ``final_layer=False``).
-    channel_pairs : list of (int, int) or None
-        ``(dataset_channel_idx, bendr_channel_idx)`` pairs produced by
-        :func:`_build_channel_indices`.  When ``None``, the input is
-        forwarded as-is (assumed to already have 20 channels).
     amplitude_range : float
         Approximate global amplitude range ``R_ds`` for the relative
         amplitude 20th channel.
@@ -144,13 +77,10 @@ class _BendrAllTokensWrapper(nn.Module):
 
     encoder: nn.Module
     contextualizer: nn.Module
-    _ds_indices: torch.Tensor | None
-    _bendr_indices: torch.Tensor | None
 
     def __init__(
         self,
         model: nn.Module,
-        channel_pairs: list[tuple[int, int]] | None = None,
         amplitude_range: float = _DEFAULT_AMPLITUDE_RANGE,
     ) -> None:
         super().__init__()
@@ -158,135 +88,96 @@ class _BendrAllTokensWrapper(nn.Module):
         self.contextualizer = model.contextualizer  # type: ignore[assignment]
         self.amplitude_range = amplitude_range
 
-        if channel_pairs is not None:
-            ds_indices = torch.tensor([p[0] for p in channel_pairs], dtype=torch.long)
-            bendr_indices = torch.tensor([p[1] for p in channel_pairs], dtype=torch.long)
-            self.register_buffer("_ds_indices", ds_indices)
-            self.register_buffer("_bendr_indices", bendr_indices)
-        else:
-            self.register_buffer("_ds_indices", None)
-            self.register_buffer("_bendr_indices", None)
-
     def _prepare_input(self, x: torch.Tensor) -> torch.Tensor:
-        """Reorder channels, apply MinMaxScaler, append amplitude channel.
+        """Apply global min-max scaling and append the amplitude channel.
 
-        Input ``x`` has shape ``(B, n_dataset_chans, T)``.
-        Output has shape ``(B, 20, T)``.
+        Input ``x`` has shape ``(B, 19, T)``; output has shape ``(B, 20, T)``.
         """
         B, _, T = x.shape
 
-        # Compute per-window range before normalisation
-        x_min, x_max = torch.aminmax(x, dim=-1, keepdim=True)  # over time
-        x_min_global = x_min.min(dim=1, keepdim=True).values  # over channels
-        x_max_global = x_max.max(dim=1, keepdim=True).values
-        window_range = (x_max_global - x_min_global).squeeze(-1).squeeze(-1)  # (B,)
+        x_flat = x.reshape(B, -1)
+        x_min = x_flat.amin(dim=1, keepdim=True)  # (B, 1)
+        x_max = x_flat.amax(dim=1, keepdim=True)  # (B, 1)
+        window_range = (x_max - x_min).squeeze(-1)  # (B,)
+        denom = (x_max - x_min).clamp_min(1e-12).unsqueeze(-1)  # (B, 1, 1)
+        x_scaled = 2.0 * (x - x_min.unsqueeze(-1)) / denom - 1.0
 
-        # MinMaxScaler: per-channel normalisation to [-1, 1]
-        denom = x_max - x_min
-        denom[denom == 0.0] = 1.0
-        x_scaled = 2.0 * (x - x_min) / denom - 1.0
+        rel_amp = (window_range / self.amplitude_range).clamp(max=1.0)
+        amp_val = 2.0 * (rel_amp - 0.5)
+        amp_channel = amp_val.view(B, 1, 1).expand(B, 1, T)
 
-        if self._ds_indices is not None:
-            # Reorder into 19 standard BENDR channels (zero-fill missing)
-            eeg = x_scaled.new_zeros(B, 19, T)
-            eeg[:, self._bendr_indices] = x_scaled[:, self._ds_indices]
-        else:
-            eeg = x_scaled
-
-        # 20th channel: relative amplitude = window_range / R_ds
-        rel_amp = (window_range / self.amplitude_range).unsqueeze(-1).unsqueeze(-1)
-        amp_channel = rel_amp.expand(B, 1, T)
-
-        return torch.cat([eeg, amp_channel], dim=1)  # (B, 20, T)
+        return torch.cat([x_scaled, amp_channel], dim=1)  # (B, 20, T)
 
     def forward(self, x: torch.Tensor, **kwargs: tp.Any) -> torch.Tensor:
-        if self._ds_indices is not None:
-            x = self._prepare_input(x)
+        x = self._prepare_input(x)
         encoded = self.encoder(x)  # (B, encoder_h, T_enc)
         context = self.contextualizer(encoded)  # (B, encoder_h, T_enc + 1)
         return context.permute(0, 2, 1)  # (B, T_enc + 1, encoder_h)
 
 
 class NtBendr(BaseBrainDecodeModel):
-    """Config for the braindecode BENDR model with channel mapping support.
+    """Config for the braindecode BENDR model.
 
     Extends :class:`BaseBrainDecodeModel` with BENDR-specific logic:
 
-    1. **Channel remapping** -- an explicit ``channel_mapping`` dict maps
-       dataset channel names to standard 10/20 names.  Channels whose names
-       already match (case-insensitively) need no entry.
-    2. **Relative amplitude channel** -- the 20th input channel is computed
-       at forward time from the per-window amplitude range, matching the
-       original BENDR paper.
-    3. **All-tokens output** -- the model is wrapped to return the full
-       contextualiser sequence ``(B, T+1, encoder_h)`` instead of just the
-       CLS token.
+    1. **Preprocessing** -- global per-window min-max to ``[-1, 1]`` with a
+       20th relative-amplitude channel, matching the BENDR paper.
+    2. **All-tokens output** -- the model is wrapped to return the full
+       contextualiser sequence ``(B, T+1, encoder_h)`` so the downstream
+       wrapper can pool it (e.g. ``aggregation: "mean"``) uniformly with
+       the other FMs.
+
+    Channel mapping is delegated to the downstream wrapper's
+    ``channel_adapter_config`` (a 1x1 Conv1d projection), which must project
+    to :data:`BENDR_N_EEG_CHANNELS` (19) channels.
 
     Parameters
     ----------
-    channel_mapping : dict or None
-        Explicit mapping from dataset channel names to standard 10/20 names
-        (e.g. ``{"EEG 042": "Cz"}``).  Channels that already match a name
-        in :data:`BENDR_CHANNEL_ORDER` (case-insensitively) need no entry.
     amplitude_range : float
         Approximate global amplitude range used as the denominator of the
         relative amplitude 20th channel.  Defaults to the value derived from
         the TUEG pretraining dataset (~4861).
     """
 
-    _MODEL_CLASS: tp.ClassVar[tp.Any] = None  # resolved lazily
-    chs_info_required: tp.ClassVar[bool] = True
-    channel_mapping: dict[str, str] | None = None
     amplitude_range: float = _DEFAULT_AMPLITUDE_RANGE
 
     @classmethod
     def _ensure_model_class(cls) -> None:
-        """Resolve ``_MODEL_CLASS`` on first use (lazy for optional dep)."""
-        if cls._MODEL_CLASS is None:
-            import braindecode.models
+        """Resolve ``_MODEL_CLASS`` on first use with a friendlier error.
 
-            resolved = getattr(braindecode.models, "BENDR", None)
-            if resolved is None:
-                raise ImportError(
-                    "braindecode.models.BENDR is not available. "
-                    "Upgrade braindecode or install missing dependencies."
-                )
-            cls._MODEL_CLASS = resolved
+        BENDR is an optional braindecode dependency; the default base-class
+        path-based loader would raise ``AttributeError`` if it is missing.
+        """
+        if cls._MODEL_CLASS is not None:
+            return
+        import braindecode.models
 
-    def model_post_init(self, __context__: tp.Any) -> None:
-        type(self)._ensure_model_class()
-        super().model_post_init(__context__)
+        resolved = getattr(braindecode.models, "BENDR", None)
+        if resolved is None:
+            raise ImportError(
+                "braindecode.models.BENDR is not available. "
+                "Upgrade braindecode or install missing dependencies."
+            )
+        cls._MODEL_CLASS = resolved
 
     def build(
         self,
         n_chans: int | None = None,
         n_times: int | None = None,
         n_outputs: int | None = None,
-        chs_info: list[dict[str, tp.Any]] | None = None,
         **kwargs: tp.Any,
     ) -> nn.Module:
-        type(self)._ensure_model_class()
+        # The wrapper prepends an amplitude channel internally, so the
+        # underlying BENDR encoder always receives 20 channels.  The upstream
+        # channel adapter is responsible for producing the 19 EEG channels;
+        # here we hard-set n_chans=20 for the inner BENDR regardless of
+        # whatever was passed in (the adapter target + our amp channel
+        # combine into 20).
+        kwargs["n_chans"] = BENDR_N_EEG_CHANNELS + 1
+        if n_times is not None:
+            kwargs["n_times"] = n_times
+        if n_outputs is not None:
+            kwargs["n_outputs"] = n_outputs
 
-        channel_pairs: list[tuple[int, int]] | None = None
-        if chs_info is not None:
-            union_ch_names = [ch["ch_name"] for ch in chs_info]
-            channel_pairs = _build_channel_indices(union_ch_names, self.channel_mapping)
-
-        effective_n_chans = 20 if channel_pairs is not None else n_chans
-
-        if self.from_pretrained_name is not None:
-            model = super().build(**kwargs)
-        else:
-            if effective_n_chans is not None:
-                kwargs["n_chans"] = effective_n_chans
-            if n_times is not None:
-                kwargs["n_times"] = n_times
-            if n_outputs is not None:
-                kwargs["n_outputs"] = n_outputs
-            model = super().build(**kwargs)
-
-        return _BendrAllTokensWrapper(
-            model,
-            channel_pairs=channel_pairs,
-            amplitude_range=self.amplitude_range,
-        )
+        model = super().build(**kwargs)
+        return _BendrAllTokensWrapper(model, amplitude_range=self.amplitude_range)

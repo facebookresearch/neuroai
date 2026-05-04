@@ -101,26 +101,10 @@ class NtReve(BaseBrainDecodeModel):
         ``"2"``).
     """
 
-    _MODEL_CLASS: tp.ClassVar[tp.Any] = None  # resolved lazily; see _ensure_model_class
+    _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.REVE"
     chs_info_required: tp.ClassVar[bool] = True
     needs_n_times: tp.ClassVar[bool] = True
     channel_mapping: dict[str, str] | None = None
-
-    @classmethod
-    def _ensure_model_class(cls) -> None:
-        """Resolve ``_MODEL_CLASS`` on first use.
-
-        Must also be called in ``build()`` because ``model_post_init`` is not
-        invoked after submitit deserialization on SLURM workers.
-        """
-        if cls._MODEL_CLASS is None:
-            import braindecode.models
-
-            cls._MODEL_CLASS = braindecode.models.REVE
-
-    def model_post_init(self, __context__: tp.Any) -> None:
-        type(self)._ensure_model_class()
-        super().model_post_init(__context__)
 
     def _remap_chs_info(
         self,
@@ -160,7 +144,6 @@ class NtReve(BaseBrainDecodeModel):
         chs_info: list[dict[str, tp.Any]] | None = None,
         **kwargs: tp.Any,
     ) -> nn.Module:
-        type(self)._ensure_model_class()
         if chs_info is not None:
             chs_info = self._remap_chs_info(chs_info)
 
