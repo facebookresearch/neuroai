@@ -127,14 +127,14 @@ Use ``models.EEGNet(kwargs={...})`` — see :doc:`../install` for an example.
    Linear
    LinearModel
 
-.. currentmodule:: neuraltrain.models.constant_predictor
+.. currentmodule:: neuraltrain.models.dummy_predictor
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
-   ConstantPredictor
-   ConstantPredictorModel
+   DummyPredictor
+   DummyPredictorModel
 
 .. currentmodule:: neuraltrain.models.fmri_mlp
 
