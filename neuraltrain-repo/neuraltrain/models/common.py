@@ -574,7 +574,7 @@ class ChannelMergerModel(nn.Module):
 
 class LayerScale(nn.Module):
     """Layer scale from [Touvron et al 2021] (https://arxiv.org/pdf/2103.17239.pdf).
-    This rescales diagonaly residual outputs close to 0 initially, then learnt.
+    This rescales diagonally residual outputs close to 0 initially, then learnt.
     """
 
     def __init__(self, channels: int, init: float = 0.1, boost: float = 5.0):

@@ -100,7 +100,7 @@ class SegmentsMixin:
     @property
     def events(self) -> pd.DataFrame:
         """All of the events spanned by all the segments"""
-        # TODO FIXME why are segments events with both an index AND and Index colum
+        # TODO FIXME why are segments events with both an index AND and Index column
         # TODO discuss should the trigger event be in events? Probably not
         return pd.concat([seg.events for seg in self.segments]).drop_duplicates()
 

@@ -496,7 +496,7 @@ class TimedIterator(tp.Generic[X]):
     Parameters
     ----------
     iterable: iterable
-        The iterable to analyze, ususally a torch Dataloader
+        The iterable to analyze, usually a torch Dataloader
     store_last: int
         maximum number of durations to keep in memory
 

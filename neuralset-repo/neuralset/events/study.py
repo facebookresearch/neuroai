@@ -365,7 +365,7 @@ class Study(base.Step):
 
     def _download(self) -> None:
         """Download dataset.
-        Needs to be overriden by user.
+        Needs to be overridden by user.
         """
         raise NotImplementedError("Dataset not available to download yet.")
 

@@ -34,7 +34,7 @@ def test_green(fake_meg, use_default_config):
             n_freqs=5,  # Learning 5 wavelets
             dropout=0.5,  # Dropout rate of 0.5 in FC layers
             hidden_dim=[100],  # Use 100 units in the hidden layer
-            bi_out=[20],  # Use a BiMap layer outputing a 20x20 matrix
+            bi_out=[20],  # Use a BiMap layer outputting a 20x20 matrix
         )
 
     sfreq = 100

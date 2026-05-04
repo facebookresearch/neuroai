@@ -225,7 +225,7 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
                 for latent in latents:
                     # notes: - aggregating with a batch would be slightly more efficient
                     # but code would be messier
-                    # - aggregating in cuda avoids transfering too much data to cpu
+                    # - aggregating in cuda avoids transferring too much data to cpu
                     latent = self._aggregate_tokens(latent)
                     yield latent.cpu().numpy()
 
@@ -292,7 +292,7 @@ class HuggingFaceImage(BaseImage):
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
         """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
-        # this method is overriden in experimental extractors for more hugging face models
+        # this method is overridden in experimental extractors for more hugging face models
         out = self.model._full_predict(images)  # type: ignore
         out = getattr(out, "vision_model_output", out)  # for clip
         states = out.hidden_states
