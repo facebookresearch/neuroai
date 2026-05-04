@@ -47,12 +47,19 @@ known-first-party = ["neuralset", "neuraltrain", "neuralfetch"]
 plugins = ["pydantic.mypy"]
 
 [tool.codespell]
+# Use `codespell[toml]` for local runs — plain `codespell` ignores this config.
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
-skip = '.git,.git-meta,.gitignore,.gitattributes,*.css'
+skip = '.git,.git-meta,.gitignore,.gitattributes,*.css,*/.venv/*,*/.tox/*'
 check-hidden = true
 # Ignore URLs: URL paths may contain sequences that look like typos
 ignore-regex = 'https?://\S+'
+# Skip `bibtex: ... = """..."""` Study attributes (verbatim citations we
+# can't edit), and any block between `codespell:ignore-begin/-end` markers
+# (use those in RST/MD where inline `# codespell:ignore` doesn't render
+# cleanly). Single-line false positives use `# codespell:ignore <word>`.
+ignore-multiline-regex = 'bibtex[^\n]*= """[\s\S]*?"""|codespell:ignore-begin[\s\S]*?codespell:ignore-end'
 # fro: PyTorch Frobenius norm parameter, e.g. x.norm(p="fro")
 # toi, rouge: French words ("you", "red") used in accent-insensitive matching tests
 # fo: test timeline identifier string
-ignore-words-list = 'fro,toi,rouge,fo'
+# lond: London site code in Nieuwland2018 filenames
+ignore-words-list = 'fro,toi,rouge,fo,lond'
