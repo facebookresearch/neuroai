@@ -456,8 +456,11 @@ class Study(base.Step):
 
     def __setstate__(self, state: dict[str, tp.Any]) -> None:
         super().__setstate__(state)
-        # reregister study path
-        STUDY_PATHS[self.__class__.__name__] = self.path
+        # Re-register for SpecialLoader in spawn workers. Pickle cycle
+        # resolution can call us mid-build with empty ``__dict__``;
+        # the assembled call follows.
+        if "path" in self.__dict__:
+            STUDY_PATHS[self.__class__.__name__] = self.path
 
     @infra_timelines.apply(
         item_uid=lambda x: ujson.dumps(x, sort_keys=True),

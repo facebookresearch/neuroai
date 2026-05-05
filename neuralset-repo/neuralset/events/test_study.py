@@ -35,10 +35,11 @@ logging.getLogger("exca").setLevel(logging.WARNING)
 
 
 def _check_loaded(step: ns.Step) -> bool:
-    """Run a step in a subprocess and verify STUDY_PATHS is populated."""
-    if "fork" not in mp.get_start_method():
-        msg = "non-forked subprocess should start with empty STUDY_PATHS"
-        assert not base.STUDY_PATHS, msg
+    """Run a step in a subprocess and verify STUDY_PATHS is populated.
+
+    Callers should force ``mp_context="spawn"`` to defeat fork inheritance
+    of STUDY_PATHS — otherwise the registry check passes trivially.
+    """
     _ = step.run()
     if isinstance(step, ns.Chain):
         step = next(iter(step._step_sequence()))  # type: ignore
@@ -66,7 +67,8 @@ def test_chain_with_transform(tmp_path: Path) -> None:
     uid = exca.ConfDict.from_model(chain, uid=True, exclude_defaults=True).to_uid()
     assert "DoNothing" in uid
     assert "blublu-param" in uid
-    with concurrent.futures.ProcessPoolExecutor(max_workers=1) as ex:
+    ctx = mp.get_context("spawn")
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1, mp_context=ctx) as ex:
         job = ex.submit(_check_loaded, chain)
     assert job.result(), "Instances should have been registered at load time"
 
@@ -133,6 +135,21 @@ def test_study_export() -> None:
     study = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER)
     dumped = study.model_dump()
     ns.Study(**dumped)
+
+
+@pytest.mark.sandbox_skip
+def test_fake_fmri_study_load(tmp_path: Path) -> None:
+    # Processpool ``infra_timelines`` pickles the cycle-prone graph
+    # that drives ``__setstate__`` mid-cycle — not reached by simply
+    # submitting a fresh Step to a worker.
+    infra: tp.Any = {"folder": tmp_path}
+    study = ns.Study(name="Fake2025Fmri", path=ns.CACHE_FOLDER, infra=infra)
+    events = study.run()
+    assert set(events.type) >= {"Fmri", "Word"}
+    # Forced spawn: STUDY_PATHS in the worker comes only from ``__setstate__``.
+    ctx = mp.get_context("spawn")
+    with concurrent.futures.ProcessPoolExecutor(max_workers=1, mp_context=ctx) as ex:
+        assert ex.submit(_check_loaded, study).result()
 
 
 def test_study_summary_and_build(tmp_path: Path) -> None:
