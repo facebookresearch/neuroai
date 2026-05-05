@@ -7,6 +7,7 @@
 import typing as tp
 from pathlib import Path
 
+import exca.utils
 import nibabel
 import numpy as np
 import pandas as pd
@@ -172,7 +173,9 @@ class Fake2025Fmri(study.Study):
                 audio[start_i : start_i + len(tone), 0] += tone
                 start_i += int(fps * min(5, max(0.5, start_i / fps * 0.25)))
                 audio /= np.max(np.abs(audio))
-            scipy.io.wavfile.write(fp, fps, audio)
+            # atomic write: concurrent MapInfra workers race on shared path
+            with exca.utils.temporary_save_path(fp) as tmp:
+                scipy.io.wavfile.write(tmp, fps, audio)
         sound = etypes.Audio(filepath=fp, start=1 + run, timeline="x")
         events.append(sound)
         # WORDS

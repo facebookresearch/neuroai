@@ -79,7 +79,8 @@ jobs:
     runs-on: 8-core-ubuntu
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-python-env
+      - id: setup
+        uses: ./.github/actions/setup-python-env
       - name: pytest neuralset
         run: |
           source activate ./ci_env
@@ -95,6 +96,14 @@ jobs:
           pip install --force-reinstall --no-deps dist/neuralset-*.whl dist/neuraltrain-*.whl
           python -c "from neuralset import events, segments, extractors; print('neuralset OK')"
           python -c "from neuraltrain import models, metrics; print('neuraltrain OK')"
+
+      # Save data cache only from this job (see setup-python-env).
+      - name: Save data cache
+        if: steps.setup.outputs.data-cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.DATA_CACHE_PATH }}
+          key: ${{ env.DATA_CACHE_KEY }}
 
   # ── Job 2: pytest downstream (neuraltrain first, then smaller) ─
   test-downstream:

@@ -8,6 +8,7 @@ import typing as tp
 from pathlib import Path
 from warnings import warn
 
+import exca.utils
 import mne
 import numpy as np
 import pandas as pd
@@ -221,7 +222,9 @@ class Fake2025Meg(Mne2013Sample):
         if not fp.exists():
             import scipy
 
-            scipy.io.wavfile.write(fp, fps, audio)
+            # atomic write: concurrent MapInfra workers race on shared path
+            with exca.utils.temporary_save_path(fp) as tmp:
+                scipy.io.wavfile.write(tmp, fps, audio)
         generated.append(
             etypes.Audio(
                 filepath=fp,

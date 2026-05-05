@@ -12,6 +12,11 @@ inputs:
     required: false
     default: 'true'
 
+outputs:
+  data-cache-hit:
+    description: Whether the data cache (HF / Torch / neuralset / MNE) was restored.
+    value: ${{ steps.data-cache.outputs.cache-hit }}
+
 runs:
   using: composite
   steps:
@@ -25,9 +30,20 @@ runs:
       run: |
         echo $CONDA/bin >> $GITHUB_PATH
 
-    - name: Set monthly cache key
+    - name: Set cache config
       shell: bash
-      run: echo "MONTH=$(date +%Y-%m)" >> $GITHUB_ENV
+      run: |
+        MONTH=$(date +%Y-%m)
+        {
+          echo "MONTH=$MONTH"
+          echo "DATA_CACHE_KEY=data-v1-$MONTH"
+          echo "DATA_CACHE_PATH<<EOF"
+          echo "~/.cache/huggingface"
+          echo "~/.cache/torch/hub"
+          echo "~/.cache/neuralset"
+          echo "~/.mne"
+          echo "EOF"
+        } >> "$GITHUB_ENV"
 
     # ── Conda env cache ──────────────────────────────────────
     # One cache entry per month (~5-6 GB, includes ~1 GB spacy models).
@@ -96,27 +112,15 @@ runs:
         pip freeze
 
     # ── Data / model caches ──────────────────────────────────
-    # Rolling monthly key: refreshes on the 1st (drops stale models/data).
-    # No fallback — one slow re-download per month keeps caches clean.
-    # Bump v1 → v2 to force a clean slate.
-    # Skipped when restore-data-caches is 'false' (e.g. mypy-only jobs).
-    - name: Restore HuggingFace / TorchHub cache
+    # Save only in test-neuralset (see ci.yml): otherwise a sparse
+    # early job first-write-wins an empty cache for the month.
+    - name: Restore data cache
       if: inputs.restore-data-caches == 'true'
-      uses: actions/cache@v4
+      id: data-cache
+      uses: actions/cache/restore@v4
       with:
-        path: |
-          ~/.cache/huggingface
-          ~/.cache/torch/hub
-        key: models-v1-${{ env.MONTH }}
-
-    - name: Restore neuralset data cache
-      if: inputs.restore-data-caches == 'true'
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/neuralset
-          ~/.mne
-        key: data-v1-${{ env.MONTH }}
+        path: ${{ env.DATA_CACHE_PATH }}
+        key: ${{ env.DATA_CACHE_KEY }}
 
     - name: Print cache sizes
       if: inputs.restore-data-caches == 'true'
