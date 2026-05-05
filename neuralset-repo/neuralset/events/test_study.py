@@ -548,7 +548,7 @@ def test_intermediary_study_cache(tmp_path: Path) -> None:
     named: tp.Any = {str(k): s for k, s in enumerate(steps)}
     chain = ns.Chain(steps=named, infra=infra)
     assert chain.infra is not None
-    df = chain.infra.cached_result()
+    df = chain.run()
     assert isinstance(df, pd.DataFrame)  # cached
     assert hasattr(df, "stop")  # validated
     chain_caches = set(extract_cache_folders(tmp_path))
