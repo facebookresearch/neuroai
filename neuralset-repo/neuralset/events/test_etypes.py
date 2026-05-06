@@ -288,8 +288,10 @@ def test_event_type_list() -> None:
         "CategoricalEvent",
         "Background",
         "SleepStage",
+        "SleepArousal",
         "Artifact",
         "Seizure",
+        "EpileptiformActivity",
         "Stimulus",
     ]
     # only check event classes owned by neuroai packages
