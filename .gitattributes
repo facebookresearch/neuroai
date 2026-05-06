@@ -1,2 +1,0 @@
-docs/neuralfetch/validation/reports/*.html filter=lfs diff=lfs merge=lfs -text
-docs/neuralfetch/validation/reports/*.html !text !filter !merge !diff
