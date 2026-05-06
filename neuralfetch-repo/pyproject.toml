@@ -13,6 +13,7 @@ dependencies = [
   "h5py",
   "pybv>=0.7.3",
   "mne_bids>=0.16",
+  "mpld3>=0.5",
 ]
 
 [project.urls]
@@ -34,6 +35,9 @@ quickstart = [
 [project.entry-points."neuralset.studies"]
 neuralfetch = "neuralfetch"
 
+[project.scripts]
+neuralfetch = "neuralfetch.cli:main"
+
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -41,7 +45,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.package-data]
 # py.typed marker enables cross-package type checking (PEP 561)
 # editable installs need: pip install --config-settings editable_mode=strict -e .
-"neuralfetch" = ["py.typed"]
+"neuralfetch" = ["py.typed", "validations/*.toml"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -66,6 +70,10 @@ extend = "../pyproject.toml"
   'praatio', 'praatio.*',
   'sklearn.*', 'pooch', 'matio', 'matio.*',
   'globus_sdk', 'globus_sdk.*',
+  'mpld3', 'mpld3.*',
+  'neuralset', 'neuralset.*',
+  'neuralyze', 'neuralyze.*',
+  'eegdash',
   ]
   ignore_missing_imports = true
 

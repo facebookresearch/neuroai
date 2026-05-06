@@ -93,7 +93,6 @@ class Grootswagers2022Human(study.Study):
         data_shape=(63, 3035740),
         frequency=1000,
     )
-
     _test_image_names: list[str] | None = None
 
     def _download(self) -> None:

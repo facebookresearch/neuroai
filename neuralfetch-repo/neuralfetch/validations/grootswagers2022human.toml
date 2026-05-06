@@ -1,0 +1,45 @@
+study_name = "Grootswagers2022Human"
+description = "Decode DINOv2 image embeddings from EEG (THINGS-EEG1 decoding validation)"
+mode = "decod"
+event_type = "Image"
+event_label_column = "category"
+start = -0.1
+stop = 1.0
+reference_metric_name = "Pearson r"
+
+[neuro]
+name = "EegExtractor"
+frequency = 100
+filter = [0.5, 40.0]
+scaler = "RobustScaler"
+aggregation = "first"
+
+[extractor]
+name = "HuggingFaceImage"
+model_name = "facebook/dinov2-small"
+aggregation = "trigger"
+
+[model.sklearn_model]
+name = "RidgeCV"
+y_scaler = "StandardScaler"
+
+[cv]
+name = "Cv"
+n_splits = 5
+shuffle = true
+
+[scoring]
+name = "corr"
+
+[trf]
+tmin = 0.0
+tmax = 0.3
+aggregation = "sum"
+n_pca = 0.95
+
+[infra]
+cluster = "slurm"
+slurm_partition = "learnfair"
+timeout_min = 480
+mem_gb = 128
+cpus_per_task = 10

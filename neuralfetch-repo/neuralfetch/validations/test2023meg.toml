@@ -1,0 +1,24 @@
+study_name = "Test2023Meg"
+description = "Toy sliding-window decoding of Word events from MEG"
+mode = "decod"
+event_type = "Word"
+start = 0.0
+stop = 0.5
+
+[neuro]
+name = "MegExtractor"
+frequency = 100
+
+[extractor]
+name = "WordLength"
+aggregation = "trigger"
+
+[model.sklearn_model]
+name = "RidgeCV"
+
+[cv]
+name = "Cv"
+n_splits = 2
+
+[scoring]
+name = "corr"

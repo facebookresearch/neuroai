@@ -497,5 +497,6 @@ citation (BibTeX at the bottom).
    Tutorials <auto_examples/index>
    explore_datasets
    samples
+   Validation Reports <validation/index>
    Contributing: New Studies <contributing>
    API <reference/reference>

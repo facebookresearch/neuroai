@@ -1032,7 +1032,7 @@ class Globus(BaseDownload):
         # be added via a future `extra_collection_scopes` hook.
         app.add_scope_requirements(
             {
-                globus_sdk.TransferClient.resource_server: (
+                globus_sdk.TransferClient.resource_server: (  # type: ignore[dict-item]
                     globus_sdk.TransferClient.scopes.all
                 ),
                 collection_scopes.resource_server: [collection_scopes.https],
