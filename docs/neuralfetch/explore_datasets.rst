@@ -34,6 +34,9 @@ a ready-to-run lightweight version — see :doc:`samples`.
      ALL.forEach(function (d) {
        d.hrs_per_subject = (d.total_hours !== null && d.subjects)
          ? parseFloat((d.total_hours / d.subjects).toFixed(1)) : null;
+       // Collapse whitespace runs so multi-line `description` ClassVars
+       // don't break the table layout.
+       d.description = (d.description || '').replace(/\s+/g, ' ').trim();
      });
 
      var EMOJI = { meg: '🔬', fmri: '🔴', eeg: '🧠', ieeg: '⚡', emg: '💪', fnirs: '💡' };
@@ -64,30 +67,36 @@ a ready-to-run lightweight version — see :doc:`samples`.
        var list = studiesData[modality] || ALL;
        var el = document.getElementById('datasetsTable');
        if (!list.length) {
-         el.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--color-foreground-muted)">No datasets for this modality.</p>';
+         el.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--color-foreground-muted)">No dataset yet for this modality.</p>';
          return;
        }
        var sorted = sortDatasets(list, sortBy);
+       var MAX_DESC = 180;
+       function escAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
        var rows = sorted.map(function (d) {
          var badge = d.sample ? ' <span class="explore-sample-badge">&#9654; sample</span>' : '';
-         var aliasCell = d.aliases ? '<em>' + d.aliases + '</em>' : '';
+         var desc = d.description || '';
+         var descCell = desc.length > MAX_DESC
+           ? '<span title="' + escAttr(desc) + '">' + desc.slice(0, MAX_DESC).trimEnd() + '\u2026</span>'
+           : desc;
+         if (d.aliases) {
+           descCell += '<div class="explore-aliases">a.k.a. <em>' + d.aliases + '</em></div>';
+         }
          return '<tr>'
            + '<td><strong>' + (EMOJI[d.modality] || '') + ' ' + d.name + '</strong>' + badge + '</td>'
-           + '<td>' + aliasCell + '</td>'
            + '<td>' + d.modality.toUpperCase() + '</td>'
            + '<td>' + fmtNum(d.subjects) + '</td>'
            + '<td>' + fmtRaw(d.total_hours) + '</td>'
            + '<td>' + fmtRaw(d.hrs_per_subject) + '</td>'
-           + '<td>' + d.description + '</td>'
+           + '<td>' + descCell + '</td>'
            + '</tr>';
        }).join('');
        el.innerHTML = '<table class="datasets-table"><thead><tr>'
          + '<th class="sortable" data-col="name">Dataset' + indicator('name') + '</th>'
-         + '<th>Aliases</th>'
          + '<th>Modality</th>'
          + '<th class="sortable" data-col="subjects">Subjects' + indicator('subjects') + '</th>'
-         + '<th class="sortable" data-col="total_hours">Total hours' + indicator('total_hours') + '</th>'
-         + '<th class="sortable" data-col="hrs_per_subject">Hrs / subject' + indicator('hrs_per_subject') + '</th>'
+         + '<th class="sortable" data-col="total_hours">Hours' + indicator('total_hours') + '</th>'
+         + '<th class="sortable" data-col="hrs_per_subject">Hrs/subj' + indicator('hrs_per_subject') + '</th>'
          + '<th>Description</th>'
          + '</tr></thead><tbody>' + rows + '</tbody></table>';
        el.querySelectorAll('.sortable').forEach(function (th) {

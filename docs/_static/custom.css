@@ -1705,6 +1705,8 @@ dl.glossary dt {
 /* Datasets table styling */
 .datasets-table {
     width: 100%;
+    /* `fixed` honors the explicit column widths below. */
+    table-layout: fixed;
     border-collapse: collapse;
     margin-top: 1.5rem;
     background: var(--color-background-primary);
@@ -1743,6 +1745,23 @@ dl.glossary dt {
     border-bottom: 1px solid var(--color-background-border);
     font-size: 0.95em;
     color: var(--color-foreground-primary);
+}
+
+/* Column widths (sum=100). Headers were shortened (Hours, Hrs/subj) so the
+   numeric columns can stay tight; description gets the surplus. */
+.datasets-table th:nth-child(1), .datasets-table td:nth-child(1) { width: 24%; }
+.datasets-table th:nth-child(2), .datasets-table td:nth-child(2) { width: 7%; }
+.datasets-table th:nth-child(3), .datasets-table td:nth-child(3) { width: 7%; }
+.datasets-table th:nth-child(4), .datasets-table td:nth-child(4) { width: 7%; }
+.datasets-table th:nth-child(5), .datasets-table td:nth-child(5) { width: 8%; }
+.datasets-table th:nth-child(6), .datasets-table td:nth-child(6) { width: 47%; }
+/* CamelCase names and long descriptions need a break-anywhere fallback. */
+.datasets-table td:nth-child(1), .datasets-table td:nth-child(6) { overflow-wrap: anywhere; }
+
+.explore-aliases {
+    margin-top: .4rem;
+    font-size: .95em;
+    color: var(--color-foreground-secondary);
 }
 
 .datasets-table tbody tr:hover {
