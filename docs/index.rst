@@ -4,6 +4,7 @@
    neuralset/index
    neuralfetch/index
    neuraltrain/index
+   neuralbench/index
    Exca <https://facebookresearch.github.io/exca/>
 
 
@@ -20,7 +21,7 @@
      </p>
      <div style="text-align: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
        <div style="display: inline-flex; align-items: center; gap: 0.6rem; position: relative;">
-         <pre id="hero-pip-install" style="display: inline-block; background: var(--color-background-secondary); padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--color-border); font-family: var(--font-stack--monospace); font-size: 0.9em; margin: 0; color: var(--color-foreground-primary);">pip install neuralset neuralfetch</pre>
+         <pre id="hero-pip-install" style="display: inline-block; background: var(--color-background-secondary); padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--color-border); font-family: var(--font-stack--monospace); font-size: 0.9em; margin: 0; color: var(--color-foreground-primary);">pip install neuralset neuralfetch neuralbench</pre>
          <button class="copy-btn" id="hero-copy-btn" title="Copy install command" style="position: static; flex-shrink: 0;"><i class="fas fa-copy"></i></button>
        </div>
      </div>
@@ -29,7 +30,7 @@
        var btn = document.getElementById('hero-copy-btn');
        if (!btn) return;
        btn.addEventListener('click', function() {
-         navigator.clipboard.writeText('pip install neuralset neuralfetch').then(function() {
+         navigator.clipboard.writeText('pip install neuralset neuralfetch neuralbench').then(function() {
            btn.innerHTML = 'Copied ⚡🧠';
            btn.classList.add('copied');
            setTimeout(function() {
@@ -52,7 +53,7 @@
        NeuralSet loads & transforms, and NeuralTrain trains models.
      </p>
      <div class="packages-cards">
-    
+
        <!-- NeuralSet (highlighted as recommended starting point) -->
        <div class="package-card-wrapper">
          <a href="neuralset/index.html" class="package-card package-card--highlight">
@@ -73,16 +74,25 @@
        </div>
 
 
-       <!-- Neuraltrain -->
-       <div class="package-card-wrapper">
-         <a href="neuraltrain/index.html" class="package-card">
-           <div class="package-card-icon"><i class="fas fa-dumbbell"></i></div>
-           <div class="package-card-name">NeuralTrain</div>
-           <div class="package-card-tagline">Deep learning for Neuro-AI.</div>
-         </a>
-       </div>
+      <!-- Neuraltrain -->
+      <div class="package-card-wrapper">
+        <a href="neuraltrain/index.html" class="package-card">
+          <div class="package-card-icon"><i class="fas fa-dumbbell"></i></div>
+          <div class="package-card-name">NeuralTrain</div>
+          <div class="package-card-tagline">Deep learning for Neuro-AI.</div>
+        </a>
+      </div>
 
-       <!-- Exca -->
+      <!-- Neuralbench -->
+      <div class="package-card-wrapper">
+        <a href="neuralbench/index.html" class="package-card">
+          <div class="package-card-icon"><i class="fas fa-flask"></i></div>
+          <div class="package-card-name">NeuralBench</div>
+          <div class="package-card-tagline">Unified benchmark for brain foundation models.</div>
+        </a>
+      </div>
+
+      <!-- Exca -->
        <div class="package-card-wrapper">
          <a href="https://facebookresearch.github.io/exca/" class="package-card" target="_blank">
            <div class="package-card-icon"><i class="fas fa-cog"></i></div>
@@ -115,6 +125,19 @@ Citation
      year   = {2026},
      url    = {https://kingjr.github.io/files/neuralset.pdf},
      note   = {Preprint; URL will be updated when the paper lands on arXiv}
+   }
+
+   @misc{banville2026neuralbench,
+     title        = {NeuralBench: A Unifying Framework to Benchmark NeuroAI Models},
+     author       = {Banville, Hubert and d'Ascoli, St{\'e}phane and Dahan, Simon
+                     and Rapin, J{\'e}r{\'e}my and Careil, Marl{\`e}ne
+                     and Benchetrit, Yohann and L{\'e}vy, Jarod
+                     and Panchavati, Saarang and Ratouchniak, Antoine
+                     and Zhang, Mingfang and Cascardi, Elisa and Begany, Katelyn
+                     and Brooks, Teon and King, Jean-R{\'e}mi},
+     year         = {2026},
+     howpublished = {Brain \& AI team, Meta FAIR},
+     url          = {https://github.com/facebookresearch/neuroai/neuralbench-repo},
    }
 
 .. raw:: html

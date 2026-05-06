@@ -1,0 +1,29 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Hinss2021Open
+    # Disable the parent's Hinss2023Open-specific `filter_task` step
+    filter_task:
+      query: null
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Stimulus
+    event_field: code
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Stimulus
+  start: 0.0
+  duration: 2.0
+  stride: 2.0
+  stride_drop_incomplete: false
+  summary_columns: [code]
+brain_model_output_size: &brain_model_output_size 4
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

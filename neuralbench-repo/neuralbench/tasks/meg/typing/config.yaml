@@ -1,0 +1,94 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Levy2025BrainMeg
+    remove_bad_subjects:
+      name: QueryEvents
+      query: "~subject.isin(['Levy2025BrainMeg/S23', 'Levy2025BrainMeg/S11122024', 'Levy2025BrainMeg/S12122024', 'Levy2025BrainMeg/S26112024', 'Levy2025BrainMeg/S27112024', 'Levy2025BrainMeg/S28112024'])"
+    filter_trial_id:
+      name: QueryEvents
+      query: "~trial_id.isin([0.0, 1.0])"
+    split:
+      name: SimilaritySplit
+      stim_event_type: Keystroke
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+      threshold: 0.7
+      use_sklearn_split: true
+  neuro:
+    name: MegExtractor
+    picks: [meg]
+    baseline: [0.0, 0.2]
+    allow_maxshield: true
+  channel_positions:
+    include_ref_eeg: false
+    layout_or_montage_name: null
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Keystroke
+    event_field: button
+    predefined_mapping:
+      s: 0
+      o: 1
+      t: 2
+      e: 3
+      n: 4
+      c: 5
+      i: 6
+      a: 7
+      "<space>": 8
+      d: 9
+      l: 10
+      r: 11
+      b: 12
+      "<special>": 13
+      z: 14
+      v: 15
+      f: 16
+      m: 17
+      u: 18
+      h: 19
+      p: 20
+      g: 21
+      q: 22
+      w: 23
+      x: 24
+      y: 25
+      j: 26
+      ý: 13
+      "\x14": 13
+      k: 27
+      ü: 13
+      û: 13
+      "£": 13
+      "¤": 13
+      "<number>": 28
+      "-": 13
+      "¿": 13
+      "`": 13
+      "\u0060": 13
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Keystroke
+  start: -0.2
+  duration: 1.0
+  summary_columns: [button]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 29
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

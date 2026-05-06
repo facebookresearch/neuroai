@@ -1,0 +1,38 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+brain_model_config:
+  name: SimpleConvTimeAgg
+  hidden: 320
+  depth: 4
+  linear_out: false
+  complex_out: false
+  kernel_size: 3
+  dilation_period: 5
+  skip: true
+  glu: 2
+  glu_context: 1
+  gelu: true
+  dropout_input: 0.0
+  batch_norm: true
+  merger_config:
+    n_virtual_channels: 270
+    fourier_emb_config:
+      n_freqs: null
+      total_dim: 2000
+      n_dims: 3
+    dropout: 0.2
+    per_subject: false
+    embed_ref: false
+  subject_layers_config: null
+  initial_linear: 270
+  backbone_out_channels: 512
+  time_agg_out: linear
+  output_head_config:
+    hidden_sizes:
+      - -1
+    norm_layer: null
+    activation_layer: null

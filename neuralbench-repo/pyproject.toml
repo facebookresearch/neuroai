@@ -1,0 +1,111 @@
+[project]
+name = "neuralbench"
+readme = "README.md"
+version = "0.0.2"
+authors = [{name = "Meta FAIR"}]
+license = "MIT"
+license-files = ["LICENSE"]
+description = "A unifying framework to benchmark NeuroAI models."
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "adjustText",
+  "braindecode",
+  "neuralset",
+  "neuraltrain",
+  "exca",
+  "lightning>=2.0.8",
+  "pyriemann>=0.6",
+  "umap-learn",
+  "seaborn",
+  "torchinfo",
+  # Pinning torch version to ensure support for CUDA capability sm_60
+  "torch==2.6",
+  "torchaudio==2.6",
+  "torchvision==0.21",
+]
+
+[project.urls]
+  Source = "https://github.com/facebookresearch/neuroai"
+  Tracker = "https://github.com/facebookresearch/neuroai/issues"
+
+[project.optional-dependencies]
+    datasets = [
+        # Download
+        "boto3",
+        "botocore",
+        "gdown",
+        "openneuro-py>=2025.2.0",
+        "synapseclient",
+    ]
+    models = [
+        "huggingface_hub",
+        "safetensors",
+    ]
+    wandb = [
+        "wandb>=0.15.11",
+    ]
+    dev = [
+        # Test
+        "pytest>=4.3.0",
+        "pytest-markdown-docs",
+        "pytest-mock",
+        # Format + lint
+        "ruff>=0.15",
+        "pre-commit>=1.15.2",
+        # Type checking
+        "mypy>=0.971",
+        # typing stubs
+        "pandas-stubs",
+        "types-PyYAML",
+        "types-Pillow",
+        "types-pywin32",
+        "types-requests",
+        "types-setuptools",
+        "types-tabulate",
+        "types-tqdm",
+    ]
+    docs = [
+        "furo",
+        "myst-parser",
+        "sphinx",
+        "sphinx-copybutton",
+        "sphinx-design",
+        "sphinx-gallery",
+    ]
+
+
+[project.scripts]
+neuralbench = "neuralbench:run_benchmark_cli"
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.setuptools.package-data]
+# py.typed marker enables cross-package type checking (PEP 561)
+# editable installs need: pip install --config-settings editable_mode=strict -e .
+"neuralbench" = ["py.typed", "**/*.yaml", "**/*.json"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["neuralbench*"]
+namespaces = false
+
+[tool.mypy]
+  plugins = ['pydantic.mypy']
+  show_error_codes = true
+[[tool.mypy.overrides]]
+  module = ['pytest', 'setuptools', 'mne', 'torchvision', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'seaborn', 'seaborn.*', 'wandb', 'wandb.*', 'pyriemann', 'pyriemann.*', 'safetensors', 'safetensors.*', 'huggingface_hub']
+  ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+  init_forbid_extra = true
+  init_typed = true
+  warn_required_dynamic_aliases = true
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"

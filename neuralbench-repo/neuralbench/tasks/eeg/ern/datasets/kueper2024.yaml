@@ -1,0 +1,32 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Kueper2024Eeg
+    filter_valid_events:
+      name: QueryEvents
+      query: "(type == 'Eeg') | (code.isin([0, 1]))"  # Valid stimulus events only
+    # Kueper2024Eeg: 8 subjects with 8-11 runs each (no sessions in the
+    # source study).  Too few subjects for a reliable cross-subject split
+    # (<10), so we use a within-subject run-based temporal hold-out: runs
+    # >= 10 are the later portion of each subject's recording and become
+    # the test set; 15% of the remaining ``(subject, run)`` timelines
+    # (drawn at the timeline granularity) become validation, and the rest
+    # is training.  No timeline (subject-run pair) appears in more than
+    # one split.
+    split:
+      =replace=: true
+      name: PredefinedSplit
+      test_split_query: "run in ['10', '11', '12']"
+      col_name: split
+      valid_split_by: timeline
+      valid_split_ratio: 0.15
+      valid_random_state: 33
+  neuro.baseline: [0.0, 0.1]
+  start: -0.1
+  duration: 1.0

@@ -1,0 +1,41 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Hamid2020Tuar
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Artifact
+    event_field: state
+    return_one_hot: true
+    aggregation: sum
+    allow_missing: true
+  trigger_event_type: Eeg
+  start: -1.0
+  duration: 3.0
+  stride: 1.0
+  stride_drop_incomplete: false
+  summary_columns: [state]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 5
+trainer_config.monitor: val/f1_score_macro
+trainer_config.mode: max
+loss:
+  =replace=: true
+  name: BCEWithLogitsLoss
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size
+  - multilabel

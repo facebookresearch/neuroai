@@ -1,0 +1,70 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    frequency: 200.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+  channel_positions:
+    include_ref_eeg: false
+brain_model_config:
+  =replace=: true
+  name: BIOT
+  from_pretrained_name: braindecode/biot-pretrained-six-datasets-18chs
+  kwargs:
+    n_times: 1000
+    return_feature: true
+downstream_model_wrapper:
+  model_output_key: 1
+  on_the_fly_preprocessor:
+    scaler: QuantileAbsScaler
+    scaler_quantile: 0.95
+    scale_dim: -1
+  # Learned 1x1 Conv1d projecting dataset channels to the 18 bipolar
+  # derivations BIOT's six-datasets checkpoint expects.  Initialised with
+  # the +1/-1 bipolar pattern *added on top of* the default Kaiming-uniform
+  # init (the default nn.Conv1d init), so:
+  #   - Rows for fully-covered pairs start as "pair + small Kaiming noise"
+  #     (BIOT's pretrained channel_tokens[i] sees approximately the right
+  #     bipolar derivation at step 0).
+  #   - Rows for partial/missing pairs keep the Kaiming baseline so they
+  #     can still learn -- this matters for BIOT specifically because
+  #     |torch.stft(0)|==0 and the abs singularity would freeze a fully
+  #     zero row's gradient.
+  # Pair order follows BIOT's pretraining order (BIOT README & braindecode
+  # biot.py channel_tokens indexing): 16 scalp bipolar pairs + C3-A2, C4-A1.
+  channel_adapter_config:
+    n_target_channels: 18
+    init: bipolar
+    target_channel_names:
+      - FP1-F7
+      - F7-T7
+      - T7-P7
+      - P7-O1
+      - FP2-F8
+      - F8-T8
+      - T8-P8
+      - P8-O2
+      - FP1-F3
+      - F3-C3
+      - C3-P3
+      - P3-O1
+      - FP2-F4
+      - F4-C4
+      - C4-P4
+      - P4-O2
+      - C3-A2
+      - C4-A1
+    rename_mapping: !include channel_mappings/biot.json
+  # BIOT's encoder already averages all patches internally (.mean(dim=1) in
+  # _BIOTEncoder), so its output is (B, emb_dim). No further aggregation needed.
+  aggregation: null
+
+# Paper config (Yang et al. NeurIPS 2023): Adam lr 1e-3 wd 1e-5, 100ep, batch 512, mean pool + ELU+Linear head, full FT.

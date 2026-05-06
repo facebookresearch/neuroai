@@ -1,0 +1,28 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    frequency: 200.0
+    filter:
+      - 0.5
+      - 99.5
+    notch_filter: null
+    baseline: null
+    scaler: StandardScaler
+    scale_factor: null
+    clamp: 15
+brain_model_config:
+  =replace=: true
+  name: NtReve
+  from_pretrained_name: brain-bzh/reve-base
+  channel_mapping: !include channel_mappings/reve.json
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (El Ouahidi et al. NeurIPS 2025): StableAdamW, warmup + ReduceOnPlateau, attn-pool or flatten + Linear head, 2-step (linear probe then LoRA on QKVO); most downstream hyperparams unspecified.

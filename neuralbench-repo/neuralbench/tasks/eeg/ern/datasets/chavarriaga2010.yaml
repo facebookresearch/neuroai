@@ -1,0 +1,30 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Chavarriaga2010Learning
+    filter_valid_events:
+      name: QueryEvents
+      query: "(type == 'Eeg') | (code.isin([1, 2]))"
+    split:
+      =replace=: true
+      # Chavarriaga2010 (BNCI2015_013): 6 subjects, 20 sessions per subject.
+      # Too few subjects for cross-subject evaluation (<10), so we use a
+      # within-subject, session-level temporal hold-out: sessions 16-19
+      # (the last 4 of 20 = 20%) are the test set, 3 random sessions from
+      # the first 16 are validation, and the remaining 13 are training.
+      # No session appears in more than one split.
+      name: PredefinedSplit
+      test_split_query: "session in ['16', '17', '18', '19']"
+      col_name: split
+      valid_split_by: session
+      valid_split_ratio: 0.1875  # 3 of 16 remaining sessions ≈ 19%
+      valid_random_state: 33
+  neuro.baseline: [0.0, 0.1]
+  start: -0.1
+  duration: 1.0

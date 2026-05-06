@@ -1,0 +1,51 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Shirazi2024Hbn
+    filter_resting_state_with_sex:
+      name: QueryEvents
+      query: "(type == 'Eeg') & (task == 'task-RestingState') & (duration > 180.0) & sex.notnull()"
+    crop_timelines:
+      name: CropTimelines
+      event_type: Eeg
+      start_offset_s: 60.0
+      max_duration_s: 120.0
+    split:
+      name: PredefinedSplit
+      test_split_query: "release in ['R5']"
+      col_name: split
+      valid_split_by: release
+      valid_split_ratio: 0.091  # 1/11
+      valid_random_state: 33
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Eeg
+    event_field: sex
+    return_one_hot: true
+    aggregation: single
+  trigger_event_type: Eeg
+  start: 0.0
+  duration: 2.0
+  stride: 2.0
+  summary_columns: [release, sex]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 2
+trainer_config:
+  monitor: val/bal_acc
+  mode: max
+  strategy: auto
+  patience: 7
+  n_epochs: 40
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - 2

@@ -23,6 +23,7 @@ for _repo in [
     "neuralset-repo",
     "neuraltrain-repo",
     "neuralfetch-repo",
+    "neuralbench-repo",
 ]:
     _p = os.path.join(_repo_root, _repo)
     if _p not in sys.path:
@@ -107,6 +108,7 @@ font_awesome = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/"
 html_css_files = [
     "custom.css",
     "conf.css",
+    "neuralbench-results-table.css",
     f"{font_awesome}all.min.css",
     f"{font_awesome}fontawesome.min.css",
     f"{font_awesome}solid.min.css",
@@ -117,6 +119,7 @@ html_js_files = [
     "pipeline-accordion.js",
     "code-selector.js",
     "sidebar-nav.js",
+    "neuralbench-results-table.js",
 ]
 
 html_theme_options = {
@@ -193,6 +196,13 @@ nitpick_ignore_regex = [
     (r"py:(class|func)", r"^huggingface_hub\..*"),
     (r"py:class", r"^_?PydanticUndefined$"),
     (r"py:class", r"^_PydanticGeneralMetadata$"),
+    # neuralbench third-party deps without intersphinx inventories
+    (r"py:(class|func|meth)", r"^(lightning|pytorch_lightning)\..*"),
+    (r"py:(class|func|meth)", r"^wandb\..*"),
+    (r"py:(class|func|meth)", r"^pyriemann\..*"),
+    (r"py:(class|func|meth)", r"^umap\..*"),
+    (r"py:(class|func|meth)", r"^seaborn\..*"),
+    (r"py:(class|func|meth)", r"^torchinfo\..*"),
     # (e) private helpers referenced in public docstrings
     (r"py:class", r".*\._[A-Za-z]\w*$"),
 ]
@@ -286,6 +296,15 @@ def setup(app):
 
 
 # -- Linkcode configuration --------------------------------------------------
+# Map each top-level package to its sub-repo so source links resolve correctly.
+_PACKAGE_TO_REPO = {
+    "neuralset": "neuralset-repo",
+    "neuralfetch": "neuralfetch-repo",
+    "neuraltrain": "neuraltrain-repo",
+    "neuralbench": "neuralbench-repo",
+}
+
+
 def linkcode_resolve(domain, info):
     if domain != "py" or not info["module"]:
         return None
@@ -293,7 +312,9 @@ def linkcode_resolve(domain, info):
     if filepath.endswith("infra"):
         filename = info["fullname"].split(".", maxsplit=1)[0].lower().replace("infra", "")
         filepath += f"/{filename}"
-    return f"https://github.com/facebookresearch/neuroai/blob/main/neuralset-repo/{filepath}.py"
+    top = info["module"].split(".", 1)[0]
+    repo = _PACKAGE_TO_REPO.get(top, "neuralset-repo")
+    return f"https://github.com/facebookresearch/neuroai/blob/main/{repo}/{filepath}.py"
 
 
 # -- Sphinx-Gallery configuration --------------------------------------------
@@ -309,6 +330,13 @@ sphinx_gallery_conf = {
         "neuraltrain/tutorials/04_trainer",
         # neuralfetch
         "neuralfetch/tutorials",
+        # neuralbench
+        "neuralbench/tutorials/01_quickstart",
+        "neuralbench/tutorials/02_results",
+        "neuralbench/tutorials/03_adding_task",
+        "neuralbench/tutorials/04_adding_model",
+        "neuralbench/tutorials/05_advanced",
+        "neuralbench/tutorials/06_eeg_challenge",
     ],
     "gallery_dirs": [
         # neuralset
@@ -321,6 +349,13 @@ sphinx_gallery_conf = {
         "neuraltrain/auto_examples/trainer",
         # neuralfetch
         "neuralfetch/auto_examples",
+        # neuralbench
+        "neuralbench/auto_examples/quickstart",
+        "neuralbench/auto_examples/results",
+        "neuralbench/auto_examples/adding_task",
+        "neuralbench/auto_examples/adding_model",
+        "neuralbench/auto_examples/advanced",
+        "neuralbench/auto_examples/eeg_challenge",
     ],
     "filename_pattern": r"/.+\.py$",
     "backreferences_dir": "gen_modules/backreferences",
@@ -328,12 +363,14 @@ sphinx_gallery_conf = {
         "neuralset",
         "neuralfetch",
         "neuraltrain",
+        "neuralbench",
     ),
     "inspect_global_variables": True,
     "reference_url": {
         "neuralset": None,
         "neuralfetch": None,
         "neuraltrain": None,
+        "neuralbench": None,
     },
     "image_scrapers": ("matplotlib",),
     "matplotlib_animations": True,

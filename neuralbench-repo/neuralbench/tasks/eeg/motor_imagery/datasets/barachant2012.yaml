@@ -1,0 +1,24 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Barachant2012Robust
+    split:
+      # Barachant2012Robust / AlexMI: 8 subjects, single recording per
+      # subject (no session/run structure), so within-subject temporal
+      # hold-outs are not available without a new transform.  Cross-subject
+      # splitting with only 8 subjects is unreliable.  Since the 4 s
+      # imagery window is strictly shorter than the min inter-trial
+      # interval across all subjects (~7.06 s), adjacent trial windows do
+      # not overlap, so a random event-level split cannot leak samples
+      # between splits.
+      split_by: _index
+      stratify_by: code
+brain_model_output_size: &brain_model_output_size 3
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

@@ -1,0 +1,28 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Zhou2016Fully
+    split:
+      =replace=: true
+      # Zhou2016: 4 subjects, 3 sessions per subject, 2 runs per session.
+      # Too few subjects for a meaningful cross-subject split, so we use a
+      # within-subject, session-level temporal hold-out: session 2 is the
+      # test set (the last recorded session), and sessions {0, 1} are
+      # split 50/50 at the session granularity so train/val are
+      # session-disjoint as well.  No events from the same session appear
+      # in more than one split.
+      name: PredefinedSplit
+      test_split_query: "session == '2'"
+      col_name: split
+      valid_split_by: session
+      valid_split_ratio: 0.5
+      valid_random_state: 33
+brain_model_output_size: &brain_model_output_size 3
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

@@ -49,6 +49,15 @@ Train Neuro AI models at scale.
 pip install neuraltrain
 ```
 
+
+### [NeuralBench](https://facebookresearch.github.io/neuroai/neuralbench/index.html)
+
+Unified benchmark for NeuroAI models.
+
+```bash
+pip install neuralbench
+```
+
 ---
 
 ## Related projects
@@ -78,4 +87,3 @@ If you use `neuroai` in your research, please cite [NeuralSet: A High-Performing
   note    = {Preprint; URL will be updated when the paper lands on arXiv}
 }
 ```
-

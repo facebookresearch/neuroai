@@ -1,0 +1,23 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Kalunga2016Online
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+
+# Kalunga2016Online is 4-class (rest + 3 SSVEP frequencies); set explicitly
+# so it doesn't follow the task-level default, which is now 40 (Wang2017).
+brain_model_output_size: &brain_model_output_size 4
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

@@ -1,0 +1,24 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Dornhege2004Boosting
+    split:
+      # Dornhege2004Boosting / BNCI2003_004: 3 subjects, a handful of
+      # runs per subject (not consistent enough for a temporal
+      # session/run hold-out across subjects).  With only 3 subjects,
+      # cross-subject splitting is unreliable.  Since the 4 s imagery
+      # window is strictly shorter than the min inter-trial interval
+      # across all subjects (~5.29 s), adjacent trial windows do not
+      # overlap, so a random event-level split cannot leak samples
+      # between splits.
+      split_by: _index
+      stratify_by: code
+brain_model_output_size: &brain_model_output_size 2
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

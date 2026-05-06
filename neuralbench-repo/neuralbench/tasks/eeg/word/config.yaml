@@ -1,0 +1,45 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Nieuwland2018Large
+      query: "site not in ['GLAS', 'LOND']"
+    preprocess_text:
+      name: TextPreprocessor
+      neuro_event_type: Eeg
+    split:
+      name: SklearnSplit
+      split_by: sequence_id
+      valid_split_ratio: 0.1
+      test_split_ratio: 0.1
+      valid_random_state: 33
+      test_random_state: 33
+  target:
+    name: SpacyEmbedding
+    aggregation: trigger
+    infra:
+      cluster: auto
+      keep_in_ram: true
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 16
+  trigger_event_type: Word
+  start: -0.5
+  duration: 3.0
+  summary_columns: [text, sequence_id]
+brain_model_output_size: &brain_model_output_size 1024
+trainer_config.monitor: val/batch_top5_acc
+trainer_config.mode: max
+loss:
+  name: ClipLoss
+  norm_kind: y
+  temperature: false
+  symmetric: false
+metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics

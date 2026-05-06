@@ -1,0 +1,45 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Hollenstein2018Zuco
+    split:
+      name: SklearnSplit
+      split_by: text
+      valid_split_ratio: 0.1
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  channel_positions:
+    layout_or_montage_name: GSN-HydroCel-128
+  target:
+    name: HuggingFaceText
+    event_types: Sentence
+    contextualized: false
+    model_name: "openai-community/gpt2"
+    layers: 0.6667
+    token_aggregation: mean
+    aggregation: trigger
+  trigger_event_type: Sentence
+  start: 0.0
+  duration: 3.0
+  stride: 3.0
+  stride_drop_incomplete: false
+  summary_columns: [task, text, sentence]
+brain_model_output_size: &brain_model_output_size 768
+target_scaler:
+  dim: 1
+trainer_config.monitor: val/batch_top5_acc
+trainer_config.mode: max
+loss:
+  name: ClipLoss
+  norm_kind: y
+  temperature: false
+  symmetric: false
+metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics

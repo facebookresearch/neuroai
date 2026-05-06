@@ -1,0 +1,30 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Wei2022BeetlA
+    # Drop the ``feet`` class that is absent from run "1finaltest", so
+    # train/val/test all share the same 3-class label space. Eeg rows are
+    # preserved.
+    drop_feet:
+      name: QueryEvents
+      query: "~((type == 'Stimulus') & (code == 3))"
+    split:
+      =replace=: true
+      name: PredefinedSplit
+      test_split_query: "run == '1finaltest'"
+      # 3 train timelines (one per subject) would force a full-subject
+      # hold-out for validation if we used ``valid_split_by: timeline``;
+      # with only 3 subjects that is too coarse. Split validation as a
+      # random sample of training events instead.
+      valid_split_by: _index
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+brain_model_output_size: &brain_model_output_size 3
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

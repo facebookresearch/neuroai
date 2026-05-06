@@ -31,8 +31,9 @@ jobs:
       neuralset: ${{ steps.filter.outputs.neuralset }}
       neuralfetch: ${{ steps.filter.outputs.neuralfetch }}
       neuraltrain: ${{ steps.filter.outputs.neuraltrain }}
+      neuralbench: ${{ steps.filter.outputs.neuralbench }}
       docs: ${{ steps.filter.outputs.docs }}
-      any: ${{ steps.filter.outputs.neuralset == 'true' || steps.filter.outputs.neuralfetch == 'true' || steps.filter.outputs.neuraltrain == 'true' }}
+      any: ${{ steps.filter.outputs.neuralset == 'true' || steps.filter.outputs.neuralfetch == 'true' || steps.filter.outputs.neuraltrain == 'true' || steps.filter.outputs.neuralbench == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -47,6 +48,11 @@ jobs:
               - 'neuralfetch-repo/**'
             neuraltrain:
               - 'neuraltrain-repo/**'
+            neuralbench:
+              - 'neuralset-repo/**'
+              - 'neuraltrain-repo/**'
+              - 'neuralfetch-repo/**'
+              - 'neuralbench-repo/**'
             docs:
               - 'docs/**'
 
@@ -90,12 +96,15 @@ jobs:
         run: |
           source activate ./ci_env
           pip install build
-          for repo in neuralset-repo neuraltrain-repo; do
+          for repo in neuralset-repo neuraltrain-repo neuralbench-repo; do
             python -m build --wheel "$repo" --outdir dist/
           done
-          pip install --force-reinstall --no-deps dist/neuralset-*.whl dist/neuraltrain-*.whl
+          pip install --force-reinstall --no-deps dist/neuralset-*.whl dist/neuraltrain-*.whl dist/neuralbench-*.whl
           python -c "from neuralset import events, segments, extractors; print('neuralset OK')"
           python -c "from neuraltrain import models, metrics; print('neuraltrain OK')"
+          # Heavy runtime deps (lightning/exca/wandb/...) aren't pulled by --no-deps,
+          # so just import the lightweight surface modules to confirm wheel layout.
+          python -c "import neuralbench; print('neuralbench OK')"
 
       # Save data cache only from this job (see setup-python-env).
       - name: Save data cache
@@ -137,6 +146,13 @@ jobs:
           cd neuralfetch-repo
           pytest neuralfetch --durations=10
 
+      - name: pytest neuralbench
+        if: needs.changes.outputs.neuralbench == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuralbench-repo
+          pytest neuralbench --durations=10
+
   # ── Job 3: type checks (no data caches needed) ─────────────
   # mypy doesn't need HuggingFace/MNE data caches, only the conda env.
   # restore-data-caches: 'false' saves disk and restore time.
@@ -169,6 +185,12 @@ jobs:
           source activate ./ci_env
           cd neuralfetch-repo
           mypy neuralfetch
+      - name: mypy neuralbench
+        if: needs.changes.outputs.neuralbench == 'true'
+        run: |
+          source activate ./ci_env
+          cd neuralbench-repo
+          mypy neuralbench
 
   # ── Job 4: build documentation ──────────────────────────────
   build-docs:

@@ -1,0 +1,28 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Riccio2013Attention
+    split:
+      # Riccio2013Attention / BNCI2014_008: 8 subjects, single-session
+      # P300 speller (no run structure usable for a temporal hold-out).
+      # Cross-subject splitting with 8 subjects is unreliable, so we fall
+      # back to a stratified random event-level split.  Note: the 1 s
+      # epoch window is longer than the ~0.25 s SOA, so neighbouring
+      # windows overlap and a small amount of sample leakage across
+      # splits is unavoidable without shortening ``duration``.
+      name: SklearnSplit
+      split_by: _index
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+      stratify_by: code
+  neuro.baseline: [0.0, 0.2]
+  start: -0.2
+  duration: 1.0

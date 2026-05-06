@@ -1,0 +1,14 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+brain_model_name: Chance
+trainer_config:
+  n_epochs: 1
+  limit_train_batches: 1
+lightning_optimizer_config:
+  optimizer:
+    lr: 0.0
+  scheduler: null
