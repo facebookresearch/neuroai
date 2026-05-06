@@ -69,7 +69,7 @@
     }
   },
   "studyMap": {
-    "language": {"meg": "Gwilliams2022Neural", "eeg": "Broderick2018Ephys", "fmri": "Nastase2021Narratives", "ieeg": "Zada2025Podcast", "emg": "Sivakumar2024Emg2qwerty"},
+    "language": {"meg": "Gwilliams2022Neural", "eeg": "Broderick2018Electrophysiological", "fmri": "Nastase2021Narratives", "ieeg": "Zada2025Podcast", "emg": "Sivakumar2024Emg2qwerty"},
     "image": {"meg": "Hebart2023ThingsMeg", "eeg": "Gifford2022Large", "fmri": "Hebart2023ThingsBold", "ieeg": "YourStudy", "emg": "YourStudy"},
     "video": {"meg": "YourStudy", "eeg": "Liu2024Eeg2video", "fmri": "Lahner2024Modeling", "ieeg": "YourStudy", "emg": "YourStudy"},
     "classification": {"meg": "Mne2013Sample", "eeg": "Cho2017Supporting", "fmri": "YourStudy", "ieeg": "YourStudy", "emg": "Sivakumar2024Emg2qwerty"}

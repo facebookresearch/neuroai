@@ -6,7 +6,7 @@ description = "A Python toolkit for building neuroimaging data pipelines."
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-version = "0.1.1"
+version = "0.2.0"
 
 dependencies = [
   "pandas>=2.2.2",

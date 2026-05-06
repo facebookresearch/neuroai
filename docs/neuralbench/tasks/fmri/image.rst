@@ -3,9 +3,14 @@ Image decoding
 
 | **Name**: image
 | **Category**: cognitive decoding
-| **Dataset**: :py:class:`~neuralset.studies.Allen2022MassiveRaw` (NSD, BIDS/deepprep variant)
+| **Dataset**: ``Allen2022MassiveRaw`` (NSD, BIDS/deepprep variant)
 | **Objective**: :bdg-dark:`Retrieval`
 | **Split**: Predefined
+
+.. note::
+
+   The ``Allen2022MassiveRaw`` study wrapper is not part of the open-source
+   release yet.
 
 Usage
 ~~~~~

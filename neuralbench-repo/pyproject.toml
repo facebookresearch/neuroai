@@ -1,7 +1,7 @@
 [project]
 name = "neuralbench"
 readme = "README.md"
-version = "0.0.2"
+version = "0.2.0"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]

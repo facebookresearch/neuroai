@@ -49,7 +49,7 @@ plugins = ["pydantic.mypy"]
 [tool.codespell]
 # Use `codespell[toml]` for local runs — plain `codespell` ignores this config.
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
-skip = '.git,.git-meta,.gitignore,.gitattributes,*.css,*/.venv/*,*/.tox/*'
+skip = '.git,.git-meta,.gitignore,.gitattributes,*.css,*/.venv/*,*/.tox/*,*_explore_data.html'
 check-hidden = true
 # Ignore URLs: URL paths may contain sequences that look like typos
 ignore-regex = 'https?://\S+'

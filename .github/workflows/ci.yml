@@ -51,7 +51,6 @@ jobs:
             neuralbench:
               - 'neuralset-repo/**'
               - 'neuraltrain-repo/**'
-              - 'neuralfetch-repo/**'
               - 'neuralbench-repo/**'
             docs:
               - 'docs/**'
@@ -96,15 +95,22 @@ jobs:
         run: |
           source activate ./ci_env
           pip install build
-          for repo in neuralset-repo neuraltrain-repo neuralbench-repo; do
+          for repo in neuralset-repo neuraltrain-repo neuralfetch-repo neuralbench-repo; do
             python -m build --wheel "$repo" --outdir dist/
           done
-          pip install --force-reinstall --no-deps dist/neuralset-*.whl dist/neuraltrain-*.whl dist/neuralbench-*.whl
+          pip install --force-reinstall --no-deps \
+            dist/neuralset-*.whl dist/neuraltrain-*.whl \
+            dist/neuralfetch-*.whl dist/neuralbench-*.whl
           python -c "from neuralset import events, segments, extractors; print('neuralset OK')"
           python -c "from neuraltrain import models, metrics; print('neuraltrain OK')"
-          # Heavy runtime deps (lightning/exca/wandb/...) aren't pulled by --no-deps,
-          # so just import the lightweight surface modules to confirm wheel layout.
           python -c "import neuralbench; print('neuralbench OK')"
+          # Verify neuralfetch exposes the full Study catalog
+          python -c "
+          from neuralset.events.study import Study
+          n = len(Study.catalog())
+          print(f'Study catalog OK ({n} studies)')
+          assert n >= 60, f'expected >= 60 registered studies, got {n}'
+          "
 
       # Save data cache only from this job (see setup-python-env).
       - name: Save data cache
