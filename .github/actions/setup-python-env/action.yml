@@ -1,7 +1,7 @@
 name: Setup Python environment
 description: >
   Shared composite action that sets up conda, restores caches,
-  and installs all packages (neuralset, neuralfetch, neuraltrain).
+  and installs all packages (neuralset, neuralfetch, neuraltrain, neuralbench).
   All packages live under <pkg>-repo/ directories.
 
 inputs:
@@ -85,6 +85,8 @@ runs:
         cd neuraltrain-repo
         pip install --config-settings editable_mode=strict -e .[lightning,dev,models,metrics]
         cd ..
+        # neuralbench (depends on neuralset + neuraltrain; brings lightning/exca/wandb/...)
+        pip install --config-settings editable_mode=strict -e neuralbench-repo/.[dev,wandb,models]
 
     - name: Save conda env cache (main only)
       if: steps.cache-conda.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
@@ -103,7 +105,8 @@ runs:
         pip install --config-settings editable_mode=strict \
           -e neuralset-repo/.[dev,all] \
           -e neuralfetch-repo/. \
-          -e neuraltrain-repo/.[lightning,dev,models]
+          -e neuraltrain-repo/.[lightning,dev,models] \
+          -e neuralbench-repo/.[dev,wandb,models]
 
     - name: Print installed packages
       shell: bash

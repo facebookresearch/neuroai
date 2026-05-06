@@ -135,3 +135,6 @@ lightning_logs/
 *.nii.gz
 .vscode
 .cursor
+
+# Local tooling installs (e.g. `pip install --target .tools/ codespell`)
+.tools/

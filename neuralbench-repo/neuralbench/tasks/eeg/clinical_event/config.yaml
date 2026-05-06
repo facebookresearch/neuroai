@@ -1,0 +1,65 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Harati2015Tuev
+    split:
+      name: PredefinedSplit
+      test_split_query: "split == 'eval'"
+      col_name: split
+      valid_split_by: subject
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  neuro:
+    # Excluded: FT9, FT10 (not in all recordings)
+    picks:
+      - Fp1
+      - Fp2
+      - F3
+      - F4
+      - C3
+      - C4
+      - P3
+      - P4
+      - O1
+      - O2
+      - F7
+      - F8
+      - T7
+      - T8
+      - P7
+      - P8
+      - T9
+      - T10
+      - Fz
+      - Cz
+      - Pz
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: [EpileptiformActivity, Artifact]
+    event_field: state
+    return_one_hot: true
+    aggregation: sum
+    allow_missing: true
+  trigger_event_type: [EpileptiformActivity, Artifact]
+  start: -1.0
+  duration: 3.0
+  stride: 1.0
+  stride_drop_incomplete: false
+  summary_columns: [state]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 6
+trainer_config.monitor: val/f1_score_macro
+trainer_config.mode: max
+loss:
+  =replace=: true
+  name: BCEWithLogitsLoss
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size
+  - multilabel

@@ -1,0 +1,134 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Study queries to use in debug mode - should be quick to load but representative of the full
+# target distribution
+
+Accou2024Sparrkulee: "subject == 'Accou2024Sparrkulee/001'"
+Albrecht2019Increased: "subject in ['Albrecht2019Increased/CC_EEG_s128_P', 'Albrecht2019Increased/CC_EEG_s130_P', 'Albrecht2019Increased/CC_EEG_s132_P', 'Albrecht2019Increased/CC_EEG_s134_P', 'Albrecht2019Increased/CC_EEG_s136_P', 'Albrecht2019Increased/CC_EEG_s149_N', 'Albrecht2019Increased/CC_EEG_s151_N', 'Albrecht2019Increased/CC_EEG_s153_N', 'Albrecht2019Increased/CC_EEG_s155_N', 'Albrecht2019Increased/CC_EEG_s157_N']"
+Allen2022Massive: "timeline_index < 4"
+Allen2022MassiveRaw: "timeline_index < 4"
+Brennan2019Hierarchical: "subject_index == 0"
+Broderick2018Electrophysiological: "subject_index == 0"
+Chen2023Large: "subject_index < 5"
+Hebart2023ThingsMeg: "timeline_index < 6"
+Dan2023Bids: "subject_index < 5"
+Fuglsang2017Noise: "subject_index == 0"
+Ghassemi2018You: "subject_index > 1978"
+Gifford2022Large: "timeline_index < 6"
+Grootswagers2024Mapping: "subject_index < 5"
+Hamid2020Tuar: "subject_index < 10"
+# Designed to contain all 6 labels and timelines from both splits
+Harati2015Tuev: "subject in ['Harati2015Tuev/017', 'Harati2015Tuev/aaaaaajc', 'Harati2015Tuev/aaaaaeee','Harati2015Tuev/aaaaaadx', 'Harati2015Tuev/aaaaaaie']"
+Hinss2023Open: "subject_index < 3"
+# Designed to contain all 6 labels and timelines from both splits
+Hollenstein2018Zuco: "subject == 'Hollenstein2018Zuco/ZKH'"
+Kemp2000Analysis: "subject_index < 3"
+Korczowski2019BrainBi2014A: "subject_index < 10"
+Kueper2024Eeg: null
+Lee2019EegErp: "subject_index < 5 & subject_timeline_index == 0"
+Lee2019EegSsvep: "subject_index < 10"
+Liu2022Comparing: "subject_index < 2"
+Liu2024Eeg2video: "subject_index == 1 and subject_timeline_index < 1"
+Lopez2017Tuab: "subject in ['Lopez2017Tuab/aaaaaaav', 'Lopez2017Tuab/aaaaaabn', 'Lopez2017Tuab/aaaaaalk', 'Lopez2017Tuab/aaaaaaaq', 'Lopez2017Tuab/aaaaaaat', 'Lopez2017Tuab/aaaaaacq', 'Lopez2017Tuab/aaaaaayx', 'Lopez2017Tuab/aaaaabdo']"
+# At least one subject from each diagnosis group in each split
+Miltiadous2023Dice: "subject in ['Miltiadous2023Dice/001', 'Miltiadous2023Dice/002', 'Miltiadous2023Dice/003', 'Miltiadous2023Dice/004', 'Miltiadous2023Dice/066', 'Miltiadous2023Dice/067', 'Miltiadous2023Dice/068', 'Miltiadous2023Dice/069', 'Miltiadous2023Dice/037', 'Miltiadous2023Dice/038', 'Miltiadous2023Dice/039', 'Miltiadous2023Dice/040']"
+# Single-subject dataset, no filtering needed
+Mne2013SampleEeg: null
+Mumtaz2018Machine: "subject in ['Mumtaz2018Machine/H S1', 'Mumtaz2018Machine/H S2', 'Mumtaz2018Machine/H S3', 'Mumtaz2018Machine/H S4', 'Mumtaz2018Machine/H S5', 'Mumtaz2018Machine/MDD S1', 'Mumtaz2018Machine/MDD S2', 'Mumtaz2018Machine/MDD S3', 'Mumtaz2018Machine/MDD S4', 'Mumtaz2018Machine/MDD S5']"
+Nieuwland2018Large: "subject in ['Nieuwland2018Large/BIRM_1', 'Nieuwland2018Large/EDIN_1', 'Nieuwland2018Large/YORK_1']"
+Obeid2016Tueg: "timeline_index < 20"
+Schalk2004Bci2000: "(subject_index < 10) or (subject_index > 96)"
+# Use a subject from each release
+Shirazi2024Hbn: "subject in ['Shirazi2024Hbn/sub-NDARAC904DMU', 'Shirazi2024Hbn/sub-NDARAB793GL3', 'Shirazi2024Hbn/sub-NDARAA948VFH', 'Shirazi2024Hbn/sub-NDARAC349YUC', 'Shirazi2024Hbn/sub-NDARAC350XUM', 'Shirazi2024Hbn/sub-NDARAB055BPR', 'Shirazi2024Hbn/sub-NDARAC462DZH', 'Shirazi2024Hbn/sub-NDARAA306NT2', 'Shirazi2024Hbn/sub-NDARAC589YMB', 'Shirazi2024Hbn/sub-NDARAA396TWZ', 'Shirazi2024Hbn/sub-NDARAB678VYW']"
+Singh2021Timing: "subject in ['Singh2021Timing/PD1025', 'Singh2021Timing/PD1795', 'Singh2021Timing/PD1285', 'Singh2021Timing/PD2565', 'Singh2021Timing/Control1025', 'Singh2021Timing/Control1155', 'Singh2021Timing/Control1285', 'Singh2021Timing/Control1415', 'Singh2021Timing/Control1035']"
+Levy2025BrainMeg: "subject_index == 0"
+Levy2025BrainEeg: "subject_index == 0"
+Zhang2024Chisco: "timeline_index < 8"
+Zyma2019Electroencephalograms: "subject_index < 10"
+
+# MOABB datasets (moabb2025.py) -- <=5 subjects use null, others use subject_index < 5
+# Studies with multiple timelines/subject add & subject_timeline_index == 0
+Acqualagna2013Gaze: "subject_index < 5 & subject_timeline_index == 0"
+Arico2014Influence: "subject_index < 5 & subject_timeline_index == 0"
+Barachant2012Robust: "subject_index < 5"
+CabreraCastillos2023BurstVep100: "subject_index < 5"
+CabreraCastillos2023BurstVep40: "subject_index < 5"
+CabreraCastillos2023BurstCvep100: "subject_index < 5"
+CabreraCastillos2023BurstCvep40: "subject_index < 5"
+Cattan2019Passive: "subject_index < 5"
+Cattan2019Dataset: "subject_index < 5 & subject_timeline_index == 0"
+Chavarriaga2010Learning: "subject_index < 5"
+Cho2017Supporting: "subject_index < 5"
+Vaineau2018Brain: "subject_index < 5"
+Crell2024Handwritten: "subject_index < 5"
+Dornhege2004Boosting: null
+Dreyer2023Large: "subject_index < 3 or subject_index in [60, 61]"
+Faller2012Autocalibration: "subject_index < 5 & subject_timeline_index == 0"
+GrosseWentrup2009Beamforming: "subject_index < 5"
+Guger2009How: "subject_index < 5 & subject_timeline_index == 0"
+Haufe2011Eeg: "subject_index < 5"
+Hinss2021Open: "subject_index < 5"
+Hoffmann2008Efficient: "subject_index < 5 & subject_timeline_index == 0"
+Hubner2017Learning: "subject_index < 5 & subject_timeline_index == 0"
+Hubner2016Eeg: "subject_index < 5 & subject_timeline_index == 0"
+Jao2023Eeg: "subject_index < 5"
+Kalunga2016Online: "subject_index < 5"
+Kappenman2021ErpErn: "subject_index < 5"
+Kappenman2021ErpLrp: "subject_index < 5"
+Kappenman2021ErpMmn: "subject_index < 5"
+Kappenman2021ErpN170: "subject_index < 5"
+Kappenman2021ErpN2pc: "subject_index < 5"
+Kappenman2021ErpP3: "subject_index < 5"
+Kappenman2021ErpN400: "subject_index < 5"
+Kojima2024ReplicationA: "subject_index < 5 & subject_timeline_index == 0"
+Kojima2024ReplicationB: "subject_index < 5 & subject_timeline_index == 0"
+Korczowski2019BrainBi2014B: "subject_index < 5"
+Korczowski2019BrainBi2015A: "subject_index < 5 & subject_timeline_index == 0"
+Korczowski2019BrainBi2015B: "subject_index < 5 & subject_timeline_index == 0"
+Lee2019EegMi: "subject_index < 5"
+Leeb2007Brain: "subject_index < 5 & subject_timeline_index == 0"
+Liu2024Eeg: "subject_index < 5"
+# The cvep YAMLs drop calibration via QueryEvents("~run.str.endswith('train')"),
+# so the picked timeline must be a test run.
+# - Checker: 2 train + N test per session → index 2 = (session 0, "3test").
+# - Pary:    6 train + 2 test per session → index 6 = (session 0, "7test").  # codespell:ignore pary
+# Picking a train-run index here would leave an empty events DataFrame.
+MartinezCagigal2023Dataset: "subject_index < 5 & subject_timeline_index == 2"
+MartinezCagigal2024Dataset: "subject_index < 5 & subject_timeline_index == 6"
+Nakanishi2015Comparison: "subject_index < 5"
+Ofner2017Upper: "subject_index < 5 & subject_timeline_index == 0"
+Ofner2017UpperExecution: "subject_index < 5 & subject_timeline_index == 0"
+Ofner2019Attempted: "subject_index < 5"
+Oikonomou2016ComparativeA: "subject_index < 5"
+Pulferer2022Continuous: "subject_index < 5"
+Oikonomou2016ComparativeB: "subject_index < 5"
+Oikonomou2016ComparativeC: "subject_index < 5"
+Reichert2020Impact: "subject_index < 5"
+Riccio2013Attention: "subject_index < 5"
+Romani2025Brainform: "subject_index < 5 & subject_timeline_index == 0"
+Schaeff2012Exploring: "subject_index < 5 & subject_timeline_index == 0"
+Scherer2015Individually: "subject_index < 5"
+Schirrmeister2017Deep: "subject_index < 5"
+Schreuder2010New: "subject_index < 5 & subject_timeline_index == 0"
+Hohne2011Novel: "subject_index < 5"
+Schwarz2020Analyzing: "subject_index < 5"
+Shin2017OpenA: "subject_index < 5 & subject_timeline_index == 0"
+Shin2017OpenB: "subject_index < 5 & subject_timeline_index == 0"
+Sosulski2019Electroencephalogram: "subject_index < 5 & subject_timeline_index == 0"
+Srisrisawang2024Simultaneous: "subject_index < 5"
+Scherer2012Brain: "subject_index < 5 & subject_timeline_index == 0"
+Stieger2021Continuous: "subject_index < 5 & subject_timeline_index == 0"
+Tangermann2012Review: "subject_index < 5 & subject_timeline_index == 0"
+Thielen2015Broad: "subject_index < 5 & subject_timeline_index == 0"
+Thielen2021From: "subject_index < 5 & subject_timeline_index == 0"
+Treder2011Gaze: "subject_index < 5 & subject_timeline_index == 0"
+Treder2014Decoding: "subject_index < 5"
+VanVeen2019Building: "subject_index < 5"
+Wang2017Benchmark: "subject_index < 5"
+Wei2022BeetlA: "subject_timeline_index == 0"
+Wei2022BeetlB: null
+Zhou2016Fully: "subject_timeline_index == 0"

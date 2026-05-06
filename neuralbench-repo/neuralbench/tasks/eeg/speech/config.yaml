@@ -1,0 +1,67 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Brennan2019Hierarchical
+    filter_event_types:
+      name: QueryEvents
+      query: "type in ['Eeg', 'Audio', 'Word']"
+    split:
+      name: PredefinedSplit
+      event_type: Word
+      test_split_query: "sequence_id >= 68"  # Last 4 runs out of 20
+      col_name: split
+      valid_split_by: sequence_id
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  neuro:
+    baseline:
+      - 0.0
+      - 0.2
+  channel_positions:
+    layout_or_montage_name: null
+  target:
+    =replace=: true
+    name: TimeAggregatedExtractor
+    time_aggregation: mean
+    n_groups_concat: 4
+    extractor:
+      name: Wav2Vec
+      model_name: facebook/wav2vec2-large-xlsr-53
+      frequency: 120.0
+      layers:
+        - 0.875  # 21/24
+        - 0.917  # 22/24
+        - 0.958  # 23/24
+        - 1.0  # 24/24
+      cache_n_layers: null
+      layer_aggregation: mean
+      token_aggregation: mean
+      aggregation: first
+      infra:
+        cluster: auto
+        keep_in_ram: false
+        slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+        folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+        cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+  trigger_event_type: Word
+  start: -0.5
+  duration: 3.0
+  summary_columns: [text, sentence]
+brain_model_output_size: &brain_model_output_size 4096  # 1024 * 4
+target_scaler:
+  dim: 1
+trainer_config.monitor: val/batch_top5_acc
+trainer_config.mode: max
+loss:
+  name: ClipLoss
+  norm_kind: y
+  temperature: false
+  symmetric: false
+metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics

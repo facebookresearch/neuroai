@@ -1,0 +1,20 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Korczowski2019BrainBi2014B
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  neuro.baseline: [0.0, 0.2]
+  start: -0.2
+  duration: 1.0

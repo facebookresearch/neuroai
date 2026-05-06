@@ -1,0 +1,83 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Lopez2017Tuab
+    crop_timelines:
+      name: CropTimelines
+      event_type: Eeg
+      start_offset_s: 60.0
+      max_duration_s: 1200.0
+    split:
+      name: PredefinedSplit
+      test_split_query: "split == 'eval'"
+      col_name: split
+      valid_split_by: subject
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  neuro:
+    picks:
+      - Fp1
+      - Fp2
+      - F7
+      - F8
+      - F3
+      - Fz
+      - F4
+      - T9
+      - T7
+      - C3
+      - Cz
+      - C4
+      - T8
+      - T10
+      - P7
+      - P3
+      - Pz
+      - P4
+      - P8
+      - O1
+      - O2
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Eeg
+    event_field: label
+    return_one_hot: true
+  trigger_event_type: Eeg
+  start: 0.0
+  duration: 5.0
+  stride: 5.0
+  summary_columns: [label]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 2
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size
+test_full_metrics:
+  - log_name: acc
+    name: Accuracy
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size
+  - log_name: bal_acc
+    name: Accuracy
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size
+      average: macro
+  - log_name: auroc
+    name: AUROC
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size

@@ -1,0 +1,31 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Classical ERP classification baseline: XdawnCovariances + TangentSpace
+# + StandardScaler + LogisticRegressionCV (moabb / pyriemann P300
+# convention, with `C` selected via stratified k-fold CV).
+#
+brain_model_name: xdawn_ts_lr
+eval_only: true
+brain_model_config:
+  =replace=: true
+  name: XdawnTsLR
+  xdawn_nfilter: 4
+  xdawn_target_class: -1  # auto-detect minority class
+# See ``cov_ts_ridge.yaml`` for rationale: covariance-based pipelines
+# require full-rank PD per-trial covariances; hard clipping at the
+# extractor can collapse saturated trials to rank-1 and crash
+# ``TangentSpace.logm``.
+data:
+  neuro:
+    clamp: null
+trainer_config:
+  n_epochs: 1
+  limit_train_batches: 1
+lightning_optimizer_config:
+  optimizer:
+    lr: 0.0
+  scheduler: null

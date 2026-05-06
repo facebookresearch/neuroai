@@ -1,0 +1,48 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Kappenman2021ErpN2pc
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  # MOABB's SetRawAnnotations shifts every ErpCore2021_N2pc annotation by
+  # interval[0] = -0.2 s, so events.start already sits at t_stim - 0.2 s.
+  # start=0.0 + this shift => effective epoch [-0.2, +0.8] s rel. TRUE stim
+  # onset, which covers the N2pc (~200-300 ms) over PO7/PO8.
+  # Baseline [0.0, 0.2] in epoch-local coords maps to [-0.2, 0.0] s rel.
+  # TRUE stim (pre-stimulus, canonical ERP baseline). For non-Kappenman
+  # variants (e.g. reichert2020, shift=0), see datasets/*.yaml for
+  # per-dataset `start` overrides. See
+  # .cursor/skills/neuralbench-moabb-debug/REFERENCE.md.
+  neuro.baseline: [0.0, 0.2]
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Stimulus
+    event_field: description
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Stimulus
+  start: 0.0
+  duration: 1.0
+  summary_columns: [description]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 2
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

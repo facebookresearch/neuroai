@@ -1,0 +1,40 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Shirazi2024Hbn
+    filter_task:
+      name: QueryEvents
+      query: "task=='task-contrastChangeDetection'"
+    filter_reaction_time:
+      name: QueryEvents
+      query: "(reaction_time >= 0.5) | type == 'Eeg'"
+    split:
+      name: PredefinedSplit
+      test_split_query: "release in ['R5']"
+      col_name: split
+      valid_split_by: release
+      valid_split_ratio: 0.091  # 1/11
+      valid_random_state: 33
+  target:
+    =replace=: true
+    name: EventField
+    event_types: Keystroke
+    event_field: reaction_time
+    aggregation: trigger
+  trigger_event_type: Keystroke
+  start: 0.5
+  duration: 2.0
+  summary_columns: [release]
+brain_model_output_size: &brain_model_output_size 1
+trainer_config.monitor: val/pearsonr
+trainer_config.mode: max
+loss:
+  name: MSELoss
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_regression_metric_configs
+  - *brain_model_output_size

@@ -1,0 +1,57 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Miltiadous2023Dice
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+      stratify_by: diagnosis
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Eeg
+    event_field: diagnosis
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Eeg
+  start: 0.0
+  duration: 5.0
+  stride: 5.0
+  summary_columns: [diagnosis]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 3
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size
+test_full_metrics:
+  - log_name: acc
+    name: Accuracy
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size
+  - log_name: bal_acc
+    name: Accuracy
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size
+      average: macro
+  - log_name: auroc
+    name: AUROC
+    kwargs:
+      task: multiclass
+      num_classes: *brain_model_output_size

@@ -1,0 +1,29 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    frequency: 200.0
+    filter:
+      - 0.3
+      - 75.0
+    notch_filter: 60.0
+    baseline: null
+    scaler: null
+    scale_factor: 10000.0  # V -> 0.1 mV (100 uV); consistent with LaBraM
+    clamp: null
+brain_model_config:
+  =replace=: true
+  name: CBraMod
+  from_pretrained_name: braindecode/cbramod-pretrained
+  kwargs:
+    return_encoder_output: true
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (Wang et al. 2025): AdamW lr 1e-4 wd 5e-2, CosineAnnealingLR, 50ep, flatten + MLP head (dropout 0.1), full FT, label smoothing 0.1.

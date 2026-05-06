@@ -1,0 +1,24 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: MartinezCagigal2024Dataset
+    drop_calibration:
+      name: QueryEvents
+      query: "~run.str.endswith('train')"
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  duration: 1.0  # cycle_dur in [0.4, 1.033]s across the 5 p-ary bases; 1.0s matches CBraMod's patch_size=200 (1s @ 200Hz)
+brain_model_output_size: &brain_model_output_size 16
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

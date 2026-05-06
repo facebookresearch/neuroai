@@ -1,0 +1,55 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Ghassemi2018You
+    # Only the "train" subset of Ghassemi2018You has labels
+    filter_train_split:
+      name: QueryEvents
+      query: "split == 'train'"
+    # `noise` is an artifact-span annotation in PC18, not a cortical arousal
+    drop_noise:
+      name: QueryEvents
+      query: "~((type == 'SleepArousal') & (state == 'noise'))"
+    create_label:
+      name: CreateColumn
+      column: label
+      query_row: "type == 'SleepArousal'"
+      query_value: arousal
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  channel_positions.layout_or_montage_name: standard_1005
+  target:
+    =replace=: true
+    name: LabelEncoder
+    allow_missing: true
+    event_types: SleepArousal
+    event_field: label
+    predefined_mapping: {arousal: 0}
+    return_one_hot: true
+    aggregation: sum
+    treat_missing_as_separate_class: true
+  trigger_event_type: Eeg
+  start: 0.0
+  duration: 15.0
+  stride: 15.0
+  stride_drop_incomplete: true
+  use_weighted_sampler: true
+  summary_columns: [state, label]
+brain_model_output_size: &brain_model_output_size 2
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

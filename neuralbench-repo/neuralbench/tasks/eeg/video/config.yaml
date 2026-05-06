@@ -1,0 +1,49 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Liu2024Eeg2video
+    split:
+      name: SklearnSplit
+      split_by: concept
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  target:
+    =replace=: true
+    name: TimeAggregatedExtractor
+    time_aggregation: mean
+    extractor:
+      name: HuggingFaceVideo
+      image:
+        model_name: "facebook/vjepa2-vitg-fpc64-256"
+        infra.keep_in_ram: False
+      frequency: 4
+      use_audio: False
+      aggregation: trigger
+      infra:
+        cluster: auto
+        keep_in_ram: false
+        slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+        folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+        cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+  trigger_event_type: Video
+  start: 0.0
+  duration: 2.0
+  summary_columns: [concept, category]
+brain_model_output_size: &brain_model_output_size 1408
+trainer_config.monitor: val/batch_top5_acc
+trainer_config.mode: max
+loss:
+  name: ClipLoss
+  norm_kind: y
+  temperature: false
+  symmetric: false
+metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics

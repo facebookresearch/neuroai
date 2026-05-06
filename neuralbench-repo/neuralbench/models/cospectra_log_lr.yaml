@@ -1,0 +1,39 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Classical spectral classification baseline for steady-state paradigms
+# (SSVEP): CoSpectra (real cross-spectra via Welch) + upper-triangular
+# flattening with log1p on the diagonal (per-channel PSD) + StandardScaler
+# + LogisticRegressionCV.
+#
+# ``sfreq`` **must** match the rate the ``EegExtractor`` resamples the raw
+# data to (default 120 Hz in ``neuralbench/defaults/config.yaml``).
+#
+brain_model_name: cospectra_log_lr
+eval_only: true
+brain_model_config:
+  =replace=: true
+  name: CoSpectraLogLR
+  sfreq: 120.0
+  window: 128
+  overlap: 0.75
+  fmin: 2.0
+  fmax: 40.0
+# Covariance-based pipelines drop flat / clipped trials at fit time; this
+# baseline is structurally the same (CoSpectra of a flat trial is all-zero
+# and would produce degenerate log1p features).  Disabling ``clamp`` at the
+# extractor avoids hard-zeroing saturated samples and keeps more trials
+# above the variance threshold.
+data:
+  neuro:
+    clamp: null
+trainer_config:
+  n_epochs: 1
+  limit_train_batches: 1
+lightning_optimizer_config:
+  optimizer:
+    lr: 0.0
+  scheduler: null

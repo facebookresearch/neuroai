@@ -1,0 +1,69 @@
+P3 classification
+=================
+
+| **Name**: p3
+| **Category**: brain-computer interfacing
+| **Dataset**: :py:class:`~neuralset.studies.Schreuder2010New` (BNCI2015_009)
+| **Objective**: :bdg-info:`Binary classification`
+| **Split**: Leave-subjects-out
+
+Usage
+~~~~~
+
+.. code-block:: bash
+
+   neuralbench eeg p3
+
+.. dropdown:: Show ``config.yaml``
+
+   .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/p3/config.yaml
+      :language: yaml
+
+
+Description
+~~~~~~~~~~~
+
+The P3 classification task involves identifying the presence of P3 event-related potentials (ERPs) in EEG recordings. In this task, we use the Schreuder2010 dataset [Schreuder2010]_, which contains 20-channel EEG data from 21 healthy participants attending to spatial auditory cues in a multi-class AMUSE ERP paradigm (Target vs. NonTarget).
+
+
+Additional Datasets
+~~~~~~~~~~~~~~~~~~~
+
+The following additional datasets from MOABB can also be used with this task:
+
+* ``Acqualagna2013`` (BNCI2015_010) -- 12 subjects, RSVP P300 speller
+* ``Arico2013`` (BNCI2014_009) -- 10 subjects, row-column + GeoSpell P300
+* ``Cattan2019Vr`` -- 21 subjects, VR P300 speller
+* ``Guger2009`` (BNCI2015_003) -- 10 subjects, auditory P300
+* ``Haufe2011`` (BNCI2016_002) -- 15 subjects, emergency braking ERP
+* ``Hoffmann2008`` (EPFLP300) -- 8 subjects
+* ``Huebner2016`` -- visual P300 matrix speller (mix-mode)
+* ``Huebner2017`` -- 13 subjects, visual P300 matrix speller
+* ``Kappenman2021P3`` (ErpCore2021_P3) -- 40 subjects, visual oddball P300
+* ``Kojima2024A`` -- 11 subjects
+* ``Kojima2024B`` -- 15 subjects
+* ``Korczowski2014A`` (BI2014a) -- 64 subjects, Brain Invaders P300
+* ``Korczowski2014B`` (BI2014b) -- 38 subjects
+* ``Korczowski2015A`` (BI2015a) -- 43 subjects
+* ``Korczowski2015B`` (BI2015b) -- 44 subjects
+* ``Lee2019Erp`` -- 54 subjects, P3 speller with face-overlay stimuli
+.. codespell:ignore-begin
+* ``Riccio2013`` (BNCI2014_008) -- 8 subjects (ALS patients)
+.. codespell:ignore-end
+* ``Romani2025`` -- 22 subjects, BrainForm serious-game P300
+* ``Schaeff2012`` (BNCI2015_007) -- 16 subjects, motion-onset VEP P300
+* ``Sosulski2019`` -- 13 subjects, auditory oddball P300
+* ``Treder2011`` (BNCI2015_008) -- 13 subjects, center-speller P300
+* ``Treder2014`` (BNCI2015_006) -- 11 subjects, auditory BCI
+* ``VanVeen2019`` (BI2012) -- 25 subjects, Brain Invaders P300
+
+To run with an alternate dataset:
+
+.. code-block:: bash
+
+   neuralbench eeg p3 --dataset kappenman2021p3
+
+References
+~~~~~~~~~~
+
+.. [Schreuder2010] Schreuder, Martijn, Benjamin Blankertz, and Michael Tangermann. "A New Auditory Multi-Class Brain-Computer Interface Paradigm: Spatial Hearing as an Informative Cue." PLoS ONE 5.4 (2010): e9813.

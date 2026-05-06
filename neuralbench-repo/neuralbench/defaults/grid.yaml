@@ -1,0 +1,15 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Model seed: controls weight initialization, dropout, and batch ordering via
+# pl.seed_everything(). Each seed produces one independent run.
+# Data split seeds (valid_random_state, test_random_state) are intentionally
+# kept fixed (=33 in each task config) so that all runs share the same
+# train/val/test partition, and variance reflects model stochasticity only.
+seed:
+  - 33
+  - 34
+  - 35

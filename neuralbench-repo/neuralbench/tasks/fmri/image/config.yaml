@@ -1,0 +1,81 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Allen2022MassiveRaw
+    # Keep a single preprocessed fMRI space per timeline. Allen2022MassiveRaw
+    # (and other deepprep studies) emit one Fmri event per
+    # {T1w, MNI152NLin2009cAsym, fsnative, fsaverage}; extractors like the
+    # subject-id LabelEncoder have no from_space filter, so we narrow to
+    # fsaverage (matching the SurfaceProjector(mesh=fsaverage5) below) upstream
+    # of segmentation.
+    filter_fmri_space:
+      name: QueryEvents
+      query: 'type != "Fmri" or space == "fsaverage"'
+    split:
+      name: PredefinedSplit
+      test_split_query: null
+      col_name: split
+      valid_split_by: timeline
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  neuro:
+    =replace=: true
+    name: FmriExtractor
+    projection:
+      name: SurfaceProjector
+      mesh: fsaverage5
+    from_space: auto
+    offset: 0
+    frequency: native
+    infra:
+      mode: cached
+      cluster: auto
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      keep_in_ram: true
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      gpus_per_node: 1
+      cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+      timeout_min: 180
+      min_samples_per_job: 64
+  target:
+    name: HuggingFaceImage
+    model_name: facebook/dinov2-giant
+    layers: 0.6667
+    token_aggregation: mean
+    imsize: 518
+    aggregation: trigger
+    infra:
+      cluster: auto
+      keep_in_ram: false
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 64
+  trigger_event_type: Image
+  start: 2.0
+  duration: 7.0
+brain_model_output_size: &brain_model_output_size 1536
+brain_model_config:
+  =replace=: true
+  name: FmriMlp
+  hidden: 128
+  n_blocks: 2
+  n_repetition_times: 4
+  output_head_config:
+    hidden_sizes:
+      - *brain_model_output_size
+trainer_config.monitor: val/batch_top5_acc
+trainer_config.mode: max
+loss:
+  name: ClipLoss
+  norm_kind: y
+  temperature: false
+  symmetric: false
+metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics

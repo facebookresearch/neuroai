@@ -1,0 +1,92 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Downstream wrapper configs for evaluation of a pretrained model.
+#
+# Other strategies to implement:
+# - Attentive probe
+# - Frozen + linear probe, then finetune
+# - PEFT, LoRA, etc.
+
+identity_freeze:
+  aggregation: null
+  probe_config: null
+  layers_to_unfreeze: "last"
+identity_finetune:
+  aggregation: null
+  probe_config: null
+cls_linear_finetune:
+  model_output_key: c_out
+  aggregation: first
+avg_linear_finetune:
+  model_output_key: c_out
+  aggregation: mean
+conv_linear_finetune:
+  model_output_key: z
+  aggregation: 4
+flatten_linear_freeze:
+  model_output_key: null
+  aggregation: flatten
+  layers_to_unfreeze: [""]
+cls_linear_freeze:
+  model_output_key: c_out
+  aggregation: first
+  layers_to_unfreeze: [""]
+avg_linear_freeze:
+  model_output_key: c_out
+  aggregation: mean
+  layers_to_unfreeze: [""]
+conv_linear_freeze:
+  model_output_key: z
+  aggregation: 4
+  layers_to_unfreeze: [""]
+cls_mlp_freeze:
+  model_output_key: c_out
+  aggregation: first
+  layers_to_unfreeze: [""]
+  probe_config:
+    name: Mlp
+    hidden_sizes:
+      - 512
+      - -1  # Last value will be overwritten
+avg_mlp_freeze:
+  model_output_key: c_out
+  aggregation: mean
+  layers_to_unfreeze: [""]
+  probe_config:
+    name: Mlp
+    hidden_sizes:
+      - 512
+      - -1  # Last value will be overwritten
+conv_mlp_freeze:
+  model_output_key: z
+  aggregation: 4
+  layers_to_unfreeze: [""]
+  probe_config:
+    name: Mlp
+    hidden_sizes:
+      - 512
+      - -1  # Last value will be overwritten
+avg_linear_finetune_attention:
+  model_output_key: c_out
+  aggregation: mean
+  layers_to_unfreeze:
+    - to_q
+    - to_k
+    - to_v
+    - to_out
+  strict_matching: false
+flatten_mlp_finetune:  # For CBraMod
+  model_output_key: null
+  aggregation: flatten
+  probe_config:
+    name: Mlp
+    activation_layer: elu
+    dropout: 0.1
+    hidden_sizes:
+      - 800  # 4 * 200
+      - 200
+      - -1  # Last value will be overwritten

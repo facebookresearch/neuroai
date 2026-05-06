@@ -1,0 +1,37 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Thielen2021From
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Stimulus
+    event_field: code
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Stimulus
+  start: 0.0
+  duration: 4.0
+  summary_columns: [code]
+brain_model_output_size: &brain_model_output_size 20
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

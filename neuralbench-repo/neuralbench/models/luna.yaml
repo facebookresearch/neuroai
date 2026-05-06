@@ -1,0 +1,46 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+brain_model_name: NtLunaLarge
+data:
+  neuro:
+    frequency: 256.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+      - 60.0
+    baseline: null
+    scaler: null
+    scale_factor: null
+    clamp: null
+  channel_positions:
+    n_spatial_dims: 3
+    normalize: false
+    include_ref_eeg: false
+brain_model_config:
+  =replace=: true
+  name: NtLuna
+  from_pretrained_name: PulpBio/LUNA
+  pretrained_filename: LUNA_large.safetensors
+  kwargs:
+    patch_size: 40
+    num_queries: 6
+    embed_dim: 96
+    depth: 10
+    num_heads: 2
+    mlp_ratio: 4.0
+    drop_path: 0.1
+downstream_model_wrapper:
+  on_the_fly_preprocessor:
+    scaler: StandardScaler
+    scale_dim: -1
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (Doner et al. NeurIPS 2025): AdamW lr 1e-4 wd 0.05, cosine+5ep warmup, 50ep, batch 512, LLRD 0.5, cross-attn aggregation + MLP head, full FT, drop_path 0.1, label smoothing 0.1.

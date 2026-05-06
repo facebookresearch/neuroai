@@ -1,0 +1,16 @@
+{
+  "ShallowFBCSPNet": 36320,
+  "Deep4Net": 146025,
+  "EEGNet": 1456,
+  "BDTCN": 26974,
+  "EEGConformer": 277440,
+  "ATCNet": 28960,
+  "SimpleConvTimeAgg": 4170867,
+  "CTNet": 150280,
+  "BENDR": 157139001,
+  "BIOT": 3186706,
+  "LaBraM": 5819936,
+  "CBraMod": 4924000,
+  "LUNA": 40448425,
+  "REVE": 69189120
+}

@@ -1,0 +1,33 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    frequency: 200.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+    baseline: null
+    scaler: null
+    scale_factor: 10000.0  # V -> 0.1 mV
+    clamp: null
+brain_model_config:
+  =replace=: true
+  name: NtLabram
+  from_pretrained_name: braindecode/labram-pretrained
+  kwargs:
+    n_times: 3000
+    n_chans: 128
+    n_outputs: 0
+  channel_mapping: !include channel_mappings/labram.json
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (Jiang et al. ICLR 2024): AdamW lr 5e-4 wd 0.05, cosine+5ep warmup, 50ep, batch 512, LLRD 0.65, mean pool, full FT, drop_path 0.1, label smoothing 0.1.

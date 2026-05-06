@@ -1,0 +1,79 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    frequency: 256.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+trainer_config:
+  gradient_clip_val: 0.5
+lightning_optimizer_config:
+  optimizer:
+    name: AdamW
+    lr: 1.0e-5
+    kwargs:
+      weight_decay: 0.05
+  scheduler:
+    name: OneCycleLR
+    kwargs:
+      max_lr: 1.0e-5
+      pct_start: 0.1
+      anneal_strategy: cos
+  interval: step
+# Enable CSVLogger so per-step train/val loss curves are saved alongside the
+# wandb run, for offline diagnostic inspection.
+csv_config: {}
+brain_model_config:
+  =replace=: true
+  name: NtBendr
+  from_pretrained_name: braindecode/braindecode-bendr
+  kwargs:
+    final_layer: false
+downstream_model_wrapper:
+  model_output_key: null
+  on_the_fly_preprocessor: null
+  # Learned 1x1 Conv1d projecting dataset channels to the 19 EEG channels
+  # BENDR expects.  Identity-initialised by channel name: rows matching a
+  # named input channel (optionally via rename_mapping) start as a one-hot
+  # pass-through; unmatched target channels start as zero.  This makes the
+  # adapter a no-op for 10/20-compatible datasets on step 0 (matching the
+  # pretraining distribution) while remaining fully trainable for channels
+  # outside the standard 10/20 set.
+  channel_adapter_config:
+    n_target_channels: 19
+    init: identity
+    target_channel_names:
+      - Fp1
+      - Fp2
+      - F7
+      - F3
+      - Fz
+      - F4
+      - F8
+      - T7
+      - C3
+      - Cz
+      - C4
+      - T8
+      - P7
+      - P3
+      - Pz
+      - P4
+      - P8
+      - O1
+      - O2
+    rename_mapping: !include channel_mappings/bendr.json
+  # Mean aggregation over all contextualizer tokens (including the CLS/start
+  # token at index 0), for uniformity with the other FMs (CBraMod, LaBraM,
+  # LUNA, REVE).
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (Kostas et al. 2021): Adam lr 1e-5-5e-5 wd 0.01, cosine+10% warmup, full FT, linear head on CLS.

@@ -1,0 +1,50 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Kemp2000Analysis
+    crop_sleep_recordings:
+      name: CropSleepRecordings
+      max_wake_duration_min: 30.0
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,
+  # Pz-Oz) whose MNE ch_locs are NaN, so the default ``ch_locs``-derived
+  # position mapping in ``ChannelPositions`` produces all-``INVALID_VALUE``
+  # positions.  Explicitly use the standard_1020 montage so the split-on-``-``
+  # fallback resolves Fpz-Cz -> Fpz and Pz-Oz -> Pz to real 3D coordinates.
+  channel_positions:
+    layout_or_montage_name: standard_1020
+  target:
+    =replace=: true
+    name: LabelEncoder
+    allow_missing: true
+    event_types: SleepStage
+    event_field: stage
+    return_one_hot: true
+  trigger_event_type: SleepStage
+  start: 0.0
+  duration: 30.0
+  stride: 30.0
+  stride_drop_incomplete: true
+  summary_columns: [stage]
+compute_class_weights: true
+brain_model_output_size: &brain_model_output_size 5
+trainer_config.monitor: val/bal_acc
+trainer_config.mode: max
+loss:
+  name: CrossEntropyLoss
+  kwargs:
+    label_smoothing: 0.1
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

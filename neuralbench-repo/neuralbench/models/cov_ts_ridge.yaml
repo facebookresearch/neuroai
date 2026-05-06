@@ -1,0 +1,29 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Classical continuous-target regression baseline:
+# Covariances + TangentSpace + StandardScaler + RidgeCV.
+#
+# Suitable for scalar / low-dimensional regression targets (e.g. age,
+# reaction time).
+brain_model_name: cov_ts_ridge
+eval_only: true
+brain_model_config:
+  =replace=: true
+  name: CovTsRidge
+  cov_estimator: oas
+# Covariance-based pipelines require full-rank, PD per-trial covariances. Disable clamp here so the
+# full dynamic range is preserved.
+data:
+  neuro:
+    clamp: null
+trainer_config:
+  n_epochs: 1
+  limit_train_batches: 1
+lightning_optimizer_config:
+  optimizer:
+    lr: 0.0
+  scheduler: null

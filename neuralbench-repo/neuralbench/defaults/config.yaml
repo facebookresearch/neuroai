@@ -1,0 +1,95 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+seed: 0
+csv_config: null
+wandb_config:
+  log_model: false
+  host: !!python/name:neuralbench.config_manager.WANDB_HOST
+  entity: null
+  project: !!python/name:neuralbench.config_manager.PROJECT_NAME
+  name: null
+infra:
+  cluster: auto
+  folder: !!python/name:neuralbench.config_manager.SAVE_DIR
+  slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+  timeout_min: 1440
+  gpus_per_node: 1
+  cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+  job_name: !!python/name:neuralbench.config_manager.PROJECT_NAME
+  mem_gb: 64
+  slurm_constraint: !!python/name:neuralbench.config_manager.SLURM_CONSTRAINT
+  mode: cached
+trainer_config:
+  monitor: val/loss
+  mode: min
+  patience: 5
+  fast_dev_run: false
+  n_epochs: 40
+  precision: "32-true"
+  gradient_clip_val: 1.0
+  limit_train_batches: null
+  limit_val_batches: null
+  num_sanity_val_steps: 0
+lightning_optimizer_config:
+  optimizer:
+    name: AdamW
+    lr: 1.0e-4
+    kwargs:
+      weight_decay: 0.05
+  scheduler:
+    name: OneCycleLR
+    kwargs:
+      max_lr: 1.0e-4
+      pct_start: 0.1
+      anneal_strategy: cos
+  interval: step
+data:
+  study:
+    source:
+      path: !!python/name:neuralbench.config_manager.DATA_DIR
+      infra:
+        backend: Cached
+        folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+  neuro:
+    name: EegExtractor
+    picks: [eeg]
+    frequency: 120.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+      - 60.0
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+    infra:
+      cluster: auto
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      keep_in_ram: true
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 8
+  channel_positions:
+    n_spatial_dims: 3
+    include_ref_eeg: false
+  target:
+    infra:
+      cluster: auto
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+  batch_size: 64
+  num_workers: !!python/name:neuralbench.config_manager.N_CPUS
+brain_model_config:
+  name: EEGNet
+loss:
+  name: CrossEntropyLoss
+metrics: []
+test_full_retrieval_metrics: []

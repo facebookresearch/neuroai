@@ -1,0 +1,12 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+eval_only: true
+brain_model_config:
+  =replace=: true
+  name: DummyPredictor
+  mode: auto
+  random_state: 33
