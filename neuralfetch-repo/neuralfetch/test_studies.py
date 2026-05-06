@@ -10,11 +10,14 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 import requests
+from scipy.io import loadmat
 
 import neuralset as ns
 from neuralfetch import utils
+from neuralfetch.studies.moabb2025 import Reichert2020Impact
 from neuralset.events import study as _study_mod
 
 INFO_STUDIES = [n for n, c in ns.Study.catalog().items() if c._info is not None]
@@ -106,6 +109,63 @@ class DummyUpdateTest2099(study.Study):
     def _load_timeline_events(self, timeline):
         return pd.DataFrame([{"type": "Stimulus", "start": 0, "duration": 1, "code": 1}])
 """
+
+
+def test_gifford_split_isolation() -> None:
+    """Train and test splits share no stimulus descriptions."""
+    try:
+        folder = utils.root_study_folder()
+    except RuntimeError as e:
+        pytest.skip(str(e))
+    if not folder.exists():
+        pytest.skip("Skipping as we are not on cluster")
+    evts = ns.Study(
+        name="Gifford2022Large", path=folder, query="timeline_index < 2"
+    ).run()
+    # ``description`` can hold a mix of strings (stimulus filenames) and
+    # NaN floats for non-stimulus events, which trips ``np.intersect1d``'s
+    # internal sort.  Drop NaNs and cast to string so the comparison is
+    # well-defined.
+    train_descs = evts.loc[evts.split == "train", "description"].dropna().astype(str)
+    test_descs = evts.loc[evts.split == "test", "description"].dropna().astype(str)
+    assert len(np.intersect1d(train_descs, test_descs)) == 0
+
+
+def test_reichert2020_impact_eeg_layout() -> None:
+    """Reichert2020Impact._load_raw must produce a trial-major EEG layout.
+
+    Regression test for the MOABB BNCI2020_002 reshape bug. MOABB's
+    ``_convert_attention_shift`` calls ``bciexp.data.reshape(n_channels,
+    -1)`` on an F-contiguous ``(n_channels, n_samples, n_trials)`` array,
+    which produces a trial-fastest interleaved layout. Our
+    ``Reichert2020Impact._load_raw`` override re-applies the correct
+    ``transpose(0, 2, 1).reshape(...)`` so that, for any trial *t* and
+    sample *s*, ``raw._data[c, t * n_samples + s]`` equals
+    ``bciexp.data[c, s, t] * 1e-6`` (uV -> V).
+    """
+    try:
+        folder = utils.root_study_folder()
+    except RuntimeError as e:
+        pytest.skip(str(e))
+    if not folder.exists():
+        pytest.skip("Skipping as we are not on cluster")
+
+    timeline = {"subject": 1, "session": "0", "run": "0"}
+    study = Reichert2020Impact(path=folder)
+    mat_path = study._mat_path(timeline)  # noqa: SLF001
+    if not mat_path.exists():
+        pytest.skip(f"Reichert2020Impact data not downloaded at {mat_path}")
+
+    raw = study._load_raw(timeline)  # noqa: SLF001
+    data = np.asarray(
+        loadmat(str(mat_path), struct_as_record=False, squeeze_me=True)["bciexp"].data
+    )
+    n_channels, n_samples, n_trials = data.shape
+
+    expected = (
+        data.transpose(0, 2, 1).reshape(n_channels, n_samples * n_trials) * 1e-6
+    )  # MOABB scales uV -> V
+    np.testing.assert_allclose(raw._data[:n_channels], expected, atol=1e-12)  # noqa: SLF001
 
 
 def test_update_source_info(tmp_path: Path) -> None:
