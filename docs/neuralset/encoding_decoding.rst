@@ -7,16 +7,6 @@ direction below to generate the code.
 
 .. raw:: html
 
-   <div class="admonition note">
-     <p class="admonition-title">Note</p>
-     <p>
-       Datasets on this page are shipping next week.
-       For runnable code now, see the <a href="index.html">quickstart</a>.
-     </p>
-   </div>
-
-.. raw:: html
-
    <div class="code-selector">
 
      <div class="selector-compact">
