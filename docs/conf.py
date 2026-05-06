@@ -165,6 +165,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "scipy": ("https://scipy.github.io/devdocs/", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
+    "mne": ("https://mne.tools/stable/", None),
     "torch": ("https://pytorch.org/docs/stable/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "pydantic": ("https://docs.pydantic.dev/latest/", None),
@@ -194,6 +195,8 @@ nitpick_ignore_regex = [
     (r"py:class", r"^exca\.(Step|Chain|steps\..*)$"),
     (r"py:class", r"^annotated_types\..*"),
     (r"py:(class|func)", r"^huggingface_hub\..*"),
+    # neuralyze is an internal Meta library with no public intersphinx inventory.
+    (r"py:(class|func|meth)", r"^neuralyze\..*"),
     (r"py:class", r"^_?PydanticUndefined$"),
     (r"py:class", r"^_PydanticGeneralMetadata$"),
     # neuralbench third-party deps without intersphinx inventories

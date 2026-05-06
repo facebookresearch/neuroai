@@ -18,7 +18,7 @@ from scipy.io import loadmat
 import neuralset as ns
 from neuralfetch import utils
 from neuralfetch.studies.moabb2025 import Reichert2020Impact
-from neuralset.events import study as _study_mod
+from neuralset.events import study
 
 INFO_STUDIES = [n for n, c in ns.Study.catalog().items() if c._info is not None]
 
@@ -46,17 +46,21 @@ def test_study_info(name: str, tmp_path: Path) -> None:
     """
     # to run one case only, use for instance:
     # pytest neuralfetch/test_studies.py::'test_study_info[Li2022Lppc]'
-    try:
-        folder = utils.root_study_folder(name, test_folder=tmp_path)
-    except RuntimeError as e:
-        pytest.skip(str(e))
+    cls = study.STUDIES[name]
+    if cls.__module__.startswith("neuralfetch.studies.testing"):
+        folder = tmp_path
+    else:
+        try:
+            folder = utils.root_study_folder()
+        except RuntimeError as e:
+            pytest.skip(str(e))
     if not folder.exists():
         pytest.skip(f"Missing folder {folder} for study {name}")
-    study = _study_mod.STUDIES[name](path=folder)
-    if study.path == folder and folder.name.lower() != name.lower():
+    test_study = study.STUDIES[name](path=folder)
+    if test_study.path == folder and folder.name.lower() != name.lower():
         # path was not updated from generic to study-specific
         pytest.skip(f"Study data not found for {name} in {folder}")
-    assert study._info is not None
+    assert test_study._info is not None
     try:
         actual = utils.compute_study_info(name, folder)
     except requests.exceptions.ConnectionError:
@@ -73,7 +77,7 @@ def test_study_info(name: str, tmp_path: Path) -> None:
         raise
     mismatches: list[str] = []
     for key, val in actual.items():
-        exp = getattr(study._info, key)
+        exp = getattr(test_study._info, key)
         if isinstance(val, set):
             # types in output of compute_study_info serve
             # as expected type
@@ -84,7 +88,7 @@ def test_study_info(name: str, tmp_path: Path) -> None:
         elif val != exp:
             mismatches.append(key)
     if mismatches:
-        expected_info = {k: getattr(study._info, k) for k in actual}
+        expected_info = {k: getattr(test_study._info, k) for k in actual}
         expected_str = utils.format_study_info(expected_info)
         actual_str = utils.format_study_info(actual)
         msg = (
@@ -183,5 +187,5 @@ def test_update_source_info(tmp_path: Path) -> None:
         for key in actual:
             assert f"{key}=" in new_source, f"{key} missing from rewritten source"
     finally:
-        _study_mod.STUDIES.pop("DummyUpdateTest2099", None)
+        study.STUDIES.pop("DummyUpdateTest2099", None)
         sys.modules.pop("dummy_study", None)
