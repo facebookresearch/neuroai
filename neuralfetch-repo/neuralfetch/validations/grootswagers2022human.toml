@@ -2,7 +2,6 @@ study_name = "Grootswagers2022Human"
 description = "Decode DINOv2 image embeddings from EEG (THINGS-EEG1 decoding validation)"
 mode = "decod"
 event_type = "Image"
-event_label_column = "category"
 start = -0.1
 stop = 1.0
 reference_metric_name = "Pearson r"
@@ -35,7 +34,6 @@ name = "corr"
 tmin = 0.0
 tmax = 0.3
 aggregation = "sum"
-n_pca = 0.95
 
 [infra]
 cluster = "slurm"

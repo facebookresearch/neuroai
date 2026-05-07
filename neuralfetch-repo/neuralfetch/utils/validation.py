@@ -82,19 +82,6 @@ class TRFConfig(pydantic.BaseModel):
         ``"sum"`` places feature vectors at each trigger onset (standard for
         discrete image/word paradigms).  Overrides the extractor's
         ``aggregation`` key from the parent config.
-    n_pca : int, float, or None
-        PCA applied to the stimulus features before fitting the TRF.  Required
-        when the extractor output dimension is large (e.g. 384 for DINOv2-small,
-        768 for DINOv2-base): the TRF delay matrix grows as
-        ``n_samples × n_features × n_lags``, which becomes infeasible at full
-        dimensionality.
-
-        * **int** — keep exactly that many components (e.g. ``50``).
-        * **float in (0, 1)** — keep the minimum number of components that
-          explain at least that fraction of variance (e.g. ``0.95`` for 95 %).
-          This is the recommended setting: the number of components adapts to
-          the actual variance structure of the stimulus set.
-        * **None** — disable PCA (only viable for low-dimensional features).
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -102,7 +89,6 @@ class TRFConfig(pydantic.BaseModel):
     tmin: float = -0.2
     tmax: float = 0.5
     aggregation: str = "sum"
-    n_pca: int | float | None = None
 
 
 class StudyValidation(pydantic.BaseModel):
@@ -165,13 +151,11 @@ class StudyValidation(pydantic.BaseModel):
         :class:`neuralyze.trf.TRFScoring` is run in addition to the
         SlidingWindow and its per-channel scores are added to the report.
         See :class:`TRFConfig` for parameter details.
-    event_label_column : str
-        Name of the events DataFrame column to use as labels in the Events
-        Map section of the report.  Each unique value becomes a distinct
-        colour/level in ``mne.Report.add_events``.  Defaults to
-        ``"description"``.  If the column is absent from the events
-        DataFrame (or contains only nulls), falls back to a single level
-        named after ``event_type``.
+    show_qc : bool
+        Whether to include the "Participants x Channels: drops" QC figure in
+        the report.  Defaults to ``False`` — the drop grid needs study-specific
+        tuning and is omitted by default.  Set to ``true`` in the TOML to
+        enable it.
     infra : dict or None
         Default infrastructure parameters for this study's validation run.
         Acts as a base that CLI flags merge on top of (CLI takes precedence
@@ -200,7 +184,7 @@ class StudyValidation(pydantic.BaseModel):
     erp_display_filter: tuple[float | None, float | None] | None = (None, 40.0)
     erp_display_sfreq: float | None = 200.0
     trf: TRFConfig | None = None
-    event_label_column: str = "description"
+    show_qc: bool = False
     infra: dict[str, tp.Any] | None = None
 
 
@@ -379,30 +363,8 @@ def _build_trf_scoring(
     encoding model (features → brain), regardless of the parent
     :class:`StudyValidation`'s ``mode``.
 
-    When ``validation.trf.n_pca`` is set, a local subclass of
-    :class:`~neuralyze.trf.TRFScoring` is used that applies PCA to the
-    extractor features before each TRF fit, reducing dimensionality in a
-    cross-validation-safe manner (fit on train, transform both train and test).
     """
     from neuralyze.trf import TRFScoring
-
-    class _TRFScoringWithPCA(TRFScoring):
-        n_pca: int | float | None = None
-
-        def _fit_predict(
-            self,
-            X: tp.Any,
-            Y: tp.Any,
-            X_test: tp.Any,
-            frequency: float,
-        ) -> tp.Any:
-            if self.n_pca is not None:
-                from sklearn.decomposition import PCA
-
-                pca = PCA(n_components=self.n_pca)
-                X = pca.fit_transform(X)
-                X_test = pca.transform(X_test)
-            return super()._fit_predict(X, Y, X_test, frequency)
 
     assert validation.trf is not None, "trf config must be set"
     trf_cfg = validation.trf
@@ -448,19 +410,21 @@ def _build_trf_scoring(
         cv_dict["group"] = "filepath"
         cv_dict["shuffle"] = False
 
+    # Force mean=False so scoring returns per-channel values (needed for topomap)
+    trf_scoring = dict(validation.scoring)
+    trf_scoring["mean"] = False
+
     trf_kwargs: dict[str, tp.Any] = {
         "data": data_config,
         "trf": {"tmin": trf_cfg.tmin, "tmax": trf_cfg.tmax},
         "mode": "encod",
-        "scoring": dict(validation.scoring),
+        "scoring": trf_scoring,
         "cv": cv_dict,
     }
-    if trf_cfg.n_pca is not None:
-        trf_kwargs["n_pca"] = trf_cfg.n_pca
     if infra is not None:
         trf_kwargs["infra"] = infra
 
-    return _TRFScoringWithPCA(**trf_kwargs)
+    return TRFScoring(**trf_kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -720,36 +684,6 @@ def _build_subject_epochs(
     return merged, label or "Evoked"
 
 
-#: Fixed topomap times (in seconds) for the per-subject ``plot_joint``
-#: figures.  Stimulus onset, 100 ms, and 200 ms were chosen because they
-#: bracket the most informative short-latency ERP/ERF components
-#: (N1/P1/N170 families).  Values outside an evoked's actual time range
-#: are filtered out at render time.
-_JOINT_TOPOMAP_TIMES: tuple[float, ...] = (0.0, 0.1, 0.2)
-
-
-def _plot_subject_evoked(
-    epochs: tp.Any,
-    subject_id: str,
-    label: str,
-) -> plt.Figure:
-    """Average *epochs* and render an ``evoked.plot_joint`` figure."""
-    evoked = epochs.average()
-    times = [
-        t for t in _JOINT_TOPOMAP_TIMES if evoked.tmin - 1e-9 <= t <= evoked.tmax + 1e-9
-    ]
-    kwargs: dict[str, tp.Any] = {
-        "show": False,
-        "title": f"Participant {subject_id.split('/', 1)[-1] if '/' in subject_id else subject_id} - {label}",
-    }
-    if times:
-        kwargs["times"] = times
-    figs = evoked.plot_joint(**kwargs)
-    if isinstance(figs, (list, tuple)):
-        return figs[0]
-    return figs
-
-
 def _plot_drop_grid(
     subject_channels: dict[str, list[str]],
     subject_bads: dict[str, list[str]],
@@ -894,7 +828,6 @@ def _plot_group_grand_average_html(
                               "Time: %{x:.3f} s<br>"
                               "Score: %{y:.4f}<extra></extra>",
                 legendgroup="participants",
-                legendgrouptitle_text="Participants" if full_id == subject_order[0] else "",
             )
         )
 
@@ -950,27 +883,43 @@ def _plot_group_grand_average_html(
             )
         )
 
+    # Lock y-axis range from the full data so it doesn't rescale when
+    # participants are toggled on/off.
+    all_y = per_subj["score"].values.tolist()
+    if validation.reference_metric is not None:
+        all_y.append(validation.reference_metric)
+    y_min, y_max = min(all_y), max(all_y)
+    y_pad = max((y_max - y_min) * 0.08, 0.01)
+    y_range = [y_min - y_pad, y_max + y_pad]
+
+    # Estimate legend height: ~18 short subject IDs fit per row at font=11.
+    # Add 2 extra rows for Grand Average / Reference lines.
+    import math
+    n_legend_rows = math.ceil(len(subject_order) / 18) + 2
+    legend_height_px = n_legend_rows * 22
+    bottom_margin = legend_height_px + 20
+
     score_label = validation.reference_metric_name or "Score"
     fig.update_layout(
         title="Group Grand Average",
         xaxis_title="Time (s)",
         yaxis_title=score_label,
-        height=480,
-        margin=dict(l=60, r=20, t=50, b=160),
+        height=540,
+        margin=dict(l=60, r=20, t=50, b=bottom_margin),
         hovermode="closest",
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.28,
+            y=-0.12,
             xanchor="left",
             x=0,
             font=dict(size=11),
-            tracegroupgap=4,
+            tracegroupgap=0,
         ),
         plot_bgcolor="white",
         paper_bgcolor="white",
         xaxis=dict(showgrid=True, gridcolor="#ebebeb"),
-        yaxis=dict(showgrid=True, gridcolor="#ebebeb"),
+        yaxis=dict(showgrid=True, gridcolor="#ebebeb", range=y_range),
     )
 
     uid = uuid.uuid4().hex[:8]
@@ -1057,16 +1006,19 @@ def _scores_summary_table(
         rows.append(
             {"subject": short_id, "peak_score": peak_score, "peak_time": peak_time}
         )
-    grand_mean = float(np.mean([r["peak_score"] for r in rows]))
-    rows.append({"subject": "Grand Average", "peak_score": grand_mean, "peak_time": ""})
+    rows.sort(key=lambda r: _subject_sort_key(r["subject"]))
+    grand_mean_score = float(np.mean([r["peak_score"] for r in rows]))
+    grand_mean_time = float(np.mean([r["peak_time"] for r in rows]))
+    rows.append({"subject": "Grand Average", "peak_score": grand_mean_score, "peak_time": grand_mean_time})
     return rows
 
 
 def _summary_table_html(rows: list[dict[str, tp.Any]]) -> str:
-    """Render the scores summary as an HTML table."""
+    """Render the scores summary as a Bootstrap-styled HTML table."""
     lines = [
-        "<table>",
-        "<thead><tr><th>Participant</th><th>Peak Score</th><th>Peak Time (s)</th></tr></thead>",
+        '<div style="overflow-x:auto;">',
+        '<table class="table table-sm table-striped table-hover table-bordered">',
+        '<thead class="table-dark"><tr><th>Participant</th><th>Peak Score</th><th>Peak Time (s)</th></tr></thead>',
         "<tbody>",
     ]
     for row in rows:
@@ -1080,11 +1032,11 @@ def _summary_table_html(rows: list[dict[str, tp.Any]]) -> str:
             if isinstance(row["peak_time"], float)
             else str(row["peak_time"])
         )
-        bold = ' style="font-weight:bold"' if row["subject"] == "Grand Average" else ""
+        row_class = ' class="table-primary fw-bold"' if row["subject"] == "Grand Average" else ""
         lines.append(
-            f"<tr{bold}><td>{row['subject']}</td><td>{peak}</td><td>{time}</td></tr>"
+            f"<tr{row_class}><td>{row['subject']}</td><td>{peak}</td><td>{time}</td></tr>"
         )
-    lines.append("</tbody></table>")
+    lines.append("</tbody></table></div>")
     return "\n".join(lines)
 
 
@@ -1177,28 +1129,18 @@ def _plot_trf_scores(
 
     short_id = subject_id.split("/", 1)[-1] if "/" in subject_id else subject_id
 
-    has_topomap = False
-    if info is not None:
-        try:
-            pos = mne.channels.layout._find_topomap_coords(info, picks=None)  # type: ignore[attr-defined]
-            has_topomap = pos is not None and len(pos) == len(scores_np)
-        except Exception:
-            has_topomap = False
+    # Attempt topomap: create both subplots unconditionally, then hide the
+    # topomap axis if mne.viz.plot_topomap raises (e.g. no channel positions,
+    # or channel-count mismatch after non-PCA scoring).
+    fig, (ax_bar, ax_topo) = plt.subplots(1, 2, figsize=(12, 4))
 
-    ncols = 2 if has_topomap else 1
-    fig, axes = plt.subplots(1, ncols, figsize=(6 * ncols, 4))
-    if ncols == 1:
-        axes = [axes]
-
-    ax_bar = axes[0]
     ax_bar.bar(range(len(scores_np)), scores_np, color="steelblue", width=0.8)
     ax_bar.axhline(0, color="gray", linestyle="--", linewidth=0.5)
     ax_bar.set_xlabel("Channel index")
     ax_bar.set_ylabel("Pearson r")
     ax_bar.set_title(f"Participant {short_id} — TRF per-channel scores")
 
-    if has_topomap:
-        ax_topo = axes[1]
+    if info is not None:
         try:
             mne.viz.plot_topomap(
                 scores_np,
@@ -1211,6 +1153,8 @@ def _plot_trf_scores(
         except Exception as exc:
             logger.warning("TRF topomap failed for %s: %s", subject_id, exc)
             ax_topo.set_visible(False)
+    else:
+        ax_topo.set_visible(False)
 
     fig.tight_layout()
     return fig
@@ -1339,7 +1283,6 @@ def _build_metadata_html(
             "tmax": validation.trf.tmax,
             "aggregation": validation.trf.aggregation,
             "mode": "encod",
-            "n_pca": validation.trf.n_pca,
         }
         _row("TRF config", _format_config_value(trf_summary))
     parts.append("</dl>")
@@ -1422,8 +1365,8 @@ def generate_mne_report(
         try:
             table_html = events.head(10).to_html(
                 index=False,
-                classes="table table-sm",
-                border=True,
+                classes="table table-sm table-striped table-hover table-bordered",
+                border=0,
             )
             overflow_div = (
                 '<div style="overflow-x: auto; max-width: 100%; display: block;">'
@@ -1481,7 +1424,7 @@ def generate_mne_report(
     subjects_scored = sorted(
         scores.coords["subject"].values.tolist(), key=_subject_sort_key
     )
-    per_subject_figs: dict[str, tuple[plt.Figure, str, "mne.Info | None"]] = {}
+    per_subject_figs: dict[str, tuple["mne.Evoked", str]] = {}
     if study_instance is not None and events is not None:
         # Phase 1 — load raw files and build epochs sequentially.
         # MNE's raw file readers (e.g. BrainVision) are not thread-safe:
@@ -1504,10 +1447,10 @@ def generate_mne_report(
                 logger.warning("Evoked build failed for %s: %s", subject_id, exc)
                 failed_subjects.add(subject_id)
 
-        # Phase 2 — build figures on the main thread.
+        # Phase 2 — average epochs into evoked objects on the main thread.
         for subject_id in tqdm(
             subjects_scored,
-            desc="Building ERP/ERF figures",
+            desc="Building ERP/ERF evokeds",
             ncols=100,
             leave=False,
         ):
@@ -1518,15 +1461,15 @@ def generate_mne_report(
             subject_bads[subject_id] = list(epochs.info["bads"])
             subject_channels[subject_id] = list(epochs.info["ch_names"])
             try:
-                fig = _plot_subject_evoked(epochs, subject_id, label)
+                evoked = epochs.average()
             except Exception as exc:  # pragma: no cover
-                logger.warning("plot_joint failed for %s: %s", subject_id, exc)
+                logger.warning("epochs.average() failed for %s: %s", subject_id, exc)
                 failed_subjects.add(subject_id)
                 continue
-            per_subject_figs[subject_id] = (fig, label, epochs.info)
+            per_subject_figs[subject_id] = (evoked, label)
 
-    # 5. Subjects x Channels drop grid
-    if events is not None:
+    # 5. Subjects x Channels drop grid (opt-in via show_qc = true in TOML)
+    if validation.show_qc and events is not None:
         try:
             all_subjects = set(events.subject.unique().tolist())
         except Exception:  # pragma: no cover
@@ -1554,55 +1497,18 @@ def generate_mne_report(
             if grid_fig is not None:
                 plt.close(grid_fig)
 
-    # 5b. Events map
-    if events is not None and validation.event_type:
-        try:
-            sfreq = float(validation.erp_display_sfreq or 1000.0)
-            target_type = validation.event_type
-            filtered = events[events["type"] == target_type]
-            label_col = validation.event_label_column
-            if (
-                label_col
-                and label_col in filtered.columns
-                and filtered[label_col].notna().any()
-            ):
-                unique_labels = sorted(
-                    filtered[label_col].dropna().unique().tolist(), key=str
-                )
-                label_to_id = {str(lbl): i + 1 for i, lbl in enumerate(unique_labels)}
-                event_id = dict(label_to_id)
-                ids = (
-                    filtered[label_col]
-                    .map(lambda x: label_to_id.get(str(x), 1))
-                    .to_numpy(dtype=int)
-                )
-            else:
-                event_id = {target_type: 1}
-                ids = np.ones(len(filtered), dtype=int)
-            samples = (filtered["start"].to_numpy(dtype=float) * sfreq).astype(int)
-            events_arr = np.column_stack(
-                [
-                    samples,
-                    np.zeros(len(samples), dtype=int),
-                    ids,
-                ]
-            )
-            report.add_events(
-                events_arr,
-                title="Events Map",
-                event_id=event_id,
-                sfreq=sfreq,
-                tags=("summary",),
-            )
-        except Exception as exc:  # pragma: no cover
-            logger.warning("Events map build failed: %s", exc)
 
     # 6. Results summary table
     summary_rows = _scores_summary_table(scores)
     summary_html = _summary_table_html(summary_rows)
     report.add_html(summary_html, title="Results Summary", tags=("summary",))
 
-    # 7. Per-subject figures: score plot + (optional) Evoked plot_joint
+    # 7. Per-subject figures: score plot + (optional) Evoked + (optional) TRF
+    trf_subject_set: set[str] = (
+        set(trf_scores.coords["subject"].values.tolist())
+        if trf_scores is not None
+        else set()
+    )
     for subject_id in tqdm(
         subjects_scored,
         desc="Attaching per-participant figures",
@@ -1611,34 +1517,44 @@ def generate_mne_report(
     ):
         # Strip study-name prefix (e.g. "StudyName/1" -> "1")
         short_id = subject_id.split("/", 1)[-1] if "/" in subject_id else subject_id
+        # Events map for this participant (all event types from the dataframe).
+        if events is not None:
+            try:
+                sfreq = float(validation.erp_display_sfreq or 1000.0)
+                subj_events = events[events["subject"] == subject_id]
+                if not subj_events.empty and "type" in subj_events.columns:
+                    unique_types = sorted(subj_events["type"].dropna().unique().tolist(), key=str)
+                    type_to_id = {t: i + 1 for i, t in enumerate(unique_types)}
+                    ids = subj_events["type"].map(type_to_id).to_numpy(dtype=int)
+                    samples = (subj_events["start"].to_numpy(dtype=float) * sfreq).astype(int)
+                    events_arr = np.column_stack(
+                        [samples, np.zeros(len(samples), dtype=int), ids]
+                    )
+                    report.add_events(
+                        events_arr,
+                        title=f"Participant {short_id} — Events",
+                        event_id=type_to_id,
+                        sfreq=sfreq,
+                        tags=("per-participant",),
+                    )
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Events map failed for %s: %s", subject_id, exc)
+        if subject_id in per_subject_figs:
+            evoked, label = per_subject_figs[subject_id]
+            report.add_evokeds(
+                evoked,
+                titles=f"Participant {short_id} - {label}",
+                tags=("per-participant", label.lower()),
+            )
         fig = _plot_subject_scores(scores, subject_id, validation)
         report.add_figure(fig, title=f"Participant {short_id}", tags=("per-participant",))
         plt.close(fig)
-        if subject_id in per_subject_figs:
-            evoked_fig, label, _ = per_subject_figs[subject_id]
-            report.add_figure(
-                evoked_fig,
-                title=f"Participant {short_id} - {label}",
-                tags=("per-participant", label.lower()),
-            )
-            plt.close(evoked_fig)
-
-    # 8. Per-subject TRF encoding figures (only when trf_scores provided)
-    if trf_scores is not None:
-        trf_subjects = sorted(
-            trf_scores.coords["subject"].values.tolist(), key=_subject_sort_key
-        )
-        for subject_id in tqdm(
-            trf_subjects,
-            desc="Building TRF figures",
-            ncols=100,
-            leave=False,
-        ):
-            short_id = subject_id.split("/", 1)[-1] if "/" in subject_id else subject_id
-            # Reuse the mne.Info stored from the ERP pre-build loop so the
-            # raw file is not read a second time just for the topomap.
+        # TRF encoding figure after ERP and decoding for this participant.
+        if trf_scores is not None and subject_id in trf_subject_set:
+            # Reuse mne.Info from the evoked object built in the ERP phase so
+            # the raw file is not read a second time just for the topomap.
             info: "mne.Info | None" = (
-                per_subject_figs[subject_id][2] if subject_id in per_subject_figs else None
+                per_subject_figs[subject_id][0].info if subject_id in per_subject_figs else None
             )
             trf_fig = None
             try:
