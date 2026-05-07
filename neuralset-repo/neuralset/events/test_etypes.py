@@ -334,7 +334,7 @@ def test_validate_events_bids_nan_recovery() -> None:
     recovered = ns.events.standardize_events(pd.DataFrame([event]))
     for entity in events.utils.BIDS_ENTITIES:
         assert recovered[entity].iloc[0] == events.utils.BIDS_ENTITY_DEFAULT
-        assert recovered[entity].dtype == object
+        assert pd.api.types.is_string_dtype(recovered[entity].dtype)
 
 
 def test_normalize_rejects_nan_duration() -> None:

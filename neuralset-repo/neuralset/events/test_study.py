@@ -310,7 +310,7 @@ def test_study_build(tmp_path: Path) -> None:
     # BIDS entity columns are present, correctly typed and populated
     for entity in _events.utils.BIDS_ENTITIES:
         assert entity in df.columns
-        assert df[entity].dtype == object  # str
+        assert pd.api.types.is_string_dtype(df[entity].dtype)
     assert df.loc[0, "task"] == "motor"
     assert df.loc[0, "session"] == _events.utils.BIDS_ENTITY_DEFAULT
     summ = study.study_summary()
