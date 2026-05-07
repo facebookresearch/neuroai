@@ -11,15 +11,14 @@ from pathlib import Path
 import pytest
 
 from neuralfetch.utils import validation as validation_runner
-from neuralfetch.utils.validation import (
-    StudyValidation,
-    _build_subject_epochs,
-    _clear_cache,
-    _evoked_kind_label,
+from neuralfetch.utils.validation import StudyValidation, discover_validations
+from neuralfetch.utils.validation.builders import _build_sliding_window
+from neuralfetch.utils.validation.config import _clear_cache, _resolve_validation
+from neuralfetch.utils.validation.erp import _build_subject_epochs, _evoked_kind_label
+from neuralfetch.utils.validation.plots import (
     _plot_drop_grid,
     _plot_group_grand_average_html,
     _short_subject_labels,
-    discover_validations,
 )
 from neuralset.events import study
 from neuralset.events.testing import test2023meg as _test2023meg  # noqa: F401
@@ -57,7 +56,7 @@ def test_study_validation_config(name: str) -> None:
 def test_resolve_validation_missing() -> None:
     """_resolve_validation raises ValueError for unknown studies."""
     with pytest.raises((ValueError, ImportError)):
-        validation_runner._resolve_validation("NonExistent9999")
+        _resolve_validation("NonExistent9999")
 
 
 def test_build_sliding_window(tmp_path: Path) -> None:
@@ -65,7 +64,7 @@ def test_build_sliding_window(tmp_path: Path) -> None:
     from neuralyze import SlidingWindow
 
     v = DISCOVERED["Test2023Meg"]
-    sw = validation_runner._build_sliding_window("Test2023Meg", v, tmp_path)
+    sw = _build_sliding_window("Test2023Meg", v, tmp_path)
     assert isinstance(sw, SlidingWindow)
     assert sw.mode == v.mode
 
@@ -218,16 +217,15 @@ def test_plot_drop_grid_marks_excluded_subject() -> None:
     plt.close(fig)
 
 
-def test_group_plot_html_contains_mpld3() -> None:
-    """_plot_group_grand_average_html embeds an mpld3 payload + toggle-all UI."""
+def test_group_plot_html_contains_plotly() -> None:
+    """_plot_group_grand_average_html embeds a Plotly payload + toggle UI."""
     v = DISCOVERED["Test2023Meg"]
     scores = _make_synthetic_scores(n_subjects=2, n_times=5)
     html = _plot_group_grand_average_html(scores, v)
-    assert "mpld3" in html
+    assert "Plotly" in html
     assert "Grand Average" in html
-    assert "Toggle all participants" in html
-    assert "rect.legend-box" in html
-    assert 'id="ga-container-' in html
+    assert "Hide participants" in html
+    assert 'id="ga-plotly-' in html
     assert 'id="ga-toggle-' in html
 
 
@@ -247,11 +245,12 @@ def test_short_subject_labels_strips_study_prefix_and_zero_pads() -> None:
 
 
 def test_validate_study_report_has_new_sections(tmp_path: Path) -> None:
-    """End-to-end: generate_mne_report includes the ERF, drop grid, and group sections."""
+    """End-to-end: generate_mne_report includes the drop grid, group plot, and summary sections."""
     study_cls = study.STUDIES["Test2023Meg"]
     study_instance = study_cls(path=tmp_path / "study")
     events = study_instance.run()
-    v = DISCOVERED["Test2023Meg"]
+    # Enable QC drop grid so "Participants x Channels" appears in the report.
+    v = DISCOVERED["Test2023Meg"].model_copy(update={"show_qc": True})
     scores = _make_synthetic_scores(n_subjects=2, n_times=4)
 
     out = validation_runner.generate_mne_report(
@@ -266,7 +265,7 @@ def test_validate_study_report_has_new_sections(tmp_path: Path) -> None:
     content = out.read_text("utf-8")
     assert "Group Grand Average" in content
     assert "Participants x Channels" in content
-    assert "ERF" in content
+    assert "Results Summary" in content
 
 
 def test_cli_list(capsys: pytest.CaptureFixture[str]) -> None:
