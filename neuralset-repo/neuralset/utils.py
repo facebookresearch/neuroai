@@ -78,7 +78,7 @@ def match_list(A, B, on_replace="delete"):
     return A_sel.astype(int), B_sel.astype(int)
 
 
-ISSUED_WARNINGS = set()
+ISSUED_WARNINGS: set[str] = set()
 
 
 def warn_once(message: str) -> None:
