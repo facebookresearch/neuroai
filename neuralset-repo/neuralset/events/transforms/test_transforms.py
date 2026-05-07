@@ -272,20 +272,10 @@ def _make_sentence_events(
     add_sentence_to_words: bool = True,
 ) -> pd.DataFrame:
     """make dataset and apply Sentence transform"""
-    # context event
-    events = [
-        dict(
-            type="Text",
-            start=-0.1,
-            duration=len(words),
-            text=text,
-            timeline="foo",
-            language="english",
-        )
-    ]
-    # word events
+    common = dict(timeline="foo", language="english")
+    events = [dict(type="Text", start=-0.1, duration=len(words), text=text, **common)]
     events += [
-        dict(type="Word", start=float(i), duration=0.1, text=word, timeline="foo")
+        dict(type="Word", start=float(i), duration=0.1, text=word, **common)
         for i, word in enumerate(words)
     ]
     df = ns.events.standardize_events(pd.DataFrame(events))
@@ -301,6 +291,7 @@ def test_sentence_to_word_standard() -> None:
     df = _make_sentence_events(text, words)
     assert df.iloc[2].sentence == "he runs. "
     assert df.iloc[-1].sentence == "she eats"
+    assert (df[df.type == "Sentence"].language == "english").all()
 
     # tokenization
     words = "I don't run".split()

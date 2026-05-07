@@ -65,6 +65,9 @@ def _extract_sentences(events) -> list[ev.Sentence]:
                 text = w0.sentence
                 if not (isinstance(text, str) and text):
                     text = MISSING_SENTENCE
+                language = getattr(w0, "language", "")
+                if not isinstance(language, str):
+                    language = ""
                 sentences.append(
                     ev.Sentence(
                         start=w0.start - eps,
@@ -74,6 +77,7 @@ def _extract_sentences(events) -> list[ev.Sentence]:
                         + 2 * eps,
                         timeline=w0.timeline,
                         text=text,
+                        language=language,
                     )
                 )
                 words = []

@@ -223,7 +223,11 @@ class EventsTransform(base.Step):
             @functools.wraps(original)
             def _validated_run(self: tp.Any, *args: tp.Any, **kw: tp.Any) -> pd.DataFrame:
                 result = original(self, *args, **kw)
-                return utils.standardize_events(result, auto_fill=False)
+                try:
+                    return utils.standardize_events(result, auto_fill=False)
+                except ValueError as exc:
+                    exc.add_note(f"in {type(self).__name__}._run output")
+                    raise
 
             cls._run = _validated_run  # type: ignore[assignment]
 

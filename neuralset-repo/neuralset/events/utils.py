@@ -14,6 +14,7 @@ import warnings
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import ujson
 from exca.cachedict import DumpContext
@@ -218,6 +219,65 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
     return result
 
 
+def _propagate_bids(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure BIDS entity and ``study`` columns exist as strings, fill
+    empty values from siblings in the same timeline, raise on conflicts.
+
+    Mutates ``df`` in place.
+    """
+    invariants = BIDS_ENTITIES + ("study",)
+    # Fast path: skip factorize when every column is fully populated or
+    # fully empty (nothing to propagate in either case).
+    any_work = False
+    for col in invariants:
+        if col not in df.columns:
+            df[col] = BIDS_ENTITY_DEFAULT
+        s = df[col].fillna(BIDS_ENTITY_DEFAULT).astype(str)
+        df[col] = s
+        has_empty = (s == BIDS_ENTITY_DEFAULT).any()
+        if not any_work and has_empty and (s != BIDS_ENTITY_DEFAULT).any():
+            any_work = True
+    if not any_work:
+        return df
+    tl_codes, _ = pd.factorize(df["timeline"], sort=False)
+    n_tls = int(tl_codes.max()) + 1 if len(tl_codes) else 0
+    for col in invariants:
+        codes, uniques = pd.factorize(df[col], sort=False)
+        empty_locs = np.where(uniques == BIDS_ENTITY_DEFAULT)[0]
+        empty_code = int(empty_locs[0]) if len(empty_locs) else -2
+        has = codes != empty_code
+        if not has.any():
+            continue
+        # First non-empty index per timeline: reverse-assign so smallest wins
+        # (equivalent to groupby(timeline)[col].first() but vectorized).
+        first_idx = np.full(n_tls, -1, dtype=np.int64)
+        wh = np.flatnonzero(has)
+        first_idx[tl_codes[wh[::-1]]] = wh[::-1]
+        has_per_tl = first_idx >= 0
+        safe = np.where(has_per_tl, first_idx, 0)
+        fill_codes = codes[safe[tl_codes]]
+        conflict = has & has_per_tl[tl_codes] & (codes != fill_codes)
+        if conflict.any():
+            bad = np.unique(tl_codes[conflict])
+            sample_mask = (tl_codes == bad[0]) & has
+            sample_vals = sorted(np.unique(uniques[codes[sample_mask]]).tolist())
+            sample_tl = df["timeline"].iloc[int(np.flatnonzero(sample_mask)[0])]
+            n = len(bad)
+            raise ValueError(
+                f"Column {col!r} has conflicting non-empty values within "
+                f"{n} timeline{'' if n == 1 else 's'}; BIDS entities and "
+                f"'study' must be invariant per timeline (transform wrote "
+                f"bad values, or timelines were merged). Example: "
+                f"timeline={sample_tl!r} has values={sample_vals}."
+            )
+        need = (~has) & has_per_tl[tl_codes]
+        if need.any():
+            arr = df[col].to_numpy().copy()
+            arr[need] = uniques[fill_codes[need]]
+            df[col] = arr
+    return df
+
+
 def standardize_events(
     events: pd.DataFrame,
     auto_fill: bool = True,
@@ -225,8 +285,10 @@ def standardize_events(
     """Normalize an events DataFrame into canonical form.
 
     Sorts by (timeline, start ASC, duration DESC) preserving first-seen
-    timeline order, fills BIDS entity columns, reorders columns, and adds
-    a computed ``stop`` column. Always returns a new DataFrame.
+    timeline order, propagates per-timeline invariants
+    (``subject``/``session``/``task``/``run``/``study``), reorders
+    columns, and adds a computed ``stop`` column. Always returns a new
+    DataFrame.
 
     Parameters
     ----------
@@ -300,10 +362,7 @@ def standardize_events(
         ignore_index=True,
     )
     df = df.drop(columns=["_tl_order"])
-    for entity in BIDS_ENTITIES:
-        if entity not in df.columns:
-            df[entity] = BIDS_ENTITY_DEFAULT
-        df[entity] = df[entity].fillna(BIDS_ENTITY_DEFAULT).astype(str)
+    df = _propagate_bids(df)
     important = ["type", "start", "duration", "timeline"] + list(BIDS_ENTITIES)
     columns = important + [c for c in df.columns if c not in important]
     df = df.loc[:, columns]

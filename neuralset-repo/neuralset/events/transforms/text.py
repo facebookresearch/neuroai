@@ -182,7 +182,7 @@ class AddSentenceToWords(EventsTransform):
         events.loc[:, "sentence_char"] = np.nan
         events["sentence"] = ""
 
-        sentences = []
+        sentences: list[dict[str, tp.Any]] = []
         for context in contexts.itertuples():
             # find words that are enclosed in this context (requires unique timeline)
             encl = _segs.find_enclosed(
@@ -206,13 +206,9 @@ class AddSentenceToWords(EventsTransform):
                 index=sel,
             )
             events.loc[sel, info.columns] = info
-            # create sentence events
-            context_sentences = [s.to_dict() for s in _extract_sentences(events)]
-            subject = getattr(context, "subject", None)
-            if subject is not None:
-                for s in context_sentences:
-                    s["subject"] = subject
-            sentences.extend(context_sentences)
+            # create sentence events; standardize_events backfills BIDS/study
+            # from sibling rows in the same timeline.
+            sentences.extend(s.to_dict() for s in _extract_sentences(events))
         sentences = [s for s in sentences if s["text"] != MISSING_SENTENCE]
         sentence_df = pd.DataFrame(sentences)
         events = pd.concat([events, sentence_df], ignore_index=True)
