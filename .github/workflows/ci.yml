@@ -19,7 +19,7 @@ on:
   # by dorny/paths-filter so unchanged packages are skipped entirely (the main
   # win). A multi-job split (one per package) was rejected: downstream tests
   # are ~1 min each while machine spawn + cache restore costs ~3 min per job.
-  # 8-core runners are used for disk space, not speed (conda env + caches > 14GB).
+  # 8-core runners are used for disk space, not speed (.venv + caches > 14GB).
 
 jobs:
 
@@ -55,7 +55,7 @@ jobs:
             docs:
               - 'docs/**'
 
-  # ── Lint (lightweight runner — no conda/torch) ──────────────
+  # ── Lint (lightweight runner — no torch env) ────────────────
   # Formatting and linting (ruff) don't need the full env.
   lint:
     name: Lint (ruff)
@@ -88,12 +88,12 @@ jobs:
         uses: ./.github/actions/setup-python-env
       - name: pytest neuralset
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralset-repo
           pytest neuralset --durations=10
       - name: Wheel smoke test
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           pip install build
           for repo in neuralset-repo neuraltrain-repo neuralfetch-repo neuralbench-repo; do
             python -m build --wheel "$repo" --outdir dist/
@@ -112,7 +112,7 @@ jobs:
           assert n >= 60, f'expected >= 60 registered studies, got {n}'
           "
 
-      # Save data cache only from this job (see setup-python-env).
+      # Saving scoped to neuralset which makes most of the downloads (avoid empty cache from other jobs)
       - name: Save data cache
         if: steps.setup.outputs.data-cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -134,13 +134,13 @@ jobs:
       - name: pytest neuraltrain
         if: needs.changes.outputs.neuraltrain == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuraltrain-repo
           pytest neuraltrain --durations=10
       - name: neuraltrain project example
         if: needs.changes.outputs.neuraltrain == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuraltrain-repo
           mkdir -p project_example/cache
           python -m project_example.grids.test_run
@@ -148,19 +148,19 @@ jobs:
       - name: pytest neuralfetch
         if: needs.changes.outputs.neuralfetch == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralfetch-repo
           pytest neuralfetch --durations=10
 
       - name: pytest neuralbench
         if: needs.changes.outputs.neuralbench == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralbench-repo
           pytest neuralbench --durations=10
 
   # ── Job 3: type checks (no data caches needed) ─────────────
-  # mypy doesn't need HuggingFace/MNE data caches, only the conda env.
+  # mypy doesn't need HuggingFace/MNE data caches, only the venv.
   # restore-data-caches: 'false' saves disk and restore time.
   typecheck:
     name: mypy
@@ -176,25 +176,25 @@ jobs:
       - name: mypy neuralset
         if: needs.changes.outputs.neuralset == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralset-repo
           mypy neuralset
       - name: mypy neuraltrain
         if: needs.changes.outputs.neuraltrain == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuraltrain-repo
           mypy neuraltrain
       - name: mypy neuralfetch
         if: needs.changes.outputs.neuralfetch == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralfetch-repo
           mypy neuralfetch
       - name: mypy neuralbench
         if: needs.changes.outputs.neuralbench == 'true'
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           cd neuralbench-repo
           mypy neuralbench
 
@@ -214,12 +214,12 @@ jobs:
 
       - name: Install Sphinx extras
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           pip install sphinx furo myst_parser sphinx_rtd_theme sphinx-copybutton sphinx-design sphinx-gallery
 
       - name: Sphinx build
         run: |
-          source activate ./ci_env
+          source .venv/bin/activate
           make -C docs html
 
       - name: Deploy to GitHub Pages

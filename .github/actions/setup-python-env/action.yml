@@ -1,14 +1,14 @@
 name: Setup Python environment
 description: >
-  Shared composite action that sets up conda, restores caches,
-  and installs all packages (neuralset, neuralfetch, neuraltrain, neuralbench).
-  All packages live under <pkg>-repo/ directories.
+  Shared composite action that installs uv, creates a .venv, restores caches,
+  and installs all packages (neuralset, neuralfetch, neuraltrain, neuralbench)
+  editable. All packages live under <pkg>-repo/.
 
 inputs:
   restore-data-caches:
     description: >
       Whether to restore HuggingFace, TorchHub, and neuralset data caches.
-      Set to 'false' for jobs that only need the conda env (e.g. mypy).
+      Set to 'false' for jobs that only need the env (e.g. mypy).
     required: false
     default: 'true'
 
@@ -20,15 +20,8 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Add conda to system path
-      shell: bash
-      run: |
-        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
 
     - name: Set cache config
       shell: bash
@@ -45,74 +38,63 @@ runs:
           echo "EOF"
         } >> "$GITHUB_ENV"
 
-    # ── Conda env cache ──────────────────────────────────────
+    # ── .venv cache ──────────────────────────────────────────
     # One cache entry per month (~5-6 GB, includes ~1 GB spacy models).
-    # Monthly rotation keeps
-    # dependencies reasonably fresh without per-commit cache churn.
-    # Uses explicit restore + save so the multi-GB upload runs as a
-    # visible mid-job step instead of in post-job cleanup (which
-    # cancel-in-progress can kill).
-    - name: Restore conda env
-      id: cache-conda
+    # Monthly rotation keeps dependencies reasonably fresh without
+    # per-commit cache churn. Uses explicit restore + save so the
+    # multi-GB upload runs as a visible mid-job step instead of in
+    # post-job cleanup (which cancel-in-progress can kill).
+    - name: Restore .venv
+      id: cache-venv
       uses: actions/cache/restore@v4
       with:
-        path: ./ci_env
-        key: conda-v2-${{ env.MONTH }}-main
+        path: ./.venv
+        key: venv-v1-${{ env.MONTH }}-main
 
-    - name: Create conda env
-      if: steps.cache-conda.outputs.cache-hit != 'true'
+    - name: Create .venv (on cache miss)
+      if: steps.cache-venv.outputs.cache-hit != 'true'
       shell: bash
-      run: conda create -p ./ci_env python=3.12 ipython ffmpeg -y
+      # --seed installs pip into the venv so `python -m spacy download`
+      # works (spacy invokes pip internally to fetch model wheels).
+      run: uv venv --python 3.12 --seed .venv
 
-    - name: Install all packages
-      if: steps.cache-conda.outputs.cache-hit != 'true'
+    - name: Install / sync packages
       shell: bash
+      # All editables in a single resolution pass. transformers pinned
+      # because neuralset's tests target 4.41.0 (pyproject leaves it open).
       run: |
-        source activate ./ci_env
-        # neuralset
-        cd neuralset-repo
-        pip install --config-settings editable_mode=strict -e .[dev,all]
-        # Spacy models used by tests (~560 MB each, ~1 GB total).
-        # Pre-installed to avoid flaky runtime downloads from GitHub.
-        python -m spacy download en_core_web_lg
-        python -m spacy download fr_core_news_lg
-        pip install numpy>=2.1
-        pip install transformers==4.41.0
-        cd ..
-        # neuralfetch
-        pip install --config-settings editable_mode=strict -e neuralfetch-repo
-        # neuraltrain
-        cd neuraltrain-repo
-        pip install --config-settings editable_mode=strict -e .[lightning,dev,models,metrics]
-        cd ..
-        # neuralbench (depends on neuralset + neuraltrain; brings lightning/exca/wandb/...)
-        pip install --config-settings editable_mode=strict -e neuralbench-repo/.[dev,wandb,models]
-
-    - name: Save conda env cache (main only)
-      if: steps.cache-conda.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
-      uses: actions/cache/save@v4
-      with:
-        path: ./ci_env
-        key: conda-v2-${{ env.MONTH }}-main
-
-    - name: Refresh editable installs (on cache hit)
-      if: steps.cache-conda.outputs.cache-hit == 'true'
-      shell: bash
-      run: |
-        source activate ./ci_env
-        # Single invocation: resolves all dependencies in one pass and picks
-        # up new/updated packages from pyproject.toml without cache eviction.
-        pip install --config-settings editable_mode=strict \
+        source .venv/bin/activate
+        uv pip install \
+          --config-settings editable_mode=strict \
           -e neuralset-repo/.[dev,all] \
           -e neuralfetch-repo/. \
-          -e neuraltrain-repo/.[lightning,dev,models] \
-          -e neuralbench-repo/.[dev,wandb,models]
+          -e neuraltrain-repo/.[lightning,dev,models,metrics] \
+          -e neuralbench-repo/.[dev,wandb,models] \
+          'transformers==4.41.0'
+
+    - name: Download spacy models (on cache miss)
+      if: steps.cache-venv.outputs.cache-hit != 'true'
+      shell: bash
+      # ~560 MB each. Pre-installed to avoid flaky runtime
+      # downloads from GitHub.
+      run: |
+        source .venv/bin/activate
+        python -m spacy download en_core_web_lg
+        python -m spacy download fr_core_news_lg
+
+    # all jobs install the same packages, so the cache-key race is benign
+    - name: Save .venv cache (main only)
+      if: steps.cache-venv.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v4
+      with:
+        path: ./.venv
+        key: venv-v1-${{ env.MONTH }}-main
 
     - name: Print installed packages
       shell: bash
       run: |
-        source activate ./ci_env
-        pip freeze
+        source .venv/bin/activate
+        uv pip freeze
 
     # ── Data / model caches ──────────────────────────────────
     # Save only in test-neuralset (see ci.yml): otherwise a sparse
