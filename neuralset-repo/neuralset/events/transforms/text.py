@@ -232,6 +232,15 @@ class AddSentenceToWords(EventsTransform):
         return events
 
 
+def _sentence_start(word: tp.Any) -> int | None:
+    """Start char of the word's sentence in the parent Text, None if unmatched."""
+    try:
+        _ = word.sentence[:0]  # fails on NaN/None/missing
+        return int(word.text_char) - int(word.sentence_char)
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 class AddContextToWords(EventsTransform):
     """Add a context field to the events dataframe, for each word event, by concatenating
     the sentence fields.
@@ -278,19 +287,18 @@ class AddContextToWords(EventsTransform):
                 splits = [getattr(w, sfield, "") for w in (word, last_word)]
                 if splits[0] != splits[1] or not same_timeline:
                     last_word = None  # restart
-            # word is not correctly match, let's not add a context
-            has_sent = isinstance(word.sentence, str) and word.sentence
-            if word.sentence_char is None or np.isnan(word.sentence_char) or not has_sent:
+            sent_start = _sentence_start(word)
+            if sent_start is None:
                 contexts.append("")
                 continue
+            sent_char = int(word.text_char) - sent_start  # type: ignore[attr-defined]
             # first word, restart parts
             if last_word is None:
                 past_parts: deque[str] = deque(maxlen=self.max_context_len)
                 start_char = 0  # assumes not splitting within sentences
             # not first word from now on
             if last_word is not None:
-                non_increasing_char = word.sentence_char <= last_word.sentence_char
-                if word.sentence != last_word.sentence or non_increasing_char:
+                if sent_start != _sentence_start(last_word):
                     # new sentence
                     if self.sentence_only:
                         past_parts.clear()
@@ -299,11 +307,10 @@ class AddContextToWords(EventsTransform):
                     start_char = 0
                 elif past_parts:  # same sentence
                     # append up to current character to the last context part
-                    last_char = int(word.sentence_char)
-                    past_parts[-1] += word.sentence[start_char:last_char]
-                    start_char = last_char
+                    past_parts[-1] += word.sentence[start_char:sent_char]
+                    start_char = sent_char
             # reset context with timeline + check ordering for safety
-            last_char = int(word.sentence_char) + len(word.text)
+            last_char = sent_char + len(word.text)
             new = word.sentence[start_char:last_char]
             contexts.append("".join(past_parts) + new)
             past_parts.append(new)

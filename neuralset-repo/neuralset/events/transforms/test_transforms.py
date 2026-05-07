@@ -243,7 +243,7 @@ def test_add_context_to_words(
     words = []
     ind = 0
     timeline = "lpp"
-    for word in "abcd":
+    for letter_idx, word in enumerate("abcd"):
         if word == "d" and change_timeline:
             timeline = "lpp2"
         for i in range(3):
@@ -253,6 +253,7 @@ def test_add_context_to_words(
                     "type": "Word",
                     "sentence": (f"{word} " * 3).strip() + ". ",
                     "sentence_char": 2 * i,
+                    "text_char": letter_idx * 100 + 2 * i,
                     "start": ind,
                     "duration": 0.2,
                     "timeline": timeline,
@@ -413,6 +414,14 @@ def test_gap_sentence_at_boundary() -> None:
     info = _tutils.TextWordMatcher(text).match(["He", "ran", "She's", "walked", "slowly"])
     assert info[2]["text_char"] == 7
     assert info[2]["sentence"] == "She walked slowly."
+
+
+def test_pending_word_between_repeated_sentence_strings() -> None:
+    """An unmatched word sandwiched between two same-string sentences is not back-filled."""
+    text = "Hi. Yes please. Hi. End now."
+    info = _tutils.TextWordMatcher(text).match(["Hi", "QQQQ", "Hi", "End", "now"])
+    assert info[1].get("text_char") is None
+    assert info[1].get("sentence") != "Hi. ", info[1]
 
 
 def test_gap_punctuated_word_offset() -> None:

@@ -29,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 
 def _check_folder_path(path: base.PathLike, name: str) -> Path:
-    """Check that the parent path exists and create directory"""
+    """Create `path` if missing; require its parent to already exist.
+
+    Raises RuntimeError if the parent is missing, so a misconfigured study
+    root fails fast instead of creating directories at the wrong location.
+    """
     path = Path(path)
     if not path.parent.exists():
         raise RuntimeError(f"Parent folder {path.parent} of {name} must exist first.")
