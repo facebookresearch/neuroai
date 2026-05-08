@@ -178,4 +178,14 @@ class CharacterSet:
                     out.append(normalized)
         return out
 
+    def encode(self, keys: Sequence[str]) -> list[int]:
+        """Clean ``keys`` and return their integer labels in one call.
+
+        Equivalent to ``[key_to_label(k) for k in clean_keys(keys)]``;
+        unknown / folded-out keys are simply absent from the result.
+        Mirrors the MNE pattern of single-call accessors that handle
+        normalization + lookup together.
+        """
+        return [self.key_to_label(k) for k in self.clean_keys(keys)]
+
 

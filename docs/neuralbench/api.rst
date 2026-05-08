@@ -143,7 +143,5 @@ EMG / qwerty
    :toctree: generated/
    :nosignatures:
 
-   BandRotation
    BandRotationCallback
-   SpecAugment
    SpecAugmentCallback

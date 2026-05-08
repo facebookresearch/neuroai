@@ -4,28 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# emg2qwerty paper recipe — personalized, compact 51-class vocabulary.
-#
-# Same data subset + optimizer / augmentation as ``paper_personalized``,
-# but the target vocabulary is collapsed from 99 (paper) to 51 classes
-# by folding uppercase letters into their lowercase equivalents and
-# US-QWERTY shifted symbols (``!@#$%^&*()`` plus the punctuation row)
-# into their unshifted base, then dropping the ``Key.shift`` modifier
-# (now redundant).
-#
-# With enough data and a big-enough model, the network can learn
-# capitalization / punctuation from context, so a compact decoder
-# vocabulary trains faster and gives better per-class statistics.  The
-# output stream needs a downstream language model / post-processor to
-# recover capitalization if you care about it.
-#
-# Pair with ``--checkpoint /path/to/upstream_generic.ckpt`` only if
-# upstream's classifier head matches: upstream's 98-class head is
-# remapped via ``EMG2QwertyNet.mapping`` but its output dim is fixed at
-# 99, so loading into a 51-class model would size-mismatch the head.
-# For that case use ``paper_personalized_finetune.yaml`` instead.
-#
-# >>> EDIT THE SUBJECT BELOW <<<
+# Personalized recipe with the compact 51-class vocabulary: case-folded
+# letters + US-QWERTY shift-folded symbols + Key.shift dropped.
 data:
   study:
     source:
@@ -34,10 +14,15 @@ data:
       split_by: session
   target:
     vocab_preset: qwerty_compact
-brain_model_output_size: 51   # 50 keys + CTC blank
+brain_model_output_size: 51
 loss:
   =replace=: true
   name: CTCLoss
   kwargs:
     blank: 50
     zero_infinity: true
+metrics:
+  - name: CharacterErrorRates
+    log_name: CER
+    kwargs:
+      vocab_preset: qwerty_compact

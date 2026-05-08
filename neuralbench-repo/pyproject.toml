@@ -81,6 +81,13 @@ dependencies = [
 [project.scripts]
 neuralbench = "neuralbench:run_benchmark_cli"
 
+# neuralset's _resolve_study() walks every package registered under this
+# entry-point group looking for Study subclasses.  Each task package's
+# studies (e.g. ``Emg2qwerty``) are auto-discovered for CLI runs without
+# requiring an explicit ``import neuralbench.tasks.<device>.<task>``.
+[project.entry-points."neuralset.studies"]
+neuralbench = "neuralbench.tasks"
+
 [tool.ruff]
 extend = "../pyproject.toml"
 

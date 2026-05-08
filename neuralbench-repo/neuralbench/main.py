@@ -44,7 +44,6 @@ from .aggregator import (  # noqa: F401
     BenchmarkAggregator as BenchmarkAggregator,
 )
 from .callbacks import (
-    BaseCallbackConfig,
     PlotConfusionMatrix,
     PlotRegressionScatter,
     PlotRegressionVectors,
@@ -54,7 +53,7 @@ from .callbacks import (
 from .data import Data as Data  # noqa: F401
 from .model_factory import build_brain_model
 from .modules import DownstreamWrapper
-from .pl_module import BrainModule, get_ctc_metric_factory_builder
+from .pl_module import BrainModule
 from .utils import TrainerConfig, compute_class_weights_from_dataset
 
 LOGGER = logging.getLogger(__name__)
@@ -82,9 +81,6 @@ class Experiment(BaseExperiment):
     trainer_config: TrainerConfig
     loss: BaseLoss
     lightning_optimizer_config: LightningOptimizer
-    # Extra task-defined trainer callbacks (e.g. SpecAugment for emg/qwerty).
-    # Only attached during fit; eval-time trainers ignore them.
-    train_callbacks: list[BaseCallbackConfig] = []
 
     # Evaluation
     eval_only: bool = False
@@ -194,17 +190,6 @@ class Experiment(BaseExperiment):
                 metric.log_name: metric.build()
                 for metric in self.test_full_retrieval_metrics
             },
-            # Bind the registered factory builder to this experiment's
-            # extractor so the CTC metric captures per-extractor state
-            # (e.g. ``KeystrokeSequence._charset`` for the qwerty task)
-            # rather than a process-global that the next experiment in
-            # the grid would clobber.
-            ctc_metric_factory=(
-                builder(self.data.target)
-                if (builder := get_ctc_metric_factory_builder(self.task_name))
-                is not None
-                else None
-            ),
         )
         pl.seed_everything(self.seed)
 
@@ -313,8 +298,6 @@ class Experiment(BaseExperiment):
                     callbacks.append(PlotRegressionScatter())
         else:
             callbacks.append(LearningRateMonitor(logging_interval="step"))
-            for cb_cfg in self.train_callbacks:
-                callbacks.append(cb_cfg.build())
             callbacks.append(
                 EarlyStopping(
                     monitor=self.trainer_config.monitor,

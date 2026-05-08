@@ -22,8 +22,6 @@ import numpy as np
 import torch
 from lightning.pytorch import Callback
 
-from neuralbench.callbacks import BaseCallbackConfig
-
 
 class SpecAugmentCallback(Callback):
     """SpecAugment masking on the log-spectrogram during training.
@@ -147,26 +145,3 @@ class BandRotationCallback(Callback):
             max_temporal_jitter=self.max_temporal_jitter,
         )
         batch.data["neuro"] = x_aug
-
-
-class SpecAugment(BaseCallbackConfig):
-    """YAML config for :class:`SpecAugmentCallback`."""
-
-    _CB_CLS: tp.ClassVar = SpecAugmentCallback
-    n_time_masks: int = 3
-    time_mask_param: int = 25
-    n_freq_masks: int = 2
-    freq_mask_param: int = 4
-    prob: float = 1.0
-    start_epoch: int = 0
-
-
-class BandRotation(BaseCallbackConfig):
-    """YAML config for :class:`BandRotationCallback`."""
-
-    _CB_CLS: tp.ClassVar = BandRotationCallback
-    num_bands: int = 2
-    electrodes_per_band: int = 16
-    band_offsets: tuple[int, ...] = (-1, 0, 1)
-    max_temporal_jitter: int = 120
-    start_epoch: int = 0

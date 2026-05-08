@@ -10,8 +10,6 @@ This module transforms base YAML configs into concrete per-experiment
 configs ready for ``BenchmarkAggregator``.
 """
 
-import functools
-import importlib
 import logging
 from itertools import product
 from pathlib import Path
@@ -29,22 +27,6 @@ from neuralbench.registry import (
 
 LOGGER = logging.getLogger(__name__)
 
-
-@functools.lru_cache(maxsize=None)
-def _maybe_import_task_module(device: str, task_name: str, task_dir: Path) -> None:
-    """Import a task's Python package so its registrations fire.
-
-    Tasks may ship custom extractors / study sources / metric factories
-    alongside their YAML; importing the package triggers their
-    ``__init_subclass__`` hooks so the YAML parser can resolve them.
-    A missing ``__init__.py`` is treated as "YAML-only task, nothing to
-    import".  Any ImportError on a present ``__init__.py`` is fatal —
-    the YAML parse downstream would only produce a confusing
-    "unknown discriminator" error otherwise.
-    """
-    if not (task_dir / "__init__.py").exists():
-        return
-    importlib.import_module(f"neuralbench.tasks.{device}.{task_name}")
 
 # ---------------------------------------------------------------------------
 # Mode overlays
@@ -219,7 +201,6 @@ def prepare_task_configs(
         datasets = [None]
 
     task_dir = _resolve_task_dir(device, task_name)
-    _maybe_import_task_module(device, task_name, task_dir)
     task_config_fname = task_dir / "config.yaml"
     task_config = load_yaml_config(task_config_fname)
     config.update(task_config)
