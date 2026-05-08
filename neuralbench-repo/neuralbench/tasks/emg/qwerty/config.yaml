@@ -65,6 +65,8 @@ data:
     # Targets cover the un-padded 4 s "core" of the padded 5 s window.
     core_start_offset: 0.9
     core_duration: 4.0
+    key_to_label: !!python/name:neuralbench.tasks.emg.qwerty.charset.PAPER_KEY_TO_LABEL
+    unichar_to_key: !!python/name:neuralbench.tasks.emg.qwerty.charset.PAPER_UNICHAR_TO_KEY
   # Paper-faithful sliding-window segmentation: 4 s core + 0.9 s left +
   # 0.1 s right padding; stride = core duration so windows abut.
   trigger_event_type: Emg2qwertyRaw
@@ -78,12 +80,11 @@ trainer_config.monitor: val/CER
 trainer_config.mode: min
 loss:
   =replace=: true
-  name: CTCLoss
-  kwargs:
-    blank: 98
-    zero_infinity: true
+  name: CtcSeqLoss
+  blank: 98
+  zero_infinity: true
 metrics:
   - name: CharacterErrorRates
     log_name: CER
     kwargs:
-      vocab_preset: paper
+      blank_idx: 98

@@ -135,9 +135,6 @@ class BrainModule(pl.LightningModule):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         y_true = batch.data["target"]
 
-        if isinstance(self.loss, nn.CTCLoss):
-            return self._run_ctc_step(batch, y_true, step_name)
-
         if self.target_scaler is not None:
             y_true = self.target_scaler.transform(y_true)
         if y_true.ndim == 3 and y_true.shape[1] == 1:
@@ -181,39 +178,6 @@ class BrainModule(pl.LightningModule):
                 if "confusion_matrix" not in metric_name:
                     self.log(metric_name, metric, **log_kwargs)
 
-        return loss, y_pred, y_true
-
-    def _run_ctc_step(
-        self, batch: Batch, y_true: torch.Tensor, step_name: str
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # ``y_true`` is ``(B, max_target_length + 1)`` from KeystrokeSequence:
-        # col 0 holds the un-padded label count, cols 1: are padded labels.
-        # Model output ``(B, T_out, C)`` (braindecode convention) is
-        # transposed for ``nn.CTCLoss``'s ``(T_out, B, C)`` signature.
-        target_lengths, targets = y_true[:, 0].long(), y_true[:, 1:].long()
-        B = y_true.shape[0]
-        is_train = step_name == "train"
-        log_kwargs = {
-            "on_step": is_train, "on_epoch": True, "logger": True,
-            "prog_bar": True, "batch_size": B,
-            "sync_dist": self.trainer.world_size > 1,
-        }
-        y_pred = self.model_forward(batch)
-        log_probs = y_pred.transpose(0, 1).contiguous()
-        input_lengths = torch.full(
-            (B,), log_probs.shape[0], dtype=torch.long, device=log_probs.device
-        )
-        loss = self.loss(log_probs, targets, input_lengths, target_lengths)
-        self.log(f"{step_name}/loss", loss, **log_kwargs)
-
-        # Update task-defined metrics (e.g. CharacterErrorRates).  Same
-        # path as ``_run_step`` — CTC-aware metrics consume the standard
-        # ``(y_pred, y_true)`` and split out the lengths internally.
-        if not is_train:
-            for metric_name, metric in self.metrics.items():
-                if metric_name.startswith(step_name):
-                    metric.update(y_pred.detach(), y_true)
-                    self.log(metric_name, metric, **log_kwargs)
         return loss, y_pred, y_true
 
     def training_step(self, batch: Batch, batch_idx: int):

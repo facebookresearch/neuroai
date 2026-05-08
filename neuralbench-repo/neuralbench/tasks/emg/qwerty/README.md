@@ -61,10 +61,20 @@ needed).
 * Paper numbers need GPU compute (A100/H100 single-GPU ≈ 6–8 h per
   generic baseline).  CPU / MPS are not feasible at full scale.
 
-## Pretrained-weight loading (planned)
+## Pretrained weights
 
-Loading upstream's `TDSConvCTCModule` checkpoint requires a 2-key
-rename (`model.4.{weight,bias}` → `final_layer.{weight,bias}`).  We
-plan to publish pre-remapped weights to `huggingface.co/braindecode/`
-so the standard `--checkpoint` flow Just Works without any loader
-changes.  Tracked as a follow-up.
+Pre-remapped weights for the upstream `generic.ckpt` (108-subject
+baseline) are published at
+[`braindecode/emg2qwerty-generic`](https://huggingface.co/braindecode/emg2qwerty-generic)
+under the upstream **CC BY-NC-SA 4.0** license:
+
+```python
+from braindecode.models import EMG2QwertyNet
+
+model = EMG2QwertyNet.from_pretrained("braindecode/emg2qwerty-generic")
+```
+
+The two-key rename (`model.4.{weight,bias}` →
+`final_layer.{weight,bias}`) and re-publishing flow live in
+[`scripts/convert_emg2qwerty_checkpoint.py`](../../../scripts/convert_emg2qwerty_checkpoint.py)
+— re-run it to produce additional remapped checkpoints.

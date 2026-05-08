@@ -511,3 +511,108 @@ def part_reversal(tensor: torch.Tensor) -> None:
         x[first : int(last)] = reversed(x[first : int(last)])  # type: ignore
         last += num
         first = int(last)
+
+
+class KeystrokeSequence(BaseStatic):
+    """Padded keystroke-sequence extractor for CTC targets.
+
+    Output is a fixed-shape ``(max_target_length + 1,)`` tensor:
+
+    * ``out[0]`` — the un-padded sequence length ``L``;
+    * ``out[1 : 1 + L]`` — the encoded labels;
+    * remainder — ``pad_value`` (defaults to ``len(key_to_label)``,
+      which is the canonical CTC-blank index).
+
+    Vocabulary-agnostic: the caller supplies ``key_to_label`` (the
+    label assignment) and optional ``unichar_to_key`` /
+    ``input_folds`` mappings for normalizing raw event keys before
+    lookup.  With ``core_start_offset`` / ``core_duration`` set, only
+    events falling inside the un-padded core of a padded EMG window
+    are kept.
+    """
+
+    event_types: str = "Keystroke"
+    event_field: str = "text"
+    max_target_length: int = pydantic.Field(default=128, gt=0)
+    pad_value: int | None = None
+    aggregation: tp.Literal["cat"] = "cat"
+    core_start_offset: float = 0.0
+    core_duration: float | None = None
+    key_to_label: dict[str, int] = pydantic.Field(default_factory=dict)
+    unichar_to_key: dict[str, str | None] = pydantic.Field(default_factory=dict)
+    input_folds: dict[str, str | None] = pydantic.Field(default_factory=dict)
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if not self.key_to_label:
+            raise ValueError("KeystrokeSequence requires a non-empty key_to_label.")
+        self._pad_value = (
+            len(self.key_to_label) if self.pad_value is None else self.pad_value
+        )
+        self._truncation_warned = False
+
+    def _encode(self, keys: tp.Sequence[str]) -> list[int]:
+        out: list[int] = []
+        for k in keys:
+            if k in self.input_folds:
+                folded = self.input_folds[k]
+                if folded is None:
+                    continue
+                k = folded
+            if k in self.key_to_label:
+                out.append(self.key_to_label[k])
+                continue
+            if len(k) == 1:
+                normalized = self.unichar_to_key.get(k, k)
+                if normalized is None:
+                    continue
+                if normalized in self.key_to_label:
+                    out.append(self.key_to_label[normalized])
+        return out
+
+    def get_static(self, event: _ev.etypes.Event) -> torch.Tensor:
+        labels = self._encode([getattr(event, self.event_field, "")])
+        return torch.tensor(labels, dtype=torch.long)
+
+    def __call__(self, *args, **kwargs) -> torch.Tensor:  # type: ignore[override]
+        events = args[0] if args else kwargs.get("events")
+        start = float(args[1]) if len(args) > 1 else float(kwargs.get("start", 0.0))
+        events = self._restrict_to_core(events, start)
+
+        # BaseStatic's missing-event default is a 1-label dummy; emit a
+        # length-0 target instead so CTC sees an empty sequence.
+        empty = self.allow_missing and len(
+            self._event_types_helper.extract(events)
+        ) == 0
+        if empty:
+            return self._pad(torch.empty(0, dtype=torch.long))
+        seq = super().__call__(events, *args[1:], **kwargs)
+        return self._pad(seq.to(torch.long).flatten())
+
+    def _restrict_to_core(self, events: tp.Any, start: float) -> tp.Any:
+        if self.core_duration is None and self.core_start_offset == 0.0:
+            return events
+        if not isinstance(events, list):
+            return events
+        lo = start + self.core_start_offset
+        hi = lo + (self.core_duration or float("inf"))
+        return [e for e in events if lo <= float(e.start) < hi]
+
+    def _pad(self, seq: torch.Tensor) -> torch.Tensor:
+        import logging
+
+        n = int(seq.numel())
+        if n > self.max_target_length and not self._truncation_warned:
+            logging.getLogger(__name__).warning(
+                "KeystrokeSequence: truncating %d keys to max_target_length=%d "
+                "(further occurrences silenced).", n, self.max_target_length,
+            )
+            self._truncation_warned = True
+        length = min(n, self.max_target_length)
+        out = torch.full(
+            (self.max_target_length + 1,), self._pad_value, dtype=torch.long,
+        )
+        out[0] = length
+        if length:
+            out[1 : 1 + length] = seq[:length]
+        return out

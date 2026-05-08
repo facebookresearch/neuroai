@@ -30,8 +30,6 @@ import typing as tp
 from collections import OrderedDict
 from collections.abc import Sequence
 
-# Single source of truth for the supported preset names.  Extractors and
-# tests both read this so adding a preset requires touching one place.
 VocabPreset = tp.Literal["paper", "qwerty_compact"]
 
 
@@ -113,45 +111,39 @@ class CharacterSet:
     ) -> None:
         self.KEY_TO_UNICODE = key_to_unicode if key_to_unicode is not None else _PAPER_KEY_TO_UNICODE
         self.UNICHAR_TO_KEY = unichar_to_key if unichar_to_key is not None else _PAPER_UNICHAR_TO_KEY
-        # Folds normalize *input* keys before vocabulary lookup.  Mapping a
-        # key to ``None`` means "drop entirely".  Empty dict => no folding.
         self._input_folds: dict[str, str | None] = input_folds or {}
         self._key_to_index = {k: i for i, k in enumerate(self.KEY_TO_UNICODE)}
+        self._idx_to_chr: tuple[str, ...] = tuple(chr(c) for c in self.KEY_TO_UNICODE.values())
 
     @classmethod
     def paper(cls) -> "CharacterSet":
-        """98-key paper-faithful vocabulary (Sivakumar et al., NeurIPS 2024)."""
         return cls()
 
     @classmethod
     def qwerty_compact(cls) -> "CharacterSet":
-        """50-key US-QWERTY-folded vocabulary; ``num_classes = 51``.
-
-        Uppercase letters and shifted symbols fold to their unshifted
-        forms in :meth:`clean_keys`; the ``Key.shift`` modifier is dropped.
-        """
         return cls(
             key_to_unicode=_COMPACT_KEY_TO_UNICODE,
             unichar_to_key=_COMPACT_UNICHAR_TO_KEY,
             input_folds=_COMPACT_INPUT_FOLDS,
         )
 
+    @classmethod
+    def from_preset(cls, name: VocabPreset) -> "CharacterSet":
+        return cls.qwerty_compact() if name == "qwerty_compact" else cls.paper()
+
     @property
     def null_class(self) -> int:
-        """Index of the CTC blank class (= ``len(KEY_TO_UNICODE)``)."""
         return len(self.KEY_TO_UNICODE)
 
     @property
     def num_classes(self) -> int:
-        """Vocabulary size + 1 for blank."""
         return len(self.KEY_TO_UNICODE) + 1
 
     def key_to_label(self, key: str) -> int:
         return self._key_to_index[key]
 
     def labels_to_str(self, labels: Sequence[int]) -> str:
-        keys = tuple(self.KEY_TO_UNICODE.keys())
-        return "".join(chr(self.KEY_TO_UNICODE[keys[label]]) for label in labels)
+        return "".join(self._idx_to_chr[label] for label in labels)
 
     def clean_keys(self, keys: Sequence[str]) -> list[str]:
         """Normalize input keys and filter to the active vocabulary.
@@ -165,7 +157,7 @@ class CharacterSet:
             if k in self._input_folds:
                 folded = self._input_folds[k]
                 if folded is None:
-                    continue  # explicit drop (e.g. Key.shift in compact)
+                    continue
                 k = folded
             if k in self.KEY_TO_UNICODE:
                 out.append(k)
@@ -189,3 +181,16 @@ class CharacterSet:
         return [self.key_to_label(k) for k in self.clean_keys(keys)]
 
 
+# Module-level vocabulary dicts consumed by ``neuralset.extractors.text.
+# KeystrokeSequence`` via ``!!python/name:`` references in the task YAML
+# configs.  Keeping them here means the keystroke-typing presets stay
+# task-side while the generic extractor lives upstream in neuralset.
+_PAPER = CharacterSet.paper()
+PAPER_KEY_TO_LABEL: dict[str, int] = dict(_PAPER._key_to_index)
+PAPER_UNICHAR_TO_KEY: dict[str, str | None] = dict(_PAPER.UNICHAR_TO_KEY)
+PAPER_INPUT_FOLDS: dict[str, str | None] = {}
+
+_COMPACT = CharacterSet.qwerty_compact()
+COMPACT_KEY_TO_LABEL: dict[str, int] = dict(_COMPACT._key_to_index)
+COMPACT_UNICHAR_TO_KEY: dict[str, str | None] = dict(_COMPACT.UNICHAR_TO_KEY)
+COMPACT_INPUT_FOLDS: dict[str, str | None] = dict(_COMPACT._input_folds)

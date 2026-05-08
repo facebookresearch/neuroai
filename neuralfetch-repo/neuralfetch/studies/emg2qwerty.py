@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""NM000104 (CTRL-Labs emg2qwerty) study source for neuralbench."""
+"""NM000104 (CTRL-Labs emg2qwerty) — surface-EMG keystroke decoding."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ import re
 import typing as tp
 from pathlib import Path
 
+import mne_bids
 import pandas as pd
 import pydantic
-
 from neuralset.events import etypes, study
 
 LOGGER = logging.getLogger(__name__)
@@ -23,29 +23,21 @@ _BIDS_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class Emg2qwertyRaw(etypes.Emg):
-    """NM000104 EMG event — coerces BDF channel types to ``emg`` and rescales
-    volts → microvolts to match the upstream HDF5 storage units.
+    """NM000104 EMG event — reads via ``mne_bids`` and rescales V → µV.
 
-    Why both fixes are needed:
-
-    * BDF headers don't carry channel-type info; only the BIDS
-      ``channels.tsv`` sidecar does, and ``mne.io.read_raw`` ignores
-      sidecars.  Without coercion, ``EmgExtractor(picks=('emg',))`` finds
-      no channels.
-    * The pretrained checkpoints' ``_SpectrogramNorm`` BatchNorm was fit on
-      microvolt-scale inputs.  Volts (~1e-5) drive the log10-power STFT to
-      its ``log_eps=1e-6`` floor (-6.0), giving the model a constant input;
-      ×1e6 gives log-spec mean ≈ 0.2 matching the ckpt's running_mean.
+    ``mne_bids.read_raw_bids`` picks up channel types from the BIDS
+    ``channels.tsv`` sidecar (which sets every channel to ``emg``), so
+    no manual coercion is needed.  The pretrained checkpoints'
+    ``_SpectrogramNorm`` BatchNorm was fit on microvolt-scale inputs;
+    the rescale here keeps the published checkpoint usable.
     """
 
     BDF_TO_MICROVOLT_SCALE: tp.ClassVar[float] = 1e6
 
     def _read(self) -> tp.Any:
-        raw = super()._read().copy()
-        raw.set_channel_types({ch: "emg" for ch in raw.ch_names}, verbose=False)
+        bp = mne_bids.get_bids_path_from_fname(self.filepath)
+        raw = mne_bids.read_raw_bids(bp, verbose=False)
         raw.load_data(verbose=False)
-        # Explicit picks: after set_channel_types(..."emg"), MNE's default
-        # ``picks="data"`` excludes EMG channels and apply_function raises.
         raw.apply_function(
             lambda x: x * self.BDF_TO_MICROVOLT_SCALE,
             picks=raw.ch_names, channel_wise=False, verbose=False,
@@ -81,10 +73,6 @@ class Emg2qwerty(study.Study):
     )
     aliases: tp.ClassVar[tuple[str, ...]] = ("emg2qwerty", "nm000104")
 
-    # NM000104 is mirrored on NEMAR (s3://nemar/nm000104) and indexed in the
-    # eegdash database; ``neuralfetch.download.Eegdash`` handles record
-    # discovery + parallel S3 transfer.  ~239 GB / 1136 files for the full
-    # 108-subject release.
     NEMAR_DATASET_ID: tp.ClassVar[str] = "nm000104"
 
     _bids_root_cache: Path | None = pydantic.PrivateAttr(default=None)
@@ -108,8 +96,6 @@ class Emg2qwerty(study.Study):
         return root
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        # Glob the BIDS layout — discovery feeds cache-uid hashing and must
-        # stay fast / dependency-light (no mne_bids).
         for emg_dir in sorted(self._bids_root().glob("sub-*/ses-*/emg")):
             subject = emg_dir.parent.parent.name.removeprefix("sub-")
             session = emg_dir.parent.name.removeprefix("ses-")
@@ -144,13 +130,9 @@ class Emg2qwerty(study.Study):
             text = p.get("prompt_text", "")
             if not isinstance(text, str):
                 continue
-            # NM000104 prompt_text often ends with a literal "\n"
-            # (backslash + 'n', two characters) — strip that suffix
-            # explicitly.  ``str.rstrip`` would treat "\\n" as a
-            # character set and chew off any trailing 'n' or '\'.
-            if text.endswith("\\n"):
-                text = text[:-2]
-            text = text.strip()
+            # NM000104 prompt_text often ends with the two-char literal
+            # "\\n"; rstrip would chew real trailing 'n' / '\\'.
+            text = text.removesuffix("\\n").strip()
             if text:
                 rows.append({
                     "type": "Sentence", "start": float(p["start"]),

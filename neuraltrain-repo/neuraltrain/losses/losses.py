@@ -276,3 +276,42 @@ class MultiLoss(nn.Module):
             loss_values["total"] += self.weights[name] * loss_values[name]
 
         return loss_values
+
+
+class CtcSeqLoss(nn.Module):
+    """CTC loss adapter with the ``(y_pred, y_true)`` signature.
+
+    ``nn.CTCLoss`` takes ``(log_probs, targets, input_lengths,
+    target_lengths)`` — incompatible with the rest of the BrainModule
+    pipeline.  This adapter accepts:
+
+    * ``y_pred`` — ``(B, T_out, C)`` log-probs from a CTC head
+      (braindecode convention).
+    * ``y_true`` — ``(B, max_target_length + 1)`` length-prefixed
+      labels: column 0 is the un-padded label count ``L``; columns
+      ``1:L+1`` are the labels; the rest is padding.
+
+    The adapter splits the lengths/targets out of ``y_true`` and
+    transposes ``y_pred`` to ``(T_out, B, C)`` for ``nn.CTCLoss``.
+    """
+
+    def __init__(
+        self,
+        blank: int = 0,
+        reduction: str = "mean",
+        zero_infinity: bool = False,
+    ) -> None:
+        super().__init__()
+        self.loss = nn.CTCLoss(
+            blank=blank, reduction=reduction, zero_infinity=zero_infinity
+        )
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        target_lengths = y_true[:, 0].long()
+        targets = y_true[:, 1:].long()
+        log_probs = y_pred.transpose(0, 1)
+        input_lengths = torch.full(
+            (y_true.shape[0],), log_probs.shape[0],
+            dtype=torch.long, device=log_probs.device,
+        )
+        return self.loss(log_probs, targets, input_lengths, target_lengths)

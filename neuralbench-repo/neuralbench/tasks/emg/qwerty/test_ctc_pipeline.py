@@ -14,11 +14,22 @@ import pytest
 import torch
 from torch import nn
 
+from neuralset.extractors.text import KeystrokeSequence
+from neuraltrain.metrics.metrics import CharacterErrorRates
+
 from .charset import CharacterSet
-from .extractors import KeystrokeSequence
-from .metrics import CharacterErrorRates
 
 CS = CharacterSet.paper()
+
+
+def _vocab_kwargs(preset: str = "paper") -> dict:
+    """Build the dicts ``KeystrokeSequence`` consumes from a preset."""
+    cs = CharacterSet.from_preset(preset)
+    return {
+        "key_to_label": dict(cs._key_to_index),
+        "unichar_to_key": dict(cs.UNICHAR_TO_KEY),
+        "input_folds": dict(cs._input_folds),
+    }
 
 
 @pytest.fixture
@@ -42,7 +53,9 @@ def make_keystrokes():
 
 
 def test_keystroke_sequence_pad_layout(make_keystrokes):
-    ext = KeystrokeSequence(max_target_length=8, event_types="Keystroke")
+    ext = KeystrokeSequence(
+        max_target_length=8, event_types="Keystroke", **_vocab_kwargs(),
+    )
     events = make_keystrokes(["h", "i", "Key.space"])
     ext.prepare(events)
     out = ext(events, start=0.0, duration=1.0)
@@ -53,7 +66,9 @@ def test_keystroke_sequence_pad_layout(make_keystrokes):
 
 
 def test_keystroke_sequence_truncation_warns_once(make_keystrokes, caplog):
-    ext = KeystrokeSequence(max_target_length=2, event_types="Keystroke")
+    ext = KeystrokeSequence(
+        max_target_length=2, event_types="Keystroke", **_vocab_kwargs(),
+    )
     events = make_keystrokes(list("hello"))
     ext.prepare(events)
     with caplog.at_level("WARNING"):
@@ -67,6 +82,7 @@ def test_keystroke_sequence_core_window_filters(make_keystrokes):
     ext = KeystrokeSequence(
         max_target_length=8, event_types="Keystroke",
         core_start_offset=0.9, core_duration=4.0,
+        **_vocab_kwargs(),
     )
     events = make_keystrokes(
         list("abcde"), starts=[10.0, 10.5, 11.0, 14.5, 14.95]
@@ -79,29 +95,25 @@ def test_keystroke_sequence_core_window_filters(make_keystrokes):
 
 def test_keystroke_sequence_empty_segment(make_keystrokes):
     ext = KeystrokeSequence(
-        max_target_length=8, event_types="Keystroke", allow_missing=True
+        max_target_length=8, event_types="Keystroke", allow_missing=True,
+        **_vocab_kwargs(),
     )
     ext.prepare(make_keystrokes(["a"]))
     out = ext([], start=0.0, duration=1.0)
     assert out.shape == (9,) and int(out[0]) == 0
 
 
-def test_two_extractors_with_different_presets_dont_clobber_each_other():
-    """Per-instance charsets — no shared process state."""
+def test_keystroke_sequence_per_instance_vocab():
+    """Distinct preset kwargs give distinct vocab sizes — no shared state."""
     paper = KeystrokeSequence(
-        max_target_length=4, event_types="Keystroke", vocab_preset="paper"
+        max_target_length=4, event_types="Keystroke", **_vocab_kwargs("paper"),
     )
     compact = KeystrokeSequence(
-        max_target_length=4, event_types="Keystroke", vocab_preset="qwerty_compact"
+        max_target_length=4, event_types="Keystroke",
+        **_vocab_kwargs("qwerty_compact"),
     )
-    assert paper.charset.num_classes == 99
-    assert compact.charset.num_classes == 51
-    # Order doesn't matter — building paper after compact still gives 99.
-    paper2 = KeystrokeSequence(
-        max_target_length=4, event_types="Keystroke", vocab_preset="paper"
-    )
-    assert paper2.charset.num_classes == 99
-    assert compact.charset.num_classes == 51
+    assert len(paper.key_to_label) == 98
+    assert len(compact.key_to_label) == 50
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +182,7 @@ def test_cer_perfect_predictions():
             y_pred[i, t, CS.key_to_label(c)] = 0.0
         y_pred[i, len(s):, CS.null_class] = 0.0
 
-    metric = CharacterErrorRates()
+    metric = CharacterErrorRates(blank_idx=98)
     metric.update(torch.log_softmax(y_pred, dim=-1), y_true)
     assert float(metric.compute()) == 0.0
 
@@ -197,7 +209,7 @@ def test_specaugment_callback_attaches_and_detaches():
         from braindecode.models import EMG2QwertyNet
     except ImportError:
         pytest.skip("EMG2QwertyNet missing from installed braindecode")
-    from .callbacks import SpecAugmentCallback
+    from neuralbench.callbacks import SpecAugmentCallback
 
     model = EMG2QwertyNet(
         n_outputs=99, n_chans=32, n_times=8000, sfreq=2000.0, log_softmax=True
@@ -213,7 +225,7 @@ def test_specaugment_callback_attaches_and_detaches():
 
 
 def test_band_rotation_callback_modifies_neuro_in_place():
-    from .callbacks import BandRotationCallback
+    from neuralbench.callbacks import BandRotationCallback
 
     x = torch.randn(2, 32, 64)
 
@@ -232,7 +244,7 @@ def test_band_rotation_callback_delegates_to_braindecode_functional(monkeypatch)
     """The callback's per-batch math lives in braindecode."""
     from braindecode.augmentation import functional as bd_functional
 
-    from .callbacks import BandRotationCallback
+    from neuralbench.callbacks import BandRotationCallback
 
     captured = {}
     real = bd_functional.band_rotation
@@ -259,33 +271,13 @@ def test_band_rotation_callback_delegates_to_braindecode_functional(monkeypatch)
 
 
 # ---------------------------------------------------------------------------
-# BrainModule CTC path: metric flows through self.metrics, no special factory
+# BrainModule CTC path: CtcSeqLoss + (y_pred, y_true) metric — no special fork
 # ---------------------------------------------------------------------------
 
 
-def test_brain_module_ctc_step_runs_e2e():
+def test_brain_module_ctc_loss_and_metric_share_signature():
     pytest.importorskip("Levenshtein")
-    from neuraltrain.optimizers import LightningOptimizer
-
-    from neuralbench.pl_module import BrainModule
-
-    class Toy(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.linear = nn.Linear(4, CS.num_classes)
-        def forward(self, x):
-            return torch.log_softmax(self.linear(x.transpose(1, 2)), dim=-1)
-
-    # _update_metrics prepends split names → {"val/CER", "test/CER"}.
-    bm = BrainModule(
-        model=Toy(),
-        loss=nn.CTCLoss(blank=CS.null_class, zero_infinity=True),
-        metrics={"CER": CharacterErrorRates()},
-        lightning_optimizer_config=LightningOptimizer(
-            optimizer={"name": "Adam", "lr": 1e-3, "kwargs": {}},
-            scheduler=None, interval="step",
-        ),
-    )
+    from neuraltrain.losses.losses import CtcSeqLoss
 
     seqs = ("hey", "world")
     target_lengths = torch.tensor([len(s) for s in seqs])
@@ -294,20 +286,16 @@ def test_brain_module_ctc_step_runs_e2e():
         targets[i, : len(s)] = torch.tensor([CS.key_to_label(c) for c in s])
     y_true = torch.cat([target_lengths.unsqueeze(1), targets], dim=1)
 
-    class _Batch: ...
-    batch = _Batch()
-    batch.data = {
-        "neuro": torch.randn(len(seqs), 4, 64), "target": y_true,
-        "subject_id": torch.zeros(len(seqs), dtype=torch.long),
-    }
-    log_probs = bm.model_forward(batch).transpose(0, 1).contiguous()
-    input_lengths = torch.full((len(seqs),), log_probs.shape[0], dtype=torch.long)
-    assert torch.isfinite(bm.loss(log_probs, targets, input_lengths, target_lengths))
+    # (B, T_out, C) log-probs — braindecode convention; same shape both
+    # the loss adapter and CER metric consume.
+    B, T_out, V = len(seqs), 64, CS.num_classes
+    y_pred = torch.log_softmax(torch.randn(B, T_out, V), dim=-1)
 
-    # Metric is constructed; update via the standard 2-tensor signature.
-    metric = bm.metrics["val/CER"]
-    y_pred_btc = log_probs.transpose(0, 1).detach()  # (B, T, C)
-    metric.update(y_pred_btc, y_true)
+    loss = CtcSeqLoss(blank=CS.null_class, zero_infinity=True)
+    assert torch.isfinite(loss(y_pred, y_true))
+
+    metric = CharacterErrorRates(blank_idx=CS.null_class)
+    metric.update(y_pred, y_true)
     assert float(metric.compute()) >= 0.0
 
 
@@ -397,7 +385,7 @@ def bids_tree(tmp_path):
 
 
 def test_emg2qwerty_iter_timelines(bids_tree):
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
     root, sub, ses = bids_tree
     assert list(Emg2qwerty(path=str(root)).iter_timelines()) == [
         {"subject": sub, "session": ses}
@@ -405,7 +393,7 @@ def test_emg2qwerty_iter_timelines(bids_tree):
 
 
 def test_emg2qwerty_load_timeline_events(bids_tree):
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
     root, sub, ses = bids_tree
     df = Emg2qwerty(path=str(root))._load_timeline_events(
         {"subject": sub, "session": ses}
@@ -423,7 +411,7 @@ def test_emg2qwerty_load_timeline_events(bids_tree):
     [("..", "0000000001"), ("00000001", "../../../etc"), ("$ub", "ses!")],
 )
 def test_emg2qwerty_bids_id_validation_rejects_unsafe(bids_tree, subject, session):
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
     root, _, _ = bids_tree
     with pytest.raises(ValueError, match="unsafe BIDS id"):
         Emg2qwerty(path=str(root))._bids_paths(subject, session)
@@ -443,7 +431,7 @@ def test_emg2qwerty_bids_id_validation_rejects_unsafe(bids_tree, subject, sessio
 def test_load_timeline_events_strips_only_literal_suffix(
     bids_tree, raw_text, expected
 ):
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
 
     root, sub, ses = bids_tree
     stem = f"sub-{sub}_ses-{ses}_task-typing"
@@ -465,7 +453,7 @@ def test_emg2qwerty_download_wires_neuralfetch_eegdash():
 
     import neuralfetch.download as dl
 
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
 
     with mock.patch.object(dl, "Eegdash") as patched:
         Emg2qwerty(path="/tmp/_nbqwerty_test")._download()
@@ -478,7 +466,7 @@ def test_emg2qwerty_download_wires_neuralfetch_eegdash():
 
 def test_emg2qwerty_bids_root_handles_download_subfolder(tmp_path):
     """``Study.download`` lands BIDS under ``self.path/download/``."""
-    from .study import Emg2qwerty
+    from neuralfetch.studies.emg2qwerty import Emg2qwerty
 
     sub, ses = "00000002", "0000000002"
     download_root = tmp_path / "download" / f"sub-{sub}" / f"ses-{ses}" / "emg"

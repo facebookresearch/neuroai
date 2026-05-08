@@ -13,16 +13,17 @@ data:
     split:
       split_by: session
   target:
-    vocab_preset: qwerty_compact
+    key_to_label: !!python/name:neuralbench.tasks.emg.qwerty.charset.COMPACT_KEY_TO_LABEL
+    unichar_to_key: !!python/name:neuralbench.tasks.emg.qwerty.charset.COMPACT_UNICHAR_TO_KEY
+    input_folds: !!python/name:neuralbench.tasks.emg.qwerty.charset.COMPACT_INPUT_FOLDS
 brain_model_output_size: 51
 loss:
   =replace=: true
-  name: CTCLoss
-  kwargs:
-    blank: 50
-    zero_infinity: true
+  name: CtcSeqLoss
+  blank: 50
+  zero_infinity: true
 metrics:
   - name: CharacterErrorRates
     log_name: CER
     kwargs:
-      vocab_preset: qwerty_compact
+      blank_idx: 50

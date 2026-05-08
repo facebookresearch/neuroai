@@ -730,3 +730,50 @@ class GroupedMetric(torchmetrics.Metric):
 
     def __repr__(self) -> str:
         return f"GroupedMetric({self.base_metric_cls.__name__})"
+
+
+class CharacterErrorRates(torchmetrics.text.CharErrorRate):
+    """CTC greedy-decoded character error rate, returned in percent.
+
+    Adapts :class:`torchmetrics.text.CharErrorRate` to a CTC head:
+    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), maps
+    each integer label to ``chr(label)`` (one Unicode codepoint per
+    label — distinct labels stay distinct, which is all Levenshtein
+    needs), and forwards to the base CER's string update.
+
+    Inputs
+    ------
+    y_pred : ``(B, T_out, num_classes)``
+        Log-probs from a CTC head.
+    y_true : ``(B, max_target_length + 1)``
+        Column 0 is the un-padded label count ``L``; columns ``1:L+1``
+        are the labels; the rest is padding.
+    """
+
+    def __init__(self, blank_idx: int = 0, **kwargs: tp.Any) -> None:
+        super().__init__(**kwargs)
+        self._blank = blank_idx
+
+    def update(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> None:  # type: ignore[override]
+        argmax = y_pred.argmax(dim=-1).long()
+        merged = torch.cat([y_true.long(), argmax], dim=1).detach().cpu().tolist()
+        max_target_len = y_true.shape[1] - 1
+        blank = self._blank
+        pred_strs: list[str] = []
+        target_strs: list[str] = []
+        for row in merged:
+            target_len = row[0]
+            targets = row[1 : 1 + target_len]
+            pred_labels = row[1 + max_target_len :]
+            preds: list[int] = []
+            prev = blank
+            for lbl in pred_labels:
+                if lbl != blank and lbl != prev:
+                    preds.append(lbl)
+                prev = lbl
+            pred_strs.append("".join(chr(lbl) for lbl in preds))
+            target_strs.append("".join(chr(lbl) for lbl in targets))
+        super().update(pred_strs, target_strs)
+
+    def compute(self) -> torch.Tensor:
+        return super().compute() * 100.0

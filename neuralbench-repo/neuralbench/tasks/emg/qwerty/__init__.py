@@ -6,9 +6,14 @@
 
 """emg2qwerty CTC task package.
 
-Submodule imports below trigger ``__init_subclass__`` registration of
-the task's pydantic-discriminated subclasses (Study sources, extractors,
-the CER metric config) with neuralset / neuraltrain.
-"""
+Task-side Python is just :mod:`charset` — the keystroke-vocabulary
+constants referenced by ``!!python/name:`` from the YAML configs.
 
-from . import callbacks, extractors, metrics, study  # noqa: F401
+Everything else lives upstream:
+
+* Study source — :mod:`neuralfetch.studies.emg2qwerty`
+* CTC target extractor — :class:`neuralset.extractors.text.KeystrokeSequence`
+* CER metric — :class:`neuraltrain.metrics.metrics.CharacterErrorRates`
+* Augmentation callbacks — :mod:`neuralbench.callbacks`
+  (``SpecAugmentCallback``, ``BandRotationCallback``)
+"""
