@@ -13,7 +13,10 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode",
+  # >=1.5 ships EMG2QwertyNet, exposes braindecode.models.__all__ (needed
+  # for neuraltrain's discriminated-model auto-registration), and includes
+  # the EEGModuleMixin HF Hub integration used by the convert script.
+  "braindecode>=1.5.0",
   "neuralset",
   "neuraltrain",
   "exca",
