@@ -538,36 +538,44 @@ class KeystrokeSequence(BaseStatic):
     aggregation: tp.Literal["cat"] = "cat"
     core_start_offset: float = 0.0
     core_duration: float | None = None
-    key_to_label: dict[str, int] = pydantic.Field(default_factory=dict)
-    unichar_to_key: dict[str, str | None] = pydantic.Field(default_factory=dict)
-    input_folds: dict[str, str | None] = pydantic.Field(default_factory=dict)
+    # Vocab fields are list-of-pairs (rather than dicts) so they survive
+    # ``exca.ConfDict``'s YAML key-flattening on ``.``-containing keys
+    # (e.g. ``"Key.backspace"``, ``"."``).  ``model_post_init`` rebuilds
+    # the dicts internally; tests + Python callers may pass a dict and
+    # it'll be normalized below.
+    key_to_label: list[tuple[str, int]] | dict[str, int] = pydantic.Field(default_factory=list)
+    unichar_to_key: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
+    input_folds: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        if not self.key_to_label:
+        self._key_to_label: dict[str, int] = dict(self.key_to_label)
+        self._unichar_to_key: dict[str, str | None] = dict(self.unichar_to_key)
+        self._input_folds: dict[str, str | None] = dict(self.input_folds)
+        if not self._key_to_label:
             raise ValueError("KeystrokeSequence requires a non-empty key_to_label.")
         self._pad_value = (
-            len(self.key_to_label) if self.pad_value is None else self.pad_value
+            len(self._key_to_label) if self.pad_value is None else self.pad_value
         )
         self._truncation_warned = False
 
     def _encode(self, keys: tp.Sequence[str]) -> list[int]:
         out: list[int] = []
         for k in keys:
-            if k in self.input_folds:
-                folded = self.input_folds[k]
+            if k in self._input_folds:
+                folded = self._input_folds[k]
                 if folded is None:
                     continue
                 k = folded
-            if k in self.key_to_label:
-                out.append(self.key_to_label[k])
+            if k in self._key_to_label:
+                out.append(self._key_to_label[k])
                 continue
             if len(k) == 1:
-                normalized = self.unichar_to_key.get(k, k)
+                normalized = self._unichar_to_key.get(k, k)
                 if normalized is None:
                     continue
-                if normalized in self.key_to_label:
-                    out.append(self.key_to_label[normalized])
+                if normalized in self._key_to_label:
+                    out.append(self._key_to_label[normalized])
         return out
 
     def get_static(self, event: _ev.etypes.Event) -> torch.Tensor:

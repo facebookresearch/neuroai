@@ -181,16 +181,17 @@ class CharacterSet:
         return [self.key_to_label(k) for k in self.clean_keys(keys)]
 
 
-# Module-level vocabulary dicts consumed by ``neuralset.extractors.text.
-# KeystrokeSequence`` via ``!!python/name:`` references in the task YAML
-# configs.  Keeping them here means the keystroke-typing presets stay
-# task-side while the generic extractor lives upstream in neuralset.
+# Module-level vocabulary tables consumed by
+# ``neuralset.extractors.text.KeystrokeSequence`` via ``!!python/name:``
+# references in the task YAML configs.  Stored as lists of (key, value)
+# pairs (not dicts) so they survive ``exca.ConfDict``'s YAML key-
+# flattening on dot-containing keys (e.g. ``"Key.backspace"``, ``"."``).
 _PAPER = CharacterSet.paper()
-PAPER_KEY_TO_LABEL: dict[str, int] = dict(_PAPER._key_to_index)
-PAPER_UNICHAR_TO_KEY: dict[str, str | None] = dict(_PAPER.UNICHAR_TO_KEY)
-PAPER_INPUT_FOLDS: dict[str, str | None] = {}
+PAPER_KEY_TO_LABEL: list[tuple[str, int]] = list(_PAPER._key_to_index.items())
+PAPER_UNICHAR_TO_KEY: list[tuple[str, str | None]] = list(_PAPER.UNICHAR_TO_KEY.items())
+PAPER_INPUT_FOLDS: list[tuple[str, str | None]] = []
 
 _COMPACT = CharacterSet.qwerty_compact()
-COMPACT_KEY_TO_LABEL: dict[str, int] = dict(_COMPACT._key_to_index)
-COMPACT_UNICHAR_TO_KEY: dict[str, str | None] = dict(_COMPACT.UNICHAR_TO_KEY)
-COMPACT_INPUT_FOLDS: dict[str, str | None] = dict(_COMPACT._input_folds)
+COMPACT_KEY_TO_LABEL: list[tuple[str, int]] = list(_COMPACT._key_to_index.items())
+COMPACT_UNICHAR_TO_KEY: list[tuple[str, str | None]] = list(_COMPACT.UNICHAR_TO_KEY.items())
+COMPACT_INPUT_FOLDS: list[tuple[str, str | None]] = list(_COMPACT._input_folds.items())
