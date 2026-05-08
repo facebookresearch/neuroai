@@ -224,29 +224,40 @@ def test_specaugment_callback_attaches_and_detaches():
     assert cb._handle is None
 
 
-def test_band_rotation_callback_modifies_neuro_in_place():
-    from neuralbench.callbacks import BandRotationCallback
+def test_band_rotation_module_changes_input_in_train_mode():
+    from neuraltrain.augmentations import BandRotation
 
     x = torch.randn(2, 32, 64)
-
-    class _Batch: ...
-    batch = _Batch()
-    batch.data = {"neuro": x.clone()}
-
-    BandRotationCallback(
+    aug = BandRotation(
         num_bands=2, electrodes_per_band=16, band_offsets=(-1, 1),
         max_temporal_jitter=4,
-    ).on_train_batch_start(None, _StubModule(), batch, 0)
-    assert not torch.equal(batch.data["neuro"], x)
+    )
+    aug.train()
+    assert not torch.equal(aug(x), x)
 
 
-def test_band_rotation_callback_delegates_to_braindecode_functional(monkeypatch):
-    """The callback's per-batch math lives in braindecode."""
+def test_band_rotation_module_is_noop_in_eval_mode():
+    from neuraltrain.augmentations import BandRotation
+
+    x = torch.randn(2, 32, 64)
+    aug = BandRotation(num_bands=2, electrodes_per_band=16).eval()
+    assert torch.equal(aug(x), x)
+
+
+def test_band_rotation_module_skips_when_channel_layout_mismatches():
+    from neuraltrain.augmentations import BandRotation
+
+    x = torch.randn(2, 7, 64)  # 7 channels, not divisible by num_bands*electrodes_per_band
+    aug = BandRotation(num_bands=2, electrodes_per_band=16).train()
+    assert torch.equal(aug(x), x)
+
+
+def test_band_rotation_delegates_to_braindecode_functional(monkeypatch):
+    """The per-batch math lives in braindecode."""
     from braindecode.augmentation import functional as bd_functional
+    from neuraltrain.augmentations import BandRotation
 
-    from neuralbench.callbacks import BandRotationCallback
-
-    captured = {}
+    captured: dict = {}
     real = bd_functional.band_rotation
 
     def spy(X, y, **kwargs):
@@ -256,18 +267,22 @@ def test_band_rotation_callback_delegates_to_braindecode_functional(monkeypatch)
 
     monkeypatch.setattr(bd_functional, "band_rotation", spy)
 
-    x = torch.randn(2, 32, 64)
-
-    class _Batch: ...
-    batch = _Batch()
-    batch.data = {"neuro": x.clone()}
-
-    BandRotationCallback(
+    aug = BandRotation(
         num_bands=2, electrodes_per_band=16, band_offsets=(-1, 1),
         max_temporal_jitter=4,
-    ).on_train_batch_start(None, _StubModule(), batch, 0)
+    ).train()
+    aug(torch.randn(2, 32, 64))
     assert captured.get("called")
     assert captured["kwargs"]["num_bands"] == 2
+
+
+def test_band_rotation_config_builds_module():
+    from neuraltrain.augmentations import BandRotation, BandRotationConfig
+
+    cfg = BandRotationConfig(num_bands=2, electrodes_per_band=16, max_temporal_jitter=4)
+    built = cfg.build()
+    assert isinstance(built, BandRotation)
+    assert built.num_bands == 2 and built.max_temporal_jitter == 4
 
 
 # ---------------------------------------------------------------------------

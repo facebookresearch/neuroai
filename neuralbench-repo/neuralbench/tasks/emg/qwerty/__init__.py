@@ -14,6 +14,8 @@ Everything else lives upstream:
 * Study source — :mod:`neuralfetch.studies.emg2qwerty`
 * CTC target extractor — :class:`neuralset.extractors.text.KeystrokeSequence`
 * CER metric — :class:`neuraltrain.metrics.metrics.CharacterErrorRates`
-* Augmentation callbacks — :mod:`neuralbench.callbacks`
-  (``SpecAugmentCallback``, ``BandRotationCallback``)
+* SpecAugment callback — :class:`neuralbench.callbacks.SpecAugmentCallback`
+  (Lightning hook on the model's spectrogram submodule)
+* Band-rotation augmentation —
+  :class:`neuraltrain.augmentations.BandRotation` (paired Module + Config)
 """

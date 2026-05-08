@@ -169,6 +169,78 @@ class BandstopFilterFFT(nn.Module):
         return iffted
 
 
+class BandRotationConfig(pydantic.BaseModel):
+    """Configuration for :class:`BandRotation`.
+
+    Parameters
+    ----------
+    num_bands : int
+        Number of EMG-electrode bands per recording (e.g. 2 wristbands).
+    electrodes_per_band : int
+        Electrodes inside each band; total channels = num_bands × electrodes_per_band.
+    band_offsets : tuple of int
+        Allowed per-band rotation offsets (samples are rolled along the
+        electrode axis by a random choice from this set).
+    max_temporal_jitter : int
+        Maximum per-band temporal jitter, in samples.
+    """
+
+    num_bands: int = 2
+    electrodes_per_band: int = 16
+    band_offsets: tuple[int, ...] = (-1, 0, 1)
+    max_temporal_jitter: int = 0
+    model_config = pydantic.ConfigDict(protected_namespaces=(), extra="forbid")
+
+    def build(self) -> nn.Module:
+        return BandRotation(
+            num_bands=self.num_bands,
+            electrodes_per_band=self.electrodes_per_band,
+            band_offsets=self.band_offsets,
+            max_temporal_jitter=self.max_temporal_jitter,
+        )
+
+
+class BandRotation(nn.Module):
+    """Per-band electrode rotation + inter-band temporal jitter.
+
+    Thin ``nn.Module`` wrapper over
+    :func:`braindecode.augmentation.functional.band_rotation`.  Operates
+    on a ``(B, C, T)`` tensor where ``C == num_bands * electrodes_per_band``;
+    no-op (returns input unchanged) when ``self.training`` is ``False`` or
+    the channel layout doesn't match.
+    """
+
+    def __init__(
+        self,
+        num_bands: int = 2,
+        electrodes_per_band: int = 16,
+        band_offsets: tuple[int, ...] = (-1, 0, 1),
+        max_temporal_jitter: int = 0,
+    ) -> None:
+        super().__init__()
+        self.num_bands = num_bands
+        self.electrodes_per_band = electrodes_per_band
+        self.band_offsets = tuple(band_offsets)
+        self.max_temporal_jitter = max_temporal_jitter
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not self.training:
+            return x
+        if x.shape[1] != self.num_bands * self.electrodes_per_band:
+            return x
+        from braindecode.augmentation.functional import band_rotation
+
+        x_aug, _ = band_rotation(
+            x,
+            torch.zeros(x.shape[0], device=x.device),
+            num_bands=self.num_bands,
+            electrodes_per_band=self.electrodes_per_band,
+            band_offsets=self.band_offsets,
+            max_temporal_jitter=self.max_temporal_jitter,
+        )
+        return x_aug
+
+
 class TrivialBrainAugmentConfig(pydantic.BaseModel):
     sfreq: float
     min_max_ch_drop: tuple[float, float] = (0.05, 0.4)
