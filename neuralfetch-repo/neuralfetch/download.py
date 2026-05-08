@@ -626,6 +626,7 @@ class Datalad(BaseDownload):
         """
         import datalad.api as dlad
 
+        logging.getLogger("datalad").setLevel(logging.WARNING)
         # clone repo
         clone_res = dlad.clone(source=self.repo_url, path=self._dl_dir)
 
