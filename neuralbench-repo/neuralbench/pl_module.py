@@ -24,6 +24,66 @@ from .modules import DownstreamWrapperModel
 LOGGER = logging.getLogger(__name__)
 
 
+class CtcMetricRegistry:
+    """Per-task registry of CTC metric *factory builders*.
+
+    A factory builder takes the active extractor and returns a no-arg
+    ``Callable[[], Metric]`` for ``BrainModule`` to call.  This indirection
+    lets the metric capture per-experiment state (e.g. the extractor's
+    charset) at ``Experiment.prepare_pl_module`` time, so multi-experiment
+    grids running different vocabularies get independent metrics.
+
+    Tasks register a builder during their package import (triggered lazily
+    by ``experiment_config._maybe_import_task_module``).  Re-registering
+    with a different builder under the same task name logs a warning.
+    """
+
+    def __init__(self) -> None:
+        self._builders: dict[
+            str, tp.Callable[[tp.Any], tp.Callable[[], Metric]]
+        ] = {}
+
+    def register(
+        self,
+        task_name: str,
+        factory_builder: tp.Callable[[tp.Any], tp.Callable[[], Metric]],
+    ) -> None:
+        prev = self._builders.get(task_name)
+        if prev is not None and prev is not factory_builder:
+            LOGGER.warning(
+                "CTC metric factory builder for task %r overwritten: %r → %r",
+                task_name, prev, factory_builder,
+            )
+        self._builders[task_name] = factory_builder
+
+    def get(
+        self, task_name: str
+    ) -> tp.Callable[[tp.Any], tp.Callable[[], Metric]] | None:
+        return self._builders.get(task_name)
+
+
+# Single shared instance.  Holding the registry on a class (rather than as
+# free-floating module-level functions on a global dict) keeps state out of
+# module scope and makes per-test isolation possible (instantiate a fresh
+# registry in a fixture) when needed.
+ctc_metric_registry = CtcMetricRegistry()
+
+
+def register_ctc_metric(
+    task_name: str,
+    factory_builder: tp.Callable[[tp.Any], tp.Callable[[], Metric]],
+) -> None:
+    """Convenience wrapper around :meth:`ctc_metric_registry.register`."""
+    ctc_metric_registry.register(task_name, factory_builder)
+
+
+def get_ctc_metric_factory_builder(
+    task_name: str,
+) -> tp.Callable[[tp.Any], tp.Callable[[], Metric]] | None:
+    """Convenience wrapper around :meth:`ctc_metric_registry.get`."""
+    return ctc_metric_registry.get(task_name)
+
+
 class BrainModule(pl.LightningModule):
     """
     Pytorch-lightning module for M/EEG model training.
@@ -53,6 +113,7 @@ class BrainModule(pl.LightningModule):
         test_full_metrics: dict[str, Metric] | None = None,
         test_full_retrieval_metrics: dict[str, Metric] | None = None,
         target_scaler: StandardScaler | None = None,
+        ctc_metric_factory: tp.Callable[[], Metric] | None = None,
     ):
         super().__init__()
         self._infer_forward_params(model)
@@ -78,6 +139,11 @@ class BrainModule(pl.LightningModule):
                 test_full_retrieval_metrics,
                 split_names=["test/full_retrieval"],
             )
+        # CTC metric is injected (not constructed here) so this generic
+        # module doesn't depend on any task package.  Per-step instances
+        # are stored as nn.Modules via add_module, looked up by name —
+        # no parallel dict needed.
+        self._ctc_metric_factory = ctc_metric_factory
 
     def _infer_forward_params(self, model: nn.Module) -> None:
         """Check which additional inputs the model's forward method requires."""
@@ -135,6 +201,9 @@ class BrainModule(pl.LightningModule):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         y_true = batch.data["target"]
 
+        if isinstance(self.loss, nn.CTCLoss):
+            return self._run_ctc_step(batch, y_true, step_name)
+
         if self.target_scaler is not None:
             y_true = self.target_scaler.transform(y_true)
         if y_true.ndim == 3 and y_true.shape[1] == 1:
@@ -177,6 +246,68 @@ class BrainModule(pl.LightningModule):
                         metric.update(y_pred, y_true)
                 if "confusion_matrix" not in metric_name:
                     self.log(metric_name, metric, **log_kwargs)
+
+        return loss, y_pred, y_true
+
+    def _get_ctc_metric(self, step_name: str) -> Metric:
+        if self._ctc_metric_factory is None:
+            raise RuntimeError(
+                "BrainModule was constructed with CTCLoss but no "
+                "ctc_metric_factory; pass one when building the module."
+            )
+        attr = f"_ctc_metric_{step_name}"
+        metric = getattr(self, attr, None)
+        if metric is None:
+            metric = self._ctc_metric_factory()
+            self.add_module(attr, metric)
+        return metric
+
+    def _run_ctc_step(
+        self, batch: Batch, y_true: torch.Tensor, step_name: str
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        # y_true layout (from KeystrokeSequence): col 0 = un-padded length,
+        # cols 1: = padded labels. Model output is braindecode-shaped
+        # (B, T_out, C); we transpose to (T_out, B, C) for CTCLoss.
+        target_lengths, targets = y_true[:, 0].long(), y_true[:, 1:].long()
+        B = y_true.shape[0]
+        is_train = step_name == "train"
+        log_kwargs = {
+            "on_step": is_train, "on_epoch": True, "logger": True,
+            "prog_bar": True, "batch_size": B,
+            "sync_dist": self.trainer.world_size > 1,
+        }
+
+        y_pred = self.model_forward(batch)
+        if y_pred.ndim != 3:
+            raise RuntimeError(
+                f"CTC model must emit a 3-D log-prob tensor; "
+                f"got shape {tuple(y_pred.shape)}."
+            )
+        # Accept both conventions: braindecode's (B, T_out, C) and the
+        # nn.CTCLoss-native (T_out, B, C) (used by upstream emg2qwerty TDS).
+        # CTCLoss wants (T_out, B, C) and contiguous storage.
+        if y_pred.shape[0] == B and y_pred.shape[1] != B:
+            log_probs = y_pred.transpose(0, 1).contiguous()
+        elif y_pred.shape[1] == B:
+            log_probs = y_pred if y_pred.is_contiguous() else y_pred.contiguous()
+        else:
+            raise RuntimeError(
+                f"CTC model output {tuple(y_pred.shape)} does not match "
+                f"batch size {B} on dim 0 or 1; expected (B, T, C) or (T, B, C)."
+            )
+        input_lengths = torch.full(
+            (B,), log_probs.shape[0], dtype=torch.long, device=log_probs.device
+        )
+
+        loss = self.loss(log_probs, targets, input_lengths, target_lengths)
+        self.log(f"{step_name}/loss", loss, **log_kwargs)
+
+        # Levenshtein decode runs on CPU — skip during train to keep the
+        # per-step path light; val/test update every batch.
+        if not is_train:
+            metric = self._get_ctc_metric(step_name)
+            metric.update(log_probs.detach(), targets, target_lengths)
+            self.log(f"{step_name}/CER", metric, **log_kwargs)
 
         return loss, y_pred, y_true
 

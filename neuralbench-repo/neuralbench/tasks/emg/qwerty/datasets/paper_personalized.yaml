@@ -1,0 +1,20 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# emg2qwerty paper recipe — personalized baseline (NeurIPS 2024, table 4).
+# Train on N-1 sessions of one subject, val on the held-out session.
+#
+# >>> EDIT THE SUBJECT BELOW <<<
+# To run on a different subject, replace ``70495563`` in the query.
+# (NeuralBench's CLI doesn't currently expose a generic config-override
+# flag; per-subject runs are usually scripted via ``sed`` / ``yq`` or
+# multiple copies of this file.)
+data:
+  study:
+    source:
+      query: "subject == 'Emg2qwerty/70495563'"
+    split:
+      split_by: session

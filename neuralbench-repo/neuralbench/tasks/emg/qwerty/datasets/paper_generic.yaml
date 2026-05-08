@@ -1,0 +1,16 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# emg2qwerty paper recipe — generic baseline (NeurIPS 2024, table 4).
+# Train on N-1 subjects, val on the held-out one.  Each subject ≈ 12
+# sessions; default = first 10 subjects (= 120 timelines).  Widen by
+# editing the query.
+data:
+  study:
+    source:
+      query: "timeline_index < 120"
+    split:
+      split_by: subject

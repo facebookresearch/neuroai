@@ -68,9 +68,6 @@ def load_checkpoint(
         from safetensors.torch import load_file
 
         checkpoint = load_file(checkpoint_path, device="cpu")
-        # For Braindecode models with explicit channel mapping (e.g. LUNA)s
-        if (mapping := getattr(brain_model, "mapping", None)) is not None:
-            checkpoint = {mapping.get(k, k): v for k, v in checkpoint.items()}
     else:
         checkpoint = torch.load(checkpoint_path, weights_only=True, map_location="cpu")
 
@@ -78,28 +75,62 @@ def load_checkpoint(
     if "state_dict" in checkpoint:
         checkpoint = checkpoint["state_dict"]  # type: ignore[assignment]
 
-    stripped_state_dict = {}
-    for name, v in checkpoint.items():
-        # PyTorch Lightning uses "model." in front of each layer
-        if name.startswith("model."):
-            name = name.replace("model.", "")
-        stripped_state_dict[name] = v
+    # Strip ONLY the leading Lightning ``model.`` prefix once.  The previous
+    # ``str.replace("model.", "")`` removed every occurrence — fine for keys
+    # like ``model.0.weight`` but corrupts inner ``model.`` substrings (e.g.
+    # ``model.model.0.weight`` would lose both prefixes).
+    stripped_state_dict = {
+        name.removeprefix("model."): v for name, v in checkpoint.items()
+    }
 
     model_dict = brain_model.state_dict()
 
-    # When the model is a wrapper (e.g. _LunaEncoderWrapper stores the inner
-    # model as self.model), state dict keys are prefixed with "model." while
-    # checkpoint keys are not.  Try to auto-prefix to match.
-    if not (set(stripped_state_dict) & set(model_dict)):
-        for prefix in ["model."]:
-            prefixed = {f"{prefix}{k}": v for k, v in stripped_state_dict.items()}
-            if set(prefixed) & set(model_dict):
-                logger.info(
-                    "Auto-prefixed checkpoint keys with %r to match model state dict.",
-                    prefix,
-                )
-                stripped_state_dict = prefixed
-                break
+    # Per-model rename (e.g. ``EMG2QwertyNet.mapping`` folds upstream's
+    # ``model.4.{weight,bias} → final_layer.{weight,bias}``; LUNA's mapping
+    # collapses a wrapper layer in its channel-location embedder).  We try
+    # mapping-source keys both **as declared** AND with the leading
+    # ``model.`` already stripped — that way a single mapping declaration
+    # works for both Lightning-wrapped (EMG2QwertyNet) and bare
+    # (LUNA-style) source checkpoints.
+    mapping = getattr(brain_model, "mapping", None)
+    if mapping:
+        targets = list(mapping.values())
+        if len(targets) != len(set(targets)):
+            raise ValueError(
+                f"{brain_model.__class__.__name__}.mapping has duplicate "
+                f"target keys; refusing to load (silent clobber)."
+            )
+        renamed: dict[str, torch.Tensor] = {}
+        # Two-pass: first apply mapping where the source matches, then carry
+        # over remaining keys.  Source can be the literal mapping key or
+        # its model.-stripped form.
+        consumed: set[str] = set()
+        for src, tgt in mapping.items():
+            for candidate in (src, src.removeprefix("model.")):
+                if candidate in stripped_state_dict and candidate not in consumed:
+                    renamed[tgt] = stripped_state_dict[candidate]
+                    consumed.add(candidate)
+                    break
+        for k, v in stripped_state_dict.items():
+            if k in consumed:
+                continue
+            renamed[k] = v
+        stripped_state_dict = renamed
+
+    # Per-key auto-prefix: try the stripped form, then the ``model.``-prefixed
+    # form.  The previous all-or-nothing global intersection check failed
+    # when a per-model mapping (above) created partial overlap with
+    # ``model_dict`` — auto-prefix would skip and the un-renamed backbone
+    # keys would get silently dropped.
+    resolved: dict[str, torch.Tensor] = {}
+    for k, v in stripped_state_dict.items():
+        if k in model_dict:
+            resolved[k] = v
+        elif f"model.{k}" in model_dict:
+            resolved[f"model.{k}"] = v
+        else:
+            resolved[k] = v  # carry as-is so it lands in "additional keys"
+    stripped_state_dict = resolved
 
     missing = set(model_dict) - set(stripped_state_dict)
     additional = set(stripped_state_dict) - set(model_dict)

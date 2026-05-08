@@ -4,7 +4,7 @@
   <img src="assets/hero.png" alt="NeuralBench: open, reproducible benchmarking of NeuroAI models on EEG, MEG, and fMRI -- 36 EEG tasks, 94 EEG datasets (9.5k+ subjects, 13.6k+ hours of recording), and 14 models" width="100%">
 </p>
 
-`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, and **fMRI** -- with more tasks and devices to come.
+`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, **fMRI**, and **EMG** (emg2qwerty CTC keystroke decoding) -- with more tasks and devices to come.
 
 **Examples**:
 ```console
@@ -61,10 +61,11 @@ Results can be visualized on `Weights & Biases`, or aggregated locally using `--
 > [!TIP]
 > See the full [quickstart tutorial](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/quickstart/01_run_first_task.html) for a walkthrough of the CLI, config system, and model selection.
 
-The same workflow applies to **MEG** and **fMRI** tasks -- just swap the device and task name:
+The same workflow applies to **MEG**, **fMRI**, and **EMG** tasks -- just swap the device and task name:
 ```console
 neuralbench meg typing --debug          # MEG keystroke classification in debug mode
 neuralbench fmri image --debug          # fMRI image retrieval in debug mode
+neuralbench emg qwerty -m emg2qwerty --debug   # EMG → keystroke CTC decoding (emg2qwerty)
 ```
 
 ## Running the full EEG benchmark

@@ -1,0 +1,95 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# emg2qwerty CTC task: surface-EMG → QWERTY keystroke sequence.
+#
+# The optimizer/scheduler block here is the paper recipe (Adam +
+# OneCycleLR, lr 1e-8 → 1e-3 → 1e-6 with 40% warmup).  Without this
+# slow warmup the CTC head collapses to all-blank within an epoch.
+# Override at the dataset overlay (``datasets/<name>.yaml``) or the
+# model YAML to use a different optimizer.
+
+lightning_optimizer_config:
+  =replace=: true
+  optimizer:
+    name: Adam
+    lr: 1.0e-3
+    kwargs: {}
+  scheduler:
+    name: OneCycleLR
+    kwargs:
+      max_lr: 1.0e-3
+      pct_start: 0.4
+      anneal_strategy: cos
+      div_factor: 1.0e+5
+      final_div_factor: 1.0e+3
+  interval: step
+data:
+  batch_size: 16
+  study:
+    source:
+      name: Emg2qwerty
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  neuro:
+    =replace=: true
+    name: EmgExtractor
+    picks: [emg]
+    frequency: 2000.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+    infra:
+      cluster: auto
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      keep_in_ram: true
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 8
+  target:
+    =replace=: true
+    name: KeystrokeSequence
+    event_types: Keystroke
+    event_field: text
+    max_target_length: 128
+    aggregation: cat
+    # Some prompts have no keystrokes inside the 4 s window; emit a
+    # length-0 target instead of raising. CTC ignores empty targets.
+    allow_missing: true
+    # Targets cover the un-padded 4 s "core" of the 5 s EMG window.
+    # See the ``start: -0.9 / duration: 5.0`` segmenter config below.
+    core_start_offset: 0.9
+    core_duration: 4.0
+  # Paper-faithful sliding-window segmentation: trigger on the EMG event
+  # (spans the whole session), then stride 4 s windows over its duration
+  # so consecutive 4-s "cores" abut without overlap (~75 segments per
+  # 5 min session). Prompt-triggered segmentation (Sentence) gives only
+  # ~10 segments/session — ~10× less training data per epoch.
+  trigger_event_type: Emg2qwertyRaw
+  start: -0.9                 # 0.9 s left context (= 1800 samples @ 2 kHz)
+  duration: 5.0               # 0.9 s left + 4 s core + 0.1 s right
+  stride: 4.0                 # core windows abut (no overlap)
+  stride_drop_incomplete: true
+  summary_columns: [text]
+brain_model_output_size: &brain_model_output_size 99   # 98 keys + CTC blank
+trainer_config.monitor: val/CER
+trainer_config.mode: min
+loss:
+  =replace=: true
+  name: CTCLoss
+  kwargs:
+    blank: 98
+    zero_infinity: true
+metrics: []

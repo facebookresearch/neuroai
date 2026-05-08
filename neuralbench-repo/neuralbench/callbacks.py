@@ -11,6 +11,7 @@ import warnings
 from collections import defaultdict
 from pathlib import Path
 
+import exca
 import lightning.pytorch as pl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +32,32 @@ if tp.TYPE_CHECKING:
     from neuraltrain.utils import StandardScaler
 
 LOGGER = logging.getLogger(__name__)
+
+
+class BaseCallbackConfig(exca.helpers.DiscriminatedModel, discriminator_key="name"):
+    """Pydantic config for a Lightning ``Callback``, discriminated by ``name``.
+
+    Subclasses set ``_CB_CLS`` and declare the callback's kwargs as
+    Pydantic fields; the default ``build()`` constructs ``_CB_CLS(**fields)``.
+    Override ``build()`` for non-trivial wiring.
+    """
+
+    _CB_CLS: tp.ClassVar[type[Callback] | None] = None
+
+    def build(self) -> Callback:
+        if self._CB_CLS is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} must set _CB_CLS or override build()."
+            )
+        # Build kwargs from declared model fields rather than ``model_dump()``:
+        # exca injects the discriminator key (``name`` here) into the dump
+        # but it's not a real field, so a literal ``pop("name")`` would also
+        # silently strip a legitimate ``name`` constructor kwarg if a future
+        # Callback wrapper ever needs one.  Iterating ``model_fields`` keeps
+        # us aligned with what the user actually declared.
+        return self._CB_CLS(
+            **{name: getattr(self, name) for name in type(self).model_fields}
+        )
 
 
 def _set_plot_theme() -> None:
