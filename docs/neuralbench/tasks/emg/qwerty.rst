@@ -58,9 +58,16 @@ Dataset Notes
   landing under ``<DATA_DIR>/Emg2qwerty/download/sub-*/...``.  An
   existing BIDS tree placed directly under ``<DATA_DIR>/Emg2qwerty/``
   is also picked up.
-* **µV rescale**: upstream's HDF5 stores EMG in microvolts while
-  ``mne.io.read_raw_bdf`` returns volts; ``Emg2qwertyRaw`` multiplies
-  by 1e6 on read so the spectrogram log-floor doesn't cap gradients.
+* **mne_bids reader**: the Study reads via
+  :py:func:`mne_bids.read_raw_bids` so channel types come from the
+  BIDS ``channels.tsv`` sidecar (every channel is correctly typed
+  ``emg`` without manual coercion).
+* **µV rescale**: upstream's pretrained checkpoints' BatchNorm was
+  fit on microvolt-magnitude inputs but ``mne_bids.read_raw_bids``
+  returns volts (with µV-magnitudes around 7e-6 V); the Study event
+  ``Emg2qwertyRaw`` multiplies by 1e6 on read so the BN running
+  statistics match the published checkpoint at
+  ``braindecode/emg2qwerty-generic``.
 * **CTC + MPS**: ``nn.CTCLoss`` isn't implemented on Apple MPS;
   ``PYTORCH_ENABLE_MPS_FALLBACK=1`` keeps the rest of the model on
   MPS while CTC falls back to CPU.  Paper-level CER requires a real

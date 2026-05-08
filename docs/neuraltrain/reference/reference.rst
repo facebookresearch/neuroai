@@ -252,6 +252,7 @@ Metrics
    TopkAccFromScores
    ImageSimilarity
    GroupedMetric
+   CharacterErrorRates
 
 Augmentations
 -------------
@@ -264,6 +265,8 @@ Augmentations
 
    TrivialBrainAugment
    TrivialBrainAugmentConfig
+   BandRotation
+   BandRotationConfig
    BandstopFilterFFT
    BandstopFilterFFTConfig
    ChannelsDropoutConfig

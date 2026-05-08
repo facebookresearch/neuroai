@@ -66,6 +66,7 @@ Callbacks
    PlotConfusionMatrix
    PlotRegressionVectors
    plot_confusion_matrix
+   SpecAugmentCallback
 
 Utilities
 ---------
@@ -106,42 +107,3 @@ Configuration
    load_config
    get_config
 
-Tasks
------
-
-EMG / qwerty
-~~~~~~~~~~~~
-
-.. currentmodule:: neuralbench.tasks.emg.qwerty.study
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   Emg2qwerty
-   Emg2qwertyRaw
-
-.. currentmodule:: neuralbench.tasks.emg.qwerty.extractors
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   KeystrokeSequence
-
-.. currentmodule:: neuralbench.tasks.emg.qwerty.metrics
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   CharacterErrorRates
-
-.. currentmodule:: neuralbench.tasks.emg.qwerty.callbacks
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   BandRotationCallback
-   SpecAugmentCallback

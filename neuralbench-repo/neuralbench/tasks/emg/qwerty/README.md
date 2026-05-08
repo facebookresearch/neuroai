@@ -39,8 +39,10 @@ subjects (or widen the cross-subject filter).
 
 ## Compact 51-class vocabulary
 
-`paper_personalized_compact.yaml` switches `data.target.vocab_preset` to
-`qwerty_compact`:
+`paper_personalized_compact.yaml` overrides `data.target.{key_to_label,
+unichar_to_key, input_folds}` (via `!!python/name:` references to the
+`COMPACT_*` constants in `charset.py`) to swap the 99-class paper vocab
+for the 51-class US-QWERTY-folded one:
 
 * uppercase letters → lowercase (`A` → `a`)
 * US-QWERTY shifted digits → digits (`!` → `1`, …, `)` → `0`)
