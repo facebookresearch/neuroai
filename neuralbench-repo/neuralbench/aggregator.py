@@ -18,6 +18,7 @@ from pydantic import Field
 from tqdm import tqdm
 
 import neuralset as ns
+from neuraltrain.utils import pack_experiments_for_submission
 
 from .plots.benchmark import plot_all_results
 from .plots.tables import print_skip_table
@@ -52,6 +53,8 @@ class BenchmarkAggregator(ns.BaseModel):
     max_workers: int = 256
     collect_max_workers: int = 32
     debug: bool = False
+    experiments_per_job: int = 1
+    local_workers_per_job: int | None = None
 
     output_dir: str = Field(default_factory=_default_output_dir)
 
@@ -94,6 +97,24 @@ class BenchmarkAggregator(ns.BaseModel):
         if self.debug:
             for experiment in self.experiments:
                 experiment.run()
+        elif self.experiments_per_job != 1:
+            packed = pack_experiments_for_submission(
+                self.experiments,
+                experiments_per_job=self.experiments_per_job,
+                n_jobs=self.local_workers_per_job,
+            )
+            if not packed:
+                LOGGER.info(
+                    "No packed job submitted; all runnable experiments are cached."
+                )
+                return
+            LOGGER.info(
+                "Submitting %d packed job(s) for %d pending experiment(s).",
+                len(packed),
+                sum(len(job.experiments) for job in packed),
+            )
+            with packed[0].infra.job_array(max_workers=self.max_workers) as tasks:
+                tasks.extend(packed)
         else:
             tmp = self.experiments[0].infra.clone_obj()
             with tmp.infra.job_array(max_workers=self.max_workers) as tasks:

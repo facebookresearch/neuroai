@@ -16,7 +16,13 @@ import torch
 
 from . import utils
 from .models import BaseModelConfig
-from .utils import BaseExperiment, StandardScaler, all_subclasses, run_grid
+from .utils import (
+    BaseExperiment,
+    StandardScaler,
+    all_subclasses,
+    pack_experiments_for_submission,
+    run_grid,
+)
 
 
 class Experiment(BaseExperiment):
@@ -30,6 +36,15 @@ class Experiment(BaseExperiment):
     @infra.apply
     def run(self):
         return 1
+
+
+class ValueExperiment(BaseExperiment):
+    value: int
+    infra: exca.TaskInfra = exca.TaskInfra(version="1")
+
+    @infra.apply
+    def run(self):
+        return self.value
 
 
 def test_all_subclasses() -> None:
@@ -170,6 +185,56 @@ def test_run_grid_random_state(tmp_path: Path):
 
     assert outs[0] == outs[1]
     assert outs[0] != outs[2]
+
+
+@pytest.mark.parametrize(
+    ("experiments_per_job", "expected_sizes"),
+    [(2, [2, 2, 1]), (-1, [5])],
+)
+def test_pack_experiments_for_submission(
+    experiments_per_job: int,
+    expected_sizes: list[int],
+    tmp_path: Path,
+) -> None:
+    infra = {"cluster": "auto", "folder": tmp_path, "mode": "force"}
+    experiments = [ValueExperiment(value=i, infra=infra) for i in range(5)]
+
+    packed = pack_experiments_for_submission(
+        experiments,
+        experiments_per_job=experiments_per_job,
+    )
+
+    assert [len(job.experiments) for job in packed] == expected_sizes
+    assert len({job.infra.uid() for job in packed}) == len(packed)
+    assert all(exp.infra.cluster is None for job in packed for exp in job.experiments)
+
+    infra_config = packed[0].infra.model_dump(mode="python")
+    infra_config["cluster"] = None
+    local_packed = type(packed[0])(
+        experiments=packed[0].experiments,
+        infra=infra_config,
+        n_jobs=1,
+    )
+    assert local_packed.run() == list(range(expected_sizes[0]))
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"experiments_per_job": 0},
+        {"experiments_per_job": -2},
+        {"experiments_per_job": 1, "n_jobs": 0},
+    ],
+)
+def test_pack_experiments_validates_arguments(
+    kwargs: dict[str, int],
+    tmp_path: Path,
+) -> None:
+    experiment = ValueExperiment(value=1, infra={"folder": tmp_path})
+    match = "n_jobs" if "n_jobs" in kwargs else "experiments_per_job"
+
+    with pytest.raises(ValueError, match=match):
+        pack_experiments_for_submission([experiment], **kwargs)
 
 
 class Model1(pydantic.BaseModel):
