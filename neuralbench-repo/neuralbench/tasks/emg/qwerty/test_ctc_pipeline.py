@@ -31,7 +31,7 @@ _PAPER_LABEL = dict(PAPER_KEY_TO_LABEL)
 
 
 def _y_true(seqs, max_len=8):
-    """``(length-prefix, padded labels)`` layout consumed by CtcSeqLoss + CER."""
+    """``(length-prefix, padded labels)`` packing for CtcSeqLoss + CER."""
     lengths = torch.tensor([len(s) for s in seqs])
     labels = torch.full((len(seqs), max_len), PAPER_NULL_CLASS, dtype=torch.long)
     for i, s in enumerate(seqs):
@@ -41,7 +41,6 @@ def _y_true(seqs, max_len=8):
 
 @pytest.fixture
 def make_keystrokes():
-    """N Keystroke events at staggered start times."""
     from neuralset.events.etypes import Keystroke
 
     def _make(texts, starts=None):
@@ -100,12 +99,12 @@ def test_keystroke_sequence_core_window_filters(make_keystrokes):
 
 
 def test_charset_class_count_invariants():
-    """Paper: 98 keys + blank = 99; compact: 50 + blank = 51 (drops uppercase, shifted, Key.shift)."""
     paper_keys = {k for k, _ in PAPER_KEY_TO_LABEL}
     assert (PAPER_NULL_CLASS, PAPER_NUM_CLASSES, len(paper_keys)) == (98, 99, 98)
 
     compact_keys = {k for k, _ in COMPACT_KEY_TO_LABEL}
     assert (COMPACT_NULL_CLASS, COMPACT_NUM_CLASSES, len(compact_keys)) == (50, 51, 50)
+    # compact drops uppercase, shifted symbols, and Key.shift.
     assert {"Key.shift", "A", "!"}.isdisjoint(compact_keys)
 
 
@@ -154,7 +153,6 @@ def test_band_rotation_module_skips_when_channel_layout_mismatches():
 
 
 def test_band_rotation_delegates_to_braindecode_functional(monkeypatch):
-    """The per-batch math lives in braindecode."""
     from braindecode.augmentation import functional as bd_functional
     from neuraltrain.augmentations import BandRotation
 
@@ -186,13 +184,10 @@ def test_band_rotation_config_builds_module():
     assert built.num_bands == 2 and built.max_temporal_jitter == 4
 
 
-# ---------------------------------------------------------------------------
-# BrainModule CTC path: CtcSeqLoss + (y_pred, y_true) metric — no special fork
-# ---------------------------------------------------------------------------
+# --- CtcSeqLoss + CER share the (y_pred, y_true) signature ----------------
 
 
 def test_brain_module_ctc_loss_and_metric_share_signature():
-    """CtcSeqLoss + CER both consume the same ``(y_pred (B,T,C), y_true)`` shapes."""
     from neuraltrain.losses.losses import CtcSeqLoss
 
     seqs = ("hey", "world")
@@ -207,9 +202,7 @@ def test_brain_module_ctc_loss_and_metric_share_signature():
     assert float(metric.compute()) >= 0.0
 
 
-# ---------------------------------------------------------------------------
-# Plumbing affected by the CTC integration
-# ---------------------------------------------------------------------------
+# --- n_outputs override path ---------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -219,8 +212,7 @@ def test_brain_module_ctc_loss_and_metric_share_signature():
 def test_n_outputs_override_routes_to_braindecode_builder(
     monkeypatch, override, target_last_dim, expected
 ):
-    """``n_outputs_override`` (when not None) wins over the inferred
-    ``target.shape[-1]`` (CTC targets carry a length prefix)."""
+    """``n_outputs_override`` wins over the inferred ``target.shape[-1]``."""
     from neuraltrain.models.base import BaseBrainDecodeModel
 
     from neuralbench import model_factory
@@ -269,9 +261,7 @@ def test_n_outputs_override_routes_to_braindecode_builder(
     assert captured["n_outputs"] == expected
 
 
-# ---------------------------------------------------------------------------
-# Study source: synthetic BIDS tree
-# ---------------------------------------------------------------------------
+# --- Emg2qwerty study (synthetic BIDS tree) ------------------------------
 
 
 @pytest.fixture
@@ -328,8 +318,7 @@ def test_emg2qwerty_bids_id_validation_rejects_unsafe(bids_tree, subject, sessio
 @pytest.mark.parametrize(
     ("raw_text", "expected"),
     [
-        # Bug 4: rstrip("\\n") used to treat the arg as a char-set, eating
-        # any trailing 'n' or '\\'.  Fix is exact-suffix match.
+        # rstrip("\\n") would treat its arg as a char-set; need exact-suffix match.
         (r"fun\n", "fun"),
         (r"running\n", "running"),
         ("hello", "hello"),
@@ -356,7 +345,6 @@ def test_load_timeline_events_strips_only_literal_suffix(
 
 
 def test_emg2qwerty_download_wires_neuralfetch_eegdash():
-    """``_download`` delegates to ``neuralfetch.download.Eegdash`` (no IO)."""
     from unittest import mock
 
     import neuralfetch.download as dl
@@ -373,7 +361,7 @@ def test_emg2qwerty_download_wires_neuralfetch_eegdash():
 
 
 def test_emg2qwerty_bids_root_handles_download_subfolder(tmp_path):
-    """``Study.download`` lands BIDS under ``self.path/download/``."""
+    # ``Study.download`` lands BIDS under ``self.path/download/``.
     from neuralfetch.studies.emg2qwerty import Emg2qwerty
 
     sub, ses = "00000002", "0000000002"

@@ -7,14 +7,7 @@
 """emg2qwerty CTC vocabulary tables.
 
 * ``paper`` — Sivakumar et al. NeurIPS 2024: 98 keys + CTC blank.
-* ``qwerty_compact`` — paper + US-QWERTY shift fold: case-fold uppercase,
-  collapse shifted digits / punctuation, drop ``Key.shift{,_l,_r}``.
-  50 keys + blank.
-
-Tables are ``list[tuple[...]]`` (not dicts) so dot-containing keys
-survive ``exca.ConfDict`` YAML flattening. Encoding is the only
-runtime direction (``KeystrokeSequence._encode`` owns it); the CER
-metric uses ``chr(label)`` directly so no display-char layer lives here.
+* ``qwerty_compact`` — paper + US-QWERTY shift fold: 50 keys + blank.
 """
 
 from __future__ import annotations
@@ -43,8 +36,7 @@ _COMPACT_FOLDS: dict[str, str | None] = {
     **dict(zip('~_+{}|:"<>?', "`-=[]\\;',./")),                # shift+punct
     "Key.shift": None, "Key.shift_l": None, "Key.shift_r": None,
 }
-# Order follows US-QWERTY physical layout (not ``string.punctuation`` order)
-# so existing checkpoints' label assignment is preserved.
+# Order follows US-QWERTY physical layout (preserves existing label assignment).
 _COMPACT_VOCAB: tuple[str, ...] = (
     *string.ascii_lowercase, *string.digits, *"`-=[]\\;',./",
     "Key.backspace", "Key.enter", "Key.space",
@@ -57,16 +49,11 @@ _COMPACT_ALIASES: dict[str, str | None] = {
 }
 
 
-def _by_len(
-    aliases: dict[str, str | None], one: bool
-) -> list[tuple[str, str | None]]:
-    """Split aliases by ``len(key) == 1`` so ``KeystrokeSequence._encode``'s
-    1-char-only ``unichar_to_key`` branch and any-length ``input_folds``
-    branch get the right entries."""
+def _by_len(aliases: dict[str, str | None], one: bool) -> list[tuple[str, str | None]]:
     return [(k, v) for k, v in aliases.items() if (len(k) == 1) == one]
 
 
-# --- YAML-facing constants (names pinned for ``!!python/name:``) ---------
+# --- YAML-facing constants (consumed by ``KeystrokeSequence``) -----------
 
 PAPER_KEY_TO_LABEL: list[tuple[str, int]] = [(k, i) for i, k in enumerate(_PAPER_VOCAB)]
 PAPER_UNICHAR_TO_KEY: list[tuple[str, str | None]] = _by_len(_PAPER_UNICHAR, one=True)
@@ -82,7 +69,7 @@ COMPACT_NUM_CLASSES = COMPACT_NULL_CLASS + 1    # 51
 
 
 def vocab_kwargs(preset: VocabPreset = "paper") -> dict:
-    """``**vocab_kwargs(preset)`` → kwargs for ``KeystrokeSequence``."""
+    """Kwargs for ``KeystrokeSequence(**vocab_kwargs(preset))``."""
     tables = {
         "paper": (PAPER_KEY_TO_LABEL, PAPER_UNICHAR_TO_KEY, PAPER_INPUT_FOLDS),
         "qwerty_compact": (
