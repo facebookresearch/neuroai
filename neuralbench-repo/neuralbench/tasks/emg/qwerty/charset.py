@@ -4,48 +4,55 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Vocabulary presets for the emg2qwerty CTC task.
+"""Vocabulary tables for the emg2qwerty CTC task.
 
-Two presets ship out of the box:
+Two presets — both consumed by
+:class:`neuralset.extractors.text.KeystrokeSequence` via
+``!!python/name:`` references in the task YAML configs:
 
-* ``paper`` (default) — the 98-key vocabulary from Sivakumar et al.
-  (NeurIPS 2024): ``string.ascii_letters`` + ``string.digits`` +
-  ``string.punctuation`` + 4 modifier keys (backspace, enter, space,
-  shift).  ``num_classes = 99`` (98 keys + CTC blank).
-* ``qwerty_compact`` — a 50-key US-QWERTY-folded variant that case-folds
-  uppercase letters into their lowercase equivalents, folds shifted
-  symbols (``!@#$%^&*()`` and the punctuation row) into their unshifted
-  forms, and drops the ``Key.shift`` modifier (which is now redundant).
-  ``num_classes = 51``.  Recommended over ``paper`` for typing-decoding
-  experiments where output capitalization / punctuation can be recovered
-  by a downstream language model: the smaller output space gives more
-  samples per class and trains faster, at the cost of losing
-  shift-state information in the raw decoder output.
+* ``paper`` — Sivakumar et al. NeurIPS 2024, **98 keys + CTC blank**
+  (99 classes): ``string.ascii_letters`` + ``string.digits`` +
+  ``string.punctuation`` + 4 modifier keys (``Key.backspace``,
+  ``Key.enter``, ``Key.space``, ``Key.shift``).
+* ``qwerty_compact`` — paper folded down to **50 unique
+  US-QWERTY base symbols** (51 classes incl. blank). Defined as a
+  small replace mapping over the paper preset: case-fold uppercase
+  letters, collapse shifted digits / punctuation to their unshifted
+  siblings, drop ``Key.shift{,_l,_r}``. Recommended over ``paper``
+  when output capitalization can be recovered downstream — fewer
+  classes ⇒ more samples per class ⇒ faster training.
+
+Encoding (raw key → label int) is the only direction needed at
+runtime; ``KeystrokeSequence._encode`` owns the cleaning loop.
+``CharacterErrorRates`` (CTC metric) intentionally uses ``chr(label)``
+directly — distinct labels stay distinct, which is all Levenshtein
+needs — so no label → display-char table lives here. Tables are
+emitted as ``list[tuple[str, ...]]`` (not dicts) so they survive
+``exca.ConfDict``'s YAML key-flattening on dot-containing entries
+like ``"Key.backspace"`` and ``"."``.
 """
 
 from __future__ import annotations
 
 import string
-import typing as tp
-from collections import OrderedDict
-from collections.abc import Sequence
+from typing import Literal
 
-VocabPreset = tp.Literal["paper", "qwerty_compact"]
+VocabPreset = Literal["paper", "qwerty_compact"]
 
+# --- paper preset --------------------------------------------------------
 
-_PAPER_KEY_TO_UNICODE: OrderedDict[str, int] = OrderedDict(
-    [(c, ord(c)) for c in string.ascii_letters + string.digits + string.punctuation]
-    + [
-        ("Key.backspace", 9003),  # ⌫
-        ("Key.enter", 9166),      # ⏎
-        ("Key.space", 32),
-        ("Key.shift", 8679),      # ⇧
-    ]
+_PAPER_VOCAB: tuple[str, ...] = (
+    *string.ascii_letters,
+    *string.digits,
+    *string.punctuation,
+    "Key.backspace",
+    "Key.enter",
+    "Key.space",
+    "Key.shift",
 )
-# Stray unicode-only inputs ("⏎", " ", "\n", ...) get normalized to the
-# canonical KEY_TO_UNICODE entry by ``clean_keys``.  ``Key.shift_l`` /
-# ``Key.shift_r`` are dropped — only plain ``Key.shift`` is in-vocab.
-_PAPER_UNICHAR_TO_KEY: dict[str, str] = {
+
+# Input substitutions paper applies to raw event keys (all 1-char).
+_PAPER_UNICHAR: dict[str, str | None] = {
     " ": "Key.space",
     "\n": "Key.enter",
     "\r": "Key.enter",
@@ -55,143 +62,97 @@ _PAPER_UNICHAR_TO_KEY: dict[str, str] = {
     "⌫": "Key.backspace",
 }
 
-# US-QWERTY shift folds for the compact preset.  Built once at import time.
-# Pairs are (shifted, unshifted) on a standard US layout.
-_QWERTY_COMPACT_BASE = string.ascii_lowercase + string.digits + "`-=[]\\;',./"
+# --- qwerty_compact preset = paper + US-QWERTY shift fold ----------------
+# A single fold dict defines everything compact differs from paper in.
+# Mapping a key to ``None`` drops it from the input stream.
 
-_COMPACT_KEY_TO_UNICODE: OrderedDict[str, int] = OrderedDict(
-    [(c, ord(c)) for c in _QWERTY_COMPACT_BASE]
-    + [
-        ("Key.backspace", 9003),
-        ("Key.enter", 9166),
-        ("Key.space", 32),
-        # Key.shift dropped: shifted variants are folded to their
-        # unshifted base in clean_keys, so the modifier is unreachable.
-    ]
-)
-
-_COMPACT_INPUT_FOLDS: dict[str, str | None] = {
-    # Uppercase → lowercase
-    **dict(zip(string.ascii_uppercase, string.ascii_lowercase)),
-    # Shifted-digit → digit
-    **dict(zip("!@#$%^&*()", "1234567890")),
-    # Other shifted punctuation → unshifted punctuation
-    **dict(zip('~_+{}|:"<>?', "`-=[]\\;',./")),
-    # Shift modifiers are no longer in-vocab; map to None to drop entirely.
+_COMPACT_FOLDS: dict[str, str | None] = {
+    **{c: c.lower() for c in string.ascii_uppercase},          # case fold
+    **dict(zip("!@#$%^&*()", "1234567890")),                   # shifted digits
+    **dict(zip('~_+{}|:"<>?', "`-=[]\\;',./")),                # shifted punctuation
     "Key.shift": None,
     "Key.shift_l": None,
     "Key.shift_r": None,
 }
 
-_COMPACT_UNICHAR_TO_KEY: dict[str, str | None] = {
-    " ": "Key.space",
-    "\n": "Key.enter",
-    "\r": "Key.enter",
-    "\b": "Key.backspace",
-    "⏎": "Key.enter",
-    "⌫": "Key.backspace",
-    # Shift unicode sentinel is dropped in compact mode.
+# Compact's punctuation row follows the **US-QWERTY physical layout**
+# (left-to-right unshifted keys ``` `-=[]\;',./ ```), not
+# ``string.punctuation`` order — that's the assignment compact-preset
+# checkpoints (and the existing tests) are pinned against. Listed
+# explicitly rather than derived from ``_PAPER_VOCAB`` minus the fold
+# map. Every key kept here must be a paper-vocab key (asserted below).
+_COMPACT_VOCAB: tuple[str, ...] = (
+    *string.ascii_lowercase,
+    *string.digits,
+    *"`-=[]\\;',./",
+    "Key.backspace",
+    "Key.enter",
+    "Key.space",
+)
+assert set(_COMPACT_VOCAB) <= set(_PAPER_VOCAB), (
+    "compact vocab must be a subset of paper vocab"
+)
+
+# Compact aliases = paper unichar map (minus the shift sentinel) merged
+# with the fold map. ``"⇧": None`` overrides paper's ``"⇧": "Key.shift"``
+# — later-key-wins semantics of dict merge.
+_COMPACT_ALIASES: dict[str, str | None] = {
+    **{u: k for u, k in _PAPER_UNICHAR.items() if k != "Key.shift"},
     "⇧": None,
+    **_COMPACT_FOLDS,
 }
 
 
-class CharacterSet:
-    """Configurable typing vocabulary plus blank → ``num_classes`` for CTC.
+def _by_len(
+    aliases: dict[str, str | None], one: bool
+) -> list[tuple[str, str | None]]:
+    """Partition aliases by ``len(key) == 1`` so ``KeystrokeSequence``'s
+    two normalization fields stay semantically equivalent.
 
-    Use :meth:`paper` (default, 99 classes) for paper-faithful runs and
-    :meth:`qwerty_compact` (51 classes) for the case-folded
-    shift-collapsed variant.
+    1-char entries → ``unichar_to_key`` (matches the ``len(k) == 1``
+    fallback branch in ``KeystrokeSequence._encode``); multi-char
+    entries → ``input_folds`` (the unconditional fold branch). The
+    consumer's existing 3-step lookup (folds → key_to_label → 1-char
+    unichar) is preserved by this split.
     """
-
-    def __init__(
-        self,
-        key_to_unicode: OrderedDict[str, int] | None = None,
-        unichar_to_key: dict[str, str | None] | None = None,
-        input_folds: dict[str, str | None] | None = None,
-    ) -> None:
-        self.KEY_TO_UNICODE = key_to_unicode if key_to_unicode is not None else _PAPER_KEY_TO_UNICODE
-        self.UNICHAR_TO_KEY = unichar_to_key if unichar_to_key is not None else _PAPER_UNICHAR_TO_KEY
-        self._input_folds: dict[str, str | None] = input_folds or {}
-        self._key_to_index = {k: i for i, k in enumerate(self.KEY_TO_UNICODE)}
-        self._idx_to_chr: tuple[str, ...] = tuple(chr(c) for c in self.KEY_TO_UNICODE.values())
-
-    @classmethod
-    def paper(cls) -> "CharacterSet":
-        return cls()
-
-    @classmethod
-    def qwerty_compact(cls) -> "CharacterSet":
-        return cls(
-            key_to_unicode=_COMPACT_KEY_TO_UNICODE,
-            unichar_to_key=_COMPACT_UNICHAR_TO_KEY,
-            input_folds=_COMPACT_INPUT_FOLDS,
-        )
-
-    @classmethod
-    def from_preset(cls, name: VocabPreset) -> "CharacterSet":
-        return cls.qwerty_compact() if name == "qwerty_compact" else cls.paper()
-
-    @property
-    def null_class(self) -> int:
-        return len(self.KEY_TO_UNICODE)
-
-    @property
-    def num_classes(self) -> int:
-        return len(self.KEY_TO_UNICODE) + 1
-
-    def key_to_label(self, key: str) -> int:
-        return self._key_to_index[key]
-
-    def labels_to_str(self, labels: Sequence[int]) -> str:
-        return "".join(self._idx_to_chr[label] for label in labels)
-
-    def clean_keys(self, keys: Sequence[str]) -> list[str]:
-        """Normalize input keys and filter to the active vocabulary.
-
-        Per-character folds (e.g. case + shift collapse for the compact
-        preset) run first, so an upstream ``"A"`` event becomes ``"a"``
-        before the lookup.  Folded-to-``None`` entries are dropped.
-        """
-        out: list[str] = []
-        for k in keys:
-            if k in self._input_folds:
-                folded = self._input_folds[k]
-                if folded is None:
-                    continue
-                k = folded
-            if k in self.KEY_TO_UNICODE:
-                out.append(k)
-                continue
-            if len(k) == 1:
-                normalized = self.UNICHAR_TO_KEY.get(k, k)
-                if normalized is None:
-                    continue
-                if normalized in self.KEY_TO_UNICODE:
-                    out.append(normalized)
-        return out
-
-    def encode(self, keys: Sequence[str]) -> list[int]:
-        """Clean ``keys`` and return their integer labels in one call.
-
-        Equivalent to ``[key_to_label(k) for k in clean_keys(keys)]``;
-        unknown / folded-out keys are simply absent from the result.
-        Mirrors the MNE pattern of single-call accessors that handle
-        normalization + lookup together.
-        """
-        return [self.key_to_label(k) for k in self.clean_keys(keys)]
+    return [(k, v) for k, v in aliases.items() if (len(k) == 1) == one]
 
 
-# Module-level vocabulary tables consumed by
-# ``neuralset.extractors.text.KeystrokeSequence`` via ``!!python/name:``
-# references in the task YAML configs.  Stored as lists of (key, value)
-# pairs (not dicts) so they survive ``exca.ConfDict``'s YAML key-
-# flattening on dot-containing keys (e.g. ``"Key.backspace"``, ``"."``).
-_PAPER = CharacterSet.paper()
-PAPER_KEY_TO_LABEL: list[tuple[str, int]] = list(_PAPER._key_to_index.items())
-PAPER_UNICHAR_TO_KEY: list[tuple[str, str | None]] = list(_PAPER.UNICHAR_TO_KEY.items())
-PAPER_INPUT_FOLDS: list[tuple[str, str | None]] = []
+# --- YAML-facing constants (names + types pinned for ``!!python/name:``) -
 
-_COMPACT = CharacterSet.qwerty_compact()
-COMPACT_KEY_TO_LABEL: list[tuple[str, int]] = list(_COMPACT._key_to_index.items())
-COMPACT_UNICHAR_TO_KEY: list[tuple[str, str | None]] = list(_COMPACT.UNICHAR_TO_KEY.items())
-COMPACT_INPUT_FOLDS: list[tuple[str, str | None]] = list(_COMPACT._input_folds.items())
+PAPER_KEY_TO_LABEL: list[tuple[str, int]] = [
+    (k, i) for i, k in enumerate(_PAPER_VOCAB)
+]
+PAPER_UNICHAR_TO_KEY: list[tuple[str, str | None]] = _by_len(_PAPER_UNICHAR, one=True)
+PAPER_INPUT_FOLDS: list[tuple[str, str | None]] = _by_len(_PAPER_UNICHAR, one=False)
+PAPER_NULL_CLASS = len(_PAPER_VOCAB)        # 98
+PAPER_NUM_CLASSES = PAPER_NULL_CLASS + 1    # 99 (98 keys + CTC blank)
+
+COMPACT_KEY_TO_LABEL: list[tuple[str, int]] = [
+    (k, i) for i, k in enumerate(_COMPACT_VOCAB)
+]
+COMPACT_UNICHAR_TO_KEY: list[tuple[str, str | None]] = _by_len(
+    _COMPACT_ALIASES, one=True
+)
+COMPACT_INPUT_FOLDS: list[tuple[str, str | None]] = _by_len(
+    _COMPACT_ALIASES, one=False
+)
+COMPACT_NULL_CLASS = len(_COMPACT_VOCAB)        # 50
+COMPACT_NUM_CLASSES = COMPACT_NULL_CLASS + 1    # 51
+
+
+# --- single helper for tests + programmatic callers ----------------------
+
+
+def vocab_kwargs(preset: VocabPreset = "paper") -> dict:
+    """Build the kwargs dict ``KeystrokeSequence(**vocab_kwargs(preset))`` consumes."""
+    tables = {
+        "paper":          (PAPER_KEY_TO_LABEL,   PAPER_UNICHAR_TO_KEY,   PAPER_INPUT_FOLDS),
+        "qwerty_compact": (COMPACT_KEY_TO_LABEL, COMPACT_UNICHAR_TO_KEY, COMPACT_INPUT_FOLDS),
+    }
+    k2l, u2k, folds = tables[preset]
+    return {
+        "key_to_label":   dict(k2l),
+        "unichar_to_key": dict(u2k),
+        "input_folds":    dict(folds),
+    }
