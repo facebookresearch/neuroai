@@ -86,6 +86,14 @@ def convert_to_pydantic(
             for field in type(instance).model_fields
             if (field != "name" and field not in exclude_from_build)
         )
+        # Wrapper-only fields that must not reach the underlying class.
+        params.pop("log_name", None)
+        # If a nested `kwargs` dict was provided, spread it into params so its
+        # entries become real keyword args to _cls (newer torchmetrics rejects
+        # an unknown literal `kwargs=` keyword).
+        nested = params.pop("kwargs", None)
+        if nested:
+            params.update(nested)
         return instance._cls(**params)  # type: ignore
 
     # Bind the build method to Builder instances using MethodType

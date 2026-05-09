@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import csv
 import logging
 import re
 import typing as tp
@@ -117,7 +118,7 @@ class Emg2qwerty(study.Study):
     ) -> pd.DataFrame:
         subject, session = timeline["subject"], timeline["session"]
         bdf_path, events_path = self._bids_paths(subject, session)
-        events = pd.read_csv(events_path, sep="\t")
+        events = pd.read_csv(events_path, sep="\t", quoting=csv.QUOTE_NONE)
         events["start"] = events["onset"].astype(float)
         value = events["value"].astype(str)
 
