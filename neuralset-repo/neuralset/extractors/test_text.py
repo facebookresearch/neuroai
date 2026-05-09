@@ -376,16 +376,37 @@ def _ks_events(texts, starts=None):
     ]
 
 
-def test_keystroke_sequence_pad_layout():
-    ext = text.KeystrokeSequence(max_target_length=8, event_types="Keystroke", **_KS_VOCAB)
-    events = _ks_events(["h", "i", "Key.space"])
+@pytest.mark.parametrize(
+    ("texts", "starts", "core_kwargs", "win_start", "win_dur", "expected"),
+    [
+        # Pad layout: every event fits, no filtering.
+        (["h", "i", "Key.space"], None, {}, 0.0, 1.0, ["h", "i", "Key.space"]),
+        # Core-window filter: core [10.9, 14.9) keeps c@11 + d@14.5.
+        (
+            list("abcde"),
+            [10.0, 10.5, 11.0, 14.5, 14.95],
+            {"core_start_offset": 0.9, "core_duration": 4.0},
+            10.0, 5.0, ["c", "d"],
+        ),
+    ],
+)
+def test_keystroke_sequence_emits_padded_layout(
+    texts, starts, core_kwargs, win_start, win_dur, expected,
+):
+    """Output is ``(length-prefix, padded labels)`` with the un-padded length
+    in column 0 and ``null_class`` filling the tail."""
+    ext = text.KeystrokeSequence(
+        max_target_length=8, event_types="Keystroke", **core_kwargs, **_KS_VOCAB,
+    )
+    events = _ks_events(texts, starts)
     ext.prepare(events)
-    out = ext(events, start=0.0, duration=1.0)
+    out = ext(events, start=win_start, duration=win_dur)
 
     labels = _KS_VOCAB["key_to_label"]
-    assert out.shape == (9,) and int(out[0]) == 3
-    assert out[1:4].tolist() == [labels[k] for k in ("h", "i", "Key.space")]
-    assert (out[4:] == _KS_NULL_CLASS).all()
+    n = len(expected)
+    assert out.shape == (9,) and int(out[0]) == n
+    assert out[1 : 1 + n].tolist() == [labels[k] for k in expected]
+    assert (out[1 + n :] == _KS_NULL_CLASS).all()
 
 
 def test_keystroke_sequence_truncation_warns_once(caplog):
@@ -396,18 +417,3 @@ def test_keystroke_sequence_truncation_warns_once(caplog):
         ext(events, start=0.0, duration=1.0)
         ext(events, start=0.0, duration=1.0)
     assert sum("truncating" in r.message for r in caplog.records) == 1
-
-
-def test_keystroke_sequence_core_window_filters():
-    # core [10.9, 14.9): only 'c'@11.0 + 'd'@14.5 qualify.
-    ext = text.KeystrokeSequence(
-        max_target_length=8, event_types="Keystroke",
-        core_start_offset=0.9, core_duration=4.0,
-        **_KS_VOCAB,
-    )
-    events = _ks_events(list("abcde"), starts=[10.0, 10.5, 11.0, 14.5, 14.95])
-    ext.prepare(events)
-    out = ext(events, start=10.0, duration=5.0)
-    labels = _KS_VOCAB["key_to_label"]
-    assert int(out[0]) == 2
-    assert out[1:3].tolist() == [labels["c"], labels["d"]]

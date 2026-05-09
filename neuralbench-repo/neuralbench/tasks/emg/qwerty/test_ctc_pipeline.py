@@ -41,30 +41,45 @@ def test_charset_class_count_invariants():
 # --- Emg2qwerty study (synthetic BIDS tree) ------------------------------
 
 
-@pytest.fixture
-def bids_tree(tmp_path):
+_EVENTS_TSV = (
+    "onset\tduration\tvalue\tprompt_text\tkey\n"
+    "0.10\t1.5\tprompt\thello\t\n"
+    "0.20\t0.05\tkeystroke_press\t\th\n"
+    "0.30\t0.05\tkeystroke_press\t\te\n"
+    "0.40\t0.05\tkeystroke_press\t\tKey.space\n"
+)
+
+
+def _make_bids_tree(root, subdir=""):
+    """Build a synthetic single-(subject, session) BIDS tree under ``root``
+    or ``root / subdir``. Returns ``(subject, session, bids_root)``."""
     sub, ses = "00000001", "0000000001"
-    emg_dir = tmp_path / f"sub-{sub}" / f"ses-{ses}" / "emg"
+    bids_root = root / subdir if subdir else root
+    emg_dir = bids_root / f"sub-{sub}" / f"ses-{ses}" / "emg"
     emg_dir.mkdir(parents=True)
     stem = f"sub-{sub}_ses-{ses}_task-typing"
-    # Stub BDF — iter_timelines / _bids_paths only check existence.
-    (emg_dir / f"{stem}_emg.bdf").write_bytes(b"\x00" * 16)
-    (emg_dir / f"{stem}_events.tsv").write_text(
-        "onset\tduration\tvalue\tprompt_text\tkey\n"
-        "0.10\t1.5\tprompt\thello\t\n"
-        "0.20\t0.05\tkeystroke_press\t\th\n"
-        "0.30\t0.05\tkeystroke_press\t\te\n"
-        "0.40\t0.05\tkeystroke_press\t\tKey.space\n"
-    )
+    (emg_dir / f"{stem}_emg.bdf").write_bytes(b"\x00" * 16)  # iter_timelines / _bids_paths only check existence.
+    (emg_dir / f"{stem}_events.tsv").write_text(_EVENTS_TSV)
+    return sub, ses, bids_root
+
+
+@pytest.fixture
+def bids_tree(tmp_path):
+    sub, ses, _ = _make_bids_tree(tmp_path)
     return tmp_path, sub, ses
 
 
-def test_emg2qwerty_bids_loader(bids_tree):
+@pytest.mark.parametrize("subdir", ["", "download"])
+def test_emg2qwerty_study_source(tmp_path, subdir):
+    """``iter_timelines`` / ``_load_timeline_events`` / ``_bids_root`` all
+    work whether the BIDS tree sits at the path root or under
+    ``download/`` (the latter is the layout ``Study.download`` produces)."""
     from neuralfetch.studies.emg2qwerty import Emg2qwerty
 
-    root, sub, ses = bids_tree
-    study = Emg2qwerty(path=str(root))
+    sub, ses, bids_root = _make_bids_tree(tmp_path, subdir)
+    study = Emg2qwerty(path=str(tmp_path))
 
+    assert study._bids_root() == bids_root
     assert list(study.iter_timelines()) == [{"subject": sub, "session": ses}]
 
     df = study._load_timeline_events({"subject": sub, "session": ses})
@@ -112,16 +127,3 @@ def test_load_timeline_events_strips_only_literal_suffix(bids_tree, raw_text, ex
     assert sentences == [expected]
 
 
-def test_emg2qwerty_bids_root_handles_download_subfolder(tmp_path):
-    # ``Study.download`` lands BIDS under ``self.path/download/``.
-    from neuralfetch.studies.emg2qwerty import Emg2qwerty
-
-    sub, ses = "00000002", "0000000002"
-    download_root = tmp_path / "download" / f"sub-{sub}" / f"ses-{ses}" / "emg"
-    download_root.mkdir(parents=True)
-    stem = f"sub-{sub}_ses-{ses}_task-typing"
-    (download_root / f"{stem}_emg.bdf").write_bytes(b"\x00" * 16)
-
-    study = Emg2qwerty(path=str(tmp_path))
-    assert study._bids_root() == tmp_path / "download"
-    assert list(study.iter_timelines()) == [{"subject": sub, "session": ses}]
