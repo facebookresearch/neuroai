@@ -352,3 +352,62 @@ def test_part_reversal() -> None:
     assert x.shape == ref.shape
     with pytest.raises(AssertionError):
         np.testing.assert_almost_equal(x.numpy(), ref)
+
+
+# --- KeystrokeSequence ---------------------------------------------------
+
+import string
+
+# Generic 27-class vocab (a-z + Key.space). Concrete task vocabularies
+# (e.g. emg2qwerty's 99-class set) live in their own task packages.
+_KS_VOCAB = {
+    "key_to_label": {k: i for i, k in enumerate([*string.ascii_lowercase, "Key.space"])},
+    "unichar_to_key": {" ": "Key.space"},
+    "input_folds": {},
+}
+_KS_NULL_CLASS = len(_KS_VOCAB["key_to_label"])  # 26
+
+
+def _ks_events(texts, starts=None):
+    starts = starts or [0.1 * i for i in range(len(texts))]
+    return [
+        etypes.Keystroke(start=s, duration=0.05, text=t, timeline="t")
+        for s, t in zip(starts, texts, strict=False)
+    ]
+
+
+def test_keystroke_sequence_pad_layout():
+    ext = text.KeystrokeSequence(max_target_length=8, event_types="Keystroke", **_KS_VOCAB)
+    events = _ks_events(["h", "i", "Key.space"])
+    ext.prepare(events)
+    out = ext(events, start=0.0, duration=1.0)
+
+    labels = _KS_VOCAB["key_to_label"]
+    assert out.shape == (9,) and int(out[0]) == 3
+    assert out[1:4].tolist() == [labels[k] for k in ("h", "i", "Key.space")]
+    assert (out[4:] == _KS_NULL_CLASS).all()
+
+
+def test_keystroke_sequence_truncation_warns_once(caplog):
+    ext = text.KeystrokeSequence(max_target_length=2, event_types="Keystroke", **_KS_VOCAB)
+    events = _ks_events(list("hello"))
+    ext.prepare(events)
+    with caplog.at_level("WARNING"):
+        ext(events, start=0.0, duration=1.0)
+        ext(events, start=0.0, duration=1.0)
+    assert sum("truncating" in r.message for r in caplog.records) == 1
+
+
+def test_keystroke_sequence_core_window_filters():
+    # core [10.9, 14.9): only 'c'@11.0 + 'd'@14.5 qualify.
+    ext = text.KeystrokeSequence(
+        max_target_length=8, event_types="Keystroke",
+        core_start_offset=0.9, core_duration=4.0,
+        **_KS_VOCAB,
+    )
+    events = _ks_events(list("abcde"), starts=[10.0, 10.5, 11.0, 14.5, 14.95])
+    ext.prepare(events)
+    out = ext(events, start=10.0, duration=5.0)
+    labels = _KS_VOCAB["key_to_label"]
+    assert int(out[0]) == 2
+    assert out[1:3].tolist() == [labels["c"], labels["d"]]
