@@ -5,9 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 # EMG2QwertyNet (Sivakumar et al., NeurIPS 2024) — pairs with emg/qwerty.
-# ``spec_augment`` enables the model's built-in SpecAugment (Sec 5.2:
-# 3 × 25-frame time masks, 2 × 4-bin freq masks, prob=1.0); active only
-# in ``train()`` mode and replaces the previous Lightning callback.
 brain_model_config:
   =replace=: true
   name: EMG2QwertyNet

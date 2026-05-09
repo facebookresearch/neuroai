@@ -823,5 +823,3 @@ class PlotRegressionScatter(Callback):
         ax.grid(True, alpha=0.3)
 
         return fig
-
-
