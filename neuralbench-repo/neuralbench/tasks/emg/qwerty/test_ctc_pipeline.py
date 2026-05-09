@@ -187,43 +187,6 @@ def test_cer_perfect_predictions():
     assert float(metric.compute()) == 0.0
 
 
-# ---------------------------------------------------------------------------
-# Lightning callbacks (qwerty Python-only API; not YAML-wired)
-# ---------------------------------------------------------------------------
-
-
-class _StubModule:
-    training = True
-    def __init__(self, model=None):
-        self.model = model
-
-
-class _StubTrainer:
-    current_epoch = 5
-    world_size = 1
-
-
-def test_specaugment_callback_attaches_and_detaches():
-    pytest.importorskip("torchaudio")
-    try:
-        from braindecode.models import EMG2QwertyNet
-    except ImportError:
-        pytest.skip("EMG2QwertyNet missing from installed braindecode")
-    from neuralbench.callbacks import SpecAugmentCallback
-
-    model = EMG2QwertyNet(
-        n_outputs=99, n_chans=32, n_times=8000, sfreq=2000.0, log_softmax=True
-    )
-    cb = SpecAugmentCallback(prob=1.0, start_epoch=0)
-    cb.on_train_start(_StubTrainer(), _StubModule(model))
-    cb.on_train_epoch_start(_StubTrainer(), _StubModule(model))
-    assert cb._handle is not None
-    model.train()
-    assert model(torch.randn(2, 32, 8000)).shape == (2, 373, 99)
-    cb.on_train_end(_StubTrainer(), _StubModule(model))
-    assert cb._handle is None
-
-
 def test_band_rotation_module_changes_input_in_train_mode():
     from neuraltrain.augmentations import BandRotation
 

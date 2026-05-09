@@ -66,7 +66,6 @@ Callbacks
    PlotConfusionMatrix
    PlotRegressionVectors
    plot_confusion_matrix
-   SpecAugmentCallback
 
 Utilities
 ---------
