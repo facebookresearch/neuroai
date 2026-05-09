@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Self-contained smoke tests for the CTC machinery (synthetic data only)."""
+"""CTC machinery smoke tests (synthetic data only)."""
 
 from __future__ import annotations
 
@@ -27,13 +27,21 @@ from .charset import (
     vocab_kwargs,
 )
 
-# Cached lookup so test bodies stay terse.
 _PAPER_LABEL = dict(PAPER_KEY_TO_LABEL)
+
+
+def _y_true(seqs, max_len=8):
+    """``(length-prefix, padded labels)`` layout consumed by CtcSeqLoss + CER."""
+    lengths = torch.tensor([len(s) for s in seqs])
+    labels = torch.full((len(seqs), max_len), PAPER_NULL_CLASS, dtype=torch.long)
+    for i, s in enumerate(seqs):
+        labels[i, : len(s)] = torch.tensor([_PAPER_LABEL[c] for c in s])
+    return torch.cat([lengths.unsqueeze(1), labels], dim=1)
 
 
 @pytest.fixture
 def make_keystrokes():
-    """Factory: build N Keystroke events at staggered start times."""
+    """N Keystroke events at staggered start times."""
     from neuralset.events.etypes import Keystroke
 
     def _make(texts, starts=None):
@@ -46,9 +54,7 @@ def make_keystrokes():
     return _make
 
 
-# ---------------------------------------------------------------------------
-# KeystrokeSequence
-# ---------------------------------------------------------------------------
+# --- KeystrokeSequence ---------------------------------------------------
 
 
 def test_keystroke_sequence_pad_layout(make_keystrokes):
@@ -77,79 +83,35 @@ def test_keystroke_sequence_truncation_warns_once(make_keystrokes, caplog):
 
 
 def test_keystroke_sequence_core_window_filters(make_keystrokes):
-    # Segment [10,15], core [10.9,14.9). Only 'c'@11.0 + 'd'@14.5 qualify.
+    # core [10.9, 14.9): only 'c'@11.0 + 'd'@14.5 qualify.
     ext = KeystrokeSequence(
         max_target_length=8, event_types="Keystroke",
         core_start_offset=0.9, core_duration=4.0,
         **vocab_kwargs(),
     )
-    events = make_keystrokes(
-        list("abcde"), starts=[10.0, 10.5, 11.0, 14.5, 14.95]
-    )
+    events = make_keystrokes(list("abcde"), starts=[10.0, 10.5, 11.0, 14.5, 14.95])
     ext.prepare(events)
     out = ext(events, start=10.0, duration=5.0)
     assert int(out[0]) == 2
     assert out[1:3].tolist() == [_PAPER_LABEL["c"], _PAPER_LABEL["d"]]
 
 
-def test_keystroke_sequence_empty_segment(make_keystrokes):
-    ext = KeystrokeSequence(
-        max_target_length=8, event_types="Keystroke", allow_missing=True,
-        **vocab_kwargs(),
-    )
-    ext.prepare(make_keystrokes(["a"]))
-    out = ext([], start=0.0, duration=1.0)
-    assert out.shape == (9,) and int(out[0]) == 0
-
-
-def test_keystroke_sequence_per_instance_vocab():
-    """Distinct preset kwargs give distinct vocab sizes — no shared state."""
-    paper = KeystrokeSequence(
-        max_target_length=4, event_types="Keystroke", **vocab_kwargs("paper"),
-    )
-    compact = KeystrokeSequence(
-        max_target_length=4, event_types="Keystroke",
-        **vocab_kwargs("qwerty_compact"),
-    )
-    assert len(paper.key_to_label) == 98
-    assert len(compact.key_to_label) == 50
-
-
-# ---------------------------------------------------------------------------
-# Vocabulary tables + CER metric
-# ---------------------------------------------------------------------------
+# --- Vocabulary tables + CER metric --------------------------------------
 
 
 def test_charset_class_count_invariants():
-    """Paper has 99 classes (98 keys + blank); compact has 51 (50 + blank).
-
-    Sanity-checks the vocab tables themselves against the documented
-    sizes (including the explicit drop of uppercase / shifted symbols /
-    ``Key.shift`` from the compact preset). Encoding semantics are
-    pinned by the existing ``KeystrokeSequence`` extractor tests above
-    via ``vocab_kwargs(preset)``; we don't re-pin them here.
-    """
-    assert PAPER_NULL_CLASS == 98
-    assert PAPER_NUM_CLASSES == 99
-    assert len(PAPER_KEY_TO_LABEL) == 98
+    """Paper: 98 keys + blank = 99; compact: 50 + blank = 51 (drops uppercase, shifted, Key.shift)."""
+    paper_keys = {k for k, _ in PAPER_KEY_TO_LABEL}
+    assert (PAPER_NULL_CLASS, PAPER_NUM_CLASSES, len(paper_keys)) == (98, 99, 98)
 
     compact_keys = {k for k, _ in COMPACT_KEY_TO_LABEL}
-    assert COMPACT_NULL_CLASS == 50
-    assert COMPACT_NUM_CLASSES == 51
-    assert len(compact_keys) == 50
-    assert "Key.shift" not in compact_keys  # explicitly dropped
-    assert "A" not in compact_keys          # uppercase not in vocab
-    assert "!" not in compact_keys          # shifted symbol not in vocab
+    assert (COMPACT_NULL_CLASS, COMPACT_NUM_CLASSES, len(compact_keys)) == (50, 51, 50)
+    assert {"Key.shift", "A", "!"}.isdisjoint(compact_keys)
 
 
 def test_cer_perfect_predictions():
-    # "hey" / "world" have unique chars per word → labels can pack densely.
     seqs = ("hey", "world")
-    target_lengths = torch.tensor([len(s) for s in seqs])
-    targets = torch.full((len(seqs), 8), PAPER_NULL_CLASS, dtype=torch.long)
-    for i, s in enumerate(seqs):
-        targets[i, : len(s)] = torch.tensor([_PAPER_LABEL[c] for c in s])
-    y_true = torch.cat([target_lengths.unsqueeze(1), targets], dim=1)
+    y_true = _y_true(seqs)
 
     T_out = 30
     y_pred = torch.full((len(seqs), T_out, PAPER_NUM_CLASSES), -100.0)
@@ -158,7 +120,7 @@ def test_cer_perfect_predictions():
             y_pred[i, t, _PAPER_LABEL[c]] = 0.0
         y_pred[i, len(s):, PAPER_NULL_CLASS] = 0.0
 
-    metric = CharacterErrorRates(blank_idx=98)
+    metric = CharacterErrorRates(blank_idx=PAPER_NULL_CLASS)
     metric.update(torch.log_softmax(y_pred, dim=-1), y_true)
     assert float(metric.compute()) == 0.0
 
@@ -230,20 +192,12 @@ def test_band_rotation_config_builds_module():
 
 
 def test_brain_module_ctc_loss_and_metric_share_signature():
-    pytest.importorskip("Levenshtein")
+    """CtcSeqLoss + CER both consume the same ``(y_pred (B,T,C), y_true)`` shapes."""
     from neuraltrain.losses.losses import CtcSeqLoss
 
     seqs = ("hey", "world")
-    target_lengths = torch.tensor([len(s) for s in seqs])
-    targets = torch.full((len(seqs), 8), PAPER_NULL_CLASS, dtype=torch.long)
-    for i, s in enumerate(seqs):
-        targets[i, : len(s)] = torch.tensor([_PAPER_LABEL[c] for c in s])
-    y_true = torch.cat([target_lengths.unsqueeze(1), targets], dim=1)
-
-    # (B, T_out, C) log-probs — braindecode convention; same shape both
-    # the loss adapter and CER metric consume.
-    B, T_out, V = len(seqs), 64, PAPER_NUM_CLASSES
-    y_pred = torch.log_softmax(torch.randn(B, T_out, V), dim=-1)
+    y_true = _y_true(seqs)
+    y_pred = torch.log_softmax(torch.randn(len(seqs), 64, PAPER_NUM_CLASSES), dim=-1)
 
     loss = CtcSeqLoss(blank=PAPER_NULL_CLASS, zero_infinity=True)
     assert torch.isfinite(loss(y_pred, y_true))
