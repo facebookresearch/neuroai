@@ -186,11 +186,8 @@ def build_brain_model(
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
     feat = batch.data["target"]
-    # ``n_outputs`` defaults to the target tensor's last dimension (e.g.
-    # one-hot ``(B, n_classes)``).  CTC-style targets carry a length prefix
-    # plus padded labels, so the last dim is ``max_target_length + 1``,
-    # not the vocabulary size.  Tasks with this shape pass an explicit
-    # ``n_outputs_override`` (sourced from ``brain_model_output_size``).
+    # CTC-style targets carry a length prefix, so ``feat.shape[-1]`` is the vocab
+    # size only for one-hot targets — pass ``n_outputs_override`` for the rest.
     n_outputs = n_outputs_override if n_outputs_override is not None else feat.shape[-1]
 
     # 1) Build the brain model

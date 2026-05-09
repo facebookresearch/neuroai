@@ -124,32 +124,24 @@ def test_cer_perfect_predictions():
     assert float(metric.compute()) == 0.0
 
 
-def test_band_rotation_module_changes_input_in_train_mode():
+@pytest.mark.parametrize(
+    ("kwargs", "mode", "n_chans", "should_change"),
+    [
+        # train mode + matching channels: input is mutated.
+        (dict(band_offsets=(-1, 1), max_temporal_jitter=4), "train", 32, True),
+        # eval mode: identity passthrough.
+        ({}, "eval", 32, False),
+        # train mode but channels don't divide num_bands*electrodes_per_band.
+        ({}, "train", 7, False),
+    ],
+)
+def test_band_rotation_module(kwargs, mode, n_chans, should_change):
     from neuraltrain.augmentations import BandRotation
 
-    x = torch.randn(2, 32, 64)
-    aug = BandRotation(
-        num_bands=2, electrodes_per_band=16, band_offsets=(-1, 1),
-        max_temporal_jitter=4,
-    )
-    aug.train()
-    assert not torch.equal(aug(x), x)
-
-
-def test_band_rotation_module_is_noop_in_eval_mode():
-    from neuraltrain.augmentations import BandRotation
-
-    x = torch.randn(2, 32, 64)
-    aug = BandRotation(num_bands=2, electrodes_per_band=16).eval()
-    assert torch.equal(aug(x), x)
-
-
-def test_band_rotation_module_skips_when_channel_layout_mismatches():
-    from neuraltrain.augmentations import BandRotation
-
-    x = torch.randn(2, 7, 64)  # 7 channels, not divisible by num_bands*electrodes_per_band
-    aug = BandRotation(num_bands=2, electrodes_per_band=16).train()
-    assert torch.equal(aug(x), x)
+    aug = BandRotation(num_bands=2, electrodes_per_band=16, **kwargs)
+    getattr(aug, mode)()
+    x = torch.randn(2, n_chans, 64)
+    assert torch.equal(aug(x), x) is not should_change
 
 
 def test_band_rotation_delegates_to_braindecode_functional(monkeypatch):
@@ -213,9 +205,11 @@ def test_n_outputs_override_routes_to_braindecode_builder(
     monkeypatch, override, target_last_dim, expected
 ):
     """``n_outputs_override`` wins over the inferred ``target.shape[-1]``."""
-    from neuraltrain.models.base import BaseBrainDecodeModel
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
 
     from neuralbench import model_factory
+    from neuraltrain.models.base import BaseBrainDecodeModel
 
     captured: dict[str, int] = {}
 
@@ -223,39 +217,29 @@ def test_n_outputs_override_routes_to_braindecode_builder(
         captured["n_outputs"] = n_outputs
         return nn.Identity()
 
-    class _FakeSummary:
-        total_params = trainable_params = 0
-
     monkeypatch.setattr(model_factory, "build_braindecode_model", fake_build)
     monkeypatch.setattr(model_factory, "build_dummy_batch", lambda *a, **k: (None, "x"))
     monkeypatch.setattr(model_factory, "init_lazy_layers", lambda *a, **k: None)
-    monkeypatch.setattr(model_factory, "summary", lambda *a, **k: _FakeSummary())
+    monkeypatch.setattr(
+        model_factory, "summary",
+        lambda *a, **k: SimpleNamespace(total_params=0, trainable_params=0),
+    )
 
-    class _Batch: ...
-    class _Loader:
-        def __iter__(self):
-            b = _Batch()
-            b.data = {
-                "neuro": torch.randn(2, 4, 64),
-                "target": torch.zeros(2, target_last_dim),
-                "subject_id": torch.zeros(2, dtype=torch.long),
-            }
-            yield b
-
-        @property
-        def dataset(self):
-            class _DS:
-                metadata: dict = {}
-            return _DS()
-
-    from unittest.mock import MagicMock
-    cfg = MagicMock(spec=BaseBrainDecodeModel)
+    batch = SimpleNamespace(data={
+        "neuro": torch.randn(2, 4, 64),
+        "target": torch.zeros(2, target_last_dim),
+        "subject_id": torch.zeros(2, dtype=torch.long),
+    })
+    # ``DataLoader``-shaped stub: needs ``__iter__`` + ``.dataset.metadata``.
+    loader = MagicMock(spec=["__iter__", "dataset"])
+    loader.__iter__.return_value = iter([batch])
+    loader.dataset = SimpleNamespace(metadata={})
 
     model_factory.build_brain_model(
-        brain_model_config=cfg,
+        brain_model_config=MagicMock(spec=BaseBrainDecodeModel),
         downstream_model_wrapper=None,
         pretrained_weights_fname=None,
-        train_loader=_Loader(),  # type: ignore[arg-type]
+        train_loader=loader,
         n_outputs_override=override,
     )
     assert captured["n_outputs"] == expected

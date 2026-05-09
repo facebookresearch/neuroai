@@ -105,4 +105,3 @@ Configuration
    setup_config
    load_config
    get_config
-
