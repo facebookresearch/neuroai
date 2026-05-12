@@ -1458,6 +1458,32 @@ def test_bipolar_ref_validation() -> None:
         )
 
 
+def test_car_ieeg_global() -> None:
+    """Global CAR makes the cross-channel mean zero at every timepoint."""
+    ch_names = ["A1", "A2", "B1", "B2"]
+    sfreq = 100.0
+    data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(picks=("seeg",), reference="car")
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+    np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
+    assert not np.allclose(result.data, 0.0)
+
+
+def test_ieeg_cannot_combine_car_and_bipolar_ref() -> None:
+    expected = "Cannot use reference='car'"
+    with pytest.raises(ValueError, match=expected):
+        ns.extractors.IeegExtractor(
+            picks=("seeg",),
+            reference="car",
+            bipolar_ref=(["A1"], ["A2"]),
+        )
+
+
 def test_overlap() -> None:
     event_start = 10.0
     event_duration = 6.0

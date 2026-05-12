@@ -585,9 +585,10 @@ class IeegExtractor(MneRaw):
     ----------
     picks: default = ("seeg", "ecog", )
         pick "seeg" and "ecog" channels by default.
-    reference: "bipolar" or None, default=None
+    reference: "bipolar", "car", or None, default=None
         If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
         Uses mne.set_bipolar_reference under the hood. [ieeg1]_
+        If "car", applies a global common-average reference (subtracts the across-channel mean from every channel).
 
     Notes
     ----------
@@ -618,7 +619,7 @@ class IeegExtractor(MneRaw):
         ),
         min_length=1,
     )
-    reference: tp.Literal["bipolar"] | None = None
+    reference: tp.Literal["bipolar", "car"] | None = None
 
     def model_post_init(self, log__):
         super().model_post_init(log__)
@@ -633,6 +634,11 @@ class IeegExtractor(MneRaw):
                 "neighboring electrodes) and bipolar_ref (explicit "
                 "anode/cathode lists) at the same time."
             )
+        if self.reference == "car" and self.bipolar_ref is not None:
+            raise ValueError(
+                "Cannot use reference='car' together with bipolar_ref. "
+                "Choose exactly one referencing scheme."
+            )
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
         raw = self._pick_channels(raw, self.picks)
@@ -644,6 +650,9 @@ class IeegExtractor(MneRaw):
         if self.reference == "bipolar":
             raw.load_data()
             raw = self._apply_bipolar_ref(raw)
+        elif self.reference == "car":
+            raw.load_data()
+            raw = self._apply_car_ref(raw)
 
         return super()._preprocess_raw(raw, event)
 
@@ -687,6 +696,25 @@ class IeegExtractor(MneRaw):
             del cathodes[idx]
         bipol = mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
         return bipol
+
+    def _apply_car_ref(self, raw: mne.io.Raw) -> mne.io.Raw:
+        """
+        Apply a global common-average reference (CAR).
+
+        Parameters
+        ----------
+        raw : mne.io.Raw
+            Raw instance that will be referenced.
+
+        Returns
+        -------
+        raw : mne.io.Raw
+            Referenced Raw object
+
+        """
+        logger.info("Applying CAR reference")
+        raw._data -= raw._data.mean(axis=0, keepdims=True)
+        return raw
 
 
 class SpikesExtractor(BaseExtractor):
