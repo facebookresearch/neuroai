@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-13
+
+- `neuralset`: interactive Code Builder docs page (#39).
+- `neuralset`: propagate BIDS fields to new events from transforms (#49).
+- `neuralset`: fixed cache clearing logic in `Study` (#57).
+- `neuralset`: fixed double-sentence issue in text transforms (#47).
+- `neuralfetch`: fixed osfstorage URL in Nieuwland2018 download (#52).
+
 ## [0.2.0] - 2026-05-06
 
 - New `neuralbench` package: unified benchmark for NeuroAI models, with
