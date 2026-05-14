@@ -1216,14 +1216,53 @@ class Physionet(S3):
 
         # Download into a temp directory first because Physionet stores
         # objects under <study>/<version>/, which the S3 base class
-        # mirrors on disk.  After downloading we flatten by renaming
-        # temp/<study>/<version>/ directly into _dl_dir.
+        # mirrors on disk. After downloading we flatten by moving
+        # the downloaded content into _dl_dir. Be robust to variations in
+        # the layout produced by the S3 client: the expected inner path
+        # temp/<study>/<version> may not always exist.
         super()._download()
 
         inner = temp_folder / self.study / self.version
-        inner.rename(self._dl_dir)
-        inner.parent.rmdir()
-        temp_folder.rmdir()
+        if not inner.exists():
+            # Try a few fallbacks: single child directory, or temp folder itself.
+            children = [p for p in temp_folder.iterdir() if p.exists()]
+            # Prefer the expected inner if present among children
+            for c in children:
+                if c.is_dir() and (c.name == self.study or c.name == self.version):
+                    # drill down if necessary
+                    potential = c / self.version if c.name == self.study else c
+                    if potential.exists():
+                        inner = potential
+                        break
+            else:
+                if len(children) == 1 and children[0].is_dir():
+                    inner = children[0]
+                else:
+                    # fallback to moving temp_folder contents directly
+                    inner = temp_folder
+
+        # Move/rename into the expected download directory.
+        if inner == temp_folder:
+            # move contents (not the temp folder itself) into _dl_dir
+            self._dl_dir.mkdir(parents=True, exist_ok=True)
+            for item in temp_folder.iterdir():
+                shutil.move(str(item), str(self._dl_dir))
+        else:
+            # move the directory (handles cross-filesystem moves)
+            if self._dl_dir.exists():
+                shutil.rmtree(self._dl_dir)
+            shutil.move(str(inner), str(self._dl_dir))
+
+        # Cleanup any empty parent temp directories (best-effort).
+        try:
+            if (temp_folder / self.study).exists() and (temp_folder / self.study).is_dir():
+                (temp_folder / self.study).rmdir()
+        except Exception:
+            pass
+        try:
+            temp_folder.rmdir()
+        except Exception:
+            pass
 
 
 synapse_msg = """Requires creating a Synapse account with 2FA.
