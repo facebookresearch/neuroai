@@ -718,8 +718,13 @@ class IeegExtractor(MneRaw):
         # mne.set_eeg_reference with ch_type=list-of-str computes one reference
         # from the union of channel types (and per-type independence requires
         # projection=True). Loop per type so each channel type gets its own
-        # average reference.
+        # average reference. Skip types absent from raw (picks may name types
+        # not present after _pick_channels, e.g. picks=("seeg","ecog") with a
+        # seeg-only recording).
+        present_types = set(raw.get_channel_types())
         for ch_type in self.picks:
+            if ch_type not in present_types:
+                continue
             raw, _ = mne.set_eeg_reference(
                 raw,
                 ref_channels="average",

@@ -1512,6 +1512,23 @@ def test_car_ieeg_multi_picks_per_channel_type() -> None:
     np.testing.assert_allclose(result.data[ecog_idx].sum(axis=0), 0.0, atol=1e-5)
 
 
+def test_car_ieeg_picks_includes_absent_type() -> None:
+    """Regression guard: per-type CAR loop must skip channel types absent from raw."""
+    ch_names = ["A1", "A2", "A3"]
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2)) + 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
+    raw = mne.io.RawArray(data, info)
+
+    # picks includes both seeg and ecog; raw has only seeg → ecog iteration must be skipped.
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), reference="car")
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+    np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
+
+
 def test_overlap() -> None:
     event_start = 10.0
     event_duration = 6.0
