@@ -187,6 +187,43 @@ def test_globus_missing_credentials_raises(tmp_path: Path) -> None:
         )
 
 
+def test_physionet_handles_missing_inner_path(tmp_path: Path) -> None:
+    """Physionet._download handles S3 layouts where temp/<study>/<version> is missing.
+    
+    Regression test for: when S3 download produces a different directory layout
+    (e.g., files directly in temp/ instead of temp/<study>/<version>/), the
+    Physionet fallback should flatten and move them to the final download/ directory
+    without raising FileNotFoundError.
+    """
+    physionet = download.Physionet(
+        study="eegmat",
+        version="1.0.0",
+        dset_dir=tmp_path / "study",
+    )
+    
+    def mock_s3_download_flat(self: download.S3) -> None:
+        """Mock S3 download that creates files directly in temp (not nested)."""
+        temp_folder = self._dl_dir.parent / "temp"
+        temp_folder.mkdir(parents=True, exist_ok=True)
+        # Simulate S3 behavior: create files directly in temp, NOT in temp/<study>/<version>/
+        (temp_folder / "file1.txt").write_text("data1")
+        (temp_folder / "file2.txt").write_text("data2")
+    
+    # Patch S3._download to use the alternative layout
+    with patch.object(download.S3, "_download", mock_s3_download_flat):
+        # This should NOT raise FileNotFoundError even though temp/eegmat/1.0.0 is missing
+        physionet._download()
+    
+    # Verify files were moved to the correct final location
+    assert (tmp_path / "study" / "download" / "file1.txt").exists()
+    assert (tmp_path / "study" / "download" / "file2.txt").exists()
+    assert (tmp_path / "study" / "download" / "file1.txt").read_text() == "data1"
+    assert (tmp_path / "study" / "download" / "file2.txt").read_text() == "data2"
+    
+    # Verify temp directory was cleaned up
+    assert not (tmp_path / "study" / "temp").exists()
+
+
 def test_nsd_data_access_agreement(tmp_path: Path) -> None:
     """NSD consent flow: T&C display, user info collection, marker persistence."""
     from neuralfetch.studies.allen2022massive import Allen2022Massive
