@@ -588,7 +588,9 @@ class IeegExtractor(MneRaw):
     reference: "bipolar", "car", or None, default=None
         If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
         Uses mne.set_bipolar_reference under the hood. [ieeg1]_
-        If "car", applies a global common-average reference (subtracts the across-channel mean from every channel).
+        If "car", applies a common-average reference via mne.set_eeg_reference;
+        with multiple picks (e.g. ("seeg", "ecog")) each channel type is referenced
+        independently to its own average.
 
     Notes
     ----------
@@ -713,7 +715,13 @@ class IeegExtractor(MneRaw):
 
         """
         logger.info("Applying CAR reference")
-        raw._data -= raw._data.mean(axis=0, keepdims=True)
+        raw, _ = mne.set_eeg_reference(
+            raw,
+            ref_channels="average",
+            ch_type=list(self.picks),
+            copy=False,
+            verbose="WARNING",
+        )
         return raw
 
 
