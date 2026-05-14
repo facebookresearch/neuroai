@@ -715,13 +715,18 @@ class IeegExtractor(MneRaw):
 
         """
         logger.info("Applying CAR reference")
-        raw, _ = mne.set_eeg_reference(
-            raw,
-            ref_channels="average",
-            ch_type=list(self.picks),
-            copy=False,
-            verbose="WARNING",
-        )
+        # mne.set_eeg_reference with ch_type=list-of-str computes one reference
+        # from the union of channel types (and per-type independence requires
+        # projection=True). Loop per type so each channel type gets its own
+        # average reference.
+        for ch_type in self.picks:
+            raw, _ = mne.set_eeg_reference(
+                raw,
+                ref_channels="average",
+                ch_type=ch_type,
+                copy=False,
+                verbose="WARNING",
+            )
         return raw
 
 

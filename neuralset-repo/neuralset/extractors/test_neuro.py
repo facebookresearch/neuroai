@@ -1484,6 +1484,34 @@ def test_ieeg_cannot_combine_car_and_bipolar_ref() -> None:
         )
 
 
+def test_car_ieeg_multi_picks_per_channel_type() -> None:
+    """With picks=("seeg", "ecog"), CAR references each channel type to its own average."""
+    seeg_names = ["A1", "A2", "A3"]
+    ecog_names = ["G1", "G2", "G3", "G4"]
+    ch_names = seeg_names + ecog_names
+    ch_types = ["seeg"] * len(seeg_names) + ["ecog"] * len(ecog_names)
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2))
+    # Offset the two groups in opposite directions: a single global average
+    # would leave a non-zero residual mean in each subset; correct per-type
+    # CAR must zero each subset independently.
+    data[: len(seeg_names)] += 5.0
+    data[len(seeg_names) :] -= 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types=ch_types)
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), reference="car")
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+
+    seeg_idx = [result.ch_names.index(n) for n in seeg_names]
+    ecog_idx = [result.ch_names.index(n) for n in ecog_names]
+    np.testing.assert_allclose(result.data[seeg_idx].sum(axis=0), 0.0, atol=1e-5)
+    np.testing.assert_allclose(result.data[ecog_idx].sum(axis=0), 0.0, atol=1e-5)
+
+
 def test_overlap() -> None:
     event_start = 10.0
     event_duration = 6.0
