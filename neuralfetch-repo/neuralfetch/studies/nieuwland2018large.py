@@ -123,7 +123,7 @@ class Nieuwland2018Large(study.Study):
             dict(task=timeline["task"]) if timeline.get("task") is not None else dict()
         )
         raw = site._load_raw(subject=timeline["site_subject"], **kwargs)
-        raw.pick_types(eeg=True, stim=True)
+        raw.pick(["eeg", "stim"])
         if raw.get_montage() is None:
             montage = mne.channels.make_standard_montage("standard_1005")
             raw.set_montage(montage)
