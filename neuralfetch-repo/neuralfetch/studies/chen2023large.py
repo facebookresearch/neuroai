@@ -84,7 +84,7 @@ class Chen2023Large(study.Study):
     description: tp.ClassVar[str] = """
         EEG recordings for 123 participants while viewing 28 video clips targeting nine categories of emotion
     """
-    requirements: tp.ClassVar[tuple[str, ...]] = ("python_calamine",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("python-calamine",)
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=123,
         num_subjects=123,

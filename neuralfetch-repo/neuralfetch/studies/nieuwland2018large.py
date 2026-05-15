@@ -89,7 +89,7 @@ class Nieuwland2018Large(study.Study):
         "EEG recordings from 334 participants across 9 laboratories reading sentences in "
         "RSVP to test phonological predictions."
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("python_calamine",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("python-calamine",)
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=335,
         num_subjects=295,
