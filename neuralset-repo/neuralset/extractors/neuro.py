@@ -174,14 +174,15 @@ class MneRaw(BaseExtractor):
     1. Channel selection
     2. Drop bad channels
     3. Bipolar referencing
-    4. Notch filtering
-    5. Band-pass filtering
-    6. Hilbert transform
-    7. Resampling
-    8. Scaling
-    9. Applying projectors
-    10. Baseline correction (applied on segments)
-    11. Clamp (applied on segments)
+    4. Common-average referencing
+    5. Notch filtering
+    6. Band-pass filtering
+    7. Hilbert transform
+    8. Resampling
+    9. Scaling
+    10. Applying projectors
+    11. Baseline correction (applied on segments)
+    12. Clamp (applied on segments)
 
     Parameters
     ----------
@@ -234,6 +235,13 @@ class MneRaw(BaseExtractor):
         Applied after channel selection and dropping bad channels but before
         filtering. The original monopolar channels consumed by the pairs are
         removed and replaced with the new bipolar channels.
+    car_ref : bool, default=False
+        If True, applies a common-average reference (CAR) via
+        ``mne.set_eeg_reference``. Each CAR-eligible channel type present
+        in the raw (``eeg``, ``ecog``, ``seeg``, ``dbs``) is referenced
+        independently to its own average. Applied after ``bipolar_ref``;
+        the two are mutually exclusive. Not supported on
+        ``MegExtractor``, ``EmgExtractor``, or ``FnirsExtractor``.
     channel_order: ["unique", "original"]
         `if self.channel_order=="original"`
         Assigns channel indices for each raw file (doesn't match channel names across files).
@@ -272,8 +280,16 @@ class MneRaw(BaseExtractor):
     clamp: float | None = None
     fill_non_finite: float | None = None
     bipolar_ref: tuple[list[str], list[str]] | None = None
+    car_ref: bool = False
     channel_order: tp.Literal["unique", "original"] = "unique"
     allow_maxshield: bool = False
+
+    _CAR_ELIGIBLE_CH_TYPES: tp.ClassVar[tuple[str, ...]] = (
+        "eeg",
+        "ecog",
+        "seeg",
+        "dbs",
+    )
 
     _channels: dict[str, int] = {}
 
@@ -303,6 +319,10 @@ class MneRaw(BaseExtractor):
                     f"bipolar_ref anodes and cathodes must have equal length, "
                     f"got {len(anodes)} and {len(cathodes)}"
                 )
+        if self.car_ref and self.bipolar_ref is not None:
+            raise ValueError(
+                "car_ref and bipolar_ref are mutually exclusive; choose one."
+            )
 
     def prepare(self, obj: DataframeOrEventsOrSegments) -> None:
         """Specify how to load and preprocess the event.
@@ -350,6 +370,10 @@ class MneRaw(BaseExtractor):
             raw.load_data()
             anodes, cathodes = self.bipolar_ref
             raw = mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
+
+        if self.car_ref:
+            raw.load_data()
+            raw = self._apply_car_ref(raw)
 
         if self.notch_filter is not None:
             raw.load_data()
@@ -514,6 +538,45 @@ class MneRaw(BaseExtractor):
             raise KeyError(msg) from e
         return channel_idx
 
+    def _apply_car_ref(self, raw: mne.io.Raw) -> mne.io.Raw:
+        """
+        Apply a common-average reference (CAR) per channel type.
+
+        Each CAR-eligible channel type present in ``raw`` (``eeg``, ``ecog``,
+        ``seeg``, ``dbs``) is referenced independently to its own average via
+        ``mne.set_eeg_reference``.
+
+        Parameters
+        ----------
+        raw : mne.io.Raw
+            Raw instance that will be referenced.
+
+        Returns
+        -------
+        raw : mne.io.Raw
+            Referenced Raw object.
+        """
+        # raw has already been narrowed by _pick_channels in _preprocess_raw,
+        # so present_types here is naturally constrained by self.picks.
+        present_types = set(raw.get_channel_types())
+        eligible = [t for t in self._CAR_ELIGIBLE_CH_TYPES if t in present_types]
+        if not eligible:
+            raise ValueError(
+                f"car_ref=True but no CAR-eligible channel types are present "
+                f"(present: {sorted(present_types)}; "
+                f"eligible: {list(self._CAR_ELIGIBLE_CH_TYPES)})."
+            )
+        logger.info("Applying CAR reference per channel type: %s", eligible)
+        for ch_type in eligible:
+            raw, _ = mne.set_eeg_reference(
+                raw,
+                ref_channels="average",
+                ch_type=ch_type,
+                copy=False,
+                verbose="WARNING",
+            )
+        return raw
+
     @staticmethod
     def _notch_filter(
         raw: mne.io.Raw, notch_filter: float | list[float], mne_cpus: int
@@ -548,6 +611,14 @@ class MegExtractor(MneRaw):
     event_types: tp.Literal["Meg"] = "Meg"
     picks: str | tuple[str, ...] = pydantic.Field(("meg",), min_length=1)
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if self.car_ref:
+            raise ValueError(
+                "car_ref is not supported for MEG; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
+
 
 class EegExtractor(MneRaw):
     """
@@ -576,6 +647,14 @@ class EmgExtractor(MneRaw):
     event_types: tp.Literal["Emg"] = "Emg"
     picks: tuple[str, ...] = pydantic.Field(("emg",), min_length=1)
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if self.car_ref:
+            raise ValueError(
+                "car_ref is not supported for EMG; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
+
 
 class IeegExtractor(MneRaw):
     """
@@ -588,9 +667,9 @@ class IeegExtractor(MneRaw):
     reference: "bipolar", "car", or None, default=None
         If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
         Uses mne.set_bipolar_reference under the hood. [ieeg1]_
-        If "car", applies a common-average reference via mne.set_eeg_reference;
-        with multiple picks (e.g. ("seeg", "ecog")) each channel type is referenced
-        independently to its own average.
+        If "car", this is a shortcut for setting ``car_ref=True`` on the base
+        extractor: each CAR-eligible channel type present in the raw is
+        referenced independently to its own average (see ``MneRaw.car_ref``).
 
     Notes
     ----------
@@ -641,6 +720,13 @@ class IeegExtractor(MneRaw):
                 "Cannot use reference='car' together with bipolar_ref. "
                 "Choose exactly one referencing scheme."
             )
+        if self.reference == "car":
+            # Normalize the shortcut to its canonical base-field form so
+            # IeegExtractor(reference="car") and IeegExtractor(car_ref=True)
+            # share post-init state (and therefore cache uid). CAR is applied
+            # by MneRaw._preprocess_raw.
+            self.car_ref = True
+            self.reference = None
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
         raw = self._pick_channels(raw, self.picks)
@@ -652,9 +738,6 @@ class IeegExtractor(MneRaw):
         if self.reference == "bipolar":
             raw.load_data()
             raw = self._apply_bipolar_ref(raw)
-        elif self.reference == "car":
-            raw.load_data()
-            raw = self._apply_car_ref(raw)
 
         return super()._preprocess_raw(raw, event)
 
@@ -698,41 +781,6 @@ class IeegExtractor(MneRaw):
             del cathodes[idx]
         bipol = mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
         return bipol
-
-    def _apply_car_ref(self, raw: mne.io.Raw) -> mne.io.Raw:
-        """
-        Apply a global common-average reference (CAR).
-
-        Parameters
-        ----------
-        raw : mne.io.Raw
-            Raw instance that will be referenced.
-
-        Returns
-        -------
-        raw : mne.io.Raw
-            Referenced Raw object
-
-        """
-        logger.info("Applying CAR reference")
-        # mne.set_eeg_reference with ch_type=list-of-str computes one reference
-        # from the union of channel types (and per-type independence requires
-        # projection=True). Loop per type so each channel type gets its own
-        # average reference. Skip types absent from raw (picks may name types
-        # not present after _pick_channels, e.g. picks=("seeg","ecog") with a
-        # seeg-only recording).
-        present_types = set(raw.get_channel_types())
-        for ch_type in self.picks:
-            if ch_type not in present_types:
-                continue
-            raw, _ = mne.set_eeg_reference(
-                raw,
-                ref_channels="average",
-                ch_type=ch_type,
-                copy=False,
-                verbose="WARNING",
-            )
-        return raw
 
 
 class SpikesExtractor(BaseExtractor):
@@ -1031,6 +1079,12 @@ class FnirsExtractor(MneRaw):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
+
+        if self.car_ref:
+            raise ValueError(
+                "car_ref is not supported for fNIRS; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
 
         # Ensure preprocessing steps are consistent with one another
         if self.compute_heamo_response and not self.compute_optical_density:
