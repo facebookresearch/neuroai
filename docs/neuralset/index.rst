@@ -16,7 +16,7 @@ extraction) can be pre-installed with:
 
 .. code-block:: bash
 
-  pip install neuralset[all]
+  pip install 'neuralset[all]'
 
 see :doc:`Installation <install>` for the full breakdown.
 
