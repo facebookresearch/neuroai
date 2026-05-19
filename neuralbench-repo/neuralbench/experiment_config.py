@@ -41,7 +41,7 @@ def _apply_debug_overlay(config: ConfDict) -> None:
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
     if "data" in config:
-        config["data.neuro.infra.cluster"] = "processpool"
+        config["data.neuro.infra.cluster"] = None
         config["data.batch_size"] = 8
         config["trainer_config"] = {
             "strategy": "auto",

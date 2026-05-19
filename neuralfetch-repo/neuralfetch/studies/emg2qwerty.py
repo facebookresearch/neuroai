@@ -8,9 +8,7 @@
 
 from __future__ import annotations
 
-import csv
 import logging
-import re
 import typing as tp
 from pathlib import Path
 
@@ -20,36 +18,30 @@ from mne.utils import _soft_import
 from neuralset.events import etypes, study
 
 LOGGER = logging.getLogger(__name__)
-_BIDS_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-_MNE_BIDS_MIN_VERSION = "0.16"
+_MNE_BIDS_MIN_VERSION = "0.19"
+
+# mne_bids is a hard dep of neuralfetch; ``strict=False`` keeps the
+# module importable in environments without it (the actual calls will
+# then fail informatively at use site).
+mne_bids = _soft_import(
+    "mne_bids",
+    "reading the BIDS-formatted NM000104 EMG recordings",
+    strict=False,
+    min_version=_MNE_BIDS_MIN_VERSION,
+)
 
 
 class Emg2qwertyRaw(etypes.Emg):
-    """NM000104 EMG event — reads via ``mne_bids`` and rescales V → µV.
+    """NM000104 EMG event — reads via ``mne_bids.read_raw_bids``.
 
-    ``mne_bids.read_raw_bids`` picks up channel types from the BIDS
-    ``channels.tsv`` sidecar (which sets every channel to ``emg``), so
-    no manual coercion is needed.  The pretrained checkpoints'
-    ``_SpectrogramNorm`` BatchNorm was fit on microvolt-scale inputs;
-    the rescale here keeps the published checkpoint usable.
+    The sidecar load (channel types from ``channels.tsv``, units from
+    ``channels.tsv``/``_emg.json``) is what we need; mne_bids ≥0.19
+    handles the EMG-unit case correctly, so no manual rescaling here.
     """
 
-    BDF_TO_MICROVOLT_SCALE: tp.ClassVar[float] = 1e6
-
     def _read(self) -> tp.Any:
-        mne_bids = _soft_import(
-            "mne_bids",
-            "reading the BIDS-formatted NM000104 EMG recordings",
-            min_version=_MNE_BIDS_MIN_VERSION,
-        )
         bp = mne_bids.get_bids_path_from_fname(self.filepath)
-        raw = mne_bids.read_raw_bids(bp, verbose=False)
-        raw.load_data(verbose=False)
-        raw.apply_function(
-            lambda x: x * self.BDF_TO_MICROVOLT_SCALE,
-            picks=raw.ch_names, channel_wise=False, verbose=False,
-        )
-        return raw
+        return mne_bids.read_raw_bids(bp, verbose=False)
 
 
 class Emg2qwerty(study.Study):
@@ -90,80 +82,79 @@ class Emg2qwerty(study.Study):
         download.Eegdash(study=self.NEMAR_DATASET_ID, dset_dir=self.path).download()
 
     def _bids_root(self) -> Path:
-        # ``Study.download`` puts files at ``self.path / "download" / ...``;
-        # users with a manual BIDS tree placed directly under ``self.path``
-        # also work — pick whichever has the BIDS layout.  Result is cached
-        # on first call to keep ``_bids_paths`` (called per-timeline) cheap.
+        # ``Study.download`` writes under ``self.path / "download" / ...``;
+        # users with a manual BIDS tree placed directly under
+        # ``self.path`` also work.  Pick the first candidate whose
+        # immediate children contain ``sub-*`` entries.  mne_bids'
+        # ``get_entity_vals`` / ``find_matching_paths`` both recurse,
+        # so neither distinguishes "BIDS at root" from "BIDS nested
+        # one level deeper" -- hence the direct-child glob here.
+        # Cached on first call.
         if self._bids_root_cache is not None:
             return self._bids_root_cache
-        root = Path(self.path)
-        if not any(root.glob("sub-*/ses-*/emg")) and (root / "download").is_dir():
-            root = root / "download"
-        self._bids_root_cache = root
-        return root
+        for candidate in (Path(self.path), Path(self.path) / "download"):
+            if candidate.is_dir() and any(candidate.glob("sub-*")):
+                self._bids_root_cache = candidate
+                return candidate
+        raise FileNotFoundError(
+            f"No BIDS tree found under {self.path!s}: expected ``sub-*`` "
+            f"directories at the root or under ``download/``.  Run "
+            f"``Study.download()`` first or point ``path`` at an existing "
+            f"BIDS-formatted copy of NM000104."
+        )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        for emg_dir in sorted(self._bids_root().glob("sub-*/ses-*/emg")):
-            subject = emg_dir.parent.parent.name.removeprefix("sub-")
-            session = emg_dir.parent.name.removeprefix("ses-")
-            bdf = emg_dir / f"sub-{subject}_ses-{session}_task-typing_emg.bdf"
-            if bdf.exists():
-                yield {"subject": subject, "session": session}
-
-    def _bids_paths(self, subject: str, session: str) -> tuple[Path, Path]:
-        if not _BIDS_ID_RE.match(subject) or not _BIDS_ID_RE.match(session):
-            raise ValueError(
-                f"unsafe BIDS id: subject={subject!r} session={session!r}"
-            )
-        emg_dir = self._bids_root() / f"sub-{subject}" / f"ses-{session}" / "emg"
-        stem = f"sub-{subject}_ses-{session}_task-typing"
-        return emg_dir / f"{stem}_emg.bdf", emg_dir / f"{stem}_events.tsv"
+        for bp in mne_bids.find_matching_paths(
+            root=self._bids_root(),
+            datatypes="emg", suffixes="emg", extensions=".bdf",
+        ):
+            yield {"subject": bp.subject, "session": bp.session}
 
     def _load_timeline_events(
         self, timeline: dict[str, tp.Any]
     ) -> pd.DataFrame:
-        subject, session = timeline["subject"], timeline["session"]
-        bdf_path, events_path = self._bids_paths(subject, session)
-        events = pd.read_csv(events_path, sep="\t", quoting=csv.QUOTE_NONE)
-        events["start"] = events["onset"].astype(float)
-        value = events["value"].astype(str)
+        bp = mne_bids.BIDSPath(
+            root=self._bids_root(),
+            subject=timeline["subject"], session=timeline["session"],
+            task="typing", datatype="emg", suffix="emg", extension=".bdf",
+        )
+        # Light path: read just the events sidecar TSV; the BDF stays
+        # closed until ``Emg2qwertyRaw._read`` opens it per segment.
+        ev = pd.read_csv(
+            bp.copy().update(suffix="events", extension=".tsv").fpath,
+            sep="\t",
+        ).rename(columns={"onset": "start"})
 
-        raw = pd.DataFrame([{
-            "type": "Emg2qwertyRaw", "filepath": str(bdf_path),
-            "start": 0.0, "subject": subject,
-        }])
-
-        # NM000104 prompt_text often ends with the two-char literal "\\n";
-        # rstrip would chew real trailing 'n' / '\\'.
-        prompts = events.loc[value == "prompt"].copy()
-        prompts["text"] = (
-            prompts["prompt_text"].astype("string")
+        # NM000104 prompt_text often ends with the two-char literal
+        # "\\n"; rstrip would chew real trailing 'n' / '\\'.
+        text = (
+            ev["prompt_text"].astype("string")
             .str.removesuffix("\\n").str.strip()
         )
-        prompts = prompts[prompts["text"].notna() & (prompts["text"] != "")]
+        sent_mask = (ev["value"] == "prompt") & text.notna() & (text != "")
         sentences = pd.DataFrame({
             "type": "Sentence",
-            "start": prompts["start"].astype(float),
-            "duration": prompts["duration"].astype(float),
-            "text": prompts["text"],
+            "start": ev.loc[sent_mask, "start"],
+            "duration": ev.loc[sent_mask, "duration"],
+            "text": text[sent_mask],
             "language": "en",
         })
 
-        keys = events.loc[
-            value.str.startswith("keystroke_"), ["start", "duration", "key"]
-        ].copy()
-        keys["key"] = keys["key"].astype(str).str.strip()
-        keys = keys[keys["key"] != ""]
+        key = ev["key"].astype("string").str.strip()
+        ks_mask = ev["value"].str.startswith("keystroke_", na=False) & (key != "")
         keystrokes = pd.DataFrame({
             "type": "Keystroke",
-            "start": keys["start"].astype(float),
-            "duration": keys["duration"].fillna(0.0).astype(float),
-            "text": keys["key"],
+            "start": ev.loc[ks_mask, "start"],
+            "duration": ev.loc[ks_mask, "duration"].fillna(0.0),
+            "text": key[ks_mask],
             "language": "en",
         })
 
+        raw_row = pd.DataFrame([{
+            "type": "Emg2qwertyRaw", "filepath": str(bp.fpath),
+            "start": 0.0, "subject": timeline["subject"],
+        }])
         return (
-            pd.concat([raw, sentences, keystrokes], ignore_index=True)
-            .sort_values(by="start")
-            .reset_index(drop=True)
+            pd.concat([raw_row, sentences, keystrokes], ignore_index=True)
+            .sort_values("start").reset_index(drop=True)
         )

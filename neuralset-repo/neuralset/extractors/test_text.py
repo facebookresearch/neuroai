@@ -356,16 +356,11 @@ def test_part_reversal() -> None:
 
 # --- KeystrokeSequence ---------------------------------------------------
 
-import string
-
-# Generic 27-class vocab (a-z + Key.space). Concrete task vocabularies
-# (e.g. emg2qwerty's 99-class set) live in their own task packages.
-_KS_VOCAB = {
-    "key_to_label": {k: i for i, k in enumerate([*string.ascii_lowercase, "Key.space"])},
-    "unichar_to_key": {" ": "Key.space"},
-    "input_folds": {},
-}
-_KS_NULL_CLASS = len(_KS_VOCAB["key_to_label"])  # 26
+# Generic 27-class vocab (a-z + Key.space) via the extractor's own helper;
+# concrete task vocabularies (e.g. emg2qwerty's 99-class set) live in
+# their own task packages.
+_KS_VOCAB = text.KeystrokeSequence.simple_ascii_vocab(extras=("Key.space",))
+_KS_NULL_CLASS = len(_KS_VOCAB["key_to_label"])  # 27 → CTC-blank index
 
 
 def _ks_events(texts, starts=None):

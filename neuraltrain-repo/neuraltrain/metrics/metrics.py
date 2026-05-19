@@ -732,14 +732,12 @@ class GroupedMetric(torchmetrics.Metric):
         return f"GroupedMetric({self.base_metric_cls.__name__})"
 
 
-class CharacterErrorRates(torchmetrics.text.CharErrorRate):
+class CharacterErrorRates(torchmetrics.Metric):
     """CTC greedy-decoded character error rate, returned in percent.
 
-    Adapts :class:`torchmetrics.text.CharErrorRate` to a CTC head:
-    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), maps
-    each integer label to ``chr(label)`` (one Unicode codepoint per
-    label — distinct labels stay distinct, which is all Levenshtein
-    needs), and forwards to the base CER's string update.
+    Adapts :class:`torchaudio.functional.edit_distance` to a CTC head:
+    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), computes
+    the Levenshtein distance between labels, and accumulates across batches.
 
     Inputs
     ------
@@ -750,30 +748,38 @@ class CharacterErrorRates(torchmetrics.text.CharErrorRate):
         are the labels; the rest is padding.
     """
 
+    is_differentiable: bool = False
+    higher_is_better: bool = False
+    full_state_update: bool = False
+
     def __init__(self, blank_idx: int = 0, **kwargs: tp.Any) -> None:
         super().__init__(**kwargs)
+        self.add_state("errors", default=torch.tensor(0.0), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self._blank = blank_idx
 
     def update(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> None:  # type: ignore[override]
+        from torchaudio.functional import edit_distance
+
         argmax = y_pred.argmax(dim=-1).long()
-        merged = torch.cat([y_true.long(), argmax], dim=1).detach().cpu().tolist()
-        max_target_len = y_true.shape[1] - 1
         blank = self._blank
-        pred_strs: list[str] = []
-        target_strs: list[str] = []
-        for row in merged:
-            target_len = row[0]
-            targets = row[1 : 1 + target_len]
-            pred_labels = row[1 + max_target_len :]
-            preds: list[int] = []
-            prev = blank
-            for lbl in pred_labels:
-                if lbl != blank and lbl != prev:
-                    preds.append(lbl)
-                prev = lbl
-            pred_strs.append("".join(chr(lbl) for lbl in preds))
-            target_strs.append("".join(chr(lbl) for lbl in targets))
-        super().update(pred_strs, target_strs)
+        # Coalesce the per-row sync into a single D2H copy.
+        target_lengths = y_true[:, 0].long().tolist()
+
+        errors = 0
+        total = 0
+        for i, target_len in enumerate(target_lengths):
+            targets = y_true[i, 1 : 1 + target_len]
+            preds = argmax[i]
+            preds = torch.unique_consecutive(preds)
+            preds = preds[preds != blank]
+            errors += edit_distance(preds, targets)
+            total += target_len
+
+        self.errors += errors
+        self.total += total
 
     def compute(self) -> torch.Tensor:
-        return super().compute() * 100.0
+        # ``total`` may be 0 if no batches have updated yet (e.g. an
+        # all-empty validation split); avoid a NaN/Inf return.
+        return (self.errors / self.total.clamp(min=1)) * 100.0

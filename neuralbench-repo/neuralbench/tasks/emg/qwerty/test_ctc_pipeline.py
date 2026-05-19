@@ -89,18 +89,6 @@ def test_emg2qwerty_study_source(tmp_path, subdir):
 
 
 @pytest.mark.parametrize(
-    ("subject", "session"),
-    [("..", "0000000001"), ("00000001", "../../../etc"), ("$ub", "ses!")],
-)
-def test_emg2qwerty_bids_id_validation_rejects_unsafe(bids_tree, subject, session):
-    from neuralfetch.studies.emg2qwerty import Emg2qwerty
-
-    root, _, _ = bids_tree
-    with pytest.raises(ValueError, match="unsafe BIDS id"):
-        Emg2qwerty(path=str(root))._bids_paths(subject, session)
-
-
-@pytest.mark.parametrize(
     ("raw_text", "expected"),
     [
         # rstrip("\\n") would treat its arg as a char-set; need exact-suffix match.

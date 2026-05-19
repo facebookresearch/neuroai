@@ -5,6 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 
 import itertools
+import logging
+import string
 import typing as tp
 from abc import abstractmethod
 
@@ -21,6 +23,8 @@ from tqdm import tqdm
 import neuralset as ns
 from neuralset import events as _ev  # avoid circular import
 from neuralset import utils
+
+LOGGER = logging.getLogger(__name__)
 from neuralset.base import TimedArray
 from neuralset.extractors.base import BaseStatic, HuggingFaceMixin
 
@@ -547,17 +551,46 @@ class KeystrokeSequence(BaseStatic):
     unichar_to_key: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
     input_folds: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
 
+    @classmethod
+    def simple_ascii_vocab(
+        cls, extras: tp.Sequence[str] = ("Key.space",),
+    ) -> dict[str, tp.Any]:
+        """Build kwargs for a minimal ``{a-z, *extras}`` vocabulary.
+
+        Useful for tests and small use cases.  Spread into the
+        constructor::
+
+            KeystrokeSequence(**KeystrokeSequence.simple_ascii_vocab())
+
+        ``unichar_to_key`` aliases the literal space character to
+        ``"Key.space"`` when that key is in ``extras``; otherwise it
+        stays empty and the caller can pass their own mapping.
+        Returns plain dicts (natural Python form); YAML callers should
+        use the list-of-pairs form to dodge ``exca.ConfDict`` key
+        flattening on dot-containing keys.
+        """
+        keys = [*string.ascii_lowercase, *extras]
+        return {
+            "key_to_label": {k: i for i, k in enumerate(keys)},
+            "unichar_to_key": {" ": "Key.space"} if "Key.space" in extras else {},
+            "input_folds": {},
+        }
+
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         self._key_to_label: dict[str, int] = dict(self.key_to_label)
         self._unichar_to_key: dict[str, str | None] = dict(self.unichar_to_key)
         self._input_folds: dict[str, str | None] = dict(self.input_folds)
         if not self._key_to_label:
-            raise ValueError("KeystrokeSequence requires a non-empty key_to_label.")
+            raise ValueError(
+                f"{type(self).__name__}: ``key_to_label`` must be a non-empty "
+                "mapping; got an empty vocab.",
+            )
         self._pad_value = (
             len(self._key_to_label) if self.pad_value is None else self.pad_value
         )
         self._truncation_warned = False
+        self._oov_warned = False
 
     def _encode(self, keys: tp.Sequence[str]) -> list[int]:
         out: list[int] = []
@@ -576,6 +609,13 @@ class KeystrokeSequence(BaseStatic):
                     continue
                 if normalized in self._key_to_label:
                     out.append(self._key_to_label[normalized])
+                    continue
+            if not self._oov_warned:
+                LOGGER.warning(
+                    "KeystrokeSequence: dropping out-of-vocab key %r "
+                    "(further occurrences silenced).", k,
+                )
+                self._oov_warned = True
         return out
 
     def get_static(self, event: _ev.etypes.Event) -> torch.Tensor:
@@ -607,11 +647,9 @@ class KeystrokeSequence(BaseStatic):
         return [e for e in events if lo <= float(e.start) < hi]
 
     def _pad(self, seq: torch.Tensor) -> torch.Tensor:
-        import logging
-
         n = int(seq.numel())
         if n > self.max_target_length and not self._truncation_warned:
-            logging.getLogger(__name__).warning(
+            LOGGER.warning(
                 "KeystrokeSequence: truncating %d keys to max_target_length=%d "
                 "(further occurrences silenced).", n, self.max_target_length,
             )
