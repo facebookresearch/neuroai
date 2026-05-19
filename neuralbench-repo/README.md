@@ -4,7 +4,7 @@
   <img src="assets/hero.png" alt="NeuralBench: open, reproducible benchmarking of NeuroAI models on EEG, MEG, and fMRI -- 36 EEG tasks, 94 EEG datasets (9.5k+ subjects, 13.6k+ hours of recording), and 14 models" width="100%">
 </p>
 
-`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, **fMRI**, and **EMG** (emg2qwerty CTC keystroke decoding) -- with more tasks and devices to come.
+`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, **fMRI**, and **EMG** -- with more tasks and devices to come.
 
 **Examples**:
 ```console
