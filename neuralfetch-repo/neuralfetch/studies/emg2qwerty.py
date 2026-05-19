@@ -14,13 +14,14 @@ import re
 import typing as tp
 from pathlib import Path
 
-import mne_bids
 import pandas as pd
 import pydantic
+from mne.utils import _soft_import
 from neuralset.events import etypes, study
 
 LOGGER = logging.getLogger(__name__)
 _BIDS_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_MNE_BIDS_MIN_VERSION = "0.16"
 
 
 class Emg2qwertyRaw(etypes.Emg):
@@ -36,6 +37,11 @@ class Emg2qwertyRaw(etypes.Emg):
     BDF_TO_MICROVOLT_SCALE: tp.ClassVar[float] = 1e6
 
     def _read(self) -> tp.Any:
+        mne_bids = _soft_import(
+            "mne_bids",
+            "reading the BIDS-formatted NM000104 EMG recordings",
+            min_version=_MNE_BIDS_MIN_VERSION,
+        )
         bp = mne_bids.get_bids_path_from_fname(self.filepath)
         raw = mne_bids.read_raw_bids(bp, verbose=False)
         raw.load_data(verbose=False)
@@ -122,34 +128,42 @@ class Emg2qwerty(study.Study):
         events["start"] = events["onset"].astype(float)
         value = events["value"].astype(str)
 
-        rows: list[dict[str, tp.Any]] = [{
+        raw = pd.DataFrame([{
             "type": "Emg2qwertyRaw", "filepath": str(bdf_path),
             "start": 0.0, "subject": subject,
-        }]
+        }])
 
-        for _, p in events[value == "prompt"].iterrows():
-            text = p.get("prompt_text", "")
-            if not isinstance(text, str):
-                continue
-            # NM000104 prompt_text often ends with the two-char literal
-            # "\\n"; rstrip would chew real trailing 'n' / '\\'.
-            text = text.removesuffix("\\n").strip()
-            if text:
-                rows.append({
-                    "type": "Sentence", "start": float(p["start"]),
-                    "duration": float(p["duration"]), "text": text,
-                    "language": "en",
-                })
+        # NM000104 prompt_text often ends with the two-char literal "\\n";
+        # rstrip would chew real trailing 'n' / '\\'.
+        prompts = events.loc[value == "prompt"].copy()
+        prompts["text"] = (
+            prompts["prompt_text"].astype("string")
+            .str.removesuffix("\\n").str.strip()
+        )
+        prompts = prompts[prompts["text"].notna() & (prompts["text"] != "")]
+        sentences = pd.DataFrame({
+            "type": "Sentence",
+            "start": prompts["start"].astype(float),
+            "duration": prompts["duration"].astype(float),
+            "text": prompts["text"],
+            "language": "en",
+        })
 
         keys = events.loc[
             value.str.startswith("keystroke_"), ["start", "duration", "key"]
         ].copy()
         keys["key"] = keys["key"].astype(str).str.strip()
-        for _, k in keys[keys["key"] != ""].iterrows():
-            rows.append({
-                "type": "Keystroke", "start": float(k["start"]),
-                "duration": float(k["duration"]) if pd.notna(k["duration"]) else 0.0,
-                "text": k["key"], "language": "en",
-            })
+        keys = keys[keys["key"] != ""]
+        keystrokes = pd.DataFrame({
+            "type": "Keystroke",
+            "start": keys["start"].astype(float),
+            "duration": keys["duration"].fillna(0.0).astype(float),
+            "text": keys["key"],
+            "language": "en",
+        })
 
-        return pd.DataFrame(rows).sort_values(by="start").reset_index(drop=True)
+        return (
+            pd.concat([raw, sentences, keystrokes], ignore_index=True)
+            .sort_values(by="start")
+            .reset_index(drop=True)
+        )
