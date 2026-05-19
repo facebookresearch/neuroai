@@ -84,7 +84,7 @@ class Chen2023Large(study.Study):
     description: tp.ClassVar[str] = """
         EEG recordings for 123 participants while viewing 28 video clips targeting nine categories of emotion
     """
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openxl",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("python-calamine",)
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=123,
         num_subjects=123,
@@ -225,7 +225,7 @@ class Chen2023Large(study.Study):
     @cached_property
     def _stimulus_info(self) -> pd.DataFrame:
         stim_df = pd.read_excel(
-            self._get_filename("stimuli_info", {"": ""}), skipfooter=6
+            self._get_filename("stimuli_info", {"": ""}), skipfooter=6, engine="calamine"
         )
         rename_cols = {
             "Video index": "video_index",
