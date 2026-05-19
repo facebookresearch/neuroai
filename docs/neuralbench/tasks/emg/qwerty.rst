@@ -35,53 +35,37 @@ Usage
 Description
 ~~~~~~~~~~~
 
-Continuous-keystroke decoding from 32-channel surface EMG (two
-16-electrode wristbands at 2 kHz) using the CTC framework introduced
-in [Sivakumar2024]_.  Each 5-second EMG window (0.9 s left context +
-4 s core + 0.1 s right context) is mapped to a variable-length
-keystroke sequence over the paper's 98-key vocabulary (letters +
-digits + punctuation + 4 modifiers) plus a CTC blank, for 99 output
-classes total.
+Continuous-keystroke decoding from 32-channel surface EMG (two 16-electrode
+wristbands at 2 kHz) using the CTC framework from [Sivakumar2024]_.  Each
+5-s window (0.9 s + 4 s core + 0.1 s) is mapped to a variable-length
+keystroke sequence over the 98-key paper vocabulary plus a CTC blank ―
+99 output classes.
 
-A compact 51-class variant collapses uppercase letters with their
-lowercase counterparts, US-QWERTY shifted symbols with their unshifted
-forms (``!`` → ``1``, ``~`` → `` ` ``, etc.), and drops the
-``Key.shift`` modifier — useful when the downstream task can recover
-case + punctuation from a language model.
+The 51-class compact variant case-folds letters, US-QWERTY-folds shifted
+symbols (``!`` → ``1``, ``~`` → `` ` ``, …), and drops ``Key.shift`` ―
+useful when a downstream LM can recover the missing shift state.
 
 Dataset Notes
 ~~~~~~~~~~~~~
 
-* **Auto-fetch via eegdash**: ``--download`` pulls NM000104 from
-  NEMAR (``s3://nemar/nm000104``) using
-  :py:class:`neuralfetch.download.Eegdash` — 1136 files, ~239 GB,
-  landing under ``<DATA_DIR>/Emg2qwerty/download/sub-*/...``.  An
-  existing BIDS tree placed directly under ``<DATA_DIR>/Emg2qwerty/``
+* **Auto-fetch**: ``--download`` pulls NM000104 from NEMAR
+  (``s3://nemar/nm000104``) via :py:class:`neuralfetch.download.Eegdash`
+  ― 1136 files, ~239 GB, under ``<DATA_DIR>/Emg2qwerty/download/sub-*/…``.
+  An existing BIDS tree placed directly under ``<DATA_DIR>/Emg2qwerty/``
   is also picked up.
-* **mne_bids reader**: the Study reads via
-  :py:func:`mne_bids.read_raw_bids` so channel types come from the
-  BIDS ``channels.tsv`` sidecar (every channel is correctly typed
-  ``emg`` without manual coercion).
-* **µV rescale**: upstream's pretrained checkpoints' BatchNorm was
-  fit on microvolt-magnitude inputs but ``mne_bids.read_raw_bids``
-  returns volts (with µV-magnitudes around 7e-6 V); the Study event
-  ``Emg2qwertyRaw`` multiplies by 1e6 on read so the BN running
-  statistics match the published checkpoint at
-  ``braindecode/emg2qwerty-generic``.
-* **CTC + MPS**: ``nn.CTCLoss`` isn't implemented on Apple MPS;
-  ``PYTORCH_ENABLE_MPS_FALLBACK=1`` keeps the rest of the model on
-  MPS while CTC falls back to CPU.  Paper-level CER requires a real
-  GPU.
-* **Test-time windowing gap**: the upstream paper trains on fixed
-  4-s windows but feeds whole sessions at test time.  Our pipeline's
-  segmenter applies the same 4-s window across all splits — slightly
-  pessimistic for CER reporting; tracked as a follow-up.
+* **BIDS-aware reader**: the Study reads via
+  :py:func:`mne_bids.read_raw_bids` (``≥ 0.19``); channel types and EMG
+  units come from the BIDS sidecars, no manual coercion or rescaling.
+* **CTC on MPS**: ``nn.CTCLoss`` isn't implemented on Apple MPS.
+  ``PYTORCH_ENABLE_MPS_FALLBACK=1`` keeps the rest of the model on MPS
+  while CTC falls back to CPU; paper-level CER still requires a GPU.
+* **Test-time windowing**: the paper trains on 4-s windows but feeds
+  whole sessions at test time.  We apply the same 4-s window across all
+  splits ― slightly pessimistic CER; tracked as a follow-up.
 
 References
 ~~~~~~~~~~
 
-.. [Sivakumar2024] Sivakumar, V., Seely, J., Du, A., Bittner, S. R.,
-   Berenzweig, A., Bolarinwa, A., Gramfort, A., & Mandel, M. I. (2024).
-   "emg2qwerty: A Large Dataset with Baselines for Touch Typing using
-   Surface Electromyography." *Advances in Neural Information Processing
-   Systems* 37, 91373--91389.
+.. [Sivakumar2024] Sivakumar et al., "emg2qwerty: A Large Dataset with
+   Baselines for Touch Typing using Surface Electromyography."
+   *Advances in Neural Information Processing Systems* 37, 91373--91389, 2024.

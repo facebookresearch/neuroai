@@ -517,6 +517,15 @@ def part_reversal(tensor: torch.Tensor) -> None:
         first = int(last)
 
 
+# Vocab fields accept either list-of-pairs OR dict.  List-of-pairs is the
+# YAML form (it dodges ``exca.ConfDict``'s dot-key-flattening on entries
+# like ``"Key.backspace"`` / ``"."``).  Dict is the natural Python form
+# for tests + library users.  ``model_post_init`` normalizes both into
+# the private ``self._*`` dicts used by :meth:`_encode`.
+Vocab = list[tuple[str, int]] | dict[str, int]
+Folds = list[tuple[str, str | None]] | dict[str, str | None]
+
+
 class KeystrokeSequence(BaseStatic):
     """Padded keystroke-sequence extractor for CTC targets.
 
@@ -542,14 +551,9 @@ class KeystrokeSequence(BaseStatic):
     aggregation: tp.Literal["cat"] = "cat"
     core_start_offset: float = 0.0
     core_duration: float | None = None
-    # Vocab fields are list-of-pairs (rather than dicts) so they survive
-    # ``exca.ConfDict``'s YAML key-flattening on ``.``-containing keys
-    # (e.g. ``"Key.backspace"``, ``"."``).  ``model_post_init`` rebuilds
-    # the dicts internally; tests + Python callers may pass a dict and
-    # it'll be normalized below.
-    key_to_label: list[tuple[str, int]] | dict[str, int] = pydantic.Field(default_factory=list)
-    unichar_to_key: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
-    input_folds: list[tuple[str, str | None]] | dict[str, str | None] = pydantic.Field(default_factory=list)
+    key_to_label: Vocab = pydantic.Field(default_factory=list)
+    unichar_to_key: Folds = pydantic.Field(default_factory=list)
+    input_folds: Folds = pydantic.Field(default_factory=list)
 
     @classmethod
     def simple_ascii_vocab(
@@ -594,26 +598,32 @@ class KeystrokeSequence(BaseStatic):
 
     def _encode(self, keys: tp.Sequence[str]) -> list[int]:
         out: list[int] = []
-        for k in keys:
-            if k in self._input_folds:
-                folded = self._input_folds[k]
-                if folded is None:
-                    continue
-                k = folded
-            if k in self._key_to_label:
-                out.append(self._key_to_label[k])
+        for raw in keys:
+            # Step 1: apply the input fold (e.g. case + shift collapse
+            # in the compact preset).  ``None`` means "drop entirely".
+            key = self._input_folds.get(raw, raw)
+            if key is None:
                 continue
-            if len(k) == 1:
-                normalized = self._unichar_to_key.get(k, k)
-                if normalized is None:
+
+            # Step 2: direct vocab hit.
+            label = self._key_to_label.get(key)
+
+            # Step 3: single-char Unicode fallback (e.g. " " → "Key.space").
+            #   - aliased to ``None``    → explicit drop;
+            #   - aliased to in-vocab    → use that label;
+            #   - aliased to OOV / no    → fall through to the OOV warn.
+            if label is None and len(key) == 1:
+                alias = self._unichar_to_key.get(key, key)
+                if alias is None:
                     continue
-                if normalized in self._key_to_label:
-                    out.append(self._key_to_label[normalized])
-                    continue
-            if not self._oov_warned:
+                label = self._key_to_label.get(alias)
+
+            if label is not None:
+                out.append(label)
+            elif not self._oov_warned:
                 LOGGER.warning(
                     "KeystrokeSequence: dropping out-of-vocab key %r "
-                    "(further occurrences silenced).", k,
+                    "(further occurrences silenced).", raw,
                 )
                 self._oov_warned = True
         return out
