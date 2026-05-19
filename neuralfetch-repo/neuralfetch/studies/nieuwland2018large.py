@@ -207,7 +207,7 @@ def _preproc_stimuli(path: str):
     path_preprocessed = Path(path) / "prepare"
     stim_dir = path_preprocessed / "stimuli"
     stim_dir.mkdir(exist_ok=True, parents=True)
-    zip_file = path_download / "osfstorage" / "Stimuli" / "Stimuli.zip"
+    zip_file = path_download / "Stimuli" / "Stimuli.zip"
     xls_file = stim_dir / "replication_items.xlsx"
 
     if not xls_file.exists():

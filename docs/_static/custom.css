@@ -753,66 +753,23 @@ body[data-theme="dark"] .figure img {
     position: relative;
 }
 
-/* Copy button for dynamic code blocks */
-.copy-btn {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: var(--color-foreground-secondary);
-    padding: 0.4rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    line-height: 1;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(5px);
-    z-index: 10;
-    min-width: 2rem;
-    height: 2rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-}
-
-.copy-btn:hover {
+/* Code-builder pages emit bare <pre> blocks (no Pygments .highlight wrapper),
+   so sphinx-copybutton's default `.highlight:hover button.copybtn` reveal
+   rule never fires. We mirror it on .code-block-wrapper so the same
+   button.copybtn that renders elsewhere is also visible here. */
+.code-block-wrapper:hover button.copybtn,
+.code-block-wrapper button.copybtn:focus,
+.code-block-wrapper button.copybtn.success {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
 }
 
-.copy-btn.copied {
-    background: rgba(76, 175, 80, 0.2);
-    border-color: rgba(76, 175, 80, 0.4);
-    color: #4CAF50;
-    min-width: 7.5rem;
-    padding: 0.4rem 0.6rem;
-}
-
-/* Dark mode copy button */
-@media (prefers-color-scheme: dark) {
-    body:not([data-theme="light"]) .copy-btn {
-        background: rgba(0, 0, 0, 0.3);
-        border-color: rgba(255, 255, 255, 0.1);
-    }
-    body:not([data-theme="light"]) .copy-btn:hover {
-        background: rgba(0, 0, 0, 0.5);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-}
-
-body[data-theme="dark"] .copy-btn {
-    background: rgba(0, 0, 0, 0.3);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-body[data-theme="dark"] .copy-btn:hover {
-    background: rgba(0, 0, 0, 0.5);
-    border-color: rgba(255, 255, 255, 0.2);
+/* Reveal-on-hover for copy buttons that live directly on a <pre> element
+   (added by sidebar-nav.js for raw <pre><code> blocks such as the pipeline
+   accordion snippets on the index pages). */
+pre:hover > button.copybtn,
+pre > button.copybtn:focus,
+pre > button.copybtn.success {
+    opacity: 1;
 }
 
 /* ---- Harmonise sphinx-copybutton with our brain+spark feedback ---- */
@@ -861,33 +818,100 @@ button.copybtn.success::after {
     color: inherit;
 }
 
-/* Syntax highlighting styles (light mode) */
-.highlight-comment { color: #008000; font-style: italic; }
-.highlight-string { color: #800080; }
-.highlight-keyword { color: #2C2CFF; font-weight: bold; }
-.highlight-builtin { color: #2C2CFF; }
-.highlight-number { color: #2C8553; font-weight: bold; }
-.highlight-function { font-weight: bold; font-style: italic; }
-.highlight-operator { color: #666666; }
+/* Syntax highlighting styles (light mode).
+   `.highlight-*` is emitted by pipeline-accordion.js (custom tokeniser).
+   `.token.*` is emitted by Prism.js (used by code-builder.js via the
+   code-highlight.js shim). Both selector families share the palette
+   below so dynamic snippets match Pygments-rendered code. */
+.highlight-comment,
+.token.comment, .token.prolog, .token.cdata,
+.token.shebang { color: #008000; font-style: italic; }
+.highlight-string,
+.token.string, .token.attr-value, .token.regex,
+.token.triple-quoted-string,
+.token.string-interpolation > .token.string { color: #800080; }
+.highlight-keyword,
+.token.keyword, .token.boolean, .token.constant,
+.token.important, .token.atrule { color: #2C2CFF; font-weight: bold; }
+.highlight-builtin,
+.token.builtin, .token.symbol,
+.token.variable, .token.environment { color: #2C2CFF; }
+.highlight-number,
+.token.number { color: #2C8553; font-weight: bold; }
+.highlight-function,
+.token.function, .token.class-name,
+.token.decorator, .token.annotation { font-weight: bold; font-style: italic; }
+.highlight-operator,
+.token.operator, .token.punctuation { color: #666666; }
 
 /* Dark mode syntax highlighting */
 @media (prefers-color-scheme: dark) {
-    body:not([data-theme="light"]) .highlight-comment { color: #959077; }
-    body:not([data-theme="light"]) .highlight-string { color: #E6DB74; }
-    body:not([data-theme="light"]) .highlight-keyword { color: #66D9EF; }
-    body:not([data-theme="light"]) .highlight-builtin { color: #A6E22E; }
-    body:not([data-theme="light"]) .highlight-number { color: #AE81FF; }
-    body:not([data-theme="light"]) .highlight-function { color: #A6E22E; font-weight: bold; }
-    body:not([data-theme="light"]) .highlight-operator { color: #FF4689; }
+    body:not([data-theme="light"]) .highlight-comment,
+    body:not([data-theme="light"]) .token.comment,
+    body:not([data-theme="light"]) .token.prolog,
+    body:not([data-theme="light"]) .token.cdata,
+    body:not([data-theme="light"]) .token.shebang { color: #959077; }
+    body:not([data-theme="light"]) .highlight-string,
+    body:not([data-theme="light"]) .token.string,
+    body:not([data-theme="light"]) .token.attr-value,
+    body:not([data-theme="light"]) .token.regex,
+    body:not([data-theme="light"]) .token.triple-quoted-string,
+    body:not([data-theme="light"]) .token.string-interpolation > .token.string { color: #E6DB74; }
+    body:not([data-theme="light"]) .highlight-keyword,
+    body:not([data-theme="light"]) .token.keyword,
+    body:not([data-theme="light"]) .token.boolean,
+    body:not([data-theme="light"]) .token.constant,
+    body:not([data-theme="light"]) .token.important,
+    body:not([data-theme="light"]) .token.atrule { color: #66D9EF; }
+    body:not([data-theme="light"]) .highlight-builtin,
+    body:not([data-theme="light"]) .token.builtin,
+    body:not([data-theme="light"]) .token.symbol,
+    body:not([data-theme="light"]) .token.variable,
+    body:not([data-theme="light"]) .token.environment { color: #A6E22E; }
+    body:not([data-theme="light"]) .highlight-number,
+    body:not([data-theme="light"]) .token.number { color: #AE81FF; }
+    body:not([data-theme="light"]) .highlight-function,
+    body:not([data-theme="light"]) .token.function,
+    body:not([data-theme="light"]) .token.class-name,
+    body:not([data-theme="light"]) .token.decorator,
+    body:not([data-theme="light"]) .token.annotation { color: #A6E22E; font-weight: bold; }
+    body:not([data-theme="light"]) .highlight-operator,
+    body:not([data-theme="light"]) .token.operator,
+    body:not([data-theme="light"]) .token.punctuation { color: #FF4689; }
 }
 
-body[data-theme="dark"] .highlight-comment { color: #959077; }
-body[data-theme="dark"] .highlight-string { color: #E6DB74; }
-body[data-theme="dark"] .highlight-keyword { color: #66D9EF; }
-body[data-theme="dark"] .highlight-builtin { color: #A6E22E; }
-body[data-theme="dark"] .highlight-number { color: #AE81FF; }
-body[data-theme="dark"] .highlight-function { color: #A6E22E; font-weight: bold; }
-body[data-theme="dark"] .highlight-operator { color: #FF4689; }
+body[data-theme="dark"] .highlight-comment,
+body[data-theme="dark"] .token.comment,
+body[data-theme="dark"] .token.prolog,
+body[data-theme="dark"] .token.cdata,
+body[data-theme="dark"] .token.shebang { color: #959077; }
+body[data-theme="dark"] .highlight-string,
+body[data-theme="dark"] .token.string,
+body[data-theme="dark"] .token.attr-value,
+body[data-theme="dark"] .token.regex,
+body[data-theme="dark"] .token.triple-quoted-string,
+body[data-theme="dark"] .token.string-interpolation > .token.string { color: #E6DB74; }
+body[data-theme="dark"] .highlight-keyword,
+body[data-theme="dark"] .token.keyword,
+body[data-theme="dark"] .token.boolean,
+body[data-theme="dark"] .token.constant,
+body[data-theme="dark"] .token.important,
+body[data-theme="dark"] .token.atrule { color: #66D9EF; }
+body[data-theme="dark"] .highlight-builtin,
+body[data-theme="dark"] .token.builtin,
+body[data-theme="dark"] .token.symbol,
+body[data-theme="dark"] .token.variable,
+body[data-theme="dark"] .token.environment { color: #A6E22E; }
+body[data-theme="dark"] .highlight-number,
+body[data-theme="dark"] .token.number { color: #AE81FF; }
+body[data-theme="dark"] .highlight-function,
+body[data-theme="dark"] .token.function,
+body[data-theme="dark"] .token.class-name,
+body[data-theme="dark"] .token.decorator,
+body[data-theme="dark"] .token.annotation { color: #A6E22E; font-weight: bold; }
+body[data-theme="dark"] .highlight-operator,
+body[data-theme="dark"] .token.operator,
+body[data-theme="dark"] .token.punctuation { color: #FF4689; }
 
 .code-separator {
     text-align: center;
@@ -2246,4 +2270,283 @@ body[data-theme="dark"] article .highlight pre {
 }
 .autosummary-back-link a:hover {
     background: #2a619e;
+}
+
+/* =============================================================================
+   Examples axis bar — NeuralSet landing page (docs/neuralset/index.rst)
+   Reuses the `.cb-axis*` / `.cb-pill` widgets shared with the full Code
+   Builder (see `:is(.code-builder, .qs-builder)` rules below) and arranges
+   them in a single horizontal row, followed by an "Open in Code Builder"
+   button that carries the current selection over as URL query params.
+   ============================================================================= */
+
+.qs-builder {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin: 1.2rem 0 1.75rem;
+}
+
+.qs-builder-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.qs-builder .cb-axis {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Below ~700px the four-axis row + button no longer fits; allow wrap so
+   the axes flow into a 2x2 grid and the button drops to its own line. */
+@media (max-width: 700px) {
+    .qs-builder,
+    .qs-builder-bar {
+        flex-wrap: wrap;
+    }
+    .qs-builder .cb-axis {
+        flex: 1 1 calc(50% - 0.4rem);
+    }
+    .qs-builder-go {
+        flex: 1 1 100%;
+        justify-content: center;
+    }
+}
+
+/* "Open in Code Builder →" CTA — same shape as `.page-nav-btn` so it
+   reads as the primary action of this section. Slightly tightened
+   padding to align with the axis-summary buttons it sits next to. */
+.qs-builder-go {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.15rem;
+    background: linear-gradient(135deg, var(--color-brand-primary), #6BB6FF);
+    color: white !important;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-decoration: none !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(68, 138, 255, 0.28);
+    white-space: nowrap;
+    align-self: stretch;
+}
+
+.qs-builder-go:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 18px rgba(68, 138, 255, 0.42);
+    color: white !important;
+}
+
+.qs-builder-go:active {
+    transform: translateY(0);
+}
+
+/* =============================================================================
+   Code Builder — 6-axis interactive page (docs/neuralset/code_builder.rst)
+   Two-column grid: pills (sticky) on the left, code on the right.
+   ============================================================================= */
+
+.code-builder {
+    margin: 1.5rem 0;
+    display: grid;
+    grid-template-columns: minmax(110px, 130px) 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+@media (max-width: 800px) {
+    .code-builder {
+        grid-template-columns: 1fr;
+    }
+}
+
+.code-builder .cb-axes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    position: sticky;
+    top: 4.5rem;
+    align-self: start;
+    padding: 0.25rem 0.25rem 0.5rem 0;
+    /* Lift above .cb-code so the absolute-positioned trays float over the
+       code blocks instead of being painted underneath. */
+    z-index: 10;
+}
+
+:is(.code-builder, .qs-builder) .cb-axis.cb-open {
+    /* The currently open axis floats above its siblings in the same column
+       (so the tray of axis N is never clipped by axis N+1's summary). */
+    z-index: 20;
+}
+
+@media (max-width: 800px) {
+    .code-builder .cb-axes {
+        position: static;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--color-background-border);
+    }
+}
+
+:is(.code-builder, .qs-builder) .cb-axis {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Stacked 2-line summary: tiny axis label on top, selected option below. */
+:is(.code-builder, .qs-builder) .cb-axis-summary {
+    appearance: none;
+    -webkit-appearance: none;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 0.4rem;
+    row-gap: 0.05rem;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 1.5px solid var(--color-background-border);
+    border-radius: 8px;
+    background: var(--color-background-secondary);
+    color: var(--color-foreground-primary);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    line-height: 1.15;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+:is(.code-builder, .qs-builder) .cb-axis-summary:hover {
+    border-color: var(--color-brand-primary);
+}
+
+:is(.code-builder, .qs-builder) .cb-axis.cb-open > .cb-axis-summary {
+    border-color: var(--color-brand-primary);
+    background: color-mix(in srgb, var(--color-brand-primary) 8%, var(--color-background-secondary));
+}
+
+:is(.code-builder, .qs-builder) .cb-axis-label {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--color-foreground-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.62rem;
+}
+
+:is(.code-builder, .qs-builder) .cb-axis-summary-value {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+:is(.code-builder, .qs-builder) .cb-axis-caret {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--color-foreground-muted, var(--color-foreground-secondary));
+    font-size: 0.7rem;
+    transition: transform 0.15s ease;
+}
+
+:is(.code-builder, .qs-builder) .cb-axis.cb-open > .cb-axis-summary > .cb-axis-caret {
+    transform: rotate(180deg);
+}
+
+/* The pill tray is hidden until the axis is open; on desktop it floats
+   over the surrounding content (code column in `.code-builder`, the row
+   below in `.qs-builder`) so the layout never shifts. */
+:is(.code-builder, .qs-builder) .cb-axis-tray {
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.35rem;
+    padding: 0.45rem 0.5rem;
+    border: 1px solid var(--color-background-border);
+    border-radius: 8px;
+    background: var(--color-background-primary);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    z-index: 30;
+}
+
+@media (min-width: 801px) {
+    :is(.code-builder, .qs-builder) .cb-axis-tray {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        min-width: 220px;
+        max-width: 360px;
+    }
+}
+
+:is(.code-builder, .qs-builder) .cb-axis.cb-open > .cb-axis-tray {
+    display: flex;
+    animation: cb-fadein 0.18s ease both;
+}
+
+:is(.code-builder, .qs-builder) .cb-pill {
+    padding: 0.28rem 0.7rem;
+    border: 1.5px solid var(--color-background-border);
+    border-radius: 999px;
+    background: var(--color-background-secondary);
+    color: var(--color-foreground-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s ease;
+}
+
+:is(.code-builder, .qs-builder) .cb-pill:hover {
+    border-color: var(--color-brand-primary);
+    background: color-mix(in srgb, var(--color-brand-primary) 10%, var(--color-background-secondary));
+}
+
+:is(.code-builder, .qs-builder) .cb-pill.active {
+    background: var(--color-brand-primary);
+    border-color: var(--color-brand-primary);
+    color: white;
+}
+
+@keyframes cb-fadein {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.code-builder .cb-code {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;  /* allow <pre> to shrink within the grid column */
+}
+
+.code-builder .code-block-wrapper {
+    position: relative;
+}
+
+.code-builder .code-block-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-foreground-secondary);
+}
+
+.code-builder pre {
+    margin: 0;
+    border-radius: 8px;
 }

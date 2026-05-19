@@ -47,24 +47,31 @@
   }
 
   /* ── Add copy buttons to raw <pre><code> blocks (accordion snippets etc.)
-     that are NOT already handled by sphinx-copybutton or code-selector.js ── */
+     that are NOT already handled by sphinx-copybutton or code-selector.js.
+     The button is appended to the <pre> itself so CSS can position it
+     absolutely at the top-right of the code box (matching the site-wide
+     `button.copybtn` look from sphinx-copybutton). ── */
+  var ICON_COPY = '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copy" width="44" height="44" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><title>Copy to clipboard</title><path stroke="none" d="M0 0h24v24H0z" fill="none"/><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+
   function addCopyButtonsToRawBlocks() {
     document.querySelectorAll('pre > code').forEach(function (codeEl) {
       var pre = codeEl.parentElement;
       // Skip if already inside a sphinx-copybutton or code-selector wrapper
       if (pre.parentElement.classList.contains('highlight')) return;
-      if (pre.parentElement.querySelector('.copy-btn')) return;
-      if (pre.parentElement.querySelector('.copybtn')) return;
+      // .code-block-wrapper blocks are managed by their own inline scripts.
+      if (pre.closest('.code-block-wrapper')) return;
+      // Skip if a copy button has already been added to this <pre>.
+      if (pre.querySelector(':scope > button.copybtn')) return;
 
-      // Ensure the wrapper is position-relative
-      var wrapper = pre.parentElement;
-      var cs = window.getComputedStyle(wrapper);
-      if (cs.position === 'static') wrapper.style.position = 'relative';
+      // Anchor the button to the <pre> so it sits inside the code box.
+      var cs = window.getComputedStyle(pre);
+      if (cs.position === 'static') pre.style.position = 'relative';
 
       var btn = document.createElement('button');
-      btn.className = 'copy-btn';
-      btn.innerHTML = '<i class="fas fa-copy"></i>';
-      btn.title = 'Copy code';
+      btn.className = 'copybtn o-tooltip--left';
+      btn.innerHTML = ICON_COPY;
+      btn.setAttribute('data-tooltip', 'Copy');
+      btn.setAttribute('aria-label', 'Copy to clipboard');
       btn.addEventListener('click', function () {
         var text = codeEl.textContent;
         if (navigator.clipboard) {
@@ -77,12 +84,10 @@
           document.execCommand('copy');
           document.body.removeChild(ta);
         }
-        var orig = btn.innerHTML;
-        btn.innerHTML = 'Copied ⚡🧠';
-        btn.classList.add('copied');
-        setTimeout(function () { btn.innerHTML = orig; btn.classList.remove('copied'); }, 1500);
+        btn.classList.add('success');
+        setTimeout(function () { btn.classList.remove('success'); }, 1500);
       });
-      wrapper.appendChild(btn);
+      pre.appendChild(btn);
     });
   }
 

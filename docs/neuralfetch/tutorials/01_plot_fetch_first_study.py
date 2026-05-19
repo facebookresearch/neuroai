@@ -47,11 +47,7 @@ print(f"Subjects: {info.num_subjects}, timelines: {info.num_timelines}")
 # Here we use ``Fake2025Meg`` which requires no download and
 # demonstrates the same events structure you'll see with real data.
 
-study = ns.Study(
-    name="Fake2025Meg",
-    path=ns.CACHE_FOLDER,
-    infra_timelines={"cluster": None},
-)
+study = ns.Study(name="Fake2025Meg", path=ns.CACHE_FOLDER)
 events = study.run()
 
 print(f"Loaded {len(events)} events from {events['subject'].nunique()} subject(s)")

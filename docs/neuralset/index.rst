@@ -22,46 +22,14 @@ see :doc:`Installation <install>` for the full breakdown.
 
 ----
 
-Quick start
-----------
-
-Pick an example to see the code. Copy the setup commands into your
-terminal first, then run the Python snippet. The first time you run it,
-it will be slow (data downloading, cache preparation, etc.) — but then
-lightning fast, even as you change parameters (e.g. segment duration).
+Examples
+--------
 
 .. raw:: html
 
-   <div class="code-selector" data-quickstart="true">
-
-     <div class="selector-compact">
-       <label class="selector-item">
-         <span class="selector-label">📋 Example</span>
-         <select id="sel-preset">
-           <option value="bel-language" selected>🗣️ Language + MEG</option>
-           <option value="li2022-language">🗣️ Language + fMRI</option>
-           <option value="grootswagers-image">🖼️ Image + EEG</option>
-           <option value="allen-image">🖼️ Image + fMRI</option>
-           <option value="fake-classif">🏷️ Classification + fMRI</option>
-         </select>
-       </label>
-     </div>
-
-     <div class="code-block-wrapper">
-       <div class="code-block-label">
-         <i class="fas fa-download"></i> Setup (run once in your terminal)
-       </div>
-       <pre><code id="code-install" class="language-bash"></code></pre>
-     </div>
-
-     <div class="code-block-wrapper">
-       <div class="code-block-label">
-         <i class="fas fa-database"></i> Load study data, configure extractors & segment
-       </div>
-       <pre><code id="code-data" class="language-python"></code></pre>
-     </div>
-
-   </div>
+   <div class="qs-builder"
+        data-axes="neuro,stim,task,model,compute"
+        data-defaults="neuro=fmri,stim=image,task=decoding,model=ridge,compute=local"></div>
 
 ----
 
@@ -239,9 +207,9 @@ Citation
    :caption: NeuralSet
 
    Installation <install>
+   Examples <code_builder>
    Tutorials <auto_examples/walkthrough/index>
    Caching & Cluster Execution <caching_and_cluster>
-   Encoding & Decoding <encoding_decoding>
 
 .. toctree::
    :maxdepth: 1

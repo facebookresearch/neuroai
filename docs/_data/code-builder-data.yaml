@@ -1,0 +1,282 @@
+# Source-of-truth for the interactive Code Builder page.
+#
+# Edit this file by hand; `docs/conf.py` regenerates `docs/_static/code-builder-data.js`
+# on every Sphinx build (and `docs/_data/build_data.py` does the same standalone).
+#
+# Each axis option carries the small data needed to render a single complete
+# script. Extractors are referenced by class name only; the renderer addresses
+# them as `ns.extractors.<cls>` (no imports needed).
+#
+# `kwargs` is a YAML *list* of strings — each item becomes one indented line
+# inside the extractor call. Tuples are written in Python syntax and converted
+# to YAML flow-lists for the yaml-style renderer.
+#
+# For the ML one-liner each neuro option provides either:
+#   t: <int>          — integer time index used as `batch.data["neuro"][:, :, t]`
+#   t_comment: <str>  — appended after `t = N` as a `# comment`
+# or:
+#   x_expr: <str>     — raw Python expression producing the X matrix from `batch`
+
+# Per (neuro, stim) pair, the renderer picks a real public dataset when one
+# exists, and falls back to the bundled `ExampleMultiModal` synthetic study
+# otherwise. The keys are `<neuro>-<stim>`. The `*Sample` variants subset the
+# original datasets so first-run downloads stay reasonable.
+default_study:
+  name: ExampleMultiModal
+  comment: "Built-in synthetic multi-modal study (~2 MB) - covers any combination."
+  # ExampleMultiModal._materialize() needs h5py (fNIRS + spikes) and
+  # imageio[ffmpeg] (videos). Both ship in `neuralset[tutorials]`.
+  pip: ["tutorials"]
+
+studies:
+  # Per-study download dependencies are listed explicitly so the rendered bash
+  # block shows exactly which third-party loaders each dataset needs (rather
+  # than hiding them all under `neuralfetch[quickstart]`).
+  fmri-image:
+    name: Allen2022MassiveSample
+    pip_packages: ["neuralfetch", "awscli"]
+    comment: "Natural Scenes Dataset sample (Allen et al., 2022) - fMRI <-> natural images."
+  fmri-audio:
+    name: Li2022PetitSample
+    pip_packages: ["neuralfetch", "openneuro-py", "praatio"]
+    comment: "Little Prince fMRI sample (Li et al., 2022) - fMRI <-> spoken story (audio + word + text)."
+  fmri-text:
+    name: Li2022PetitSample
+    pip_packages: ["neuralfetch", "openneuro-py", "praatio"]
+    # Li's Petit Prince audiobook is in English.
+    stim_kwargs: ['language="english"']
+    comment: "Little Prince fMRI sample (Li et al., 2022) - fMRI <-> word/text events from the audiobook."
+  meg-audio:
+    name: Bel2026PetitListenSample
+    pip_packages: ["neuralfetch", "openneuro-py"]
+    # MaxShield-recorded MEG: enable allow_maxshield so MegExtractor accepts it.
+    neuro_kwargs: ["allow_maxshield=True"]
+    comment: "Petit Prince MEG listening sample (Bel et al., 2026) - MEG <-> spoken story."
+  meg-text:
+    name: Bel2026PetitListenSample
+    pip_packages: ["neuralfetch", "openneuro-py"]
+    neuro_kwargs: ["allow_maxshield=True"]
+    # Bel's Petit Prince audiobook is in French.
+    stim_kwargs: ['language="french"']
+    comment: "Petit Prince MEG listening sample (Bel et al., 2026) - MEG <-> word/text events from the audiobook."
+  eeg-image:
+    name: Grootswagers2022HumanSample
+    pip_packages: ["neuralfetch", "pyunpack", "boto3", "osfclient", "openneuro-py"]
+    comment: "THINGS-EEG sample (Grootswagers et al., 2022) - EEG <-> natural images."
+  meg-classification:
+    # Built into neuralset (neuralset.events.testing.mne2013sample), so no
+    # `pip_packages` are needed beyond `neuralset` itself. MNE auto-downloads
+    # the ~600 MB sample to `~/mne_data/` on first run.
+    name: Mne2013Sample
+    comment: "MNE-Python sample MEG dataset (Gramfort et al., 2013) - MEG <-> audio/visual side classification."
+
+axes:
+
+  neuro:
+    label: "Neuro"
+    default: fmri
+    options:
+
+      meg:
+        label: "MEG"
+        cls: MegExtractor
+        event_type: Meg
+        kwargs:
+          - "frequency=120"
+          - "filter=(0.5, 30)"
+          - "scaler='RobustScaler'"
+          - "baseline=(-0.1, 0.0)"
+        window: {start: -0.1, duration: 0.5}
+        t: 48
+        t_comment: "300ms @120Hz"
+
+      eeg:
+        label: "EEG"
+        cls: EegExtractor
+        event_type: Eeg
+        kwargs:
+          - "frequency=120"
+          - "filter=(0.5, 40)"
+          - "scaler='RobustScaler'"
+          - "baseline=(-0.1, 0.0)"
+        window: {start: -0.1, duration: 0.5}
+        t: 48
+        t_comment: "300ms @120Hz"
+
+      ieeg:
+        label: "iEEG"
+        cls: IeegExtractor
+        event_type: Ieeg
+        kwargs:
+          - "frequency=100"
+          - "filter=(0.5, 40)"
+          - 'picks=("seeg",)'
+        window: {start: -0.1, duration: 0.5}
+        t: 40
+        t_comment: "300ms @100Hz"
+
+      emg:
+        label: "EMG"
+        cls: EmgExtractor
+        event_type: Emg
+        # MNE's .filter() requires explicit picks for EMG-only raws — keep
+        # this example minimal (no filter), see EmgExtractor docs for more.
+        kwargs:
+          - "frequency=256"
+          - "scaler='RobustScaler'"
+        window: {start: -0.1, duration: 0.5}
+        t: 102
+        t_comment: "300ms @256Hz"
+
+      fmri:
+        label: "fMRI"
+        cls: FmriExtractor
+        event_type: Fmri
+        # `nilearn` ships with `neuralset[tutorials]` (used by FmriExtractor
+        # internals for cleaning/projection helpers).
+        pip: ["tutorials"]
+        kwargs:
+          - "offset=5"
+        window: {start: 0.0, duration: 2.0}
+        x_expr: 'batch.data["neuro"].reshape(len(batch), -1)'
+
+      fnirs:
+        label: "fNIRS"
+        cls: FnirsExtractor
+        event_type: Fnirs
+        # `mne-nirs` is the upstream MNE plug-in for fNIRS preprocessing
+        # (optical density, scalp-coupling, TDDR, …) — not in `[tutorials]`.
+        pip_packages: ["mne-nirs"]
+        kwargs:
+          - "frequency=10"
+          - 'picks=("fnirs",)'
+          - "scaler='RobustScaler'"
+          - "baseline=(-0.1, 0.0)"
+        window: {start: -0.1, duration: 0.5}
+        t: 4
+        t_comment: "300ms @10Hz"
+
+      spike:
+        label: "Spike"
+        cls: SpikesExtractor
+        event_type: Spikes
+        # `h5py` (used to read NWB-style spike files) ships in
+        # `neuralset[tutorials]`, which the ExampleMultiModal study already
+        # pulls in — so no extra `pip_packages` are needed here.
+        kwargs:
+          - "frequency=200"
+          - "baseline=(-0.1, 0.0)"
+          - "scaler='RobustScaler'"
+        window: {start: -0.1, duration: 0.5}
+        t: 60
+        t_comment: "200ms @200Hz"
+
+  stim:
+    label: "Stim"
+    default: image
+    options:
+
+      text:
+        label: "Text"
+        cls: SpacyEmbedding
+        pip: ["tutorials"]
+        post_install: "python -m spacy download en_core_web_md"
+        event_type: Word
+        is_classification: false
+        # `language` flows from the Word event itself (ExampleMultiModal sets it).
+        kwargs:
+          - 'aggregation="trigger"'
+
+      image:
+        label: "Image"
+        cls: HuggingFaceImage
+        # HuggingFaceImage uses `transformers` + `torchvision` (also covered by
+        # the broader `neuralset[all]` extras, but listed explicitly to keep the
+        # rendered install line minimal).
+        pip_packages: ["transformers", "torchvision"]
+        event_type: Image
+        is_classification: false
+        kwargs:
+          - 'model_name="facebook/dinov2-small"'
+          - 'aggregation="trigger"'
+
+      audio:
+        label: "Audio"
+        cls: MelSpectrum
+        event_type: Audio
+        # MelSpectrum is a lightweight FFT/Mel extractor — no model download.
+        # Listed explicitly rather than via `neuralset[all]` so users see only
+        # the audio-specific deps.
+        pip_packages: ["julius", "torchaudio", "soundfile"]
+        is_classification: false
+        kwargs:
+          - "n_mels=40"
+          - 'aggregation="trigger"'
+
+      video:
+        label: "Video"
+        cls: HuggingFaceVideo
+        # HuggingFaceVideo pulls `transformers` + `torchvision` for the model
+        # and `julius` + `moviepy` for video/audio decoding.
+        pip_packages: ["transformers", "torchvision", "julius", "moviepy"]
+        event_type: Video
+        is_classification: false
+        # Default model: MCG-NJU/videomae-base. Tied to upstream transformers'
+        # ImagesKwargs validation; covered by L0/L1/L2 — L3 skipped via
+        # `l3_skip` until the kwargs validator settles upstream.
+        l3_skip: "videomae+transformers ImagesKwargs(text=) compat — upstream"
+        kwargs:
+          - 'frequency="native"'
+          - "use_audio=False"
+          - 'aggregation="trigger"'
+
+      classification:
+        label: "Categories"
+        cls: LabelEncoder
+        event_type: Stimulus
+        is_classification: true
+        # LabelEncoder is a tiny pure-Python extractor with no caching.
+        accepts_infra: false
+        kwargs:
+          - 'event_types="Stimulus"'
+          - 'event_field="description"'
+          - 'return_one_hot=True'
+          - 'aggregation="first"'
+
+  task:
+    label: "Task"
+    default: load
+    options:
+      load:     {label: "Load data",  needs_ml: false}
+      decoding: {label: "Decoding",   needs_ml: true,  direction: decoding}
+      encoding: {label: "Encoding",   needs_ml: true,  direction: encoding}
+
+  # Only meaningful for encoding/decoding. The Training axis is hidden in
+  # the UI when Task is "Load data". `kind` selects the rendering branch in
+  # code-builder.js / test_code_builder.py.
+  #   - ridge: classic full-RAM `dset.load_all()` + `cross_val_score`
+  #   - torch: mini-batch training over a `DataLoader` with manual Adam
+  model:
+    label: "Training"
+    default: ridge
+    options:
+      ridge: {label: "Scikit-Learn", kind: ridge}
+      torch: {label: "PyTorch", kind: torch}
+
+  style:
+    label: "Config"
+    default: kwargs
+    options:
+      kwargs: {label: "kwargs"}
+      yaml:   {label: "YAML"}
+
+  compute:
+    label: "Compute"
+    default: local
+    options:
+      local:
+        label: "Local"
+        infra_literal: '{"folder": "$CACHE"}'
+      slurm:
+        label: "Slurm"
+        infra_literal: '{"folder": "$CACHE", "cluster": "slurm", "gpus_per_node": 1, "slurm_partition": "gpu", "timeout_min": 120}'

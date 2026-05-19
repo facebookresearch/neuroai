@@ -1,7 +1,7 @@
 .. _walkthrough:
 
-Tutorials: the NeuralSet pipeline
-==================================
+Tutorials
+=========
 
 Each tutorial covers one step of the pipeline — from
 loading data through to building a DataLoader — with

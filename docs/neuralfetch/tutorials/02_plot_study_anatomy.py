@@ -21,7 +21,7 @@ data_folder = ns.CACHE_FOLDER
 # ----------
 # A Study yields timelines — each represents one recording session.
 
-study = ns.Study(name="Fake2025Meg", path=data_folder, infra_timelines={"cluster": None})
+study = ns.Study(name="Fake2025Meg", path=data_folder)
 
 for tl in study.iter_timelines():
     print(tl)  # dict: {subject: "sample0"}, {subject: "sample1"}
@@ -62,7 +62,6 @@ class Experiment(pydantic.BaseModel):
 study_config = {
     "name": "Fake2025Meg",
     "path": data_folder,
-    "infra_timelines": {"cluster": None},
 }
 exp = Experiment(
     study=[

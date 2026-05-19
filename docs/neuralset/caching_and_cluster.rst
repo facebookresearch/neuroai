@@ -375,5 +375,5 @@ Quick reference
 
    <div class="page-nav">
      <a href="auto_examples/walkthrough/index.html" class="page-nav-btn page-nav-btn--outline">&larr; Tutorials</a>
-     <a href="encoding_decoding.html" class="page-nav-btn">Encoding &amp; Decoding &rarr;</a>
+     <a href="code_builder.html" class="page-nav-btn">Examples &rarr;</a>
    </div>
