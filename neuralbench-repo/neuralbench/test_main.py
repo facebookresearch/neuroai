@@ -32,11 +32,12 @@ class _DummyBrainModule:
         self.kwargs = kwargs
 
 
-def test_prepare_pl_module_seeds_before_and_after_model_build(monkeypatch) -> None:
-    """Model construction should ignore prior RNG usage and reset training RNG."""
-    seed = 123
+def _make_experiment_with_capturing_build(
+    monkeypatch, seed: int
+) -> tuple[Experiment, list[torch.Tensor]]:
+    """Build a minimal ``Experiment`` whose ``build_brain_model`` captures the
+    first ``torch.rand(4)`` it draws after each ``prepare_pl_module`` call."""
     build_draws: list[torch.Tensor] = []
-    post_draws: list[torch.Tensor] = []
 
     def fake_build_brain_model(**kwargs):
         del kwargs
@@ -62,6 +63,14 @@ def test_prepare_pl_module_seeds_before_and_after_model_build(monkeypatch) -> No
         test_full_retrieval_metrics=[],
         seed=seed,
     )
+    return experiment, build_draws
+
+
+def test_prepare_pl_module_seeds_before_and_after_model_build(monkeypatch) -> None:
+    """Model construction should ignore prior RNG usage and reset training RNG."""
+    seed = 123
+    experiment, build_draws = _make_experiment_with_capturing_build(monkeypatch, seed)
+    post_draws: list[torch.Tensor] = []
 
     for pre_draws in (3, 17):
         torch.manual_seed(999)
@@ -78,8 +87,35 @@ def test_prepare_pl_module_seeds_before_and_after_model_build(monkeypatch) -> No
     assert torch.allclose(post_draws[1], expected)
 
 
+def test_prepare_pl_module_different_seeds_diverge(monkeypatch) -> None:
+    """Different ``Experiment.seed`` values should drive different model-build RNGs.
+
+    Companion to :func:`test_prepare_pl_module_seeds_before_and_after_model_build`,
+    which proves the same-seed determinism direction.  This one locks in that
+    changing the seed actually changes the model-construction stream, catching
+    future regressions where ``prepare_pl_module`` would accidentally hardcode
+    a constant seed.
+    """
+    experiment_a, draws_a = _make_experiment_with_capturing_build(monkeypatch, seed=7)
+    experiment_a.prepare_pl_module(train_loader=tp.cast(DataLoader, object()))
+
+    experiment_b, draws_b = _make_experiment_with_capturing_build(monkeypatch, seed=8)
+    experiment_b.prepare_pl_module(train_loader=tp.cast(DataLoader, object()))
+
+    assert not torch.allclose(draws_a[0], draws_b[0])
+
+
 def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
-    """The experiment seed should be applied before data.prepare() runs."""
+    """``Experiment.run()`` calls ``pl.seed_everything(self.seed, workers=True)``
+    as its first action, before ``setup_run`` and ``data.prepare``.
+
+    Data-side determinism (shuffle, weighted sampler, worker RNGs) is driven
+    by ``Data.seed`` via explicit ``torch.Generator``s, but this call still
+    matters for (a) the ``Data.seed=None`` fallback path, where the shuffle
+    inherits the global torch RNG, and (b) any RNG-consuming code in
+    ``setup_run`` / ``data.prepare`` that runs before ``prepare_pl_module``
+    reseeds for model build.
+    """
     events: list[str] = []
     seed_calls: list[tuple[int | None, bool]] = []
 

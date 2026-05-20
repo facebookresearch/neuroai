@@ -5,7 +5,10 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import typing as tp
 
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -22,7 +25,7 @@ from .transforms import (  # noqa: F401
     SklearnSplit,
     TextPreprocessor,
 )
-from .utils import make_weighted_sampler
+from .utils import make_weighted_sampler, seed_worker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +51,7 @@ class Data(ns.BaseModel):
     pin_memory: bool = True
     persistent_workers: bool = True
     prefetch_factor: int | None = None
+    seed: int | None = None
     # Others
     summary_columns: list[str] = []
 
@@ -117,6 +121,38 @@ class Data(ns.BaseModel):
         dataset = segmenter.apply(events)
         dataset.prepare()
 
+        # Derive four independent RNG streams from ``self.seed`` so that each
+        # consumer (train DataLoader shuffle + train worker base-seeds, train
+        # WeightedRandomSampler multinomial draws, val worker base-seeds,
+        # test worker base-seeds) is a pure function of its own sub-seed.
+        # Per-split DataLoader generators matter when ``num_workers > 0``:
+        # ``DataLoader.__iter__`` consumes one int64 from ``generator`` to
+        # derive each worker's base seed, so sharing one generator across
+        # splits would couple the train shuffle stream to how often Lightning
+        # iterates val/test (sanity check, per-epoch validation, etc.).
+        loader_gens: dict[str, torch.Generator | None]
+        sampler_gen: torch.Generator | None
+        worker_init_fn: tp.Callable[[int], None] | None
+        if self.seed is None:
+            LOGGER.info(
+                "Data.seed=None; dataloader shuffling and weighted sampling "
+                "will follow the caller's global torch RNG state."
+            )
+            loader_gens = {"train": None, "val": None, "test": None}
+            sampler_gen = None
+            worker_init_fn = None
+        else:
+            train_state, sampler_state, val_state, test_state = np.random.SeedSequence(
+                self.seed
+            ).generate_state(4)
+            loader_gens = {
+                "train": torch.Generator().manual_seed(int(train_state)),
+                "val": torch.Generator().manual_seed(int(val_state)),
+                "test": torch.Generator().manual_seed(int(test_state)),
+            }
+            sampler_gen = torch.Generator().manual_seed(int(sampler_state))
+            worker_init_fn = seed_worker
+
         # Create the dataloaders
         loaders = {}
         for split in tqdm(["train", "val", "test"], desc="Preparing segments"):
@@ -125,7 +161,9 @@ class Data(ns.BaseModel):
 
             sampler = None
             if split == "train" and self.use_weighted_sampler:
-                sampler = make_weighted_sampler(split_dataset, logger=LOGGER)
+                sampler = make_weighted_sampler(
+                    split_dataset, logger=LOGGER, generator=sampler_gen
+                )
 
             persistent_workers = self.persistent_workers and self.num_workers > 0
             loaders[split] = DataLoader(
@@ -139,6 +177,8 @@ class Data(ns.BaseModel):
                 pin_memory=self.pin_memory,
                 persistent_workers=persistent_workers,
                 prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+                generator=loader_gens[split],
+                worker_init_fn=worker_init_fn,
             )
 
         return loaders

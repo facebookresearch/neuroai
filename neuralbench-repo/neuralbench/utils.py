@@ -7,6 +7,7 @@
 """Utility functions."""
 
 import logging
+import random
 import typing as tp
 from copy import copy
 from hashlib import sha1
@@ -22,6 +23,27 @@ import neuralset as ns
 from neuralset.dataloader import SegmentDataset
 
 LOGGER = logging.getLogger(__name__)
+
+
+def seed_worker(worker_id: int) -> None:
+    """Seed the per-worker ``numpy`` and ``random`` RNGs from torch's per-worker seed.
+
+    PyTorch already seeds the per-worker ``torch`` RNG from the parent
+    ``DataLoader``'s ``generator`` (when set) at worker spawn time, but
+    ``numpy.random`` and Python's ``random`` modules are left untouched.  This
+    helper mirrors :func:`lightning.pytorch.utilities.seed.pl_worker_init_function`
+    but without relying on the ``PL_SEED_WORKERS`` environment variable, so that
+    :class:`~neuralbench.data.Data` can make worker-side determinism a function
+    of its own ``seed`` field rather than a Lightning side-effect.
+    """
+    del worker_id  # Pulled from worker_info to match PyTorch's per-worker seed
+    worker_info = torch.utils.data.get_worker_info()
+    assert worker_info is not None, (
+        "seed_worker must be called inside a DataLoader worker"
+    )
+    seed = worker_info.seed % (2**32)
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def model_hash(model: nn.Module) -> str:
@@ -223,8 +245,22 @@ def compute_class_weights_from_dataset(
 def make_weighted_sampler(
     dataset: SegmentDataset,
     logger: logging.Logger,
+    generator: torch.Generator | None = None,
 ) -> torch.utils.data.WeightedRandomSampler:
-    """Create a weighted random sampler for the given dataset to handle class imbalance."""
+    """Create a weighted random sampler for the given dataset to handle class imbalance.
+
+    Parameters
+    ----------
+    dataset
+        Training dataset whose targets drive the class-weight computation.
+    logger
+        Logger forwarded to :func:`compute_class_weights_from_dataset`.
+    generator
+        Optional ``torch.Generator`` used by the returned sampler.  When set,
+        successive iterations of the sampler draw from this generator instead
+        of the global ``torch`` RNG, so the sampling sequence is determined
+        solely by the generator's seed.
+    """
     loss_kwargs, y_true = compute_class_weights_from_dataset(
         dataset,
         logger=logger,
@@ -236,6 +272,7 @@ def make_weighted_sampler(
         weights=weights.tolist(),
         num_samples=len(weights),
         replacement=True,
+        generator=generator,
     )
     return sampler
 
