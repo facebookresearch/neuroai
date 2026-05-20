@@ -13,7 +13,7 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode>=1.5.0",
+  "braindecode>1.5.0",
   "neuralset",
   "neuraltrain",
   "exca",
