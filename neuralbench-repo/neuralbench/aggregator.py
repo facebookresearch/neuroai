@@ -14,12 +14,12 @@ import typing as tp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from tqdm import tqdm
 
 import neuralset as ns
-from neuraltrain.utils import pack_experiments_for_submission
 
+from .packing import pack_experiments_for_submission
 from .plots.benchmark import plot_all_results
 from .plots.tables import print_skip_table
 
@@ -53,8 +53,8 @@ class BenchmarkAggregator(ns.BaseModel):
     max_workers: int = 256
     collect_max_workers: int = 32
     debug: bool = False
-    experiments_per_job: int = 1
-    local_workers_per_job: int | None = None
+    experiments_per_job: int | tp.Literal["all"] = 1
+    local_workers_per_job: int = 1
 
     output_dir: str = Field(default_factory=_default_output_dir)
 
@@ -64,6 +64,22 @@ class BenchmarkAggregator(ns.BaseModel):
         "MSELoss": "test/pearsonr",
         "ClipLoss": "test/full_retrieval/top5_acc_subject-agg",
     }
+
+    @field_validator("experiments_per_job", mode="after")
+    @classmethod
+    def _validate_experiments_per_job(
+        cls, v: int | tp.Literal["all"]
+    ) -> int | tp.Literal["all"]:
+        if isinstance(v, int) and not isinstance(v, bool) and v < 1:
+            raise ValueError("experiments_per_job must be >= 1 or 'all'.")
+        return v
+
+    @field_validator("local_workers_per_job", mode="after")
+    @classmethod
+    def _validate_local_workers_per_job(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("local_workers_per_job must be >= 1.")
+        return v
 
     def prepare(self) -> None:
         n_total = len(self.experiments)

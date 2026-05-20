@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: pack pending experiments into fewer scheduler jobs via
+  `--experiments-per-job` (#PR).
+
 ## [0.2.1] - 2026-05-13
 
 - `neuralset`: interactive Code Builder docs page (#39).

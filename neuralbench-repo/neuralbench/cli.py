@@ -42,6 +42,22 @@ from neuralbench.registry import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_experiments_per_job(value: str) -> int | tp.Literal["all"]:
+    if value == "all":
+        return "all"
+    try:
+        v = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"experiments-per-job must be an integer >= 1 or 'all'; got {value!r}"
+        ) from exc
+    if v < 1:
+        raise argparse.ArgumentTypeError(
+            "experiments-per-job must be >= 1 or 'all'."
+        )
+    return v
+
+
 def run_benchmark(
     device: str,
     task: str | list[str],
@@ -57,8 +73,8 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
-    experiments_per_job: int = 1,
-    local_workers_per_job: int | None = None,
+    experiments_per_job: int | tp.Literal["all"] = 1,
+    local_workers_per_job: int = 1,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -307,15 +323,15 @@ def run_benchmark_cli() -> None:
     )
     parser.add_argument(
         "--experiments-per-job",
-        type=int,
+        type=_parse_experiments_per_job,
         default=1,
-        help="Experiments per scheduler job; -1 packs all pending experiments.",
+        help="Experiments per scheduler job; pass 'all' to pack every pending experiment into one job.",
     )
     parser.add_argument(
         "--local-workers-per-job",
         type=int,
-        default=None,
-        help="Local workers inside each packed scheduler job.",
+        default=1,
+        help="Local worker processes inside each packed scheduler job (default: 1, serial).",
     )
     parser.add_argument(
         "--dataset",
