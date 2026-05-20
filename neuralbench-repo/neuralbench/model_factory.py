@@ -163,7 +163,6 @@ def build_brain_model(
     train_loader: DataLoader,
     val_loader: DataLoader | None = None,
     wandb_logger: WandbLogger | None = None,
-    n_outputs_override: int | None = None,
 ) -> tuple[torch.nn.Module, int, int]:
     """Build, initialise and optionally wrap a brain model.
 
@@ -186,9 +185,16 @@ def build_brain_model(
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
     feat = batch.data["target"]
-    # CTC-style targets carry a length prefix, so ``feat.shape[-1]`` is the vocab
-    # size only for one-hot targets — pass ``n_outputs_override`` for the rest.
-    n_outputs = n_outputs_override if n_outputs_override is not None else feat.shape[-1]
+    # One-hot targets give the head width directly from the last dim, but
+    # length-prefixed CTC targets (e.g. ``KeystrokeSequence``) don't -- in
+    # that case the extractor exposes ``num_classes`` so we still infer
+    # without an explicit config override.
+    target_extractor = getattr(train_loader.dataset, "extractors", {}).get("target")
+    n_outputs = (
+        target_extractor.num_classes
+        if target_extractor is not None and hasattr(target_extractor, "num_classes")
+        else feat.shape[-1]
+    )
 
     # 1) Build the brain model
     if isinstance(brain_model_config, BaseBrainDecodeModel):

@@ -17,6 +17,8 @@ import pydantic
 from mne.utils import _soft_import
 from neuralset.events import etypes, study
 
+from neuralfetch import download
+
 LOGGER = logging.getLogger(__name__)
 _MNE_BIDS_MIN_VERSION = "0.19"
 
@@ -44,29 +46,27 @@ class Emg2qwertyRaw(etypes.Emg):
         return mne_bids.read_raw_bids(bp, verbose=False)
 
 
-class Emg2qwerty(study.Study):
+class Sivakumar2024Emg2qwerty(study.Study):
     """emg2qwerty (CTRL-Labs, NeurIPS 2024) — surface-EMG keystroke decoding."""
 
-    url: tp.ClassVar[str] = (
-        "https://proceedings.neurips.cc/paper_files/paper/2024/file/"
-        "a64d53074d011e49af1dfc72c332fe4b-Paper-Datasets_and_Benchmarks_Track.pdf"
-    )
-    bibtex: tp.ClassVar[str] = (
-        "@inproceedings{NEURIPS2024_a64d5307,\n"
-        "  author={Sivakumar, Viswanath and Seely, Jeffrey and Du, Alan and\n"
-        "          Bittner, Sean R and Berenzweig, Adam and Bolarinwa,\n"
-        "          Anuoluwapo and Gramfort, Alexandre and Mandel, Michael I},\n"
-        "  title={emg2qwerty: A Large Dataset with Baselines for Touch Typing\n"
-        "         using Surface Electromyography},\n"
-        "  booktitle={Advances in Neural Information Processing Systems},\n"
-        "  editor={A. Globerson and L. Mackey and D. Belgrave and A. Fan and\n"
-        "          U. Paquet and J. Tomczak and C. Zhang},\n"
-        "  pages={91373--91389},\n"
-        "  publisher={Curran Associates, Inc.},\n"
-        "  doi={10.52202/079017-2899},\n"
-        "  volume={37},\n"
-        "  year={2024}}"
-    )
+    bibtex: tp.ClassVar[str] = """
+    @inproceedings{NEURIPS2024_a64d5307,
+        author = {Sivakumar, Viswanath and Seely, Jeffrey and Du, Alan and
+                  Bittner, Sean R and Berenzweig, Adam and Bolarinwa, Anuoluwapo and
+                  Gramfort, Alexandre and Mandel, Michael I},
+        title = {emg2qwerty: A Large Dataset with Baselines for Touch Typing
+                 using Surface Electromyography},
+        booktitle = {Advances in Neural Information Processing Systems},
+        editor = {A. Globerson and L. Mackey and D. Belgrave and A. Fan and
+                  U. Paquet and J. Tomczak and C. Zhang},
+        pages = {91373--91389},
+        publisher = {Curran Associates, Inc.},
+        doi = {10.52202/079017-2899},
+        url = {https://proceedings.neurips.cc/paper_files/paper/2024/file/a64d53074d011e49af1dfc72c332fe4b-Paper-Datasets_and_Benchmarks_Track.pdf},
+        volume = {37},
+        year = {2024},
+    }
+    """
     description: tp.ClassVar[str] = (
         "108 subjects doing surface typing with an EMG wristband on each arm."
     )
@@ -77,31 +77,24 @@ class Emg2qwerty(study.Study):
     _bids_root_cache: Path | None = pydantic.PrivateAttr(default=None)
 
     def _download(self) -> None:
-        from neuralfetch import download
-
         download.Eegdash(study=self.NEMAR_DATASET_ID, dset_dir=self.path).download()
 
     def _bids_root(self) -> Path:
-        # ``Study.download`` writes under ``self.path / "download" / ...``;
-        # users with a manual BIDS tree placed directly under
-        # ``self.path`` also work.  Pick the first candidate whose
-        # immediate children contain ``sub-*`` entries.  mne_bids'
-        # ``get_entity_vals`` / ``find_matching_paths`` both recurse,
-        # so neither distinguishes "BIDS at root" from "BIDS nested
-        # one level deeper" -- hence the direct-child glob here.
-        # Cached on first call.
+        # ``Study.download`` writes under ``self.path / "download"``;
+        # that is the only supported layout.  Users with an existing
+        # NM000104 BIDS tree should symlink it into ``download/``.
         if self._bids_root_cache is not None:
             return self._bids_root_cache
-        for candidate in (Path(self.path), Path(self.path) / "download"):
-            if candidate.is_dir() and any(candidate.glob("sub-*")):
-                self._bids_root_cache = candidate
-                return candidate
-        raise FileNotFoundError(
-            f"No BIDS tree found under {self.path!s}: expected ``sub-*`` "
-            f"directories at the root or under ``download/``.  Run "
-            f"``Study.download()`` first or point ``path`` at an existing "
-            f"BIDS-formatted copy of NM000104."
-        )
+        candidate = Path(self.path) / "download"
+        if not (candidate.is_dir() and any(candidate.glob("sub-*"))):
+            raise FileNotFoundError(
+                f"No BIDS tree found under {candidate!s}: expected "
+                f"``sub-*`` directories.  Run ``Study.download()`` first, "
+                f"or symlink an existing BIDS-formatted copy of NM000104 "
+                f"into ``{candidate!s}``."
+            )
+        self._bids_root_cache = candidate
+        return candidate
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         for bp in mne_bids.find_matching_paths(
@@ -154,7 +147,4 @@ class Emg2qwerty(study.Study):
             "type": "Emg2qwertyRaw", "filepath": str(bp.fpath),
             "start": 0.0, "subject": timeline["subject"],
         }])
-        return (
-            pd.concat([raw_row, sentences, keystrokes], ignore_index=True)
-            .sort_values("start").reset_index(drop=True)
-        )
+        return pd.concat([raw_row, sentences, keystrokes], ignore_index=True)

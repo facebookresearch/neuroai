@@ -265,8 +265,6 @@ Augmentations
 
    TrivialBrainAugment
    TrivialBrainAugmentConfig
-   BandRotation
-   BandRotationConfig
    BandstopFilterFFT
    BandstopFilterFFTConfig
    ChannelsDropoutConfig

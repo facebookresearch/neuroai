@@ -4,7 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# emg2qwerty CTC task: surface-EMG → QWERTY keystroke sequence.
+# emg/typing CTC task: surface-EMG → keystroke sequence (Sivakumar2024Emg2qwerty).
+# Cross-subject baseline restricted to the first ~10 subjects
+# (timeline_index < 120) to keep benchmark runtime tractable.
 
 # Paper recipe optimizer (Adam + OneCycleLR, lr 1e-8 → 1e-3 → 1e-6 with
 # 40 % warmup).  Without the slow warmup CTC collapses to all-blank
@@ -28,7 +30,8 @@ data:
   batch_size: 16
   study:
     source:
-      name: Emg2qwerty
+      name: Sivakumar2024Emg2qwerty
+      query: "timeline_index < 120"
     split:
       name: SklearnSplit
       split_by: subject
@@ -36,6 +39,12 @@ data:
       test_split_ratio: 0.2
       valid_random_state: 33
       test_random_state: 33
+  # No filter / notch / baseline / scaler / clamp — matches the paper
+  # pipeline (Sivakumar et al. 2024): raw 2 kHz EMG is fed straight to
+  # the model, which handles SpecAugment and per-window normalization
+  # internally (``EMG2QwertyNet``).
+  # TODO: when a second EMG task lands, lift this preprocessing block
+  # to a shared device-level default and reference it from here.
   neuro:
     =replace=: true
     name: EmgExtractor
@@ -65,8 +74,8 @@ data:
     # Targets cover the un-padded 4 s "core" of the padded 5 s window.
     core_start_offset: 0.9
     core_duration: 4.0
-    key_to_label: !!python/name:neuralbench.tasks.emg.qwerty.charset.PAPER_KEY_TO_LABEL
-    unichar_to_key: !!python/name:neuralbench.tasks.emg.qwerty.charset.PAPER_UNICHAR_TO_KEY
+    key_to_label: !!python/name:neuralbench.tasks.emg.typing.charset.PAPER_KEY_TO_LABEL
+    unichar_to_key: !!python/name:neuralbench.tasks.emg.typing.charset.PAPER_UNICHAR_TO_KEY
   # Paper-faithful sliding-window segmentation: 4 s core + 0.9 s left +
   # 0.1 s right padding; stride = core duration so windows abut.
   trigger_event_type: Emg2qwertyRaw
@@ -75,7 +84,6 @@ data:
   stride: 4.0
   stride_drop_incomplete: true
   summary_columns: [text]
-brain_model_output_size: 99      # 98 keys + CTC blank
 trainer_config.monitor: val/CER
 trainer_config.mode: min
 loss:

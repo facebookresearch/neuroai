@@ -757,6 +757,17 @@ class LabelEncoder(EventField):
     _label_to_ind: dict[str, int] = {}
     _n_classes: int = 0
 
+    @property
+    def num_classes(self) -> int:
+        """Number of distinct output labels (post ``prepare()``).
+
+        Exposed so the head sizing in
+        :func:`neuralbench.model_factory.build_brain_model` can read it
+        off the extractor instead of inferring from ``target.shape[-1]``
+        (which would be ``1`` for non-one-hot integer targets).
+        """
+        return self._n_classes
+
     def model_post_init(self, log__):
         super().model_post_init(log__)
 

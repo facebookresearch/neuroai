@@ -596,6 +596,15 @@ class KeystrokeSequence(BaseStatic):
         self._truncation_warned = False
         self._oov_warned = False
 
+    @property
+    def num_classes(self) -> int:
+        """Total output classes (vocab keys + CTC blank).
+
+        The blank index is ``_pad_value`` (equal to ``len(key_to_label)``
+        by default), so the head must emit ``_pad_value + 1`` logits.
+        """
+        return self._pad_value + 1
+
     def _encode(self, keys: tp.Sequence[str]) -> list[int]:
         out: list[int] = []
         for raw in keys:

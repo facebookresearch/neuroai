@@ -65,7 +65,7 @@ The same workflow applies to **MEG**, **fMRI**, and **EMG** tasks -- just swap t
 ```console
 neuralbench meg typing --debug          # MEG keystroke classification in debug mode
 neuralbench fmri image --debug          # fMRI image retrieval in debug mode
-neuralbench emg qwerty -m emg2qwerty --debug   # EMG → keystroke CTC decoding (emg2qwerty)
+neuralbench emg typing -m emg2qwerty --debug   # EMG → keystroke CTC decoding (emg2qwerty)
 ```
 
 ## Running the full EEG benchmark

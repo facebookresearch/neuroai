@@ -293,6 +293,13 @@ class CtcSeqLoss(nn.Module):
 
     The adapter splits the lengths/targets out of ``y_true`` and
     transposes ``y_pred`` to ``(T_out, B, C)`` for ``nn.CTCLoss``.
+
+    Notes
+    -----
+    ``nn.CTCLoss`` is not implemented on Apple MPS.  Setting
+    ``PYTORCH_ENABLE_MPS_FALLBACK=1`` keeps the rest of the model on MPS
+    while this loss falls back to CPU; paper-level training still
+    requires a CUDA GPU.
     """
 
     def __init__(

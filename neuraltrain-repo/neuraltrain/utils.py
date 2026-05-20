@@ -86,14 +86,35 @@ def convert_to_pydantic(
             for field in type(instance).model_fields
             if (field != "name" and field not in exclude_from_build)
         )
-        # Wrapper-only fields that must not reach the underlying class.
+        # Drop wrapper-only metric labels that must not reach the underlying class
+        # (e.g. ``log_name`` on metric configs).
         params.pop("log_name", None)
-        # If a nested `kwargs` dict was provided, spread it into params so its
-        # entries become real keyword args to _cls (newer torchmetrics rejects
-        # an unknown literal `kwargs=` keyword).
-        nested = params.pop("kwargs", None)
+        # Configs declare extra positional kwargs through a nested ``kwargs:``
+        # block so the Pydantic wrapper does not need a field per argument.
+        # Example (emg/typing/config.yaml)::
+        #
+        #     metrics:
+        #       - name: CharacterErrorRates
+        #         log_name: CER
+        #         kwargs:
+        #           blank_idx: 98
+        #
+        # ``CharacterErrorRates(blank_idx=98)`` is the call we want; passing
+        # ``kwargs={"blank_idx": 98}`` literally lands in the base class
+        # ``**kwargs`` and newer torchmetrics rejects it.  Spread it — unless
+        # the target class itself declares a named ``kwargs`` parameter
+        # (e.g. ``GroupedMetric(metric_name, kwargs=None)``), in which case
+        # the dict is the intended payload and must be passed through.
+        nested = params.get("kwargs")
         if nested:
-            params.update(nested)
+            cls_params = inspect.signature(instance._cls).parameters
+            accepts_literal_kwargs = (
+                "kwargs" in cls_params
+                and cls_params["kwargs"].kind != inspect.Parameter.VAR_KEYWORD
+            )
+            if not accepts_literal_kwargs:
+                params.pop("kwargs")
+                params.update(nested)
         return instance._cls(**params)  # type: ignore
 
     # Bind the build method to Builder instances using MethodType

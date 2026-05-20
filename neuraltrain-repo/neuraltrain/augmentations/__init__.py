@@ -5,8 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 from .augmentations import (
-    BandRotation,
-    BandRotationConfig,
     BandstopFilterFFT,
     BandstopFilterFFTConfig,
     ChannelsDropoutConfig,

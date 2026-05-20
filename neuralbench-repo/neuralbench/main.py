@@ -153,7 +153,6 @@ class Experiment(BaseExperiment):
             train_loader=train_loader,
             val_loader=val_loader,
             wandb_logger=self._wandb_logger,
-            n_outputs_override=self.brain_model_output_size,
         )
 
         if self.target_scaler is not None:

@@ -732,12 +732,13 @@ class GroupedMetric(torchmetrics.Metric):
         return f"GroupedMetric({self.base_metric_cls.__name__})"
 
 
-class CharacterErrorRates(torchmetrics.Metric):
+class CharacterErrorRates(torchmetrics.text.CharErrorRate):
     """CTC greedy-decoded character error rate, returned in percent.
 
-    Adapts :class:`torchaudio.functional.edit_distance` to a CTC head:
-    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), computes
-    the Levenshtein distance between labels, and accumulates across batches.
+    Wraps :class:`torchmetrics.text.CharErrorRate` for a CTC head:
+    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), maps the
+    integer label IDs to a private per-character alphabet via ``chr``,
+    and delegates the Levenshtein accumulation to the parent class.
 
     Inputs
     ------
@@ -748,38 +749,36 @@ class CharacterErrorRates(torchmetrics.Metric):
         are the labels; the rest is padding.
     """
 
-    is_differentiable: bool = False
-    higher_is_better: bool = False
-    full_state_update: bool = False
-
     def __init__(self, blank_idx: int = 0, **kwargs: tp.Any) -> None:
         super().__init__(**kwargs)
-        self.add_state("errors", default=torch.tensor(0.0), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self._blank = blank_idx
 
-    def update(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> None:  # type: ignore[override]
-        from torchaudio.functional import edit_distance
-
+    def update(  # type: ignore[override]
+        self, y_pred: torch.Tensor, y_true: torch.Tensor
+    ) -> None:
         argmax = y_pred.argmax(dim=-1).long()
         blank = self._blank
         # Coalesce the per-row sync into a single D2H copy.
         target_lengths = y_true[:, 0].long().tolist()
 
-        errors = 0
-        total = 0
+        preds_str: list[str] = []
+        targets_str: list[str] = []
         for i, target_len in enumerate(target_lengths):
-            targets = y_true[i, 1 : 1 + target_len]
-            preds = argmax[i]
-            preds = torch.unique_consecutive(preds)
-            preds = preds[preds != blank]
-            errors += edit_distance(preds, targets)
-            total += target_len
+            preds_i = torch.unique_consecutive(argmax[i])
+            preds_i = preds_i[preds_i != blank].tolist()
+            targets_i = y_true[i, 1 : 1 + target_len].tolist()
+            # chr() gives each label id a distinct single-codepoint
+            # "character" so torchmetrics' string-typed CER sees the
+            # right alphabet without us touching its accumulation.
+            preds_str.append("".join(chr(p) for p in preds_i))
+            targets_str.append("".join(chr(t) for t in targets_i))
 
-        self.errors += errors
-        self.total += total
+        super().update(preds_str, targets_str)
 
     def compute(self) -> torch.Tensor:
-        # ``total`` may be 0 if no batches have updated yet (e.g. an
-        # all-empty validation split); avoid a NaN/Inf return.
-        return (self.errors / self.total.clamp(min=1)) * 100.0
+        # Parent returns CER in [0, 1]; keep the historical percent
+        # contract.  ``total`` may be 0 if no batches have updated yet
+        # (e.g. an all-empty validation split); avoid a NaN/Inf return.
+        if int(self.total) == 0:
+            return torch.zeros_like(self.errors)
+        return super().compute() * 100.0
