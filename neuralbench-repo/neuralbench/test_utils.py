@@ -489,7 +489,9 @@ def _ks_events(labels: list[int], starts: list[float] | None = None):
         (list(range(5)), [10.0, 10.5, 11.0, 14.5, 14.95], 10.9, 4.0, [2, 3]),
     ],
 )
-def test_sequence_label_encoder_padded_layout(labels, starts, win_start, win_dur, expected):
+def test_sequence_label_encoder_padded_layout(
+    labels, starts, win_start, win_dur, expected
+):
     """``SequenceLabelEncoder`` produces a fixed-shape tensor of concatenated
     integer labels, right-padded with ``pad_value`` (the CTC blank)."""
     ext = SequenceLabelEncoder(

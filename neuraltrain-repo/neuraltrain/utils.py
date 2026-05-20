@@ -67,7 +67,8 @@ def convert_to_pydantic(
         for k, v in sig.parameters.items()
         if k != "self"
         and not k.startswith("_")
-        and v.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        and v.kind
+        not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
     }
 
     # add name for pydantic.discriminator (unless using DiscriminatedModel)

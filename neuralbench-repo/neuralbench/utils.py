@@ -369,4 +369,6 @@ class SequenceLabelEncoder(LabelEncoder):
         if n > self.max_length:
             warn_once(f"{self.name}: truncating labels to max_length={self.max_length}")
             seq, n = seq[: self.max_length], self.max_length
-        return torch.nn.functional.pad(seq, (0, self.max_length - n), value=self.pad_value)
+        return torch.nn.functional.pad(
+            seq, (0, self.max_length - n), value=self.pad_value
+        )
