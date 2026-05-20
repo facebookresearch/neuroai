@@ -48,12 +48,17 @@ Dataset Notes
   ``<DATA_DIR>/Sivakumar2024Emg2qwerty/download/sub-*/…``.
   Users with an existing BIDS copy should symlink it into ``download/``.
 * **BIDS-aware reader**: the Study reads via
-  :py:func:`mne_bids.read_raw_bids` (``≥ 0.19``); channel types and EMG
-  units come from the BIDS sidecars, no manual coercion or rescaling.
-* **Test-time windowing**: the paper [Sivakumar2024]_ trains on 4-s
-  windows but feeds whole sessions at test time.  We apply the same
-  4-s core window (inside a 5-s padded crop, 0.9 s + 4 s + 0.1 s)
-  across all splits ― slightly pessimistic CER; tracked as a follow-up.
+  :py:func:`mne_bids.read_raw_bids` (``≥ 0.18``); channel types come
+  from the BIDS sidecars.  On ``mne_bids ≥ 0.19`` the EMG-unit fix
+  lands the data in microvolts directly; on older versions
+  ``BidsEmg._read`` applies a V→µV rescale.
+* **Windowing**: 5-s sliding windows with a 4-s stride (0.9 s left +
+  4-s core + 0.1 s right); ``CroppedExtractor`` restricts label
+  collection to the core, so the 4-s cores tile each session
+  non-overlappingly while the EMG signal context overlaps neighbours
+  by 1 s.  The paper [Sivakumar2024]_ trains on 4-s windows but feeds
+  whole sessions at test time; we apply this 5-s padded window across
+  all splits ― slightly pessimistic CER, tracked as a follow-up.
 
 References
 ~~~~~~~~~~

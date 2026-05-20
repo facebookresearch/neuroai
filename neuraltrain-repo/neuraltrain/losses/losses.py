@@ -276,5 +276,3 @@ class MultiLoss(nn.Module):
             loss_values["total"] += self.weights[name] * loss_values[name]
 
         return loss_values
-
-

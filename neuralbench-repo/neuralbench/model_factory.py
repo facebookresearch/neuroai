@@ -188,12 +188,12 @@ def build_brain_model(
     # One-hot targets give the head width directly from the last dim, but
     # sequence-target CTC layouts (e.g. ``LabelEncoder`` with
     # ``aggregation='cat'`` + ``max_length``) don't -- in that case the
-    # extractor exposes ``num_classes`` so we still infer without an
+    # extractor exposes ``n_classes`` so we still infer without an
     # explicit config override.
     target_extractor = getattr(train_loader.dataset, "extractors", {}).get("target")
     n_outputs = (
-        target_extractor.num_classes
-        if target_extractor is not None and hasattr(target_extractor, "num_classes")
+        target_extractor.n_classes
+        if target_extractor is not None and hasattr(target_extractor, "n_classes")
         else feat.shape[-1]
     )
 

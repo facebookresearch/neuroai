@@ -21,7 +21,6 @@ from neuralset.base import Frequency as Frequency
 from neuralset.base import TimedArray as TimedArray
 from neuralset.events import Event, EventTypesHelper, etypes
 from neuralset.segments import Segment
-from neuralset.utils import warn_once
 
 T = tp.TypeVar("T", bound=torch.Tensor | np.ndarray)
 logger = logging.getLogger(__name__)
@@ -729,13 +728,6 @@ class EventField(BaseStatic):
 class LabelEncoder(EventField):
     """Encode a given field from an event, e.g. to be used as a label.
 
-    With ``aggregation='cat'`` plus ``max_length``, doubles as a fixed-length
-    sequence-target encoder for CTC training: the per-segment concatenation
-    is padded (or truncated) to ``max_length`` with ``pad_value`` (defaults
-    to ``len(predefined_mapping)``, i.e. the canonical CTC-blank index).
-    Use :class:`~neuralset.extractors.meta.CroppedExtractor` to restrict
-    label collection to a sub-window of the segment.
-
     Parameters
     ----------
     event_types : str or tuple of str
@@ -756,60 +748,24 @@ class LabelEncoder(EventField):
     predefined_mapping : dict, optional
         If provided, use this mapping from label to index instead of computing it from data. Values
         must be >= 0. If ``return_one_hot=True``, these indices MUST be contiguous and start from 0.
-    max_length : int, optional
-        With ``aggregation='cat'``, pad/truncate the concatenated label
-        sequence to this fixed length so segments collate cleanly into a
-        batch.  Output shape becomes ``(max_length,)``.
-    pad_value : int, optional
-        Filler used when padding to ``max_length``.  Defaults to
-        ``len(predefined_mapping)`` (or to ``len(_label_to_ind)`` after
-        ``prepare()`` when no predefined mapping is given), matching the
-        canonical CTC-blank convention.
-    allow_unknown_labels : bool
-        If True, drop out-of-vocabulary labels with a one-shot warning
-        instead of raising.  Required when the dataset can contain keys
-        outside ``predefined_mapping`` (e.g. modifier-key variants that
-        aren't in the paper vocab).
     """
 
     treat_missing_as_separate_class: bool = False
     return_one_hot: bool = False
     predefined_mapping: dict[str, int] | None = None
-    max_length: int | None = None
-    pad_value: int | None = None
-    allow_unknown_labels: bool = False
 
     _label_to_ind: dict[str, int] = {}
     _n_classes: int = 0
 
     @property
-    def _resolved_pad_value(self) -> int | None:
-        """Blank index used for padding (single source of truth).
-
-        Resolution order: explicit ``pad_value`` → ``len(predefined_mapping)``
-        → ``len(_label_to_ind)`` (only populated post-``prepare()``).
-        """
-        if self.pad_value is not None:
-            return self.pad_value
-        if self.predefined_mapping is not None:
-            return len(self.predefined_mapping)
-        return len(self._label_to_ind) or None
-
-    @property
     def n_classes(self) -> int:
         """Number of distinct output labels (post ``prepare()``).
 
-        Exposed so the head sizing in
-        :func:`neuralbench.model_factory.build_brain_model` can read it
-        off the extractor instead of inferring from ``target.shape[-1]``
-        (which would be ``1`` for non-one-hot integer targets).  In the
-        sequence-target mode (``max_length`` set), returns
-        ``pad_value + 1`` so the CTC head emits one logit per label plus
-        the blank.
+        Exposed so :func:`neuralbench.model_factory.build_brain_model`
+        can read the head width off the extractor instead of inferring
+        from ``target.shape[-1]`` (which would be ``1`` for non-one-hot
+        integer targets).
         """
-        pad = self._resolved_pad_value
-        if self.max_length is not None and pad is not None:
-            return pad + 1
         return self._n_classes
 
     def model_post_init(self, log__):
@@ -847,9 +803,6 @@ class LabelEncoder(EventField):
                 msg = "Key '__missing__' is reserved when treat_missing_as_separate_class is True."
                 raise ValueError(msg)
 
-        if self.max_length is not None and self.max_length <= 0:
-            raise ValueError(f"max_length must be > 0, got {self.max_length}.")
-
     def prepare(
         self, obj: pd.DataFrame | tp.Sequence[Event] | tp.Sequence[Segment]
     ) -> None:
@@ -858,21 +811,15 @@ class LabelEncoder(EventField):
         mapping = self._label_to_ind or self.predefined_mapping
         if mapping:
             unknown = labels - mapping.keys()
-            if unknown and not self.allow_unknown_labels:
-                raise ValueError(
+            if unknown:
+                msg = (
                     f"Labels {unknown} are not in the existing mapping "
                     f"{sorted(mapping)}. If prepare() is called per-subject "
                     "after an initial full-data prepare(), this means new "
                     "labels appeared. Use predefined_mapping to fix the "
-                    "mapping upfront, or set allow_unknown_labels=True to "
-                    "drop them silently."
+                    "mapping upfront."
                 )
-            if unknown:
-                warn_once(
-                    f"{self.name}: {len(unknown)} out-of-vocab label(s) seen "
-                    f"in prepare() (e.g. {sorted(unknown)[0]!r}); they will be "
-                    "dropped at encode time."
-                )
+                raise ValueError(msg)
             if self._label_to_ind:
                 return
             self._label_to_ind = dict(self.predefined_mapping)  # type: ignore[arg-type]
@@ -909,46 +856,11 @@ class LabelEncoder(EventField):
         if not self._label_to_ind:
             msg = f"{self.name}: Must call extractor.prepare(events) before using the extractor."
             raise ValueError(msg)
-        key = event._get_field_or_extra(self.event_field)
-        ind = self._label_to_ind.get(key)
-        if ind is None:
-            if not self.allow_unknown_labels:
-                raise KeyError(key)
-            warn_once(f"{self.name}: dropping OOV label {key!r}")
-            # Empty tensor → ``aggregation='cat'`` concatenates nothing.
-            return torch.empty(0, dtype=torch.long)
-        label = torch.tensor([ind], dtype=torch.long)
+        inds = [self._label_to_ind[event._get_field_or_extra(self.event_field)]]
+        label = torch.tensor(inds, dtype=torch.long)
         if self.return_one_hot:
             label = torch.nn.functional.one_hot(label, num_classes=self._n_classes)[0]
         return label
-
-    def __call__(  # type: ignore[override]
-        self,
-        events: tp.Any,
-        start: float,
-        duration: float,
-        trigger: Event | pd.Series | dict | None = None,
-    ) -> torch.Tensor:
-        if self.max_length is None:
-            return super().__call__(events, start, duration, trigger=trigger)
-
-        max_len, pad_v = self.max_length, self._resolved_pad_value
-        assert pad_v is not None
-        # CTC accepts length-0 targets; short-circuit when nothing's in the
-        # segment instead of letting BaseExtractor synthesize a 1-label
-        # ``_missing_default`` fallback.
-        if self.allow_missing and not any(
-            start <= e.start < start + duration
-            for e in self._event_types_helper.extract(events)
-        ):
-            return torch.full((max_len,), pad_v, dtype=torch.long)
-
-        seq = super().__call__(events, start, duration, trigger=trigger)
-        n = int(seq.numel())
-        if n > max_len:
-            warn_once(f"{self.name}: truncating labels to max_length={max_len}")
-            seq, n = seq[:max_len], max_len
-        return torch.nn.functional.pad(seq, (0, max_len - n), value=pad_v)
 
 
 class EventDetector(BaseExtractor):

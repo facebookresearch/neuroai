@@ -511,5 +511,3 @@ def part_reversal(tensor: torch.Tensor) -> None:
         x[first : int(last)] = reversed(x[first : int(last)])  # type: ignore
         last += num
         first = int(last)
-
-

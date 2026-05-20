@@ -145,5 +145,3 @@ def test_multi_loss_multi_heads(multi_pred_heads, multi_targets):
 
     out = loss(y_pred, y_true)
     assert not out["total"].isnan()
-
-

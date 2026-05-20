@@ -394,14 +394,14 @@ class CroppedExtractor(base.BaseStatic):  # can be static or not
 
     @property
     def n_classes(self) -> int:
-        """Forward ``num_classes`` from the wrapped extractor.
+        """Forward ``n_classes`` from the wrapped extractor.
 
         Raises ``AttributeError`` when the inner extractor doesn't expose
-        it, so ``hasattr(cropped, "num_classes")`` mirrors the wrapped
+        it, so ``hasattr(cropped, "n_classes")`` mirrors the wrapped
         contract (used by ``neuralbench.model_factory`` for CTC head
         sizing).
         """
-        return self.extractor.num_classes  # type: ignore[attr-defined]
+        return self.extractor.n_classes  # type: ignore[attr-defined]
 
     def __call__(
         self,

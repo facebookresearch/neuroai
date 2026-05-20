@@ -742,7 +742,7 @@ class CharacterErrorRates(torchmetrics.text.CharErrorRate):
 
     Inputs
     ------
-    y_pred : ``(B, T_out, num_classes)``
+    y_pred : ``(B, T_out, n_classes)``
         Log-probs from a CTC head.
     y_true : ``(B, max_target_length)``
         Integer labels padded with ``blank_idx``.  Per-row label counts

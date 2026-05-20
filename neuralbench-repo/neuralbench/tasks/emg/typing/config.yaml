@@ -74,17 +74,19 @@ data:
     offset: 0.9
     duration: 4.0
     extractor:
-      name: LabelEncoder
+      # Reads the pre-computed integer ``label`` column written by the
+      # study's events-dataframe construction (in
+      # ``sivakumar2024emg2qwerty.py``) — no string→int mapping at
+      # encode time, no OOV branch (OOV keys are dropped upstream).
+      name: SequenceLabelEncoder
       event_types: Keystroke
-      event_field: text
-      aggregation: cat
+      event_field: label
       allow_missing: true
-      allow_unknown_labels: true
       max_length: 128
-      predefined_mapping: !!python/name:neuralbench.tasks.emg.typing.vocab.PAPER_KEY_TO_LABEL
+      pad_value: 98
   # Paper-faithful sliding-window segmentation: 4 s core + 0.9 s left +
   # 0.1 s right padding; stride = core duration so windows abut.
-  trigger_event_type: Emg2qwertyRaw
+  trigger_event_type: BidsEmg
   start: -0.9
   duration: 5.0
   stride: 4.0
@@ -101,5 +103,4 @@ loss:
 metrics:
   - name: CharacterErrorRates
     log_name: CER
-    kwargs:
-      blank_idx: 98
+    blank_idx: 98

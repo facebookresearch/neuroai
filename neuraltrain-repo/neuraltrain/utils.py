@@ -52,13 +52,22 @@ def convert_to_pydantic(
     if "name" in sig.parameters:
         raise RuntimeError("Cannot convert class with attribute 'name' to pydantic")
 
+    # Drop ``*args`` / ``**kwargs`` from the auto-discovered fields: they
+    # would otherwise surface as required ``Any`` fields on the Builder
+    # and force every YAML to declare a nested ``kwargs:`` block.
+    # ``BaseTorchMetric`` / ``BaseTorchLoss`` keep their own explicit
+    # ``kwargs: dict[str, Any] = {}`` field for the torchmetrics /
+    # torch-loss spread path; that one is declared on the parent, not
+    # discovered here.
     fields = {
         k: (
             v.annotation if v.annotation != empty else tp.Any,
             v.default if v.default != empty else ...,
         )
         for k, v in sig.parameters.items()
-        if k != "self" and not k.startswith("_")
+        if k != "self"
+        and not k.startswith("_")
+        and v.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
     }
 
     # add name for pydantic.discriminator (unless using DiscriminatedModel)
@@ -86,35 +95,6 @@ def convert_to_pydantic(
             for field in type(instance).model_fields
             if (field != "name" and field not in exclude_from_build)
         )
-        # Drop wrapper-only metric labels that must not reach the underlying class
-        # (e.g. ``log_name`` on metric configs).
-        params.pop("log_name", None)
-        # Configs declare extra positional kwargs through a nested ``kwargs:``
-        # block so the Pydantic wrapper does not need a field per argument.
-        # Example (emg/typing/config.yaml)::
-        #
-        #     metrics:
-        #       - name: CharacterErrorRates
-        #         log_name: CER
-        #         kwargs:
-        #           blank_idx: 98
-        #
-        # ``CharacterErrorRates(blank_idx=98)`` is the call we want; passing
-        # ``kwargs={"blank_idx": 98}`` literally lands in the base class
-        # ``**kwargs`` and newer torchmetrics rejects it.  Spread it — unless
-        # the target class itself declares a named ``kwargs`` parameter
-        # (e.g. ``GroupedMetric(metric_name, kwargs=None)``), in which case
-        # the dict is the intended payload and must be passed through.
-        nested = params.get("kwargs")
-        if nested:
-            cls_params = inspect.signature(instance._cls).parameters
-            accepts_literal_kwargs = (
-                "kwargs" in cls_params
-                and cls_params["kwargs"].kind != inspect.Parameter.VAR_KEYWORD
-            )
-            if not accepts_literal_kwargs:
-                params.pop("kwargs")
-                params.update(nested)
         return instance._cls(**params)  # type: ignore
 
     # Bind the build method to Builder instances using MethodType
