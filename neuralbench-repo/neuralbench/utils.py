@@ -329,18 +329,20 @@ class SequenceLabelEncoder(LabelEncoder):
             raise ValueError(f"max_length must be > 0, got {self.max_length}.")
         if self.pad_value < 0:
             raise ValueError(f"pad_value must be >= 0, got {self.pad_value}.")
-        # Populate ``_label_to_ind`` with an identity mapping so the
-        # parent's ``Must call extractor.prepare(events)`` guard in
-        # :meth:`get_static` is satisfied without an explicit
-        # ``prepare()`` pass over the data.  Labels are already integers
-        # in ``[0, pad_value)``; the mapping is the identity.
-        self._label_to_ind = {i: i for i in range(self.pad_value)}
-        self._n_classes = self.pad_value
 
-    def prepare(self, obj: tp.Any) -> None:  # type: ignore[override]
-        # Labels are pre-computed integers; no mapping to learn.
-        # ``model_post_init`` has already populated ``_label_to_ind``.
-        return None
+    def prepare(self, obj: tp.Any) -> None:
+        # Skip ``LabelEncoder.prepare`` which would try to learn a
+        # string→int mapping from the integer ``label`` field — it
+        # builds a *sorted-enumerate* mapping, so missing values in
+        # ``obj`` would corrupt the canonical ``[0, pad_value)``
+        # layout.  ``EventField.prepare`` (one level up the MRO) still
+        # validates the field's dtype, and the one-shot ``self(...)``
+        # call populates the output shape used when
+        # ``allow_missing=True``.
+        super(LabelEncoder, self).prepare(obj)
+        events = self._event_types_helper.extract(obj)
+        if events:
+            self(events[0], events[0].start, duration=0.001, trigger=events[0])
 
     def get_static(self, event: etypes.Event) -> torch.Tensor:  # type: ignore[override]
         return torch.tensor(
