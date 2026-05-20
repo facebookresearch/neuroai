@@ -35,7 +35,7 @@ wristbands at 2 kHz) using the CTC framework from [Sivakumar2024]_.  Each
 keystroke sequence over the 98-key paper vocabulary plus a CTC blank ―
 99 output classes.
 
-The benchmark variant restricts training to the first ~10 subjects
+As compared to the original paper, the NeuralBench default configuration restricts training to the first ~10 subjects
 (``timeline_index < 120``) and uses a leave-subjects-out split for
 cross-subject evaluation, keeping turn-around tractable.
 

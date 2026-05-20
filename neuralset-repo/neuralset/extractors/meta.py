@@ -393,7 +393,7 @@ class CroppedExtractor(base.BaseStatic):  # can be static or not
         super().model_post_init(log__)
 
     @property
-    def num_classes(self) -> int:
+    def n_classes(self) -> int:
         """Forward ``num_classes`` from the wrapped extractor.
 
         Raises ``AttributeError`` when the inner extractor doesn't expose

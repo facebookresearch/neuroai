@@ -796,7 +796,7 @@ class LabelEncoder(EventField):
         return len(self._label_to_ind) or None
 
     @property
-    def num_classes(self) -> int:
+    def n_classes(self) -> int:
         """Number of distinct output labels (post ``prepare()``).
 
         Exposed so the head sizing in
