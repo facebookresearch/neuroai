@@ -33,6 +33,9 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "sandbox_skip: skip when running inside the Cursor sandbox"
     )
+    config.addinivalue_line(
+        "markers", "slow: end-to-end pipeline test (opt-in via `pytest -m slow`)"
+    )
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

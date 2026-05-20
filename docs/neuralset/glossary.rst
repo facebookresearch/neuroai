@@ -118,6 +118,6 @@ See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit toge
 .. raw:: html
 
    <div class="page-nav">
-     <a href="encoding_decoding.html" class="page-nav-btn page-nav-btn--outline">&larr; Encoding &amp; Decoding</a>
+     <a href="caching_and_cluster.html" class="page-nav-btn page-nav-btn--outline">&larr; Caching &amp; Cluster Execution</a>
      <a href="extending/contributing.html" class="page-nav-btn">Contributing &rarr;</a>
    </div>

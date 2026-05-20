@@ -146,6 +146,9 @@ class Experiment(BaseExperiment):
         train_loader: DataLoader,
         val_loader: DataLoader | None = None,
     ) -> None:
+        # Seed before any model construction so wrapper/adapters/lazy init do
+        # not depend on RNG already consumed by data preparation or setup.
+        pl.seed_everything(self.seed, workers=True)
         brain_model, self._n_total_params, self._n_trainable_params = build_brain_model(
             brain_model_config=self.brain_model_config,
             downstream_model_wrapper=self.downstream_model_wrapper,
@@ -190,7 +193,7 @@ class Experiment(BaseExperiment):
                 for metric in self.test_full_retrieval_metrics
             },
         )
-        pl.seed_everything(self.seed)
+        pl.seed_everything(self.seed, workers=True)
 
     def fit(
         self,
@@ -390,6 +393,11 @@ class Experiment(BaseExperiment):
         logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
         logging.getLogger("exca").propagate = False
         logging.getLogger("neuralset").propagate = False
+        # Defense-in-depth seeding at the top of ``run()``.  Data-side
+        # determinism (shuffle, weighted sampler, worker RNGs) is driven by
+        # ``Data.seed`` via explicit ``torch.Generator``s and is immune to
+        # the global RNG state when set.
+        pl.seed_everything(self.seed, workers=True)
         self.setup_run()
         loaders = self.data.prepare()
         trainer = self.setup_trainer()

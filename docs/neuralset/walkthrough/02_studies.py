@@ -124,20 +124,21 @@ print(f"With query: {events_q.timeline.nunique()} timelines, {len(events_q)} eve
 # Caching
 # -------
 #
-# Study loading can be cached via the ``infra`` parameter, avoiding
-# repeated I/O and validation on subsequent runs:
+# Study loading can be cached via the ``infra`` parameter. ``infra.folder``
+# automatically propagates to ``infra_timelines.folder``, so a single
+# ``infra`` caches both the merged events DataFrame and each timeline:
 #
 # .. code-block:: python
 #
 #    study = ns.Study(
 #        name="Fake2025Meg",
 #        path=ns.CACHE_FOLDER,
-#        infra={"backend": "Cached", "folder": "/cache"},
+#        infra={"folder": "/cache"},
 #    )
 #    events = study.run()  # first call: loads and caches
 #    events = study.run()  # subsequent calls: reads from cache
 #
-# Cache modes (set via ``infra.mode``):
+# Cache modes (set via ``infra.mode``, also propagates):
 #
 # .. list-table::
 #    :header-rows: 1
@@ -154,16 +155,8 @@ print(f"With query: {events_q.timeline.nunique()} timelines, {len(events_q)} eve
 #      - Only read from cache; error if not cached
 #
 # See :doc:`/neuralset/caching_and_cluster` for all backend options and
-# cluster configuration.
-#
-# .. tip::
-#
-#    By default, ``Study`` loads timelines in parallel
-#    (``infra_timelines=MapInfra(cluster="processpool")``).
-#    This is fast but makes exceptions hard to read (they appear as
-#    ``BrokenProcessPool``).  During development or debugging, disable
-#    parallelism with ``infra_timelines={"cluster": None}`` to get clear
-#    tracebacks.
+# cluster configuration (including how to disable parallel timeline
+# loading via ``infra_timelines={"cluster": None}`` when debugging).
 
 # %%
 # Create Your Own (optional)

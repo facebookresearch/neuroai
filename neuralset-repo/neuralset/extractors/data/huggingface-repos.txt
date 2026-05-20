@@ -38,6 +38,7 @@ facebook/detr-resnet-50
 facebook/dinov2-base
 facebook/dinov2-giant
 facebook/dinov2-large
+facebook/dinov2-small
 facebook/dinov2-small-imagenet1k-1-layer
 facebook/dpt-dinov2-base-kitti
 facebook/hf-seamless-m4t-medium

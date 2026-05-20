@@ -5,6 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import logging
+import random
+from collections.abc import Callable
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -12,7 +18,9 @@ from torch import nn
 from neuraltrain.models.common import ChannelMerger, FourierEmb
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
+from .data import Data
 from .modules import ChannelProjection, DownstreamWrapper, DownstreamWrapperModel
+from .utils import make_weighted_sampler, seed_worker
 
 
 def test_downstream_wrapper():
@@ -440,3 +448,126 @@ def test_channel_projection_bipolar_end_to_end():
     out = wrapped_model(**{"input": raw_input.clone()}).reshape(B, len(target), T)
     assert torch.allclose(out[:, 0, :], raw_input[:, 0, :] - raw_input[:, 1, :])
     assert torch.allclose(out[:, 1, :], raw_input[:, 1, :] - raw_input[:, 2, :])
+
+
+# ---------------------------------------------------------------------------
+# seed_worker
+# ---------------------------------------------------------------------------
+
+
+def test_seed_worker_seeds_numpy_and_random(monkeypatch) -> None:
+    """seed_worker must reseed numpy and Python random from torch's per-worker seed."""
+    fake_worker_info = SimpleNamespace(seed=42)
+    monkeypatch.setattr(torch.utils.data, "get_worker_info", lambda: fake_worker_info)
+
+    np.random.seed(0)
+    random.seed(0)
+    seed_worker(worker_id=0)
+    after_np = np.random.rand(3)
+    after_py = [random.random() for _ in range(3)]
+
+    np.random.seed(0)
+    random.seed(0)
+    seed_worker(worker_id=0)
+    again_np = np.random.rand(3)
+    again_py = [random.random() for _ in range(3)]
+
+    assert np.allclose(after_np, again_np)
+    assert after_py == again_py
+
+    np.random.seed(0)
+    random.seed(0)
+    monkeypatch.setattr(
+        torch.utils.data, "get_worker_info", lambda: SimpleNamespace(seed=999)
+    )
+    seed_worker(worker_id=0)
+    different_np = np.random.rand(3)
+    assert not np.allclose(after_np, different_np)
+
+
+def test_seed_worker_raises_when_called_outside_worker(monkeypatch) -> None:
+    """seed_worker should fail loudly when called outside a DataLoader worker."""
+    monkeypatch.setattr(torch.utils.data, "get_worker_info", lambda: None)
+    with pytest.raises(AssertionError):
+        seed_worker(worker_id=0)
+
+
+# ---------------------------------------------------------------------------
+# make_weighted_sampler
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def train_segment_dataset(build_data: Callable[..., Data]):
+    """Real ``SegmentDataset`` over the ``Test2024Eeg`` synthetic study.
+
+    Built once per module so each sampler test reuses the same dataset and
+    avoids re-running the (already memoised) ``Study.run`` pipeline.  Using
+    a real dataset means ``compute_class_weights_from_dataset`` runs end-to-
+    end -- no stubs, no mocks -- and the tests exercise the same code path
+    as production.
+    """
+    return build_data(seed=0).prepare()["train"].dataset
+
+
+def test_make_weighted_sampler_with_generator_is_deterministic(
+    train_segment_dataset,
+) -> None:
+    """Two samplers built with the same generator-seed must draw the same indices."""
+    sampler_a = make_weighted_sampler(
+        train_segment_dataset,
+        logger=logging.getLogger("t"),
+        generator=torch.Generator().manual_seed(7),
+    )
+    sampler_b = make_weighted_sampler(
+        train_segment_dataset,
+        logger=logging.getLogger("t"),
+        generator=torch.Generator().manual_seed(7),
+    )
+
+    assert list(iter(sampler_a)) == list(iter(sampler_b))
+
+
+def test_make_weighted_sampler_with_different_generators_diverges(
+    train_segment_dataset,
+) -> None:
+    """Different generator seeds must produce different index sequences."""
+    indices_7 = list(
+        iter(
+            make_weighted_sampler(
+                train_segment_dataset,
+                logger=logging.getLogger("t"),
+                generator=torch.Generator().manual_seed(7),
+            )
+        )
+    )
+    indices_8 = list(
+        iter(
+            make_weighted_sampler(
+                train_segment_dataset,
+                logger=logging.getLogger("t"),
+                generator=torch.Generator().manual_seed(8),
+            )
+        )
+    )
+
+    assert indices_7 != indices_8
+
+
+def test_make_weighted_sampler_without_generator_follows_global_rng(
+    train_segment_dataset,
+) -> None:
+    """Backward compat: with ``generator=None`` the sampler follows the global RNG."""
+    torch.manual_seed(123)
+    sampler_a = make_weighted_sampler(
+        train_segment_dataset, logger=logging.getLogger("t")
+    )
+    indices_a = list(iter(sampler_a))
+
+    torch.manual_seed(123)
+    sampler_b = make_weighted_sampler(
+        train_segment_dataset, logger=logging.getLogger("t")
+    )
+    indices_b = list(iter(sampler_b))
+
+    assert indices_a == indices_b

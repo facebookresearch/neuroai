@@ -1,4 +1,4 @@
-# Contributing to NeuralSet
+# Contributing
 
 Thanks for your interest in contributing! Before diving in, see the
 [design philosophy](../philosophy.md) for the principles behind NeuralSet's

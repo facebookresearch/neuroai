@@ -127,17 +127,17 @@ Citation
      note   = {Preprint; URL will be updated when the paper lands on arXiv}
    }
 
-   @misc{banville2026neuralbench,
-     title        = {NeuralBench: A Unifying Framework to Benchmark NeuroAI Models},
-     author       = {Banville, Hubert and d'Ascoli, St{\'e}phane and Dahan, Simon
-                     and Rapin, J{\'e}r{\'e}my and Careil, Marl{\`e}ne
-                     and Benchetrit, Yohann and L{\'e}vy, Jarod
-                     and Panchavati, Saarang and Ratouchniak, Antoine
-                     and Zhang, Mingfang and Cascardi, Elisa and Begany, Katelyn
-                     and Brooks, Teon and King, Jean-R{\'e}mi},
-     year         = {2026},
-     howpublished = {Brain \& AI team, Meta FAIR},
-     url          = {https://github.com/facebookresearch/neuroai/neuralbench-repo},
+   @article{banville2026neuralbench,
+     title   = {NeuralBench: A Unifying Framework to Benchmark NeuroAI Models},
+     author  = {Banville, Hubert and d'Ascoli, St{\'e}phane and Dahan, Simon
+                and Rapin, J{\'e}r{\'e}my and Careil, Marl{\`e}ne
+                and Benchetrit, Yohann and L{\'e}vy, Jarod
+                and Panchavati, Saarang and Ratouchniak, Antoine
+                and Zhang, Mingfang and Cascardi, Elisa and Begany, Katelyn
+                and Brooks, Teon and King, Jean-R{\'e}mi},
+     year    = {2026},
+     journal = {arXiv preprint arXiv:2605.08495},
+     url     = {https://arxiv.org/abs/2605.08495},
    }
 
 .. raw:: html
