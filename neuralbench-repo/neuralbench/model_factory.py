@@ -185,11 +185,10 @@ def build_brain_model(
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
     feat = batch.data["target"]
-    # One-hot targets give the head width directly from the last dim, but
-    # sequence-target CTC layouts (e.g. ``LabelEncoder`` with
-    # ``aggregation='cat'`` + ``max_length``) don't -- in that case the
-    # extractor exposes ``n_classes`` so we still infer without an
-    # explicit config override.
+    # Some extractors (integer-target ``LabelEncoder``,
+    # ``SequenceLabelEncoder`` for CTC) produce shapes whose last dim
+    # doesn't reveal the head width; they expose ``n_classes`` instead.
+    # Fall back to ``feat.shape[-1]`` for one-hot / scalar targets.
     target_extractor = getattr(train_loader.dataset, "extractors", {}).get("target")
     n_outputs = (
         target_extractor.n_classes

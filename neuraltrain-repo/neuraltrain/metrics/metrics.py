@@ -16,6 +16,7 @@ import pandas as pd
 import scipy as sp
 import torch
 import torchmetrics
+import torchmetrics.text  # noqa: F401  -- registers ``torchmetrics.text.CharErrorRate``
 import torchvision.models as tvmodels
 import torchvision.transforms as T
 from scipy.stats import binom

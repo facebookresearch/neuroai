@@ -5,7 +5,10 @@
 # LICENSE file in the root directory of this source tree.
 
 from .cli import run_benchmark, run_benchmark_cli
-# Register custom extractors in the ``exca`` discriminator at import
-# time so YAML configs (e.g. ``emg/typing/config.yaml``) can resolve
-# ``name: SequenceLabelEncoder`` without an explicit import.
-from .utils import SequenceLabelEncoder  # noqa: F401
+from .utils import SequenceLabelEncoder
+
+# ``SequenceLabelEncoder`` is re-exported so importing ``neuralbench``
+# registers it in the ``exca`` discriminator and YAML configs (e.g.
+# ``emg/typing/config.yaml``) can resolve ``name: SequenceLabelEncoder``
+# without an explicit import.
+__all__ = ["SequenceLabelEncoder", "run_benchmark", "run_benchmark_cli"]

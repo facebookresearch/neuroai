@@ -859,6 +859,7 @@ class LabelEncoder(EventField):
         inds = [self._label_to_ind[event._get_field_or_extra(self.event_field)]]
         label = torch.tensor(inds, dtype=torch.long)
         if self.return_one_hot:
+            # Remove the batch dim
             label = torch.nn.functional.one_hot(label, num_classes=self._n_classes)[0]
         return label
 

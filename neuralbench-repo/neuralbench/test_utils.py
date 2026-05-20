@@ -9,6 +9,10 @@ import pytest
 import torch
 from torch import nn
 
+from neuralbench.utils import SequenceLabelEncoder
+from neuralset import utils as ns_utils
+from neuralset.events import etypes
+from neuralset.extractors.meta import CroppedExtractor
 from neuraltrain.models.common import ChannelMerger, FourierEmb
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
@@ -449,12 +453,6 @@ def test_channel_projection_bipolar_end_to_end():
 # Hubert's review #34 we keep this CTC-specific shape out of the base
 # ``LabelEncoder`` and read the pre-computed ``label`` field that the
 # emg/typing study writes onto each Keystroke event.
-
-import neuralset.utils as ns_utils  # noqa: E402
-from neuralset.events import etypes  # noqa: E402
-from neuralset.extractors.meta import CroppedExtractor  # noqa: E402
-
-from neuralbench.utils import SequenceLabelEncoder  # noqa: E402
 
 _KS_PAD = 27  # blank index for the toy 27-class vocab below
 

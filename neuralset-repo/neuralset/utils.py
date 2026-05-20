@@ -64,9 +64,11 @@ def match_list(A, B, on_replace="delete"):
         elif type_ == "delete":
             A_sel[val_a] = np.nan
         elif on_replace == "delete":
+            # print('delete replace')
             A_sel[val_a] = np.nan
             B_sel[val_b] = np.nan
         elif on_replace == "keep":
+            # print('keep replace')
             pass
         else:
             raise NotImplementedError
