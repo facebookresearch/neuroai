@@ -29,7 +29,7 @@ def all_subclasses(cls: tp.Type[X]) -> tp.Set[tp.Type[X]]:
 
 
 def match_list(A, B, on_replace="delete"):
-    """Match two lists of different sizes and return corresponding indice
+    """Match two lists of different sizes and return corresponding indices
     Parameters
     ----------
     A: list | array, shape (n,)
@@ -45,16 +45,6 @@ def match_list(A, B, on_replace="delete"):
     """
     from rapidfuzz.distance.Levenshtein import editops
 
-    if not isinstance(A, str):
-        unique = np.unique(np.r_[A, B])
-        label_encoder = dict((k, v) for v, k in enumerate(unique))
-
-        def int_to_unicode(array: np.ndarray) -> str:
-            return "".join([str(chr(label_encoder[ii])) for ii in array])
-
-        A = int_to_unicode(A)
-        B = int_to_unicode(B)
-
     changes = editops(A, B)
     B_sel = np.arange(len(B)).astype(float)
     A_sel = np.arange(len(A)).astype(float)
@@ -64,11 +54,9 @@ def match_list(A, B, on_replace="delete"):
         elif type_ == "delete":
             A_sel[val_a] = np.nan
         elif on_replace == "delete":
-            # print('delete replace')
             A_sel[val_a] = np.nan
             B_sel[val_b] = np.nan
         elif on_replace == "keep":
-            # print('keep replace')
             pass
         else:
             raise NotImplementedError

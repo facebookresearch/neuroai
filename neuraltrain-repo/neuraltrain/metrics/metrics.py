@@ -744,9 +744,9 @@ class CharacterErrorRates(torchmetrics.text.CharErrorRate):
     ------
     y_pred : ``(B, T_out, num_classes)``
         Log-probs from a CTC head.
-    y_true : ``(B, max_target_length + 1)``
-        Column 0 is the un-padded label count ``L``; columns ``1:L+1``
-        are the labels; the rest is padding.
+    y_true : ``(B, max_target_length)``
+        Integer labels padded with ``blank_idx``.  Per-row label counts
+        are recovered as ``(y_true != blank_idx).sum(-1)``.
     """
 
     def __init__(self, blank_idx: int = 0, **kwargs: tp.Any) -> None:
@@ -758,15 +758,16 @@ class CharacterErrorRates(torchmetrics.text.CharErrorRate):
     ) -> None:
         argmax = y_pred.argmax(dim=-1).long()
         blank = self._blank
+        targets = y_true.long()
         # Coalesce the per-row sync into a single D2H copy.
-        target_lengths = y_true[:, 0].long().tolist()
+        target_lengths = (targets != blank).sum(dim=-1).tolist()
 
         preds_str: list[str] = []
         targets_str: list[str] = []
         for i, target_len in enumerate(target_lengths):
             preds_i = torch.unique_consecutive(argmax[i])
             preds_i = preds_i[preds_i != blank].tolist()
-            targets_i = y_true[i, 1 : 1 + target_len].tolist()
+            targets_i = targets[i, :target_len].tolist()
             # chr() gives each label id a distinct single-codepoint
             # "character" so torchmetrics' string-typed CER sees the
             # right alphabet without us touching its accumulation.

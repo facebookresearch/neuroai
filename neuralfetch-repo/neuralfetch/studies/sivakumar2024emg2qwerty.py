@@ -15,9 +15,9 @@ from pathlib import Path
 import pandas as pd
 import pydantic
 from mne.utils import _soft_import
-from neuralset.events import etypes, study
 
 from neuralfetch import download
+from neuralset.events import etypes, study
 
 LOGGER = logging.getLogger(__name__)
 _MNE_BIDS_MIN_VERSION = "0.19"
@@ -99,17 +99,21 @@ class Sivakumar2024Emg2qwerty(study.Study):
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         for bp in mne_bids.find_matching_paths(
             root=self._bids_root(),
-            datatypes="emg", suffixes="emg", extensions=".bdf",
+            datatypes="emg",
+            suffixes="emg",
+            extensions=".bdf",
         ):
             yield {"subject": bp.subject, "session": bp.session}
 
-    def _load_timeline_events(
-        self, timeline: dict[str, tp.Any]
-    ) -> pd.DataFrame:
+    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         bp = mne_bids.BIDSPath(
             root=self._bids_root(),
-            subject=timeline["subject"], session=timeline["session"],
-            task="typing", datatype="emg", suffix="emg", extension=".bdf",
+            subject=timeline["subject"],
+            session=timeline["session"],
+            task="typing",
+            datatype="emg",
+            suffix="emg",
+            extension=".bdf",
         )
         # Light path: read just the events sidecar TSV; the BDF stays
         # closed until ``Emg2qwertyRaw._read`` opens it per segment.
@@ -120,31 +124,38 @@ class Sivakumar2024Emg2qwerty(study.Study):
 
         # NM000104 prompt_text often ends with the two-char literal
         # "\\n"; rstrip would chew real trailing 'n' / '\\'.
-        text = (
-            ev["prompt_text"].astype("string")
-            .str.removesuffix("\\n").str.strip()
-        )
+        text = ev["prompt_text"].astype("string").str.removesuffix("\\n").str.strip()
         sent_mask = (ev["value"] == "prompt") & text.notna() & (text != "")
-        sentences = pd.DataFrame({
-            "type": "Sentence",
-            "start": ev.loc[sent_mask, "start"],
-            "duration": ev.loc[sent_mask, "duration"],
-            "text": text[sent_mask],
-            "language": "en",
-        })
+        sentences = pd.DataFrame(
+            {
+                "type": "Sentence",
+                "start": ev.loc[sent_mask, "start"],
+                "duration": ev.loc[sent_mask, "duration"],
+                "text": text[sent_mask],
+                "language": "en",
+            }
+        )
 
         key = ev["key"].astype("string").str.strip()
         ks_mask = ev["value"].str.startswith("keystroke_", na=False) & (key != "")
-        keystrokes = pd.DataFrame({
-            "type": "Keystroke",
-            "start": ev.loc[ks_mask, "start"],
-            "duration": ev.loc[ks_mask, "duration"].fillna(0.0),
-            "text": key[ks_mask],
-            "language": "en",
-        })
+        keystrokes = pd.DataFrame(
+            {
+                "type": "Keystroke",
+                "start": ev.loc[ks_mask, "start"],
+                "duration": ev.loc[ks_mask, "duration"].fillna(0.0),
+                "text": key[ks_mask],
+                "language": "en",
+            }
+        )
 
-        raw_row = pd.DataFrame([{
-            "type": "Emg2qwertyRaw", "filepath": str(bp.fpath),
-            "start": 0.0, "subject": timeline["subject"],
-        }])
+        raw_row = pd.DataFrame(
+            [
+                {
+                    "type": "Emg2qwertyRaw",
+                    "filepath": str(bp.fpath),
+                    "start": 0.0,
+                    "subject": timeline["subject"],
+                }
+            ]
+        )
         return pd.concat([raw_row, sentences, keystrokes], ignore_index=True)

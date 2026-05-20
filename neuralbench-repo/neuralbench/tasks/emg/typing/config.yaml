@@ -66,16 +66,22 @@ data:
       min_samples_per_job: 200
   target:
     =replace=: true
-    name: KeystrokeSequence
-    max_target_length: 128
-    # CTC accepts empty targets; segments without keystrokes return
-    # length-0 instead of raising.
-    allow_missing: true
-    # Targets cover the un-padded 4 s "core" of the padded 5 s window.
-    core_start_offset: 0.9
-    core_duration: 4.0
-    key_to_label: !!python/name:neuralbench.tasks.emg.typing.charset.PAPER_KEY_TO_LABEL
-    unichar_to_key: !!python/name:neuralbench.tasks.emg.typing.charset.PAPER_UNICHAR_TO_KEY
+    # CroppedExtractor restricts label collection to the un-padded 4 s
+    # "core" of the padded 5 s window; the inner LabelEncoder turns the
+    # keystrokes in that core into a fixed-length blank-padded CTC target
+    # of shape ``(128,)``.
+    name: CroppedExtractor
+    offset: 0.9
+    duration: 4.0
+    extractor:
+      name: LabelEncoder
+      event_types: Keystroke
+      event_field: text
+      aggregation: cat
+      allow_missing: true
+      allow_unknown_labels: true
+      max_length: 128
+      predefined_mapping: !!python/name:neuralbench.tasks.emg.typing.vocab.PAPER_KEY_TO_LABEL
   # Paper-faithful sliding-window segmentation: 4 s core + 0.9 s left +
   # 0.1 s right padding; stride = core duration so windows abut.
   trigger_event_type: Emg2qwertyRaw
@@ -88,9 +94,10 @@ trainer_config.monitor: val/CER
 trainer_config.mode: min
 loss:
   =replace=: true
-  name: CtcSeqLoss
-  blank: 98
-  zero_infinity: true
+  name: CTCLoss
+  kwargs:
+    blank: 98
+    zero_infinity: true
 metrics:
   - name: CharacterErrorRates
     log_name: CER

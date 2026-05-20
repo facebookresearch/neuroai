@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import string
 import typing as tp
 
 import numpy as np
@@ -12,12 +13,23 @@ import pandas as pd
 import pytest
 import torch
 
+from neuralset import utils as ns_utils
 from neuralset.base import TimedArray
 from neuralset.events import etypes
 from neuralset.events.transforms import AddConcatenationContext
 from neuralset.events.utils import extract_events, standardize_events
+from neuralset.extractors.base import LabelEncoder
+from neuralset.extractors.meta import CroppedExtractor
 
 from . import text
+
+
+@pytest.fixture
+def _fresh_warn_registry():
+    """warn_once dedupes per-process; reset it so per-test assertions are stable."""
+    ns_utils.ISSUED_WARNINGS.clear()
+    yield
+    ns_utils.ISSUED_WARNINGS.clear()
 
 
 def _make_test_events() -> pd.DataFrame:
@@ -354,13 +366,13 @@ def test_part_reversal() -> None:
         np.testing.assert_almost_equal(x.numpy(), ref)
 
 
-# --- KeystrokeSequence ---------------------------------------------------
+# --- LabelEncoder sequence-target mode ----------------------------------
 
-# Generic 27-class vocab (a-z + Key.space) via the extractor's own helper;
-# concrete task vocabularies (e.g. emg2qwerty's 99-class set) live in
-# their own task packages.
-_KS_VOCAB = text.KeystrokeSequence.simple_ascii_vocab(extras=("Key.space",))
-_KS_NULL_CLASS = len(_KS_VOCAB["key_to_label"])  # 27 → CTC-blank index
+# Generic 27-class vocab (a-z + Key.space).  Concrete task vocabularies
+# (e.g. emg2qwerty's 99-class set) live in their own task packages.
+_KS_KEYS = (*string.ascii_lowercase, "Key.space")
+_KS_VOCAB = {k: i for i, k in enumerate(_KS_KEYS)}
+_KS_NULL_CLASS = len(_KS_VOCAB)  # 27 → CTC-blank index
 
 
 def _ks_events(texts, starts=None):
@@ -372,43 +384,127 @@ def _ks_events(texts, starts=None):
 
 
 @pytest.mark.parametrize(
-    ("texts", "starts", "core_kwargs", "win_start", "win_dur", "expected"),
+    ("texts", "starts", "win_start", "win_dur", "expected"),
     [
-        # Pad layout: every event fits, no filtering.
-        (["h", "i", "Key.space"], None, {}, 0.0, 1.0, ["h", "i", "Key.space"]),
-        # Core-window filter: core [10.9, 14.9) keeps c@11 + d@14.5.
+        # Every event fits the window.
+        (["h", "i", "Key.space"], None, 0.0, 1.0, ["h", "i", "Key.space"]),
+        # Window [10.9, 14.9) keeps c@11 + d@14.5; the rest fall outside.
         (
             list("abcde"),
             [10.0, 10.5, 11.0, 14.5, 14.95],
-            {"core_start_offset": 0.9, "core_duration": 4.0},
-            10.0, 5.0, ["c", "d"],
+            10.9,
+            4.0,
+            ["c", "d"],
         ),
     ],
 )
-def test_keystroke_sequence_emits_padded_layout(
-    texts, starts, core_kwargs, win_start, win_dur, expected,
+def test_label_encoder_sequence_target_padded_layout(
+    texts,
+    starts,
+    win_start,
+    win_dur,
+    expected,
 ):
-    """Output is ``(length-prefix, padded labels)`` with the un-padded length
-    in column 0 and ``null_class`` filling the tail."""
-    ext = text.KeystrokeSequence(
-        max_target_length=8, event_types="Keystroke", **core_kwargs, **_KS_VOCAB,
+    """``aggregation='cat'`` + ``max_length`` produces a fixed-shape tensor
+    of concatenated labels, padded on the right with the blank class."""
+    ext = LabelEncoder(
+        event_types="Keystroke",
+        event_field="text",
+        aggregation="cat",
+        allow_missing=True,
+        allow_unknown_labels=True,
+        max_length=8,
+        predefined_mapping=_KS_VOCAB,
     )
     events = _ks_events(texts, starts)
     ext.prepare(events)
     out = ext(events, start=win_start, duration=win_dur)
 
-    labels = _KS_VOCAB["key_to_label"]
     n = len(expected)
-    assert out.shape == (9,) and int(out[0]) == n
-    assert out[1 : 1 + n].tolist() == [labels[k] for k in expected]
-    assert (out[1 + n :] == _KS_NULL_CLASS).all()
+    assert out.shape == (8,)
+    assert out[:n].tolist() == [_KS_VOCAB[k] for k in expected]
+    assert (out[n:] == _KS_NULL_CLASS).all()
 
 
-def test_keystroke_sequence_truncation_warns_once(caplog):
-    ext = text.KeystrokeSequence(max_target_length=2, event_types="Keystroke", **_KS_VOCAB)
+def test_cropped_label_encoder_composition():
+    """``CroppedExtractor`` wrapping ``LabelEncoder(max_length=...)``
+    restricts label collection to the cropped sub-window and forwards
+    ``num_classes`` for downstream head sizing."""
+    inner = LabelEncoder(
+        event_types="Keystroke",
+        event_field="text",
+        aggregation="cat",
+        allow_missing=True,
+        max_length=8,
+        predefined_mapping=_KS_VOCAB,
+    )
+    # Outer crop: [start+0.9, start+0.9+4.0) → for start=10.0 keeps c@11, d@14.5.
+    cropped = CroppedExtractor(extractor=inner, offset=0.9, duration=4.0)
+    events = _ks_events(list("abcde"), [10.0, 10.5, 11.0, 14.5, 14.95])
+    cropped.prepare(events)
+    out = cropped(events, start=10.0, duration=5.0)
+
+    assert out.shape == (8,)
+    assert out[:2].tolist() == [_KS_VOCAB["c"], _KS_VOCAB["d"]]
+    assert (out[2:] == _KS_NULL_CLASS).all()
+    # ``num_classes`` passthrough lets ``model_factory`` size the head
+    # through the composition.
+    assert cropped.num_classes == _KS_NULL_CLASS + 1
+
+
+def test_label_encoder_sequence_target_truncation_warns_once(_fresh_warn_registry):
+    ext = LabelEncoder(
+        event_types="Keystroke",
+        event_field="text",
+        aggregation="cat",
+        allow_missing=True,
+        max_length=2,
+        predefined_mapping=_KS_VOCAB,
+    )
     events = _ks_events(list("hello"))
     ext.prepare(events)
-    with caplog.at_level("WARNING"):
+    with pytest.warns(UserWarning, match="truncating") as records:
         ext(events, start=0.0, duration=1.0)
         ext(events, start=0.0, duration=1.0)
-    assert sum("truncating" in r.message for r in caplog.records) == 1
+    assert sum("truncating" in str(r.message) for r in records) == 1
+
+
+def test_label_encoder_sequence_target_drops_oov(_fresh_warn_registry):
+    """OOV labels are dropped (with a one-shot warning) when
+    ``allow_unknown_labels=True``."""
+    ext = LabelEncoder(
+        event_types="Keystroke",
+        event_field="text",
+        aggregation="cat",
+        allow_missing=True,
+        allow_unknown_labels=True,
+        max_length=4,
+        predefined_mapping=_KS_VOCAB,
+    )
+    # ``Key.shift_l`` is OOV in the 27-class vocab — silently dropped.
+    events = _ks_events(["h", "Key.shift_l", "i"])
+    ext.prepare(events)
+    with pytest.warns(UserWarning, match="OOV label") as records:
+        out = ext(events, start=0.0, duration=1.0)
+    assert out[:2].tolist() == [_KS_VOCAB["h"], _KS_VOCAB["i"]]
+    assert (out[2:] == _KS_NULL_CLASS).all()
+    # warn_once dedupes by message → exactly one encode-time OOV warning.
+    assert sum("OOV label" in str(r.message) for r in records) == 1
+
+
+def test_label_encoder_sequence_target_empty_segment():
+    """Segments without matching events return all-blank padding."""
+    ext = LabelEncoder(
+        event_types="Keystroke",
+        event_field="text",
+        aggregation="cat",
+        allow_missing=True,
+        max_length=4,
+        predefined_mapping=_KS_VOCAB,
+    )
+    events = _ks_events(["h", "i"])
+    ext.prepare(events)
+    # Target window 10..11 excludes both events at t=0.0, t=0.1.
+    out = ext(events, start=10.0, duration=1.0)
+    assert out.shape == (4,)
+    assert (out == _KS_NULL_CLASS).all()

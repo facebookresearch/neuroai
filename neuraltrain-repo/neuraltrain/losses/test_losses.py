@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from .losses import ClipLoss, CtcSeqLoss, MultiLoss, SigLipLoss
+from .losses import ClipLoss, MultiLoss, SigLipLoss
 
 
 @pytest.mark.parametrize("norm_kind", ["x", "y", "xy"])
@@ -147,22 +147,3 @@ def test_multi_loss_multi_heads(multi_pred_heads, multi_targets):
     assert not out["total"].isnan()
 
 
-def test_ctc_seq_loss_signature():
-    """CtcSeqLoss accepts (y_pred (B, T, C), y_true (B, max_len + 1))
-    and returns a finite scalar — same signature as the rest of
-    neuraltrain's losses, so it slots into the standard training loop."""
-    null_class = 26  # 26-letter alphabet → blank index 26.
-    seqs = ("hey", "world")
-
-    # y_true: column 0 is the un-padded label count; columns 1:L+1 are labels.
-    lengths = torch.tensor([len(s) for s in seqs])
-    targets = torch.full((len(seqs), 8), null_class, dtype=torch.long)
-    for i, s in enumerate(seqs):
-        targets[i, : len(s)] = torch.tensor([ord(c) - ord("a") for c in s])
-    y_true = torch.cat([lengths.unsqueeze(1), targets], dim=1)
-
-    y_pred = torch.log_softmax(
-        torch.randn(len(seqs), 64, null_class + 1), dim=-1
-    )
-    loss = CtcSeqLoss(blank=null_class, zero_infinity=True)
-    assert torch.isfinite(loss(y_pred, y_true))

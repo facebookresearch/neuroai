@@ -45,7 +45,6 @@ from .neuro import (
 from .text import (
     BaseText,
     HuggingFaceText,
-    KeystrokeSequence,
     SentenceTransformer,
     SonarEmbedding,
     SpacyEmbedding,

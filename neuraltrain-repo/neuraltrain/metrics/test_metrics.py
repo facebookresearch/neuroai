@@ -399,13 +399,13 @@ def test_torchmetricskwargs_rank(torchmetrics_kwargs):
 
 
 def _ctc_y_true(seqs, null_class, max_len=8):
-    """Pack ``seqs`` into the (length-prefix + padded labels) layout
-    ``CtcSeqLoss`` and ``CharacterErrorRates`` consume."""
-    lengths = torch.tensor([len(s) for s in seqs])
+    """Pack ``seqs`` into the blank-padded layout that ``nn.CTCLoss`` and
+    ``CharacterErrorRates`` consume.  Lengths are recovered downstream as
+    ``(y_true != null_class).sum(-1)``."""
     labels = torch.full((len(seqs), max_len), null_class, dtype=torch.long)
     for i, s in enumerate(seqs):
         labels[i, : len(s)] = torch.tensor([ord(c) - ord("a") for c in s])
-    return torch.cat([lengths.unsqueeze(1), labels], dim=1)
+    return labels
 
 
 def test_character_error_rates_perfect_predictions():

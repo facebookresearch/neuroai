@@ -198,7 +198,6 @@ Extractors — Text
    :nosignatures:
 
    HuggingFaceText
-   KeystrokeSequence
    SentenceTransformer
    SonarEmbedding
    SpacyEmbedding

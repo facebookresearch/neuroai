@@ -70,10 +70,11 @@ def test_emg2qwerty_study_source(tmp_path):
 def test_load_timeline_events_strips_only_literal_suffix(bids_tree, raw_text, expected):
     root, sub, ses = bids_tree
     stem = f"sub-{sub}_ses-{ses}_task-typing"
-    events_path = root / "download" / f"sub-{sub}" / f"ses-{ses}" / "emg" / f"{stem}_events.tsv"
+    events_path = (
+        root / "download" / f"sub-{sub}" / f"ses-{ses}" / "emg" / f"{stem}_events.tsv"
+    )
     events_path.write_text(
-        "onset\tduration\tvalue\tprompt_text\tkey\n"
-        f"0.10\t1.5\tprompt\t{raw_text}\t\n"
+        f"onset\tduration\tvalue\tprompt_text\tkey\n0.10\t1.5\tprompt\t{raw_text}\t\n"
     )
     df = Sivakumar2024Emg2qwerty(path=str(root))._load_timeline_events(
         {"subject": sub, "session": ses}
