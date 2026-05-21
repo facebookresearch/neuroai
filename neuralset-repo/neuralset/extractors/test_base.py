@@ -230,6 +230,26 @@ def test_single_aggregation_scoped_to_window() -> None:
         feat(events, start=0.0, duration=3.0)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "aggregation='single' currently raises whenever >1 events overlap the "
+        "segment window, even when the events themselves do not overlap each other."
+    ),
+)
+def test_single_aggregation_non_overlapping_events() -> None:
+    """A dynamic extractor with ``aggregation='single'`` should accept a segment
+    that contains two events whose time spans do not overlap each other."""
+    feat = Time(frequency=10, aggregation="single")
+    events = [
+        etypes.Image(start=0.0, duration=0.3, timeline="stuff", filepath=__file__),
+        etypes.Image(start=0.5, duration=0.3, timeline="stuff", filepath=__file__),
+    ]
+    out = feat(events, start=0.0, duration=1.0)
+    # frequency=10 Hz over a 1 s window -> 10 time samples.
+    assert out.shape[-1] == 10
+
+
 def test_trigger_outside_window() -> None:
     feat = ns.extractors.WordFrequency(aggregation="trigger")
     trigger = etypes.Word(text="Hello", start=0, duration=1, timeline="stuff")

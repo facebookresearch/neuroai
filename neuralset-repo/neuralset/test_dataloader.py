@@ -64,6 +64,44 @@ def test_dataset() -> None:
         batch = ds[600_000:]
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Segmenter does not pre-validate that segments contain at most one event "
+        "for an extractor with aggregation='single'; the failure currently surfaces "
+        "only at dataset[i] time inside the extractor."
+    ),
+)
+def test_segmenter_rejects_segments_with_multiple_single_agg_events() -> None:
+    """Segments containing two non-overlapping same-type events should either be
+    dropped by Segmenter or raise at build time, not surface lazily inside
+    ``aggregation='single'`` during ``__getitem__``."""
+    word_kwargs = dict(type="Word", text="x", language="english", timeline="t1")
+    events_df = ns.events.standardize_events(
+        pd.DataFrame(
+            [
+                dict(start=0.5, duration=0.3, **word_kwargs),
+                dict(start=1.5, duration=0.3, **word_kwargs),
+                dict(type="Event", start=0.0, duration=2.0, timeline="t1"),
+            ]
+        )
+    )
+    segments = list_segments(
+        events_df,
+        triggers=events_df.type == "Event",
+        start=0.0,
+        duration=2.0,
+    )
+    extractor = ns.extractors.Pulse(
+        frequency=10, aggregation="single", event_types="Word"
+    )
+    dataset = dl.SegmentDataset(extractors={"word": extractor}, segments=segments)
+    # Desired: Segmenter would have pre-filtered the bad segment, so every
+    # remaining segment loads without error. Today: dataset[0] raises.
+    for i in range(len(dataset)):
+        dataset[i]
+
+
 @pytest.mark.sandbox_skip
 def test_load_all_order() -> None:
     data = [
