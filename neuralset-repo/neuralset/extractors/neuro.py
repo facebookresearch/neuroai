@@ -91,7 +91,7 @@ class MneTimedArray(TimedArray):
             "lowpass": raw.info["lowpass"],
         }
         if start is None:
-            start = raw.first_samp / raw.info["sfreq"]
+            start = float(raw.first_samp / raw.info["sfreq"])
         return cls(
             data=data,
             frequency=raw.info["sfreq"],
@@ -432,16 +432,14 @@ class MneRaw(BaseExtractor):
         freq = ta.frequency
         ch_names = ta.ch_names
 
-        # Relocate cached data to the event's timeline position and extract window
         ta = ta.with_start(event.start)
         tdata = ta.overlap(start=window_start, duration=window_stop - window_start)
-        tdata.data = np.asarray(
-            tdata.data
-        )  # materialize ContiguousMemmap before arithmetic
+        # exca caches return ContiguousMemmap which needs
+        # materializing to operate upon:
+        tdata.data = np.asarray(tdata.data)
         if self.scale_factor is not None:
             tdata.data = tdata.data * self.scale_factor
 
-        # Apply baseline to the data
         if self.baseline is not None:
             baseline_duration = self.baseline[1] - self.baseline[0]
             base = tdata.overlap(start + self.baseline[0], baseline_duration).data
@@ -1728,7 +1726,7 @@ class FmriExtractor(BaseExtractor):
     ) -> tp.Iterable[TimedArray]:
         if self.padding == "auto" and self._padding is None:
             raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
-        for _event, ta in zip(events, self._get_data(events)):
+        for ta in self._get_data(events):
             data = ta.data
             if self._padding is not None:
                 if data.ndim != 2:

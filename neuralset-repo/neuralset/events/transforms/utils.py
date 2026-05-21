@@ -15,9 +15,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
-import pandas as pd
 
-from neuralset import segments as _segs
 from neuralset import utils as _ns_utils
 
 from .. import etypes as ev
@@ -273,81 +271,6 @@ def _merge_sentences(
         else:
             out[-1].append(s)
     return out
-
-
-# ---------------------------------------------------------------------------
-# chunking helpers
-# ---------------------------------------------------------------------------
-
-
-def chunk_events(
-    events: pd.DataFrame,
-    event_type_to_chunk: tp.Literal["Audio", "Video"],
-    event_type_to_use: str | None = None,
-    min_duration: float | None = None,
-    max_duration: float = np.inf,
-):
-    """
-    Split events into smaller chunks.
-    If event_type_to_use is None, the events are chunked into chunks of max_duration.
-    If event_type_to_use is not None, the events are chunked based on the train/val/test splits of the event_type_to_use, ensuring that each chunk has duration between min_duration and max_duration.
-    """
-
-    added_events: list[dict] = []
-    dropped_rows: list[int] = []
-    ns_event_type_to_chunk = ev.Event._CLASSES.get(event_type_to_chunk)
-    if ns_event_type_to_chunk is None or not hasattr(ns_event_type_to_chunk, "_split"):
-        raise ValueError(f"Event type {event_type_to_chunk} is not splittable")
-    if event_type_to_use is not None:
-        if "split" not in events.columns:
-            raise RuntimeError("Events must have a split column")
-
-    for _, df in events.groupby("timeline"):
-        to_chunk = df.type == event_type_to_chunk
-        if not any(to_chunk):
-            continue
-        if event_type_to_use is None:  # chunk based on max_duration
-            segments = _segs.list_segments(
-                df,
-                triggers=to_chunk,
-                duration=max_duration,
-                stride=max_duration,
-                stride_drop_incomplete=False,
-            )
-            timepoints = [segment.start for segment in segments]
-        else:  # chunk based on train/test split of the event_type_to_use
-            timepoints = []
-            events_to_use = df.loc[events.type == event_type_to_use].copy()
-            previous = events_to_use.copy().shift(1)
-            split_change = events_to_use.split.astype(str) != previous.split.astype(str)
-            events_to_use["section"] = np.cumsum(split_change.values)  # type: ignore
-            for _, section in events_to_use.groupby("section"):
-                start, end = (
-                    section.iloc[0].start,
-                    section.iloc[-1].start + section.iloc[-1].duration,
-                )
-                timepoints.extend(np.arange(start, end, max_duration))
-
-        events_to_chunk = df.loc[to_chunk]
-        dropped_rows.extend(events_to_chunk.index)
-        for row in events_to_chunk.itertuples(index=False):
-            event_to_chunk = ns_event_type_to_chunk.from_dict(row)
-            new_events = event_to_chunk._split(
-                [t - event_to_chunk.start for t in timepoints], min_duration
-            )  # type: ignore
-            for new_event in new_events:
-                new_event_dict = new_event.to_dict()
-                # add the columns which were removed by event.from_dict() except index
-                for k, v in row._asdict().items():  # type: ignore
-                    if k not in new_event_dict:
-                        new_event_dict[k] = v
-                added_events.append(new_event_dict)
-
-    out_events = events.copy()
-    out_events.drop(dropped_rows, inplace=True)
-    out_events = pd.concat([out_events, pd.DataFrame(added_events)])
-    out_events.reset_index(drop=True, inplace=True)
-    return out_events
 
 
 # ---------------------------------------------------------------------------

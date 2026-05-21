@@ -317,8 +317,11 @@ def test_split_event(tmp_path: Path) -> None:
         dict(type="Audio", start=1, timeline="whatever", filepath=fp, duration=np.nan)
     )
 
-    res = event._split(timepoints=[0, 1.49, 2 * 1.49, 3 * 1.49], min_duration=1.49)
-    assert {ev.offset for ev in res} == {0, 1.49, 2 * 1.49}
+    res = event._split(timepoints=[1.49, 2 * 1.49])
+    # ``_split`` snaps timepoints to sample boundaries (see etypes), so 1.49
+    # at 120 Hz lands on ~179/120 = 1.4916..., off by <1 sample.
+    offsets = sorted(ev.offset for ev in res)
+    assert offsets == pytest.approx([0, 1.49, 2 * 1.49], abs=1 / Fs)
 
 
 def test_validate_events_bids_nan_recovery() -> None:
@@ -449,3 +452,19 @@ def test_fmri_surface_read(tmp_path: Path) -> None:
     )
     assert event.read().get_fdata().shape == (n_v * 2, n_t)
     assert event.read_mask() is None
+
+
+def test_fmri_volume_chunked_read(tmp_path: Path) -> None:
+    """Chunked Fmri reads (no SpecialLoader) partition the volume exactly.
+
+    Feeds ``_split`` off-grid timepoints to exercise sample-grid snapping:
+    at TR=2s, 5.7s and 14.3s must snap to 6.0s and 14.0s (nearest sample).
+    SpecialLoader-backed path is covered by ``test_transforms.test_chunk_neuro``.
+    """
+    event = make_fmri_event(tmp_path, space="T1w", frequency=0.5)
+    full = event.read().get_fdata()
+    chunks = event._split([5.7, 14.3])
+    assert [c.start for c in chunks] == [0.0, 6.0, 14.0]
+    assert [c.duration for c in chunks] == [6.0, 8.0, 6.0]
+    concat = np.concatenate([ch.read().get_fdata() for ch in chunks], axis=-1)
+    np.testing.assert_array_equal(concat, full)

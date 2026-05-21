@@ -415,63 +415,48 @@ class BaseSplittableEvent(BaseDataEvent):
         """Cache UID incorporating file path, offset and duration.
 
         Used as ``item_uid`` by extractors that process splittable events
-        (audio, video, MNE, fMRI). The format ensures that chunked and
-        non-chunked events for the same file get distinct cache entries.
-
-        Precision is millisecond (``:.3f``), which is sufficient
-        for all current chunking granularities.
+        (audio, video, MNE, fMRI) to ensures that chunked events get
+        distinct cache entries (millisecond granularity)
         """
         return f"{self.study_relative_path()}_{self.offset:.3f}_{self.duration:.3f}"
 
-    def _split(
-        self, timepoints: list[float], min_duration: float | None = None
-    ) -> tp.Sequence["BaseSplittableEvent"]:
-        """Split the event at specified timepoints into multiple sub-events.
-
-        Given n ordered timepoints, returns n + 1 corresponding events for each section.
+    def _split(self, timepoints: list[float]) -> tp.Sequence["BaseSplittableEvent"]:
+        """Given n ordered timepoints, returns n + 1 corresponding events for each section.
         Timepoints are relative to the event start, not the absolute timeline time.
 
         Parameters
         ----------
         timepoints : list of float
             Ordered list of split points in seconds (relative to event start)
-        min_duration : float, optional
-            Minimum duration in seconds for resulting segments. Timepoints that would
-            create segments shorter than this are filtered out.
 
         Returns
         -------
         list of BaseSplittableEvent
             List of new event instances representing each segment
 
-        Raises
-        ------
-        ValueError
-            If timepoints are not strictly increasing
+        Note
+        ----
+        The chunks partition the data exactly (no gaps/overlaps). To this end,
+        each timepoint is snapped to the sample grid via ``round()``, so a
+        non-aligned value can shift by up to half a sample period.
 
         Examples
         --------
         .. code-block:: python
 
             audio = Audio(start=0, timeline="t1", filepath="audio.wav", duration=10.0)
-            # Split at 3s and 7s with minimum 2s segments
-            segments = audio._split([3.0, 7.0], min_duration=2.0)
+            segments = audio._split([3.0, 7.0])
             # Returns 3 sounds: [0-3s], [3-7s], [7-10s]
         """
-        # keep only timepoints that are within the sound duration
+        # keep only timepoints strictly inside the event
         timepoints = [t for t in timepoints if 0 < t < self.duration]
         timepoints = sorted(set(timepoints))
-        if min_duration:
-            round_decimals = max(0, int(-np.floor(np.log10(1 / self.frequency))) + 1)
-            delta_before = np.round(np.diff(timepoints, prepend=0), round_decimals)
-            delta_after = np.round(
-                np.diff(timepoints, append=self.duration), round_decimals
-            )
-            timepoints = [
-                t
-                for t, db, da in zip(timepoints, delta_before, delta_after)
-                if db >= min_duration and da >= min_duration
-            ]
+        # Snap so that each chunk's ``read()`` does not round
+        # offset/duration independently and drift by a sample
+        if self.frequency:
+            sr = Frequency(self.frequency)
+            timepoints = sorted({sr.to_sec(sr.to_ind(t)) for t in timepoints})
+            timepoints = [t for t in timepoints if 0 < t < self.duration]
         timepoints.append(self.duration)
 
         start = 0.0
@@ -885,7 +870,8 @@ class MneRaw(BaseSplittableEvent):
     """Brain recording saved as MNE Raw object.
 
     Base class for neurophysiological recordings (MEG, EEG, etc.) that can be
-    loaded using MNE-Python.
+    loaded using MNE-Python. Supports chunking via :meth:`_split` inherited
+    from :class:`BaseSplittableEvent`.
 
     Parameters
     ----------
@@ -899,6 +885,8 @@ class MneRaw(BaseSplittableEvent):
       (use for FIF files with nonzero first_samp)
     - Guards against ``start=0`` when ``raw.first_samp > 0``
     - Subject ID is cast to string to handle numeric IDs from dataframes
+    - Like Audio/Video, :meth:`read` crops the raw to ``[offset, offset+duration]``
+      so that only the chunk's data is loaded into memory.
 
     Examples
     --------
@@ -918,10 +906,6 @@ class MneRaw(BaseSplittableEvent):
         return float("nan") if v == "auto" else v
 
     def model_post_init(self, log__: tp.Any) -> None:
-        if self.offset:
-            raise ValueError(
-                "offset is not supported for MneRaw events (chunking not yet implemented)"
-            )
         self.subject = self.subject
         if self._missing_duration_or_frequency() or pd.isna(self.start):
             raw = self.read()
@@ -959,6 +943,20 @@ class MneRaw(BaseSplittableEvent):
             kwargs["clean_names"] = True
         with utils.ignore_all():
             return mne.io.read_raw(self.filepath, **kwargs)
+
+    def read(self) -> tp.Any:
+        # Crop here, not in ``_read`` — ``_read`` is bypassed under ``_special_loader``.
+        raw = super().read()
+        if self.duration:
+            sr = Frequency(raw.info["sfreq"])
+            start_samp = sr.to_ind(self.offset)
+            end_samp = min(start_samp + sr.to_ind(self.duration), raw.n_times)
+            if start_samp > 0 or end_samp < raw.n_times:  # chunked
+                # copy first — ``crop`` mutates in place, and ``super().read()``
+                # could return a cached/shared Raw (e.g. via ``_special_loader``).
+                raw = raw.copy()
+                raw.crop(tmin=sr.to_sec(start_samp), tmax=sr.to_sec(end_samp - 1))
+        return raw
 
 
 class Meg(MneRaw):
@@ -1058,6 +1056,10 @@ class Fmri(BaseSplittableEvent):
     the **left hemisphere** (containing ``hemi-L``); the right hemisphere
     is derived automatically by replacing ``hemi-L`` with ``hemi-R``.
 
+    Supports chunking via :meth:`_split` inherited from
+    :class:`BaseSplittableEvent`; :meth:`read` crops to
+    ``[offset, offset+duration]`` so chunks load only their own slice.
+
     Parameters
     ----------
     subject : str
@@ -1084,10 +1086,6 @@ class Fmri(BaseSplittableEvent):
     spec: FmriSpec | None = None
 
     def model_post_init(self, log__: tp.Any) -> None:
-        if self.offset:
-            raise ValueError(
-                "offset is not supported for Fmri events (chunking not yet implemented)"
-            )
         if not self.frequency or pd.isna(self.frequency):
             raise ValueError(
                 "Frequency must be provided for Fmri event: "
@@ -1097,6 +1095,18 @@ class Fmri(BaseSplittableEvent):
         if not self.duration or pd.isna(self.duration):
             self.duration = self.read().shape[-1] / self.frequency
         super().model_post_init(log__)
+
+    def read(self) -> tp.Any:
+        # Crop here, not in ``_read`` — ``_read`` is bypassed under ``_special_loader``.
+        img = super().read()
+        if not self.duration:  # autofill
+            return img
+        sr = Frequency(self.frequency)
+        start_vol = sr.to_ind(self.offset)
+        end_vol = start_vol + sr.to_ind(self.duration)
+        if start_vol == 0 and end_vol >= img.shape[-1]:
+            return img
+        return img.slicer[..., start_vol:end_vol]  # chunked
 
     def _read(self) -> tp.Any:
         import nibabel
