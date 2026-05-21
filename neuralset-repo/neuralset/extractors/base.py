@@ -330,23 +330,21 @@ class BaseExtractor(base._Module, base.NamedModel):
             # the zero-fill in _tarrays_to_tensor (see test_first_samp).
             ns_events = in_window or ns_events
 
-        if self.aggregation in ("first", "trigger", "single"):
-            if self.aggregation == "single" and len(ns_events) > 1:
-                # Multiple events allowed only if they do not mutually overlap:
-                # they then occupy disjoint slots and combine unambiguously
-                # via the 'sum' code path in `_tarrays_to_tensor`.
-                sorted_evs = sorted(ns_events, key=lambda e: e.start)
-                if any(
-                    b.start < a.start + a.duration
-                    for a, b in zip(sorted_evs, sorted_evs[1:])
-                ):
-                    msg = (
-                        f"{self.name}.aggregation='single' but found "
-                        f"{len(ns_events)} overlapping events: {ns_events}"
-                    )
-                    raise ValueError(msg)
-            else:
-                ns_events = ns_events[:1]
+        if self.aggregation == "single" and len(ns_events) > 1:
+            # Multiple events allowed only if they do not mutually overlap:
+            # they then occupy disjoint slots and combine unambiguously
+            # via the 'sum' code path in `_tarrays_to_tensor`.
+            sorted_evs = sorted(ns_events, key=lambda e: e.start)
+            if any(
+                b.start < a.start + a.duration for a, b in zip(sorted_evs, sorted_evs[1:])
+            ):
+                msg = (
+                    f"{self.name}.aggregation='single' but found "
+                    f"{len(ns_events)} overlapping events: {ns_events}"
+                )
+                raise ValueError(msg)
+        elif self.aggregation in ("first", "trigger", "single"):
+            ns_events = ns_events[:1]
         elif self.aggregation == "last":
             ns_events = ns_events[-1:]
         elif self.aggregation == "middle":
