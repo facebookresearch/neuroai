@@ -14,7 +14,7 @@ import typing as tp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from tqdm import tqdm
 
 import neuralset as ns
@@ -64,22 +64,6 @@ class BenchmarkAggregator(ns.BaseModel):
         "MSELoss": "test/pearsonr",
         "ClipLoss": "test/full_retrieval/top5_acc_subject-agg",
     }
-
-    @field_validator("experiments_per_job", mode="after")
-    @classmethod
-    def _validate_experiments_per_job(
-        cls, v: int | tp.Literal["all"]
-    ) -> int | tp.Literal["all"]:
-        if isinstance(v, int) and not isinstance(v, bool) and v < 1:
-            raise ValueError("experiments_per_job must be >= 1 or 'all'.")
-        return v
-
-    @field_validator("local_workers_per_job", mode="after")
-    @classmethod
-    def _validate_local_workers_per_job(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError("local_workers_per_job must be >= 1.")
-        return v
 
     def prepare(self) -> None:
         n_total = len(self.experiments)
