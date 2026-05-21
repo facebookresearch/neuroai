@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import multiprocessing
-import os
 import typing as tp
 from concurrent.futures import ProcessPoolExecutor
 
@@ -18,14 +17,6 @@ from pydantic import Field, SerializeAsAny
 
 from neuraltrain.base import BaseModel
 from neuraltrain.utils import BaseExperiment
-
-
-def _cpu_budget() -> int:
-    """CPU count available to this process; respects Slurm cgroups on Linux."""
-    getaffinity = getattr(os, "sched_getaffinity", None)
-    if getaffinity is not None:
-        return len(getaffinity(0))
-    return os.cpu_count() or 1
 
 
 class PackedExperiment(BaseModel):
@@ -52,7 +43,7 @@ class PackedExperiment(BaseModel):
         if self.n_jobs == 1 or len(self.experiments) <= 1:
             return [exp.run() for exp in self.experiments]
 
-        max_workers = min(self.n_jobs, len(self.experiments), _cpu_budget())
+        max_workers = min(self.n_jobs, len(self.experiments))
         ctx = multiprocessing.get_context("spawn")  # CUDA-safe
         # Manual lifecycle so we can cancel pending futures on the first
         # failure rather than wait for the longest in-flight task to drain.
