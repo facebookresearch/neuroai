@@ -217,21 +217,28 @@ def test_aggreg(aggreg: tp.Literal["first", "trigger"], expected: list[float]) -
 def test_single_aggregation_scoped_to_window() -> None:
     """``aggregation='single'`` counts events inside the segment window,
     not across the whole input (typical when the caller passes a full
-    recording's DataFrame rather than a segment-scoped subset).  Only
-    *overlapping* events inside the window are ambiguous."""
+    recording's DataFrame rather than a segment-scoped subset)."""
     feat = Time(frequency=3, aggregation="single")
     events = [
-        # Two overlapping events around [0.5, 2.0].
+        etypes.Image(start=s, duration=0.5, timeline="stuff", filepath=__file__)
+        for s in [0.0, 2.0, 4.0]
+    ]
+    # One overlaps [2, 3): picked, no raise.
+    feat(events, start=2.0, duration=1.0)
+    # Two non-overlapping events in [0, 3): accepted under 'single'.
+    feat(events, start=0.0, duration=3.0)
+
+
+def test_single_aggregation_raises_on_overlapping_events() -> None:
+    """Overlapping events in the segment window remain ambiguous under
+    ``aggregation='single'``."""
+    feat = Time(frequency=3, aggregation="single")
+    events = [
         etypes.Image(start=0.5, duration=1.0, timeline="stuff", filepath=__file__),
         etypes.Image(start=1.0, duration=1.0, timeline="stuff", filepath=__file__),
-        # Isolated event far away.
-        etypes.Image(start=4.0, duration=0.5, timeline="stuff", filepath=__file__),
     ]
-    # Only the isolated event overlaps [3.5, 4.5): picked, no raise.
-    feat(events, start=3.5, duration=1.0)
-    # Two *overlapping* events inside [0, 3): ambiguous, raise.
     with pytest.raises(ValueError, match="overlapping events"):
-        feat(events, start=0.0, duration=3.0)
+        feat(events, start=0.0, duration=2.0)
 
 
 def test_single_aggregation_non_overlapping_events() -> None:

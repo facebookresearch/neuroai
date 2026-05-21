@@ -334,15 +334,12 @@ class BaseExtractor(base._Module, base.NamedModel):
             # Multiple events allowed only if they do not mutually overlap:
             # they then occupy disjoint slots and combine unambiguously
             # via the 'sum' code path in `_tarrays_to_tensor`.
-            sorted_evs = sorted(ns_events, key=lambda e: e.start)
-            if any(
-                b.start < a.start + a.duration for a, b in zip(sorted_evs, sorted_evs[1:])
-            ):
-                msg = (
+            evs = sorted(ns_events, key=lambda e: e.start)
+            if any(b.start < a.start + a.duration for a, b in zip(evs, evs[1:])):
+                raise ValueError(
                     f"{self.name}.aggregation='single' but found "
                     f"{len(ns_events)} overlapping events: {ns_events}"
                 )
-                raise ValueError(msg)
         elif self.aggregation in ("first", "trigger", "single"):
             ns_events = ns_events[:1]
         elif self.aggregation == "last":

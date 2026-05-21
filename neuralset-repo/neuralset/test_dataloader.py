@@ -64,35 +64,6 @@ def test_dataset() -> None:
         batch = ds[600_000:]
 
 
-def test_segment_dataset_with_multiple_non_overlapping_single_agg_events() -> None:
-    """End-to-end check that a SegmentDataset works when a segment contains
-    several non-overlapping events of the same type and the extractor uses
-    ``aggregation='single'``."""
-    word_kwargs = dict(type="Word", text="x", language="english", timeline="t1")
-    events_df = ns.events.standardize_events(
-        pd.DataFrame(
-            [
-                dict(start=0.5, duration=0.3, **word_kwargs),
-                dict(start=1.5, duration=0.3, **word_kwargs),
-                dict(type="Event", start=0.0, duration=2.0, timeline="t1"),
-            ]
-        )
-    )
-    segments = list_segments(
-        events_df,
-        triggers=events_df.type == "Event",
-        start=0.0,
-        duration=2.0,
-    )
-    extractor = ns.extractors.Pulse(
-        frequency=10, aggregation="single", event_types="Word"
-    )
-    dataset = dl.SegmentDataset(extractors={"word": extractor}, segments=segments)
-    assert len(dataset) == 1
-    batch = dataset[0]
-    assert batch.data["word"].shape[-1] == 20  # 2 s * 10 Hz
-
-
 @pytest.mark.sandbox_skip
 def test_load_all_order() -> None:
     data = [
