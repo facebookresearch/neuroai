@@ -55,10 +55,7 @@ class BaseExtractor(base._Module, base.NamedModel):
         Strategy for combining values when multiple matching events fall
         inside the same segment:
 
-        * ``"single"`` — one event expected, or several events whose time
-          spans do not overlap each other (raises otherwise).  Non-overlapping
-          events are combined into the same tensor via the ``"sum"`` code
-          path, which is unambiguous since they occupy disjoint time slots.
+        * ``"single"`` — maximum one event at each time instant (raises otherwise).
         * ``"sum"`` / ``"mean"`` — element-wise sum or mean.
         * ``"first"`` / ``"middle"`` / ``"last"`` — pick one event.
         * ``"cat"`` — concatenate along the first dimension.
@@ -335,25 +332,17 @@ class BaseExtractor(base._Module, base.NamedModel):
 
         if self.aggregation in ("first", "trigger", "single"):
             if self.aggregation == "single" and len(ns_events) > 1:
-                # Multiple events in the window are allowed under 'single'
-                # only when they do not mutually overlap: their data then
-                # lives in disjoint time slots and combines unambiguously
+                # Multiple events allowed only if they do not mutually overlap:
+                # they then occupy disjoint slots and combine unambiguously
                 # via the 'sum' code path in `_tarrays_to_tensor`.
-                intervals = sorted(
-                    (float(e.start), float(e.start) + float(e.duration))
-                    for e in ns_events
-                )
-                any_overlap = any(
-                    nxt_start < prev_stop
-                    for (_, prev_stop), (nxt_start, _) in zip(intervals, intervals[1:])
-                )
-                if any_overlap:
+                sorted_evs = sorted(ns_events, key=lambda e: e.start)
+                if any(
+                    b.start < a.start + a.duration
+                    for a, b in zip(sorted_evs, sorted_evs[1:])
+                ):
                     msg = (
-                        f"Found {len(ns_events)} overlapping events in the segment "
-                        f"but expected one or several non-overlapping events "
-                        f"since {self.name}.aggregation='single'. "
-                        "Update it to sum/average/first/trigger/... ?\n"
-                        f"{ns_events=}"
+                        f"{self.name}.aggregation='single' but found "
+                        f"{len(ns_events)} overlapping events: {ns_events}"
                     )
                     raise ValueError(msg)
             else:
