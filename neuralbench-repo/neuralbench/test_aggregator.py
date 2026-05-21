@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import typing as tp
 from pathlib import Path
 
 import exca
@@ -23,20 +24,15 @@ class MiniExperiment(BaseExperiment):
 
 
 def test_prepare_packs_experiments_and_preserves_child_caches(tmp_path: Path) -> None:
-    experiments = [
-        MiniExperiment(
-            value=i,
-            infra={
-                "cluster": None,
-                "folder": tmp_path / "experiments",
-                "mode": "cached",
-            },
-        )
-        for i in range(3)
-    ]
+    infra: tp.Any = {
+        "cluster": None,
+        "folder": tmp_path / "experiments",
+        "mode": "cached",
+    }
+    experiments = [MiniExperiment(value=i, infra=infra) for i in range(3)]
 
     agg = BenchmarkAggregator.model_construct(
-        experiments=experiments,
+        experiments=experiments,  # type: ignore[arg-type]
         max_workers=2,
         collect_max_workers=1,
         debug=False,

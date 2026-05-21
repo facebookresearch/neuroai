@@ -104,7 +104,10 @@ def pack_experiments_for_submission(
     keyed.sort(key=lambda kv: kv[0])
     pending = [exp for _, exp in keyed]
 
-    scheduler_infra = pending[0].infra.model_dump(
+    # Typed as ``tp.Any`` because pydantic accepts the sparse dict at runtime
+    # (auto-builds a ``TaskInfra``) but the pydantic-mypy plugin enforces the
+    # declared ``TaskInfra`` type strictly.
+    scheduler_infra: tp.Any = pending[0].infra.model_dump(
         mode="python",
         exclude_computed_fields=True,
         exclude_defaults=True,

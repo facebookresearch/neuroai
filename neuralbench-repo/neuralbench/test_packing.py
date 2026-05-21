@@ -43,12 +43,15 @@ class FailingExperiment(BaseExperiment):
 
 
 @pytest.fixture
-def infra(tmp_path: Path) -> dict[str, tp.Any]:
+def infra(tmp_path: Path) -> tp.Any:
+    # ``tp.Any`` so the dict can be passed to pydantic models without
+    # tripping the pydantic-mypy strict-init check (the dict is converted
+    # to a ``TaskInfra`` at runtime).
     return {"cluster": "auto", "folder": tmp_path, "mode": "force"}
 
 
 def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
-    cfg = packed.infra.model_dump(mode="python")
+    cfg: tp.Any = packed.infra.model_dump(mode="python")
     cfg["cluster"] = None
     return type(packed)(experiments=packed.experiments, infra=cfg, n_jobs=n_jobs).run()
 
@@ -105,7 +108,7 @@ def test_should_submit_experiment(mode: str, status: str, expected: bool) -> Non
     ],
 )
 def test_pack_groups_and_runs(
-    infra: dict[str, tp.Any],
+    infra: tp.Any,
     experiments_per_job: int | tp.Literal["all"],
     expected_sizes: list[int],
     n_jobs: int,
@@ -144,7 +147,7 @@ def test_pack_groups_and_runs(
     ],
 )
 def test_pack_validates_arguments(
-    infra: dict[str, tp.Any],
+    infra: tp.Any,
     kwargs: dict[str, tp.Any],
     match: str,
 ) -> None:
@@ -160,8 +163,8 @@ def test_pack_returns_empty_for_empty_input() -> None:
     assert pack_experiments_for_submission([]) == []
 
 
-def test_pack_skips_all_read_only(infra: dict[str, tp.Any]) -> None:
-    read_only = {**infra, "mode": "read-only"}
+def test_pack_skips_all_read_only(infra: tp.Any) -> None:
+    read_only: tp.Any = {**infra, "mode": "read-only"}
     experiments = [ValueExperiment(value=i, infra=read_only) for i in range(3)]
     assert pack_experiments_for_submission(experiments) == []
 
@@ -171,7 +174,7 @@ def test_pack_skips_all_read_only(infra: dict[str, tp.Any]) -> None:
 
 @pytest.mark.parametrize("experiments_per_job", [1, 2, 3, "all"])
 def test_pack_uid_order_independent(
-    infra: dict[str, tp.Any],
+    infra: tp.Any,
     experiments_per_job: int | tp.Literal["all"],
 ) -> None:
     experiments = [ValueExperiment(value=i, infra=infra) for i in range(4)]
@@ -188,9 +191,7 @@ def test_pack_uid_order_independent(
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
-def test_packed_experiment_propagates_errors(
-    infra: dict[str, tp.Any], n_jobs: int
-) -> None:
+def test_packed_experiment_propagates_errors(infra: tp.Any, n_jobs: int) -> None:
     failing = [FailingExperiment(value=i, infra=infra) for i in range(2)]
     packed = pack_experiments_for_submission(failing, experiments_per_job="all")
     assert len(packed) == 1
@@ -202,9 +203,7 @@ def test_packed_experiment_propagates_errors(
 
 
 @pytest.mark.parametrize("n_jobs", [0, -1])
-def test_packed_experiment_rejects_bad_n_jobs(
-    infra: dict[str, tp.Any], n_jobs: int
-) -> None:
+def test_packed_experiment_rejects_bad_n_jobs(infra: tp.Any, n_jobs: int) -> None:
     exp = ValueExperiment(value=0, infra=infra)
     with pytest.raises(ValidationError):
         PackedExperiment(experiments=[exp], n_jobs=n_jobs)
