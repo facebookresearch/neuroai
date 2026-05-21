@@ -43,18 +43,32 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_experiments_per_job(value: str) -> int | tp.Literal["all"]:
+    """argparse type converter for ``--experiments-per-job``.
+
+    Accepts:
+    - the literal string ``"all"`` — pack every pending experiment into
+      a single scheduler job;
+    - a positive integer ``N`` — pack at most ``N`` experiments per
+      scheduler job.
+
+    Examples::
+
+        --experiments-per-job 8     # 8 experiments per job
+        --experiments-per-job all   # one job covering all pending experiments
+
+    Raises :class:`argparse.ArgumentTypeError` for any other input so the
+    CLI prints a friendly error instead of a Python traceback.
+    """
     if value == "all":
         return "all"
     try:
         v = int(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
-            f"experiments-per-job must be an integer >= 1 or 'all'; got {value!r}"
+            f"--experiments-per-job expected a positive integer or 'all', got {value!r}."
         ) from exc
     if v < 1:
-        raise argparse.ArgumentTypeError(
-            "experiments-per-job must be >= 1 or 'all'."
-        )
+        raise argparse.ArgumentTypeError(f"--experiments-per-job must be >= 1, got {v}.")
     return v
 
 

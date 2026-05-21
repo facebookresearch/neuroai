@@ -19,7 +19,6 @@ from .packing import (
     pack_experiments_for_submission,
 )
 
-
 # ---- module-level helpers (must be module-level so spawn workers can pickle) -
 
 
@@ -51,9 +50,7 @@ def infra(tmp_path: Path) -> dict[str, tp.Any]:
 def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
     cfg = packed.infra.model_dump(mode="python")
     cfg["cluster"] = None
-    return type(packed)(
-        experiments=packed.experiments, infra=cfg, n_jobs=n_jobs
-    ).run()
+    return type(packed)(experiments=packed.experiments, infra=cfg, n_jobs=n_jobs).run()
 
 
 # ---- _should_submit_experiment truth table ---------------------------------
@@ -63,19 +60,19 @@ def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
     ("mode", "status", "expected"),
     [
         ("read-only", "not submitted", False),
-        ("read-only", "completed",     False),
-        ("read-only", "failed",        False),
-        ("force",     "not submitted", True),
-        ("force",     "completed",     True),
-        ("force",     "running",       True),
-        ("cached",    "not submitted", True),
-        ("cached",    "completed",     False),
-        ("cached",    "running",       False),
-        ("cached",    "failed",        False),
-        ("retry",     "not submitted", True),
-        ("retry",     "failed",        True),
-        ("retry",     "completed",     False),
-        ("retry",     "running",       False),
+        ("read-only", "completed", False),
+        ("read-only", "failed", False),
+        ("force", "not submitted", True),
+        ("force", "completed", True),
+        ("force", "running", True),
+        ("cached", "not submitted", True),
+        ("cached", "completed", False),
+        ("cached", "running", False),
+        ("cached", "failed", False),
+        ("retry", "not submitted", True),
+        ("retry", "failed", True),
+        ("retry", "completed", False),
+        ("retry", "running", False),
     ],
 )
 def test_should_submit_experiment(mode: str, status: str, expected: bool) -> None:
@@ -99,11 +96,11 @@ def test_should_submit_experiment(mode: str, status: str, expected: bool) -> Non
 @pytest.mark.parametrize(
     ("experiments_per_job", "expected_sizes"),
     [
-        (1,     [1, 1, 1, 1, 1]),
-        (2,     [2, 2, 1]),
-        (3,     [3, 2]),
-        (5,     [5]),
-        (10,    [5]),
+        (1, [1, 1, 1, 1, 1]),
+        (2, [2, 2, 1]),
+        (3, [3, 2]),
+        (5, [5]),
+        (10, [5]),
         ("all", [5]),
     ],
 )
@@ -121,18 +118,14 @@ def test_pack_groups_and_runs(
 
     assert [len(job.experiments) for job in packed] == expected_sizes
     assert len({job.infra.uid() for job in packed}) == len(packed)
-    assert all(
-        exp.infra.cluster is None for job in packed for exp in job.experiments
-    )
+    assert all(exp.infra.cluster is None for job in packed for exp in job.experiments)
 
     expected_values = [
         exp.value for exp in sorted(experiments, key=lambda e: e.infra.uid())
     ]
     cursor = 0
     for job, size in zip(packed, expected_sizes):
-        assert _run_locally(job, n_jobs=n_jobs) == expected_values[
-            cursor : cursor + size
-        ]
+        assert _run_locally(job, n_jobs=n_jobs) == expected_values[cursor : cursor + size]
         cursor += size
 
 
@@ -142,11 +135,11 @@ def test_pack_groups_and_runs(
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"experiments_per_job": 0},       r"got 0"),
-        ({"experiments_per_job": -2},      r"got -2"),
-        ({"experiments_per_job": "ALL"},   r"got 'ALL'"),
+        ({"experiments_per_job": 0}, r"got 0"),
+        ({"experiments_per_job": -2}, r"got -2"),
+        ({"experiments_per_job": "ALL"}, r"got 'ALL'"),
         ({"experiments_per_job": "every"}, r"got 'every'"),
-        ({"experiments_per_job": 1, "n_jobs": 0},  r"n_jobs must be >= 1"),
+        ({"experiments_per_job": 1, "n_jobs": 0}, r"n_jobs must be >= 1"),
         ({"experiments_per_job": 1, "n_jobs": -3}, r"n_jobs must be >= 1"),
     ],
 )

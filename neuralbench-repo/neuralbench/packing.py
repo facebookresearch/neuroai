@@ -86,12 +86,10 @@ def pack_experiments_for_submission(
     pending experiment.
     """
     if experiments_per_job != "all" and (
-        not isinstance(experiments_per_job, int)
-        or experiments_per_job < 1
+        not isinstance(experiments_per_job, int) or experiments_per_job < 1
     ):
         raise ValueError(
-            f"experiments_per_job must be 'all' or int >= 1; "
-            f"got {experiments_per_job!r}."
+            f"experiments_per_job must be 'all' or int >= 1; got {experiments_per_job!r}."
         )
     if n_jobs < 1:
         raise ValueError("n_jobs must be >= 1.")
@@ -99,9 +97,7 @@ def pack_experiments_for_submission(
     # Materialize uid once per experiment, then sort so the packed cache key
     # is independent of caller iteration order.
     keyed = [
-        (exp.infra.uid(), exp)
-        for exp in experiments
-        if _should_submit_experiment(exp)
+        (exp.infra.uid(), exp) for exp in experiments if _should_submit_experiment(exp)
     ]
     if not keyed:
         return []
