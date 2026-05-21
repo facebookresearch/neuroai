@@ -34,6 +34,26 @@ def test_downstream_wrapper():
     assert out.shape == (B, Fp)
 
 
+def test_downstream_wrapper_probe_layer():
+    B, F, Fp = 8, 10, 3
+    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
+    dummy_batch = {"input": torch.Tensor(B, F)}
+    wrapped = DownstreamWrapper(probe_layer="0").build(model, dummy_batch, Fp)
+
+    # Probe is sized from layer "0"'s output (16) — not the final layer (4).
+    assert wrapped.probe.in_features == 16
+    out = wrapped(**dummy_batch)
+    assert out.shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_invalid():
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    with pytest.raises(AttributeError):
+        DownstreamWrapper(probe_layer="no_such_layer").build(
+            model, {"input": torch.Tensor(2, 10)}, 3
+        )
+
+
 class LinearOutDict(nn.Module):
     def __init__(self, n_inputs: int, n_outputs: int):
         super().__init__()

@@ -388,6 +388,11 @@ class DownstreamWrapper(pydantic.BaseModel):
         has a linear layer of the right output size.
         ``"linear"`` adds a single linear layer.
         An ``Mlp`` instance adds a multi-layer perceptron with specified configuration.
+    probe_layer : str | None, optional
+        Dotted submodule name (from ``model.named_modules()``) where a forward
+        hook taps activations for probing.  ``None`` (default) probes the final
+        model output.  Set ``model_output_key=None`` when tapping an intermediate
+        layer that returns a raw tensor.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -399,6 +404,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     strict_matching: bool = True
     aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
     probe_config: Mlp | tp.Literal["linear"] | None = "linear"
+    probe_layer: str | None = None
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -458,9 +464,29 @@ class DownstreamWrapper(pydantic.BaseModel):
                 else:
                     x_adapted = channel_adapter(x)
                 model_batch = {input_key: x_adapted}
+            else:
+                model_batch = dummy_batch
+            if self.probe_layer is None:
                 orig_output = model(**model_batch)
             else:
-                orig_output = model(**dummy_batch)
+                # Single-slot buffer the hook appends into; the lambda cannot
+                # rebind a non-local, so it mutates a list instead.  Same idiom:
+                # https://github.com/meta-pytorch/captum/blob/36ad45af252049df5d8a74cfc3db25e62d0b344b/captum/_utils/gradient.py#L331
+                probed_activation: list[torch.Tensor] = []
+                handle = model.get_submodule(self.probe_layer).register_forward_hook(
+                    lambda _m, _i, out: probed_activation.append(out)
+                )
+                try:
+                    model(**model_batch)
+                finally:
+                    handle.remove()
+                if not probed_activation:
+                    raise RuntimeError(
+                        f"probe_layer={self.probe_layer!r} hook did not fire during "
+                        f"the dummy forward; the submodule is unreachable from this input."
+                    )
+                # Last fire wins when the submodule is reused (e.g. recurrent).
+                orig_output = probed_activation[-1]
             if self.model_output_key is not None:
                 orig_output = orig_output[self.model_output_key]
             model.train()
@@ -478,6 +504,7 @@ class DownstreamWrapper(pydantic.BaseModel):
             strict_matching=self.strict_matching,
             aggregation=self.aggregation,
             probe_config=self.probe_config,
+            probe_layer=self.probe_layer,
         )
 
         # Sanity check (wrapper handles preprocessing internally)
@@ -508,6 +535,7 @@ class DownstreamWrapperModel(nn.Module):
         strict_matching: bool = True,
         aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten",
         probe_config: Mlp | tp.Literal["linear"] | None = None,
+        probe_layer: str | None = None,
     ):
         super().__init__()
 
@@ -526,6 +554,16 @@ class DownstreamWrapperModel(nn.Module):
         self._apply_freeze(layers_to_freeze, layers_to_unfreeze, strict_matching)
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
         self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
+
+        # Persistent hook + single-slot buffer for intermediate-layer probing.
+        self._probed_activation: list[torch.Tensor] = []
+        self._probe_handle: torch.utils.hooks.RemovableHandle | None = None
+        if probe_layer is not None:
+            self._probe_handle = self.wrapped_model.get_submodule(
+                probe_layer
+            ).register_forward_hook(
+                lambda _m, _i, out: self._probed_activation.append(out)
+            )
 
     def _apply_freeze(
         self,
@@ -651,7 +689,19 @@ class DownstreamWrapperModel(nn.Module):
         if not self._inner_accepts_var_kwargs:
             kwargs = {k: v for k, v in kwargs.items() if k in self._inner_param_names}
 
+        # Clear before the forward so an activation captured by a previous
+        # (possibly failed) call cannot leak into this one; clear again after
+        # reading so we don't hold the autograd graph between steps.
+        self._probed_activation.clear()
         out = self.wrapped_model(*args, **kwargs)
+        if self._probe_handle is not None:
+            if not self._probed_activation:
+                raise RuntimeError(
+                    "probe_layer hook did not fire during forward; the configured "
+                    "submodule was not executed by this forward pass."
+                )
+            out = self._probed_activation[-1]
+            self._probed_activation.clear()
         if self.model_output_key is not None:
             out = out[self.model_output_key]
         out = self.aggregation(out)
