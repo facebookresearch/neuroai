@@ -217,29 +217,28 @@ def test_aggreg(aggreg: tp.Literal["first", "trigger"], expected: list[float]) -
 def test_single_aggregation_scoped_to_window() -> None:
     """``aggregation='single'`` counts events inside the segment window,
     not across the whole input (typical when the caller passes a full
-    recording's DataFrame rather than a segment-scoped subset)."""
+    recording's DataFrame rather than a segment-scoped subset).  Only
+    *overlapping* events inside the window are ambiguous."""
     feat = Time(frequency=3, aggregation="single")
     events = [
-        etypes.Image(start=s, duration=0.5, timeline="stuff", filepath=__file__)
-        for s in [0.0, 2.0, 4.0]
+        # Two overlapping events around [0.5, 2.0].
+        etypes.Image(start=0.5, duration=1.0, timeline="stuff", filepath=__file__),
+        etypes.Image(start=1.0, duration=1.0, timeline="stuff", filepath=__file__),
+        # Isolated event far away.
+        etypes.Image(start=4.0, duration=0.5, timeline="stuff", filepath=__file__),
     ]
-    # One overlaps [2, 3): picked, no raise.
-    feat(events, start=2.0, duration=1.0)
-    # Two overlap [0, 3): still ambiguous.
-    with pytest.raises(ValueError, match="expected only one"):
+    # Only the isolated event overlaps [3.5, 4.5): picked, no raise.
+    feat(events, start=3.5, duration=1.0)
+    # Two *overlapping* events inside [0, 3): ambiguous, raise.
+    with pytest.raises(ValueError, match="overlapping events"):
         feat(events, start=0.0, duration=3.0)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "aggregation='single' currently raises whenever >1 events overlap the "
-        "segment window, even when the events themselves do not overlap each other."
-    ),
-)
 def test_single_aggregation_non_overlapping_events() -> None:
-    """A dynamic extractor with ``aggregation='single'`` should accept a segment
-    that contains two events whose time spans do not overlap each other."""
+    """A dynamic extractor with ``aggregation='single'`` accepts a segment
+    that contains two events whose time spans do not overlap each other:
+    the events are placed in their disjoint time slots via the underlying
+    ``sum`` code path."""
     feat = Time(frequency=10, aggregation="single")
     events = [
         etypes.Image(start=0.0, duration=0.3, timeline="stuff", filepath=__file__),
@@ -248,6 +247,10 @@ def test_single_aggregation_non_overlapping_events() -> None:
     out = feat(events, start=0.0, duration=1.0)
     # frequency=10 Hz over a 1 s window -> 10 time samples.
     assert out.shape[-1] == 10
+    # Output should match calling 'sum' on the same events, since 'single'
+    # with non-overlapping events delegates to the same code path.
+    feat_sum = Time(frequency=10, aggregation="sum")
+    np.testing.assert_array_almost_equal(out, feat_sum(events, start=0.0, duration=1.0))
 
 
 def test_trigger_outside_window() -> None:

@@ -55,7 +55,10 @@ class BaseExtractor(base._Module, base.NamedModel):
         Strategy for combining values when multiple matching events fall
         inside the same segment:
 
-        * ``"single"`` — exactly one event expected (raises otherwise).
+        * ``"single"`` — one event expected, or several events whose time
+          spans do not overlap each other (raises otherwise).  Non-overlapping
+          events are combined into the same tensor via the ``"sum"`` code
+          path, which is unambiguous since they occupy disjoint time slots.
         * ``"sum"`` / ``"mean"`` — element-wise sum or mean.
         * ``"first"`` / ``"middle"`` / ``"last"`` — pick one event.
         * ``"cat"`` — concatenate along the first dimension.
@@ -332,14 +335,29 @@ class BaseExtractor(base._Module, base.NamedModel):
 
         if self.aggregation in ("first", "trigger", "single"):
             if self.aggregation == "single" and len(ns_events) > 1:
-                msg = (
-                    f"Found {len(ns_events)} events in the segment but expected only one "
+                # Multiple events in the window are allowed under 'single'
+                # only when they do not mutually overlap: their data then
+                # lives in disjoint time slots and combines unambiguously
+                # via the 'sum' code path in `_tarrays_to_tensor`.
+                intervals = sorted(
+                    (float(e.start), float(e.start) + float(e.duration))
+                    for e in ns_events
                 )
-                msg += f"since {self.name}.aggregation='single'. "
-                msg += "Update it to sum/average/first/trigger/... ?\n"
-                msg += f"{ns_events=}"
-                raise ValueError(msg)
-            ns_events = ns_events[:1]
+                any_overlap = any(
+                    nxt_start < prev_stop
+                    for (_, prev_stop), (nxt_start, _) in zip(intervals, intervals[1:])
+                )
+                if any_overlap:
+                    msg = (
+                        f"Found {len(ns_events)} overlapping events in the segment "
+                        f"but expected one or several non-overlapping events "
+                        f"since {self.name}.aggregation='single'. "
+                        "Update it to sum/average/first/trigger/... ?\n"
+                        f"{ns_events=}"
+                    )
+                    raise ValueError(msg)
+            else:
+                ns_events = ns_events[:1]
         elif self.aggregation == "last":
             ns_events = ns_events[-1:]
         elif self.aggregation == "middle":
@@ -370,7 +388,12 @@ class BaseExtractor(base._Module, base.NamedModel):
             tarrays[0].start = start  # fake an overlap as start time does not matter
 
         match aggregation:
-            case "trigger" | "single" | "first" | "middle" | "last":
+            case "single":
+                # `_get_relevant_events` already ensured the events do not
+                # mutually overlap, so summing places each event in its own
+                # disjoint time slot of the segment.
+                aggregation = "sum"
+            case "trigger" | "first" | "middle" | "last":
                 aggregation = "sum"
                 # expect a single Event
                 if not len(tarrays) == 1:
