@@ -6,6 +6,7 @@
 
 import typing as tp
 from pathlib import Path
+from unittest.mock import Mock
 
 import exca
 import pytest
@@ -79,17 +80,10 @@ def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
     ],
 )
 def test_should_submit_experiment(mode: str, status: str, expected: bool) -> None:
-    class _Infra:
-        def __init__(self) -> None:
-            self.mode = mode
-
-        def status(self) -> str:
-            return status
-
-    class _Exp:
-        infra = _Infra()
-
-    assert _should_submit_experiment(_Exp()) is expected  # type: ignore[arg-type]
+    exp = Mock()
+    exp.infra.mode = mode
+    exp.infra.status.return_value = status
+    assert _should_submit_experiment(exp) is expected
 
 
 # ---- grouping + running, serial and parallel -------------------------------

@@ -227,24 +227,17 @@ def plot(
         label=f"short: {n_exp_short}×{short_work:.0f}s per exp.",
     )
 
-    # Annotate endpoints on each curve.
+    # Annotate left & right endpoints of each curve.
     for ys, color, dy in ((t_long, C_LONG, 8), (t_short, C_SHORT, -14)):
-        ax_t.annotate(
-            f"{ys[0]:.1f}s",
-            xy=(xs[0], ys[0]),
-            xytext=(8, dy),
-            textcoords="offset points",
-            color=color,
-            fontweight="bold",
-        )
-        ax_t.annotate(
-            f"{ys[-1]:.1f}s",
-            xy=(xs[-1], ys[-1]),
-            xytext=(8, dy),
-            textcoords="offset points",
-            color=color,
-            fontweight="bold",
-        )
+        for idx in (0, -1):
+            ax_t.annotate(
+                f"{ys[idx]:.1f}s",
+                xy=(xs[idx], ys[idx]),
+                xytext=(8, dy),
+                textcoords="offset points",
+                color=color,
+                fontweight="bold",
+            )
 
     ax_t.set_xscale("log", base=2)
     ax_t.set_yscale("log")
@@ -317,21 +310,16 @@ def main() -> int:
     n_jobs_grid = [1, 2, 4, 8]
     repeats = 2
 
-    regimes: dict[str, list[dict[str, float]]] = {}
-    regimes["short"] = sweep(
-        "short",
-        work_seconds=2.0,
-        n_experiments=8,
-        n_jobs_grid=n_jobs_grid,
-        repeats=repeats,
-    )
-    regimes["long"] = sweep(
-        "long",
-        work_seconds=10.0,
-        n_experiments=8,
-        n_jobs_grid=n_jobs_grid,
-        repeats=repeats,
-    )
+    regimes: dict[str, list[dict[str, float]]] = {
+        name: sweep(
+            name,
+            work_seconds=work_s,
+            n_experiments=8,
+            n_jobs_grid=n_jobs_grid,
+            repeats=repeats,
+        )
+        for name, work_s in [("short", 2.0), ("long", 10.0)]
+    }
 
     # --- csv ---
     out_csv = Path("pack_scaling.csv")

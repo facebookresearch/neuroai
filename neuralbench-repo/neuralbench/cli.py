@@ -127,6 +127,7 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+
     Returns
     -------
     list of dict

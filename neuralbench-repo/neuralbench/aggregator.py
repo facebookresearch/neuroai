@@ -94,6 +94,13 @@ class BenchmarkAggregator(ns.BaseModel):
                 )
                 return
 
+        if self.experiments_per_job == 1 and self.local_workers_per_job > 1:
+            LOGGER.warning(
+                "local_workers_per_job=%d is ignored because "
+                "experiments_per_job=1 (no in-job batching).",
+                self.local_workers_per_job,
+            )
+
         if self.debug:
             for experiment in self.experiments:
                 experiment.run()

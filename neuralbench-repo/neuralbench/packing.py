@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import multiprocessing
 import typing as tp
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 import exca
 from pydantic import Field, SerializeAsAny
@@ -26,6 +26,11 @@ class PackedExperiment(BaseModel):
     excluded so the cache key is insensitive to local-parallelism choices.
     ``SerializeAsAny`` keeps subclass-specific fields in the UID. Use
     :func:`pack_experiments_for_submission` to build instances.
+
+    Not using :class:`exca.MapInfra` with ``cluster="processpool"`` here: that
+    path drains in-flight tasks on failure, which delays error reporting by
+    the length of the longest running experiment. We want first-failure
+    cancellation, hence the manual pool + ``as_completed`` gather below.
     """
 
     experiments: list[SerializeAsAny[BaseExperiment]] = Field(min_length=1)
@@ -45,17 +50,28 @@ class PackedExperiment(BaseModel):
 
         max_workers = min(self.n_jobs, len(self.experiments))
         ctx = multiprocessing.get_context("spawn")  # CUDA-safe
-        # Manual lifecycle so we can cancel pending futures on the first
-        # failure rather than wait for the longest in-flight task to drain.
+        # Manual lifecycle + ``as_completed`` so the first child failure
+        # surfaces immediately and ``shutdown(cancel_futures=True)`` aborts
+        # whatever is still pending — instead of waiting for the slowest
+        # in-flight task to drain before reporting.
         pool = ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx)
         try:
-            futures = [pool.submit(exp.run) for exp in self.experiments]
-            return [f.result() for f in futures]
+            futures = {pool.submit(exp.run): i for i, exp in enumerate(self.experiments)}
+            results: list[tp.Any] = [None] * len(self.experiments)
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()  # raises on first failure
+            return results
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
 
 
 def _should_submit_experiment(experiment: BaseExperiment) -> bool:
+    """Whether an experiment needs (re-)submission.
+
+    Mirrors the status-and-mode filter that :meth:`exca.TaskInfra.job_array`
+    applies internally; kept inline so the pending set can be computed before
+    handing experiments to the scheduler.
+    """
     status = experiment.infra.status()
     mode = experiment.infra.mode
     if mode == "read-only":
@@ -85,35 +101,37 @@ def pack_experiments_for_submission(
     when ``> 1``). The scheduler-job resource budget comes from the first
     pending experiment.
     """
-    if experiments_per_job != "all" and (
-        not isinstance(experiments_per_job, int) or experiments_per_job < 1
-    ):
+    if isinstance(experiments_per_job, str):
+        if experiments_per_job != "all":
+            raise ValueError(
+                f"experiments_per_job must be 'all' or int >= 1; "
+                f"got {experiments_per_job!r}."
+            )
+    elif not isinstance(experiments_per_job, int) or experiments_per_job < 1:
         raise ValueError(
             f"experiments_per_job must be 'all' or int >= 1; got {experiments_per_job!r}."
         )
     if n_jobs < 1:
         raise ValueError("n_jobs must be >= 1.")
 
-    # Materialize uid once per experiment, then sort so the packed cache key
-    # is independent of caller iteration order.
-    keyed = [
-        (exp.infra.uid(), exp) for exp in experiments if _should_submit_experiment(exp)
-    ]
+    # ``_should_submit_experiment`` calls ``infra.status()``, which may hit
+    # the filesystem (uncached, NFS in the cluster case). Thread the check
+    # so a 5000-experiment grid doesn't pay 5000 × stat-latency in series.
+    n = len(experiments)
+    if n == 0:
+        return []
+    with ThreadPoolExecutor(max_workers=min(32, n)) as pool:
+        keep_flags = list(pool.map(_should_submit_experiment, experiments))
+
+    # Materialize uid once per kept experiment, then sort so the packed cache
+    # key is independent of caller iteration order.
+    keyed = [(exp.infra.uid(), exp) for exp, keep in zip(experiments, keep_flags) if keep]
     if not keyed:
         return []
     keyed.sort(key=lambda kv: kv[0])
     pending = [exp for _, exp in keyed]
 
-    # Typed as ``tp.Any`` because pydantic accepts the sparse dict at runtime
-    # (auto-builds a ``TaskInfra``) but the pydantic-mypy plugin enforces the
-    # declared ``TaskInfra`` type strictly.
-    scheduler_infra: tp.Any = pending[0].infra.model_dump(
-        mode="python",
-        exclude_computed_fields=True,
-        exclude_defaults=True,
-        exclude_unset=True,
-    )
-    scheduler_infra["mode"] = "force"
+    scheduler_infra = pending[0].infra.model_copy(update={"mode": "force"})
 
     step = len(pending) if experiments_per_job == "all" else experiments_per_job
     return [
