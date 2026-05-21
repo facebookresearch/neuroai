@@ -301,7 +301,7 @@ class HuggingFaceImage(BaseImage):
                 f"Model {self.model_name!r} returned hidden_states=None. "
                 "This is a known regression in transformers>=5 where some "
                 "encoders (CLIP, SAM, ViT) no longer collect intermediate "
-                "hidden states. See RELEASE_PLAN.md for the tracking item."
+                "hidden states."
             )
         return states  # type: ignore
 

@@ -461,15 +461,15 @@ Each study provides:
 
 ----
 
-Browse All Datasets
--------------------
+Explore Studies
+---------------
 
-Filter and sort all available datasets by modality, subjects, and hours:
+Explore declared ``StudyInfo`` metadata by recording volume and event coverage:
 
 .. raw:: html
 
    <div style="text-align:center;margin:1rem 0 1.5rem;">
-     <a href="explore_datasets.html" class="help-button"><i class="fas fa-table"></i>&nbsp; Browse All Datasets</a>
+     <a href="explore_studies.html" class="help-button"><i class="fas fa-table"></i>&nbsp; Explore Studies</a>
    </div>
 
 Sample datasets are available for immediate use — no large download required:
@@ -495,7 +495,7 @@ citation (BibTeX at the bottom).
 
    install
    Tutorials <auto_examples/index>
-   explore_datasets
+   Explore Studies <explore_studies>
    samples
    Contributing: New Studies <contributing>
    API <reference/reference>

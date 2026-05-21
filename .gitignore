@@ -87,6 +87,7 @@ docs/auto_pyvista_examples/
 docs/gen_modules/
 docs/sg_execution_times.rst
 docs/**/reference/generated/
+docs/neuralfetch/_explore_studies.html
 
 # PyBuilder
 target/
