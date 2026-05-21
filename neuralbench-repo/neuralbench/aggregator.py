@@ -53,8 +53,8 @@ class BenchmarkAggregator(ns.BaseModel):
     max_workers: int = 256
     collect_max_workers: int = 32
     debug: bool = False
-    experiments_per_job: int | tp.Literal["all"] = 1
-    local_workers_per_job: int = 1
+    experiments_per_job: tp.Annotated[int, Field(ge=1)] | tp.Literal["all"] = 1
+    local_workers_per_job: int = Field(default=1, ge=1)
 
     output_dir: str = Field(default_factory=_default_output_dir)
 

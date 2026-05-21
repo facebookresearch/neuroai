@@ -126,30 +126,6 @@ def test_pack_groups_and_runs(
         cursor += size
 
 
-# ---- validation ------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        ({"experiments_per_job": 0}, r"got 0"),
-        ({"experiments_per_job": -2}, r"got -2"),
-        ({"experiments_per_job": "ALL"}, r"got 'ALL'"),
-        ({"experiments_per_job": "every"}, r"got 'every'"),
-        ({"experiments_per_job": 1, "n_jobs": 0}, r"n_jobs must be >= 1"),
-        ({"experiments_per_job": 1, "n_jobs": -3}, r"n_jobs must be >= 1"),
-    ],
-)
-def test_pack_validates_arguments(
-    infra: tp.Any,
-    kwargs: dict[str, tp.Any],
-    match: str,
-) -> None:
-    experiment = ValueExperiment(value=1, infra=infra)
-    with pytest.raises(ValueError, match=match):
-        pack_experiments_for_submission([experiment], **kwargs)
-
-
 # ---- skip / empty ----------------------------------------------------------
 
 

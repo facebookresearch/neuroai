@@ -101,19 +101,6 @@ def pack_experiments_for_submission(
     when ``> 1``). The scheduler-job resource budget comes from the first
     pending experiment.
     """
-    if isinstance(experiments_per_job, str):
-        if experiments_per_job != "all":
-            raise ValueError(
-                f"experiments_per_job must be 'all' or int >= 1; "
-                f"got {experiments_per_job!r}."
-            )
-    elif not isinstance(experiments_per_job, int) or experiments_per_job < 1:
-        raise ValueError(
-            f"experiments_per_job must be 'all' or int >= 1; got {experiments_per_job!r}."
-        )
-    if n_jobs < 1:
-        raise ValueError("n_jobs must be >= 1.")
-
     # ``_should_submit_experiment`` calls ``infra.status()``, which may hit
     # the filesystem (uncached, NFS in the cluster case). Thread the check
     # so a 5000-experiment grid doesn't pay 5000 × stat-latency in series.

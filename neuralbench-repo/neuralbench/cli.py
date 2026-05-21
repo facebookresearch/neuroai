@@ -42,36 +42,6 @@ from neuralbench.registry import (
 logger = logging.getLogger(__name__)
 
 
-def _parse_experiments_per_job(value: str) -> int | tp.Literal["all"]:
-    """argparse type converter for ``--experiments-per-job``.
-
-    Accepts:
-    - the literal string ``"all"`` — pack every pending experiment into
-      a single scheduler job;
-    - a positive integer ``N`` — pack at most ``N`` experiments per
-      scheduler job.
-
-    Examples::
-
-        --experiments-per-job 8     # 8 experiments per job
-        --experiments-per-job all   # one job covering all pending experiments
-
-    Raises :class:`argparse.ArgumentTypeError` for any other input so the
-    CLI prints a friendly error instead of a Python traceback.
-    """
-    if value == "all":
-        return "all"
-    try:
-        v = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            f"--experiments-per-job expected a positive integer or 'all', got {value!r}."
-        ) from exc
-    if v < 1:
-        raise argparse.ArgumentTypeError(f"--experiments-per-job must be >= 1, got {v}.")
-    return v
-
-
 def run_benchmark(
     device: str,
     task: str | list[str],
@@ -338,7 +308,6 @@ def run_benchmark_cli() -> None:
     )
     parser.add_argument(
         "--experiments-per-job",
-        type=_parse_experiments_per_job,
         default=1,
         help="Experiments per scheduler job; pass 'all' to pack every pending experiment into one job.",
     )
