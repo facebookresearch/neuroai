@@ -237,8 +237,22 @@ def test_single_aggregation_raises_on_overlapping_events() -> None:
         etypes.Image(start=0.5, duration=1.0, timeline="stuff", filepath=__file__),
         etypes.Image(start=1.0, duration=1.0, timeline="stuff", filepath=__file__),
     ]
-    with pytest.raises(ValueError, match="overlapping events"):
+    with pytest.raises(ValueError, match="events overlap"):
         feat(events, start=0.0, duration=2.0)
+
+
+def test_single_aggregation_raises_on_sample_space_collision() -> None:
+    """Events disjoint in continuous time can still quantize to the same
+    sample slot at low frequencies; ``aggregation='single'`` rejects that
+    case rather than silently double-counting at the boundary."""
+    events = [
+        etypes.Image(start=0.4, duration=0.3, timeline="stuff", filepath=__file__),
+        etypes.Image(start=0.7, duration=0.3, timeline="stuff", filepath=__file__),
+    ]
+    with pytest.raises(ValueError, match="events overlap at 2"):
+        Time(frequency=2, aggregation="single")(events, start=0.0, duration=1.0)
+    # 'mean' handles the collision via _overlapping_data_count.
+    Time(frequency=2, aggregation="mean")(events, start=0.0, duration=1.0)
 
 
 def test_single_aggregation_non_overlapping_events() -> None:

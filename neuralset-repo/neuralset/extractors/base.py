@@ -331,14 +331,30 @@ class BaseExtractor(base._Module, base.NamedModel):
             ns_events = in_window or ns_events
 
         if self.aggregation == "single" and len(ns_events) > 1:
-            # Multiple events allowed only if they do not mutually overlap:
-            # they then occupy disjoint slots and combine unambiguously
-            # via the 'sum' code path in `_tarrays_to_tensor`.
-            evs = sorted(ns_events, key=lambda e: e.start)
-            if any(b.start < a.start + a.duration for a, b in zip(evs, evs[1:])):
+            # For dynamic extractors compare sample-space slots (matching what
+            # TimedArray.__iadd__ writes into); for static or unresolved 'native',
+            # fall back to continuous-time intervals.
+            freq = (
+                self._effective_frequency
+                if self.frequency == "native"
+                else self.frequency
+            )
+            to_ind = Frequency(freq).to_ind if freq else (lambda x: x)
+            seg_stop = start + duration
+            ranges = []
+            for e in ns_events:
+                o_start = max(e.start, start)
+                o_stop = min(e.start + e.duration, seg_stop)
+                lo = to_ind(o_start - start)
+                hi = lo + to_ind(o_stop - o_start)
+                if hi > lo:
+                    ranges.append((lo, hi))
+            ranges.sort()
+            if any(b_lo < a_hi for (_, a_hi), (b_lo, _) in zip(ranges, ranges[1:])):
+                unit = f"{freq} Hz" if freq else "time"
                 raise ValueError(
-                    f"{self.name}.aggregation='single' but found "
-                    f"{len(ns_events)} overlapping events: {ns_events}"
+                    f"{self.name}.aggregation='single' but {len(ns_events)} events "
+                    f"overlap at {unit}: {ns_events}. Use aggregation='mean' instead."
                 )
         elif self.aggregation in ("first", "trigger", "single"):
             ns_events = ns_events[:1]
