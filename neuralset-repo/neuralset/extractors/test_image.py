@@ -176,9 +176,12 @@ def test_image_accelerate_device_resolution() -> None:
 @pytest.mark.skipif(
     torch.cuda.device_count() < 2, reason="accelerate dispatch requires >=2 GPUs"
 )
-def test_image_accelerate_end_to_end(cat_event: etypes.Image) -> None:
+def test_image_accelerate_end_to_end(cat_event: etypes.Image, tmp_path: Path) -> None:
+    infra: tp.Any = dict(folder=tmp_path)
     extractor = ns.extractors.HuggingFaceImage(
-        device="accelerate", model_name="facebook/dinov2-small-imagenet1k-1-layer"
+        device="accelerate",
+        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        infra=infra,
     )
     out = extractor.get_static(cat_event)
     assert out.ndim == 1 and out.numel() > 0
