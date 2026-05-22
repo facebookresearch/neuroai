@@ -16,6 +16,7 @@ runtime wrapper they produce (``DownstreamWrapperModel``).
 import inspect
 import logging
 import typing as tp
+import weakref
 
 import pydantic
 import torch
@@ -375,10 +376,12 @@ class DownstreamWrapper(pydantic.BaseModel):
         If True, when freezing/unfreezing layers, only the first part of the layer name
         (before the first dot) must match exactly. If False, any part of the layer name
         can match the patterns. Default is True.
-    aggregation : {"flatten", "mean", "first"} or int, optional
+    aggregation : {"flatten", "mean", "mean_tokens", "first"} or int, optional
         Method to aggregate the model output.
         ``"flatten"`` flattens all dimensions except batch;
         ``"mean"`` averages over the temporal/sequence dimension (dim=1);
+        ``"mean_tokens"`` averages over dim=0 (for sequence-first ``(T, B, D)``
+        transformer outputs, ``batch_first=False``);
         ``"first"`` selects only the first timestep/token;
         an ``int`` splits into n groups, averages each group, then concatenates;
         ``None`` performs no aggregation.
@@ -402,7 +405,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     layers_to_freeze: list[str] | None = None
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
     strict_matching: bool = True
-    aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
+    aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None = "flatten"
     probe_config: Mlp | tp.Literal["linear"] | None = "linear"
     probe_layer: str | None = None
 
@@ -469,11 +472,26 @@ class DownstreamWrapper(pydantic.BaseModel):
             if self.probe_layer is None:
                 orig_output = model(**model_batch)
             else:
+                if self.model_output_key is not None:
+                    raise ValueError(
+                        f"probe_layer={self.probe_layer!r} requires "
+                        f"model_output_key=None (intermediate captures are tensors, "
+                        f"not dicts); got {self.model_output_key!r}."
+                    )
+                try:
+                    submodule = model.get_submodule(self.probe_layer)
+                except AttributeError as exc:
+                    valid = [n for n, _ in model.named_modules() if n]
+                    raise AttributeError(
+                        f"probe_layer={self.probe_layer!r} not in "
+                        f"{type(model).__name__} ({len(valid)} submodules; "
+                        f"e.g. {valid[:3]})"
+                    ) from exc
                 # Single-slot buffer the hook appends into; the lambda cannot
                 # rebind a non-local, so it mutates a list instead.  Same idiom:
                 # https://github.com/meta-pytorch/captum/blob/36ad45af252049df5d8a74cfc3db25e62d0b344b/captum/_utils/gradient.py#L331
                 probed_activation: list[torch.Tensor] = []
-                handle = model.get_submodule(self.probe_layer).register_forward_hook(
+                handle = submodule.register_forward_hook(
                     lambda _m, _i, out: probed_activation.append(out)
                 )
                 try:
@@ -487,6 +505,33 @@ class DownstreamWrapper(pydantic.BaseModel):
                     )
                 # Last fire wins when the submodule is reused (e.g. recurrent).
                 orig_output = probed_activation[-1]
+                if not isinstance(orig_output, torch.Tensor):
+                    raise TypeError(
+                        f"probe_layer={self.probe_layer!r} returned "
+                        f"{type(orig_output).__name__}; only tensor-returning "
+                        f"submodules are supported (e.g. probe a parent of "
+                        f"nn.MultiheadAttention, not the MHA itself)."
+                    )
+                # Check aggregation matches the captured tensor's batch axis.
+                dummy_batch_size = next(iter(model_batch.values())).shape[0]
+                batch_axes = [
+                    i for i, s in enumerate(orig_output.shape) if s == dummy_batch_size
+                ]
+                seq_first = bool(batch_axes) and 0 not in batch_axes
+                batch_first = bool(batch_axes) and 0 in batch_axes
+                if seq_first and self.aggregation in ("flatten", "mean", "first"):
+                    raise ValueError(
+                        f"probe_layer={self.probe_layer!r} captured shape "
+                        f"{tuple(orig_output.shape)} with batch on dim {batch_axes[0]}; "
+                        f"aggregation={self.aggregation!r} expects batch-first. "
+                        f"Use aggregation='mean_tokens' for sequence-first."
+                    )
+                if batch_first and self.aggregation == "mean_tokens":
+                    raise ValueError(
+                        f"probe_layer={self.probe_layer!r} captured batch-first shape "
+                        f"{tuple(orig_output.shape)}; aggregation='mean_tokens' is "
+                        f"for sequence-first (T, B, D). Use 'mean' or 'flatten'."
+                    )
             if self.model_output_key is not None:
                 orig_output = orig_output[self.model_output_key]
             model.train()
@@ -533,7 +578,7 @@ class DownstreamWrapperModel(nn.Module):
         layers_to_freeze: list[str] | None = None,
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
-        aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten",
+        aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None = "flatten",
         probe_config: Mlp | tp.Literal["linear"] | None = None,
         probe_layer: str | None = None,
     ):
@@ -555,15 +600,23 @@ class DownstreamWrapperModel(nn.Module):
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
         self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
 
-        # Persistent hook + single-slot buffer for intermediate-layer probing.
+        # Hook -> weakref so the closure doesn't pin self alive; finalizer
+        # removes the hook when this wrapper is GC'd, so shared backbones
+        # don't accumulate stale hooks across folds.
         self._probed_activation: list[torch.Tensor] = []
         self._probe_handle: torch.utils.hooks.RemovableHandle | None = None
         if probe_layer is not None:
+            self_ref = weakref.ref(self)
+
+            def _capture(_m, _i, out, _ref=self_ref):
+                s = _ref()
+                if s is not None:
+                    s._probed_activation.append(out)
+
             self._probe_handle = self.wrapped_model.get_submodule(
                 probe_layer
-            ).register_forward_hook(
-                lambda _m, _i, out: self._probed_activation.append(out)
-            )
+            ).register_forward_hook(_capture)
+            weakref.finalize(self, self._probe_handle.remove)
 
     def _apply_freeze(
         self,
@@ -604,7 +657,7 @@ class DownstreamWrapperModel(nn.Module):
 
     def _build_aggregation(
         self,
-        aggregation: tp.Literal["flatten", "mean", "first"] | int | None,
+        aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None,
         brain_model_output_size: torch.Size,
     ) -> int:
         """Build the aggregation module and return the flattened input size for the probe."""
@@ -631,6 +684,17 @@ class DownstreamWrapperModel(nn.Module):
                     f"(got brain_model_output_size={brain_model_output_size})"
                 )
             self.aggregation = Mean(dim=dim)
+            return brain_model_output_size[-1]
+        elif aggregation == "mean_tokens":
+            # Sequence-first (T, B, D) -> mean over dim 0 (tokens) -> (B, D).
+            # ``brain_model_output_size`` is (B, D) since the wrapper strips T.
+            if len(brain_model_output_size) != 2:
+                raise ValueError(
+                    f"aggregation='mean_tokens' expects raw capture of shape "
+                    f"(T, B, D); got brain_model_output_size="
+                    f"{brain_model_output_size}. For batch-first use 'mean'."
+                )
+            self.aggregation = Mean(dim=0)
             return brain_model_output_size[-1]
         elif isinstance(aggregation, int):
             assert len(brain_model_output_size) == 2

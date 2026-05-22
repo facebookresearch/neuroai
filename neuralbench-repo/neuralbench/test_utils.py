@@ -48,10 +48,32 @@ def test_downstream_wrapper_probe_layer():
 
 def test_downstream_wrapper_probe_layer_invalid():
     model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
-    with pytest.raises(AttributeError):
+    with pytest.raises(AttributeError, match="not in Sequential"):
         DownstreamWrapper(probe_layer="no_such_layer").build(
             model, {"input": torch.Tensor(2, 10)}, 3
         )
+
+
+@pytest.mark.parametrize(
+    "kwargs, exc, match",
+    [
+        # model_output_key with probe_layer must error.
+        (dict(probe_layer="0", model_output_key="logits"), ValueError, "model_output_key"),
+        # mean_tokens on a batch-first (B, C, T) Conv1d capture must error.
+        (dict(probe_layer="0", aggregation="mean_tokens"), ValueError, "batch-first"),
+    ],
+)
+def test_downstream_wrapper_probe_layer_rejects(kwargs, exc, match):
+    model = nn.Sequential(nn.Conv1d(3, 8, kernel_size=5), nn.Flatten(), nn.Linear(64, 4))
+    with pytest.raises(exc, match=match):
+        DownstreamWrapper(**kwargs).build(model, {"input": torch.Tensor(2, 3, 12)}, 3)
+
+
+def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
+    # nn.RNN returns (output, h_n); probing it must raise.
+    model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        DownstreamWrapper(probe_layer="").build(model, {"input": torch.Tensor(2, 5, 10)}, 3)
 
 
 class LinearOutDict(nn.Module):
