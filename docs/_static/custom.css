@@ -78,6 +78,16 @@
     display: none !important;
 }
 
+/* Float-right Furo icon row hosts the visible theme-toggle. Article
+   headings (h1/h2/h3) below use `position: relative`, which makes
+   their full-width boxes paint above the float's stacking layer and
+   swallow clicks on the toggle. Promote this container to its own
+   positioned layer so the toggle stays clickable on every page. */
+.content-icon-container {
+    position: relative;
+    z-index: 1;
+}
+
 /* ===== HERO TAGLINE MAIN (Aggressive Glitch) ===== */
 
 .hero-section-root {
