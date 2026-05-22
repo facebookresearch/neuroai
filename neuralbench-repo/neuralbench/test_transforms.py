@@ -16,6 +16,7 @@ from neuralset.events import standardize_events
 from .main import Data
 from .transforms import (
     AddDefaultEvents,
+    AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
     OffsetEvents,
@@ -262,6 +263,60 @@ def sleep_events():
 
 
 @pytest.fixture
+def sleep_onset_events():
+    """Two timelines: ``tl_n2`` has W/N1/N2 epochs (pre-onset window); ``tl_no_n2``
+    has W/R only (no N2 → no SleepOnsetMarker rows expected)."""
+    rows: list[dict[str, tp.Any]] = []
+    # Timeline with an N2 onset at t=60s, recording spans [0, 120].
+    rows.append(
+        dict(
+            type="Eeg",
+            start=0.0,
+            duration=120.0,
+            subject="1",
+            frequency=100.0,
+            filepath=":.fif",
+            study="Test2025",
+            timeline="tl_n2",
+        )
+    )
+    for k, stage in enumerate(["W", "N1", "N2", "N2"]):
+        rows.append(
+            dict(
+                type="SleepStage",
+                start=30.0 * k,
+                duration=30.0,
+                stage=stage,
+                timeline="tl_n2",
+            )
+        )
+    # Timeline with no N2 stage at all (only W/R), recording spans [0, 90].
+    rows.append(
+        dict(
+            type="Eeg",
+            start=0.0,
+            duration=90.0,
+            subject="2",
+            frequency=100.0,
+            filepath=":.fif",
+            study="Test2025",
+            timeline="tl_no_n2",
+        )
+    )
+    for k, stage in enumerate(["W", "W", "R"]):
+        rows.append(
+            dict(
+                type="SleepStage",
+                start=30.0 * k,
+                duration=30.0,
+                stage=stage,
+                timeline="tl_no_n2",
+            )
+        )
+    return standardize_events(pd.DataFrame(rows))
+
+
+@pytest.fixture
 def eeg_events(tmp_path):
     return ns.Study(
         name="Test2023Meg",
@@ -328,6 +383,77 @@ def test_crop_sleep_recordings(sleep_events):
 
     assert new_events.iloc[0].duration == max_wake_duration_min * 60.0
     assert new_events.iloc[-1].duration == max_wake_duration_min * 60.0
+
+
+def test_add_sleep_onset_targets_basic(sleep_onset_events):
+    """tl_n2 (N2 onset at 60s): one marker spanning [0, 60] with n2_onset=60.
+    tl_no_n2 (no N2): no SleepOnsetMarker rows added."""
+    transform = AddSleepOnsetTargets()
+    new_events = transform(sleep_onset_events)
+
+    markers = new_events[new_events.type == "SleepOnsetMarker"]
+    marker_n2 = markers[markers.timeline == "tl_n2"].reset_index(drop=True)
+    marker_no_n2 = markers[markers.timeline == "tl_no_n2"]
+
+    assert len(marker_n2) == 1
+    assert len(marker_no_n2) == 0
+
+    assert marker_n2.loc[0, "start"] == pytest.approx(0.0)
+    assert marker_n2.loc[0, "duration"] == pytest.approx(60.0)
+    assert marker_n2.loc[0, "stop"] == pytest.approx(60.0)
+    assert marker_n2.loc[0, "n2_onset"] == pytest.approx(60.0)
+    # Per-timeline metadata propagated by standardize_events.
+    assert marker_n2.loc[0, "subject"] == "1"
+    assert marker_n2.loc[0, "study"] == "Test2025"
+
+
+def test_add_sleep_onset_targets_no_pre_onset_window(sleep_onset_events):
+    """If the pre-onset region is empty (t_stop <= t0), no marker is emitted."""
+    # N2 onset is at 60s, so capping pre-N2 region to 0s leaves an empty span.
+    transform = AddSleepOnsetTargets(max_pre_n2_s=0.0)
+    new_events = transform(sleep_onset_events)
+    assert (new_events.type == "SleepOnsetMarker").sum() == 0
+    # Original events are returned unmodified (same row count).
+    assert len(new_events) == len(sleep_onset_events)
+
+
+def test_add_sleep_onset_targets_max_pre_n2_s_truncates_marker_span(
+    sleep_onset_events,
+):
+    """`max_pre_n2_s` shifts the marker's start forward, capping its duration.
+
+    With N2 onset at t=60s and `max_pre_n2_s=20`, the marker spans [40, 60].
+    """
+    transform = AddSleepOnsetTargets(max_pre_n2_s=20.0)
+    new_events = transform(sleep_onset_events)
+    marker_n2 = new_events[
+        (new_events.type == "SleepOnsetMarker") & (new_events.timeline == "tl_n2")
+    ].reset_index(drop=True)
+    assert len(marker_n2) == 1
+    assert marker_n2.loc[0, "start"] == pytest.approx(40.0)
+    assert marker_n2.loc[0, "stop"] == pytest.approx(60.0)
+    assert marker_n2.loc[0, "duration"] == pytest.approx(20.0)
+    assert marker_n2.loc[0, "n2_onset"] == pytest.approx(60.0)
+
+
+def test_add_sleep_onset_targets_max_pre_n2_s_no_op_when_larger_than_recording(
+    sleep_onset_events,
+):
+    """A `max_pre_n2_s` exceeding the available pre-N2 region is a no-op."""
+    baseline = AddSleepOnsetTargets()(sleep_onset_events)
+    transformed = AddSleepOnsetTargets(max_pre_n2_s=10_000.0)(sleep_onset_events)
+
+    base_marker = (
+        baseline[baseline.type == "SleepOnsetMarker"]
+        .sort_values(["timeline", "start"])
+        .reset_index(drop=True)
+    )
+    new_marker = (
+        transformed[transformed.type == "SleepOnsetMarker"]
+        .sort_values(["timeline", "start"])
+        .reset_index(drop=True)
+    )
+    pd.testing.assert_frame_equal(base_marker, new_marker)
 
 
 @pytest.mark.parametrize("max_duration_s", [None, 10.0, 110.0])

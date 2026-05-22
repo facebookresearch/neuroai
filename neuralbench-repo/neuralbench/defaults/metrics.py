@@ -124,6 +124,27 @@ def get_regression_metric_configs(output_size: int) -> list[dict[str, tp.Any]]:
     ]
 
 
+def get_sleep_onset_metric_configs(
+    bin_boundaries: list[float] | None = None,
+) -> list[dict[str, tp.Any]]:
+    """Metric configs for the sleep-onset prediction task.
+
+    Combines the standard regression metrics (RMSE, MAE, Pearson r, R2,
+    normalized RMSE) with a binned MAE (``bMAE``) -- the headline metric of
+    the EEG 2026 sleep-onset task -- computed inside time-to-onset bins and
+    averaged with equal weight across bins.
+    """
+    if bin_boundaries is None:
+        bin_boundaries = [0.0, 40.0, 90.0, 300.0, 600.0]
+    return get_regression_metric_configs(1) + [
+        {
+            "log_name": "bmae",
+            "name": "BinnedMAE",
+            "bin_boundaries": bin_boundaries,
+        },
+    ]
+
+
 retrieval_metrics = [
     {"log_name": "batch_median_rank", "name": "Rank", "reduction": "median"},
     {"log_name": "batch_mean_rank", "name": "Rank", "reduction": "mean"},
