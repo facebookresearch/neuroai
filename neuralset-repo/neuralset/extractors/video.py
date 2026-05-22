@@ -223,7 +223,7 @@ class HuggingFaceVideo(BaseExtractor):
                 raise RuntimeError(f"Expected {len(times)} frames, got {k + 1}")
             # resample full output
             if abs(output.shape[0] - expect_frames) > 1:  # some flexibility allowed
-                output = output.to(self.image._tensor_device)
+                output = output.to(self.image.device)
                 output = resamp_first_dim(output, expect_frames).cpu()
                 logger.debug("Resampled video embeddings at frequency %s", self.frequency)
             # set first (time) dim to last
@@ -261,11 +261,11 @@ class HuggingFaceVideo(BaseExtractor):
             pretrained=self.image.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
-            model_kwargs=self.image._from_pretrained_kwargs,
+            model_kwargs=self.image._hf_kwargs,
         )
         if model.model.device.type == "cpu":
             # may already be dispatched (with "accelerate")
-            model.model.to(self.image._tensor_device)
+            model.model.to(self.image.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)
         freq = events[0].frequency if self.frequency == "native" else self.frequency

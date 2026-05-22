@@ -71,8 +71,14 @@ class _HuggingFace(nn.Module):
 
         if model_name == "facebook/dpt-dinov2-base-kitti":
             from transformers import DPTForDepthEstimation as Model
-        # explicit args win over caller-supplied model_kwargs
-        kwargs = {**(model_kwargs or {}), "output_hidden_states": output_hidden_states}
+        # Force safetensors loading. Transformers >=4.50 refuses to torch.load
+        # weights when torch < 2.6 (CVE-2025-32434); safetensors bypasses that
+        # check entirely. Caller-supplied model_kwargs can still override this.
+        kwargs = {
+            "use_safetensors": True,
+            **(model_kwargs or {}),
+            "output_hidden_states": output_hidden_states,
+        }
         try:
             self.model = Model.from_pretrained(model_name, **kwargs)
         except ValueError as e:
@@ -213,13 +219,12 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
         if len(events) > 1:
             dloader = tqdm(dloader, desc="Computing image embeddings")  # type: ignore
         # Embed the images in batches
-        device = self._tensor_device
         with torch.no_grad():
             for batch_images in dloader:
                 if isinstance(batch_images, torch.Tensor):
-                    batch_images = batch_images.to(device)
+                    batch_images = batch_images.to(self.device)
                 else:  # should be list of different sizes
-                    batch_images = [i.to(device) for i in batch_images]
+                    batch_images = [i.to(self.device) for i in batch_images]
                 with torch.no_grad():
                     latents = self._extract_batched_latents(batch_images)
                 for latent in latents:
@@ -228,7 +233,9 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
                     # - aggregating in cuda avoids transferring too much data to cpu
                     latent = self._aggregate_tokens(latent)
                     yield latent.cpu().numpy()
-                self._maybe_empty_cache()
+                if self._hf_kwargs:
+                    # accelerate may dispatch across multiple GPUs; free cache "just in case"
+                    torch.cuda.empty_cache()
 
     def get_static(self, event: etypes.Image) -> torch.Tensor:
         raise NotImplementedError
@@ -287,9 +294,10 @@ class HuggingFaceImage(BaseImage):
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
-                model_kwargs=self._from_pretrained_kwargs,
+                model_kwargs=self._hf_kwargs,
             )
-            if self.device != "accelerate":
+            if not self._hf_kwargs:
+                # accelerate dispatches the model internally; otherwise place it ourselves
                 self._model.to(self.device)
         return self._model
 

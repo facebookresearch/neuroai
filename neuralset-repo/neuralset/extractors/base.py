@@ -515,12 +515,21 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
+    # Extra kwargs for ``from_pretrained`` when HF accelerate is dispatching the
+    # model across GPUs. Empty otherwise; truthiness == "accelerate is active".
+    _hf_kwargs: dict[str, tp.Any] = pydantic.PrivateAttr(default_factory=dict)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if self.device == "accelerate":
+            # "accelerate" is a HF dispatch sentinel, not a torch device.
+            # Resolve it once: tensors go to cuda; the model is built with
+            # device_map="auto" + fp16 (so callers skip the usual .to(device)).
+            self._hf_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+            self.device = "cuda"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -564,32 +573,6 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
-
-    @property
-    def _tensor_device(self) -> str:
-        """Concrete torch device for moving input tensors. ``"accelerate"`` is a
-        HuggingFace dispatch mode (not a real torch device), so resolve it to
-        ``"cuda"`` — its only supported backend. Accelerate's hooks then route
-        tensors across the dispatched GPUs internally.
-        """
-        return "cuda" if self.device == "accelerate" else self.device
-
-    @property
-    def _from_pretrained_kwargs(self) -> dict[str, tp.Any]:
-        """Extra kwargs for ``transformers.PreTrainedModel.from_pretrained`` so
-        ``device="accelerate"`` enables multi-GPU dispatch + fp16. Empty for
-        single-device modes (caller still does ``model.to(device)``).
-        """
-        if self.device == "accelerate":
-            return {"device_map": "auto", "torch_dtype": torch.float16}
-        return {}
-
-    def _maybe_empty_cache(self) -> None:
-        """Free the CUDA cache between batches when accelerate is dispatching
-        across multiple GPUs. No-op in any other mode.
-        """
-        if self.device == "accelerate" and torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
         """

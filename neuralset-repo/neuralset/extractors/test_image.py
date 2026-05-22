@@ -156,21 +156,21 @@ def test_image_token_aggregation(
 
 
 def test_image_accelerate_device_resolution() -> None:
-    """device='accelerate' must resolve to a real torch device for tensor ops.
+    """device='accelerate' is resolved at init into a real torch device + HF kwargs.
 
     Regression for the crash where _get_data called ``tensor.to("accelerate")``,
     which is not a valid torch device string.
     """
     extractor = ns.extractors.HuggingFaceImage(device="accelerate")
-    assert extractor.device == "accelerate"
-    assert extractor._tensor_device == "cuda"
-    assert extractor._from_pretrained_kwargs == {
+    # the "accelerate" sentinel is resolved at construction time
+    assert extractor.device == "cuda"
+    assert extractor._hf_kwargs == {
         "device_map": "auto",
         "torch_dtype": torch.float16,
     }
     if torch.cuda.is_available():
         # exercises the original crash site: tensor.to("accelerate") used to raise
-        torch.empty(0).to(extractor._tensor_device)
+        torch.empty(0).to(extractor.device)
 
 
 @pytest.mark.skipif(

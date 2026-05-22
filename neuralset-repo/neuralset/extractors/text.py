@@ -360,7 +360,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         elif "Llama-3.2-11B-Vision" in self.model_name:
             from transformers import MllamaForConditionalGeneration as Model
         # instantiate
-        kwargs = {**self._from_pretrained_kwargs, **kwargs}
+        kwargs = {**self._hf_kwargs, **kwargs}
         model = Model.from_pretrained(self.model_name, **kwargs)
         if not self.pretrained:
             rawmodel = Model.from_config(model.config)
@@ -373,7 +373,8 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             with torch.no_grad():
                 for p in model.parameters():
                     part_reversal(p)
-        if self.device != "accelerate":
+        if not self._hf_kwargs:
+            # accelerate dispatches the model internally; otherwise place it ourselves
             model.to(self.device)
         model.eval()
         return model
@@ -422,7 +423,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = self._tensor_device
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -441,7 +441,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         return_tensors="pt",
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
-                    ).to(device)
+                    ).to(self.device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
@@ -489,7 +489,9 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                self._maybe_empty_cache()
+                if self._hf_kwargs:
+                    # accelerate may dispatch across multiple GPUs; free cache "just in case"
+                    torch.cuda.empty_cache()
 
 
 def part_reversal(tensor: torch.Tensor) -> None:
