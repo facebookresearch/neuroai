@@ -360,8 +360,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         elif "Llama-3.2-11B-Vision" in self.model_name:
             from transformers import MllamaForConditionalGeneration as Model
         # instantiate
-        if self.device == "accelerate":
-            kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+        kwargs = {**self._from_pretrained_kwargs, **kwargs}
         model = Model.from_pretrained(self.model_name, **kwargs)
         if not self.pretrained:
             rawmodel = Model.from_config(model.config)
@@ -423,9 +422,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = "auto" if self.device == "accelerate" else self.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self._tensor_device
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -492,9 +489,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.device == "accelerate" and torch.cuda.is_available():
-                    # in case of multi-GPU models, explicitly empty cache "just in case"
-                    torch.cuda.empty_cache()
+                self._maybe_empty_cache()
 
 
 def part_reversal(tensor: torch.Tensor) -> None:

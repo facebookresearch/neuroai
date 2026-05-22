@@ -565,6 +565,32 @@ class HuggingFaceMixin(base.BaseModel):
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
 
+    @property
+    def _tensor_device(self) -> str:
+        """Concrete torch device for moving input tensors. ``"accelerate"`` is a
+        HuggingFace dispatch mode (not a real torch device), so resolve it to
+        ``"cuda"`` — its only supported backend. Accelerate's hooks then route
+        tensors across the dispatched GPUs internally.
+        """
+        return "cuda" if self.device == "accelerate" else self.device
+
+    @property
+    def _from_pretrained_kwargs(self) -> dict[str, tp.Any]:
+        """Extra kwargs for ``transformers.PreTrainedModel.from_pretrained`` so
+        ``device="accelerate"`` enables multi-GPU dispatch + fp16. Empty for
+        single-device modes (caller still does ``model.to(device)``).
+        """
+        if self.device == "accelerate":
+            return {"device_map": "auto", "torch_dtype": torch.float16}
+        return {}
+
+    def _maybe_empty_cache(self) -> None:
+        """Free the CUDA cache between batches when accelerate is dispatching
+        across multiple GPUs. No-op in any other mode.
+        """
+        if self.device == "accelerate" and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
         """
         Input:

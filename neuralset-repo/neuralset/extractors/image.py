@@ -61,6 +61,7 @@ class _HuggingFace(nn.Module):
         model_name: str,
         output_hidden_states: bool = False,
         pretrained: bool = True,
+        model_kwargs: dict[str, tp.Any] | None = None,
     ) -> None:
         super().__init__()
         Model: tp.Any  # ignore typing as we'll override the imports
@@ -70,10 +71,10 @@ class _HuggingFace(nn.Module):
 
         if model_name == "facebook/dpt-dinov2-base-kitti":
             from transformers import DPTForDepthEstimation as Model
+        # explicit args win over caller-supplied model_kwargs
+        kwargs = {**(model_kwargs or {}), "output_hidden_states": output_hidden_states}
         try:
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
+            self.model = Model.from_pretrained(model_name, **kwargs)
         except ValueError as e:
             # handle specific cases
             if "VisionEncoderDecoderConfig" in str(e):
@@ -84,9 +85,7 @@ class _HuggingFace(nn.Module):
                 from transformers import ViTHybridImageProcessor as Processor
             elif "UperNetConfig" in str(e):
                 from transformers import UperNetForSemanticSegmentation as Model
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
+            self.model = Model.from_pretrained(model_name, **kwargs)
         if not pretrained:
             self.model = Model.from_config(self.model.config)
         self.model.eval()
@@ -214,12 +213,13 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
         if len(events) > 1:
             dloader = tqdm(dloader, desc="Computing image embeddings")  # type: ignore
         # Embed the images in batches
+        device = self._tensor_device
         with torch.no_grad():
             for batch_images in dloader:
                 if isinstance(batch_images, torch.Tensor):
-                    batch_images = batch_images.to(self.device)
+                    batch_images = batch_images.to(device)
                 else:  # should be list of different sizes
-                    batch_images = [i.to(self.device) for i in batch_images]
+                    batch_images = [i.to(device) for i in batch_images]
                 with torch.no_grad():
                     latents = self._extract_batched_latents(batch_images)
                 for latent in latents:
@@ -228,6 +228,7 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
                     # - aggregating in cuda avoids transferring too much data to cpu
                     latent = self._aggregate_tokens(latent)
                     yield latent.cpu().numpy()
+                self._maybe_empty_cache()
 
     def get_static(self, event: etypes.Image) -> torch.Tensor:
         raise NotImplementedError
@@ -286,8 +287,10 @@ class HuggingFaceImage(BaseImage):
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
+                model_kwargs=self._from_pretrained_kwargs,
             )
-            self._model.to(self.device)
+            if self.device != "accelerate":
+                self._model.to(self.device)
         return self._model
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
