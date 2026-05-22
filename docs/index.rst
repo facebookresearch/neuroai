@@ -19,39 +19,10 @@
      <p class="hero-subtitle">
        The Python suite for Neuro-AI.
      </p>
-     <div style="text-align: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
-       <div style="display: inline-flex; align-items: center; gap: 0.6rem; position: relative;">
-         <pre id="hero-pip-install" style="display: inline-block; background: var(--color-background-secondary); padding: 0.5rem 1rem; border-radius: 4px; border: 1px solid var(--color-border); font-family: var(--font-stack--monospace); font-size: 0.9em; margin: 0; color: var(--color-foreground-primary);">pip install neuralset neuralfetch neuralbench</pre>
-         <button class="copy-btn" id="hero-copy-btn" title="Copy install command" style="position: static; flex-shrink: 0;"><i class="fas fa-copy"></i></button>
-       </div>
-     </div>
-     <script>
-     (function() {
-       var btn = document.getElementById('hero-copy-btn');
-       if (!btn) return;
-       btn.addEventListener('click', function() {
-         navigator.clipboard.writeText('pip install neuralset neuralfetch neuralbench').then(function() {
-           btn.innerHTML = 'Copied ⚡🧠';
-           btn.classList.add('copied');
-           setTimeout(function() {
-             btn.innerHTML = '<i class="fas fa-copy"></i>';
-             btn.classList.remove('copied');
-           }, 1500);
-         });
-       });
-     })();
-     </script>
-     <p style="margin-top: 1rem; font-size: 0.9em;">
-       New here? Start with <a href="neuralset/index.html" style="color: var(--color-brand-primary); font-weight: 600; text-decoration: none;">NeuralSet</a> — the core data pipeline.
-     </p>
    </div>
 
    <!-- Packages as card layout -->
    <div class="packages-cards-container">
-     <p style="text-align: center; color: var(--color-foreground-muted); margin-bottom: 2rem; font-size: 0.95em;">
-       <strong>Each pipeline step maps to a Python package</strong> — NeuralFetch handles data discovery,
-       NeuralSet loads & transforms, and NeuralTrain trains models.
-     </p>
      <div class="packages-cards">
 
        <!-- NeuralSet (highlighted as recommended starting point) -->
@@ -102,43 +73,6 @@
        </div>
     </div>
   </div>
-
-----
-
-Citation
---------
-
-.. code-block:: text
-
-   @misc{king2026neuralset,
-     title  = {NeuralSet: A High-Performing Python Package for Neuro-AI},
-     author = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
-               and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
-               and Raugel, Josephine and Santos Revilla, Andrea
-               and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
-               and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
-               and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
-               and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
-               and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
-               and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
-               and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
-     year   = {2026},
-     url    = {https://kingjr.github.io/files/neuralset.pdf},
-     note   = {Preprint; URL will be updated when the paper lands on arXiv}
-   }
-
-   @article{banville2026neuralbench,
-     title   = {NeuralBench: A Unifying Framework to Benchmark NeuroAI Models},
-     author  = {Banville, Hubert and d'Ascoli, St{\'e}phane and Dahan, Simon
-                and Rapin, J{\'e}r{\'e}my and Careil, Marl{\`e}ne
-                and Benchetrit, Yohann and L{\'e}vy, Jarod
-                and Panchavati, Saarang and Ratouchniak, Antoine
-                and Zhang, Mingfang and Cascardi, Elisa and Begany, Katelyn
-                and Brooks, Teon and King, Jean-R{\'e}mi},
-     year    = {2026},
-     journal = {arXiv preprint arXiv:2605.08495},
-     url     = {https://arxiv.org/abs/2605.08495},
-   }
 
 .. raw:: html
 
