@@ -155,6 +155,35 @@ def test_image_token_aggregation(
     assert out.ndim == 2 if token_aggregation is None else 1
 
 
+def test_image_accelerate_device_resolution() -> None:
+    """device='accelerate' must resolve to a real torch device for tensor ops.
+
+    Regression for the crash where _get_data called ``tensor.to("accelerate")``,
+    which is not a valid torch device string.
+    """
+    extractor = ns.extractors.HuggingFaceImage(device="accelerate")
+    assert extractor.device == "accelerate"
+    assert extractor._tensor_device == "cuda"
+    assert extractor._from_pretrained_kwargs == {
+        "device_map": "auto",
+        "torch_dtype": torch.float16,
+    }
+    if torch.cuda.is_available():
+        # exercises the original crash site: tensor.to("accelerate") used to raise
+        torch.empty(0).to(extractor._tensor_device)
+
+
+@pytest.mark.skipif(
+    torch.cuda.device_count() < 2, reason="accelerate dispatch requires >=2 GPUs"
+)
+def test_image_accelerate_end_to_end(cat_event: etypes.Image) -> None:
+    extractor = ns.extractors.HuggingFaceImage(
+        device="accelerate", model_name="facebook/dinov2-small-imagenet1k-1-layer"
+    )
+    out = extractor.get_static(cat_event)
+    assert out.ndim == 1 and out.numel() > 0
+
+
 @pytest.mark.parametrize("token_aggregation", ["mean", "first", None])
 def test_openai_clip(
     cat_event: etypes.Image,
