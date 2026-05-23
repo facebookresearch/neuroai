@@ -1467,22 +1467,12 @@ def test_car_ieeg_global() -> None:
     info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
     raw = mne.io.RawArray(data, info)
 
-    extractor = ns.extractors.IeegExtractor(picks=("seeg",), reference="car")
+    extractor = ns.extractors.IeegExtractor(picks=("seeg",), car_ref=True)
     result = extractor._preprocess_raw(
         raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
     )
     np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
     assert not np.allclose(result.data, 0.0)
-
-
-def test_ieeg_cannot_combine_car_and_bipolar_ref() -> None:
-    expected = "Cannot use reference='car'"
-    with pytest.raises(ValueError, match=expected):
-        ns.extractors.IeegExtractor(
-            picks=("seeg",),
-            reference="car",
-            bipolar_ref=(["A1"], ["A2"]),
-        )
 
 
 def test_car_ieeg_multi_picks_per_channel_type() -> None:
@@ -1502,7 +1492,7 @@ def test_car_ieeg_multi_picks_per_channel_type() -> None:
     info = mne.create_info(ch_names, sfreq=sfreq, ch_types=ch_types)
     raw = mne.io.RawArray(data, info)
 
-    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), reference="car")
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), car_ref=True)
     result = extractor._preprocess_raw(
         raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
     )
@@ -1523,47 +1513,11 @@ def test_car_ieeg_picks_includes_absent_type() -> None:
     raw = mne.io.RawArray(data, info)
 
     # picks includes both seeg and ecog; raw has only seeg → ecog iteration must be skipped.
-    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), reference="car")
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), car_ref=True)
     result = extractor._preprocess_raw(
         raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
     )
     np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
-
-
-def test_car_eeg() -> None:
-    """car_ref=True on EegExtractor produces a zero cross-channel mean."""
-    ch_names = ["Fp1", "F7", "T7", "P7"]
-    sfreq = 100.0
-    rng = np.random.RandomState(0)
-    data = rng.randn(len(ch_names), int(sfreq * 2)) + 3.0
-    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="eeg")
-    raw = mne.io.RawArray(data, info)
-
-    extractor = ns.extractors.EegExtractor(picks=tuple(ch_names), car_ref=True)
-    result = extractor._preprocess_raw(
-        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
-    )
-    np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
-    assert not np.allclose(result.data, 0.0)
-
-
-def test_car_ieeg_field_matches_shortcut() -> None:
-    """Setting car_ref=True directly on IeegExtractor matches reference='car'."""
-    ch_names = ["A1", "A2", "B1", "B2"]
-    sfreq = 100.0
-    data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
-    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
-    raw = mne.io.RawArray(data, info)
-
-    via_flag = ns.extractors.IeegExtractor(picks=("seeg",), car_ref=True)
-    via_shortcut = ns.extractors.IeegExtractor(picks=("seeg",), reference="car")
-    out_flag = via_flag._preprocess_raw(
-        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
-    )
-    out_shortcut = via_shortcut._preprocess_raw(
-        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
-    )
-    np.testing.assert_allclose(out_flag.data, out_shortcut.data, atol=1e-5)
 
 
 def test_car_meg_raises() -> None:

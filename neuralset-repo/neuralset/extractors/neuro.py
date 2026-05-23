@@ -664,12 +664,11 @@ class IeegExtractor(MneRaw):
     ----------
     picks: default = ("seeg", "ecog", )
         pick "seeg" and "ecog" channels by default.
-    reference: "bipolar", "car", or None, default=None
+    reference: "bipolar", or None, default=None
         If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
         Uses mne.set_bipolar_reference under the hood. [ieeg1]_
-        If "car", this is a shortcut for setting ``car_ref=True`` on the base
-        extractor: each CAR-eligible channel type present in the raw is
-        referenced independently to its own average (see ``MneRaw.car_ref``).
+        For common-average reference, set ``car_ref=True`` on the base
+        ``MneRaw`` (see ``MneRaw.car_ref``).
 
     Notes
     ----------
@@ -700,7 +699,7 @@ class IeegExtractor(MneRaw):
         ),
         min_length=1,
     )
-    reference: tp.Literal["bipolar", "car"] | None = None
+    reference: tp.Literal["bipolar"] | None = None
 
     def model_post_init(self, log__):
         super().model_post_init(log__)
@@ -715,18 +714,6 @@ class IeegExtractor(MneRaw):
                 "neighboring electrodes) and bipolar_ref (explicit "
                 "anode/cathode lists) at the same time."
             )
-        if self.reference == "car" and self.bipolar_ref is not None:
-            raise ValueError(
-                "Cannot use reference='car' together with bipolar_ref. "
-                "Choose exactly one referencing scheme."
-            )
-        if self.reference == "car":
-            # Normalize the shortcut to its canonical base-field form so
-            # IeegExtractor(reference="car") and IeegExtractor(car_ref=True)
-            # share post-init state (and therefore cache uid). CAR is applied
-            # by MneRaw._preprocess_raw.
-            self.car_ref = True
-            self.reference = None
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
         raw = self._pick_channels(raw, self.picks)
