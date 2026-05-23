@@ -567,6 +567,8 @@ class MneRaw(BaseExtractor):
                 f"eligible: {list(self._CAR_ELIGIBLE_CH_TYPES)})."
             )
         logger.info("Applying CAR reference per channel type: %s", eligible)
+        # Per-type loop, not ch_type=eligible: list ch_type with projection=False
+        # applies a union average (https://github.com/mne-tools/mne-python/issues/13913).
         for ch_type in eligible:
             raw, _ = mne.set_eeg_reference(
                 raw,
