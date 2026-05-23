@@ -78,10 +78,6 @@
 
    <div class="metadata-panel">
      <p style="font-size: 0.85rem; color: var(--color-foreground-muted); margin: 0;">
-       Copyright © Meta Platforms, Inc. and affiliates |
-       Made with <a href="https://www.sphinx-doc.org/" style="color: inherit; text-decoration: none;">Sphinx</a> and
-       <a href="https://pradyunsg.me" style="color: inherit; text-decoration: none;">@pradyunsg</a>'s
-       <a href="https://github.com/pradyunsg/furo" style="color: inherit; text-decoration: none;">Furo</a> |
        <a href="https://github.com/facebookresearch/neuroai" style="color: inherit; text-decoration: none;"><i class="fab fa-github"></i></a>
      </p>
    </div>

@@ -1461,14 +1461,14 @@ body[data-theme="dark"] .result-item {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: center;
     margin: 0 auto;
 }
 
 .package-card-wrapper {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 1rem;
 }
 
