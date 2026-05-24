@@ -1,29 +1,9 @@
-/* ---- sphinx-gallery download buttons ---- */
+/* ---- sphinx-gallery: hide the auto-generated
+   "Note: Go to the end to download the full example code." admonition
+   at the top of every example. The working download buttons in the
+   footer live under `.sphx-glr-footer`, not this class. ---- */
 .sphx-glr-download-link-note {
-    margin: 2rem 0;
-    padding: 1rem;
-    background-color: var(--color-background-secondary);
-    border-radius: 8px;
-    border-left: 4px solid var(--color-brand-primary);
-}
-
-.sphx-glr-download-link-note .sphx-glr-download-python,
-.sphx-glr-download-link-note .sphx-glr-download-jupyter {
-    display: inline-block;
-    margin: 0.5rem 1rem 0.5rem 0;
-    padding: 0.5rem 1rem;
-    background-color: var(--color-brand-primary);
-    color: white !important;
-    text-decoration: none;
-    border-radius: 4px;
-    font-weight: 600;
-    transition: background-color 0.2s;
-}
-
-.sphx-glr-download-link-note .sphx-glr-download-python:hover,
-.sphx-glr-download-link-note .sphx-glr-download-jupyter:hover {
-    background-color: var(--color-brand-content);
-    text-decoration: none;
+    display: none;
 }
 
 /* ---- sphinx-gallery card hover ---- */

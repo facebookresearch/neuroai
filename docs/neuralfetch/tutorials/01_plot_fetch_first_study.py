@@ -1,9 +1,9 @@
 """
-Fetch Your First Study
-======================
+Fetch a curated study
+=====================
 
-Download a sample dataset, load it as an events DataFrame, and explore
-the event structure — the same workflow that works for all neuralfetch studies.
+Download a curated sample dataset and load it as an events DataFrame --
+the same workflow that works for every study registered in neuralfetch.
 """
 
 # %%
@@ -55,30 +55,6 @@ print()
 print(events[["type", "start", "duration", "subject"]].head(12).to_string())
 
 # %%
-# Explore event types
-# --------------------
-#
-# Every study returns the same schema: a flat DataFrame where brain
-# recordings, stimuli, text, and annotations share the same rows,
-# distinguished by the ``type`` column.
-
-print("Event types:")
-print(events["type"].value_counts().to_string())
-
-# %%
-# Each type has its own extra columns:
-
-for t in events["type"].unique():
-    sub = events[events["type"] == t]
-    extra = [
-        c
-        for c in ["filepath", "text", "code"]
-        if c in sub.columns and sub[c].notna().any()
-    ]
-    extra_str = extra if extra else "(no extra columns)"
-    print(f"  {t}: {extra_str}")
-
-# %%
 # Visualise the timeline
 # ----------------------
 
@@ -108,26 +84,5 @@ plt.tight_layout()
 plt.show()
 
 # %%
-# Using a real sample dataset
-# ----------------------------
-#
-# Replace ``Fake2025Meg`` with any sample name from the catalog to run
-# on real data.  All sample studies download their files automatically:
-#
-# .. code-block:: python
-#
-#    # EEG + images (THINGS-EEG2, OpenNeuro subset)
-#    study = ns.Study(name="Grootswagers2022HumanSample", path="./data")
-#    study.download()
-#    events = study.run()
-#
-#    # MEG + speech (Le Petit Prince, 1 subject)
-#    study = ns.Study(name="Bel2026PetitListenSample", path="./data")
-#    study.download()
-#    events = study.run()
-#
-# See :doc:`/neuralfetch/samples` for all available sample datasets
-# and ready-to-paste loading snippets.
-#
-# Next: :doc:`/neuralfetch/auto_examples/02_plot_study_anatomy` — timelines,
-# event anatomy, and composing studies with transforms.
+# Next: :doc:`/neuralfetch/auto_examples/03_create_new_study` — wrap your
+# own dataset as a Study subclass.
