@@ -264,7 +264,7 @@ class Experiment(BaseExperiment):
             callbacks.append(PlotConfusionMatrix(labels=labels))
         if is_test:
             if self.test_full_metrics:
-                callbacks.append(RecordingLevelEval())
+                callbacks.append(RecordingLevelEval(save_dir=self.infra.uid_folder()))
             if self.test_full_retrieval_metrics:
                 callbacks.append(
                     TestFullRetrievalMetrics(

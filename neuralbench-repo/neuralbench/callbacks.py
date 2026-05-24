@@ -365,7 +365,8 @@ class TestFullRetrievalMetrics(Callback):
 class RecordingLevelEval(Callback):
     """Callback to evaluate average prediction over each recording (timeline)."""
 
-    def __init__(self) -> None:
+    def __init__(self, save_dir: str | Path | None = None) -> None:
+        self.save_dir = save_dir
         self.test_outputs: dict[str, dict[str, tp.Any]] = {}
         self.num_classes: int | None = None
 
@@ -431,12 +432,17 @@ class RecordingLevelEval(Callback):
             outputs_df[f"y_pred{i}"] = outputs_df["class_counts"].apply(
                 lambda counts: counts[i] / sum(counts) if sum(counts) > 0 else 0.0
             )
+            outputs_df[f"y_pred_prob{i}"] = outputs_df[f"y_pred{i}"]
+
+        pred_columns = [f"y_pred{i}" for i in range(self.num_classes)]
+        outputs_df["y_pred"] = outputs_df[pred_columns].to_numpy().argmax(axis=1)
 
         # Create prediction tensor with shape (n_recordings, num_classes)
-        pred_columns = [f"y_pred{i}" for i in range(self.num_classes)]
         y_pred_probs = torch.from_numpy(outputs_df[pred_columns].values)
         # Convert y_true to int64 explicitly to avoid object dtype issues
         y_true = torch.tensor(outputs_df.y_true.tolist(), dtype=torch.int64)
+
+        self._save_outputs(outputs_df, trainer)
 
         for metric_name, metric in pl_module.test_full_metrics.items():  # type: ignore
             metric.to("cpu")
@@ -450,6 +456,17 @@ class RecordingLevelEval(Callback):
                 logger=True,
                 batch_size=outputs_df.shape[0],
             )
+
+    def _save_outputs(self, outputs_df: pd.DataFrame, trainer: pl.Trainer) -> None:
+        if self.save_dir is None:
+            return
+        out_dir = Path(self.save_dir) / "predictions"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        file = out_dir / "test_recording_level.pt"
+
+        save_df = outputs_df.rename_axis("timeline").reset_index()
+        torch.save(save_df.to_dict(orient="list"), file)
+        LOGGER.info("Saved %s recording-level predictions to %s", len(save_df), file)
 
 
 def plot_confusion_matrix(

@@ -61,9 +61,9 @@ def mock_pl_module_3class(mocker):
     return pl_module
 
 
-def test_binary_single_window_per_recording(mock_trainer, mock_pl_module):
+def test_binary_single_window_per_recording(tmp_path, mock_trainer, mock_pl_module):
     """Test binary classification with one window per recording."""
-    callback = RecordingLevelEval()
+    callback = RecordingLevelEval(save_dir=tmp_path)
     callback.on_test_epoch_start(mock_trainer, mock_pl_module)
 
     # Batch with 3 recordings, 1 window each
@@ -110,6 +110,23 @@ def test_binary_single_window_per_recording(mock_trainer, mock_pl_module):
 
     # Check true labels (convert to same dtype for comparison)
     assert torch.equal(y_true.long(), torch.tensor([0, 1, 1]))
+
+    output_file = tmp_path / "predictions" / "test_recording_level.pt"
+    saved = torch.load(output_file)
+    assert {
+        "timeline",
+        "y_true",
+        "total_count",
+        "y_pred",
+        "y_pred0",
+        "y_pred1",
+        "y_pred_prob0",
+        "y_pred_prob1",
+    }.issubset(saved)
+    rec1_idx = saved["timeline"].index("rec1")
+    rec2_idx = saved["timeline"].index("rec2")
+    assert saved["y_pred"][rec1_idx] == 1
+    assert saved["y_pred_prob0"][rec2_idx] == 1.0
 
 
 def test_binary_multiple_windows_per_recording(mock_trainer, mock_pl_module):
