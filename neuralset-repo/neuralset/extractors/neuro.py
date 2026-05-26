@@ -1475,8 +1475,6 @@ class FmriExtractor(BaseExtractor):
         ``None`` skips all cleaning.
     frequency : ``"native"`` | float
         Target sampling frequency.
-    padding : int | ``"auto"`` | None
-        Pad 1-D+T data to a uniform voxel count across subjects.
     from_space : str | ``"auto"`` | None
         Input space to load.  ``None`` (default) passes through when only
         one space is present, raises when multiple are found.
@@ -1496,7 +1494,6 @@ class FmriExtractor(BaseExtractor):
     projection: BaseFmriProjector | None = None
     cleaning: FmriCleaner | None = FmriCleaner()
     frequency: tp.Literal["native"] | float = "native"
-    padding: int | tp.Literal["auto"] | None = None
     from_space: str | None = None
     from_preproc: str | tuple[str, ...] | None = None
     fwhm: float | None = None
@@ -1505,12 +1502,9 @@ class FmriExtractor(BaseExtractor):
         cpus_per_task=10,
         version="2",
     )
-    _padding: int | None = None
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        if isinstance(self.padding, int):
-            self._padding = self.padding
         if not self.projection and self.infra.folder is not None:
             logger.warning(
                 f"{self.name}: caching volumetric fMRI data (projection=None)"
@@ -1519,7 +1513,7 @@ class FmriExtractor(BaseExtractor):
             )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        return super()._exclude_from_cache_uid() + ["offset", "padding"]
+        return super()._exclude_from_cache_uid() + ["offset"]
 
     def _auto_filter_fmri_events(
         self, fmri_events: list[etypes.Fmri]
@@ -1604,13 +1598,6 @@ class FmriExtractor(BaseExtractor):
     def prepare(self, obj: DataframeOrEventsOrSegments) -> None:
         all_events: list[etypes.Fmri] = self._event_types_helper.extract(obj)  # type: ignore[assignment]
         events = self._auto_filter_fmri_events(all_events)
-        if self.padding == "auto":
-            # for padding, we first need everything to be preprocessed
-            # but we need on an object without padding since missing_default filling
-            # will apply the extractor on 1 event, and we'll need the padding length for that
-            self.infra.clone_obj(padding=None).prepare(events)
-            self._padding = max(ta.data.shape[0] for ta in self._get_data(events))  # type: ignore
-            # (recompute prepare to just fill the missing default value)
         super().prepare(events)
 
     @staticmethod
@@ -1724,19 +1711,8 @@ class FmriExtractor(BaseExtractor):
     def _get_timed_arrays(
         self, events: list[etypes.Fmri], start: float, duration: float
     ) -> tp.Iterable[TimedArray]:
-        if self.padding == "auto" and self._padding is None:
-            raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
         for ta in self._get_data(events):
             data = ta.data
-            if self._padding is not None:
-                if data.ndim != 2:
-                    raise ValueError(f"Only 1D+T FMRI can be padded, got {data.shape=}")
-                padding = self._padding - data.shape[0]
-                if padding < 0:
-                    raise ValueError(
-                        f"Padding to length {self._padding} but got {data.shape=}"
-                    )
-                data = np.pad(data, [(0, self._padding - data.shape[0]), (0, 0)])
             yield FmriTimedArray(
                 data=data,
                 frequency=ta.frequency,

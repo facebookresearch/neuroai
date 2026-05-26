@@ -19,6 +19,7 @@ import neuralset as ns
 
 from . import dataloader as dl
 from . import events
+from .extractors import padding as pad
 from .segments import list_segments
 from .test_segments import _make_segments
 
@@ -80,22 +81,66 @@ def test_load_all_order() -> None:
     np.testing.assert_array_equal(ds.data["stim1"][:, 0], np.arange(len(df)))
 
 
+def test_padding_strategies() -> None:
+    # -- PadToLength defaults to the longest tensor on last dim --
+    t1 = torch.ones(1, 2, 30)
+    t2 = torch.ones(1, 2, 50)
+    result = pad.PadToLength()([t1, t2])
+    assert result[0].shape == (1, 2, 50)
+    assert result[1].shape == (1, 2, 50)
+    assert result[0][0, 0, 29] == 1.0 and result[0][0, 0, 30] == 0.0
+
+    # -- PadToLength(length="max") on an inner dim --
+    t3 = torch.ones(3, 5)
+    t4 = torch.ones(7, 5)
+    result = pad.PadToLength(dim=0, length="max")([t3, t4])
+    assert result[0].shape == (7, 5)
+    assert result[1].shape == (7, 5)
+
+    # -- PadToLength --
+    result = pad.PadToLength(length=100)([t1, t2])
+    assert result[0].shape == (1, 2, 100)
+    assert result[1].shape == (1, 2, 100)
+
+    # -- PadToLength crops with warning when shorter --
+    with pytest.warns(UserWarning, match="cropping"):
+        result = pad.PadToLength(length=10)([t1])
+    assert result[0].shape == (1, 2, 10)
+
+    # -- PadToDuration uses the owning extractor's frequency --
+    ext_dur = ns.extractors.Pulse(
+        frequency=100.0, event_types="Word", padding=pad.PadToDuration(duration=2.0)
+    )
+    assert ext_dur.padding is not None
+    result = ext_dur.padding([t1])
+    assert result[0].shape == (1, 2, 200)
+
+    # -- PadToDuration raises when frequency is missing --
+    with pytest.raises(RuntimeError, match="frequency is not set"):
+        pad.PadToDuration(duration=2.0)([t1])
+
+
 def test_padded_collate_dataset() -> None:
-    # A study is just a dataframe of events
     segments = _make_segments()
     segments[1].duration = 2.0
-    extractors = {"Pulse": ns.extractors.Pulse(frequency=100.0, event_types="Word")}
-    ds = dl.SegmentDataset(extractors, segments, pad_duration=None)
-    with pytest.raises(ValueError):
-        ds.load_all()
-    with pytest.raises(ValueError):
-        ds.build_dataloader()
 
-    for pad_duration in ["auto", 4.0]:
-        ds = dl.SegmentDataset(extractors, segments, pad_duration=pad_duration)  # type: ignore
-        dataloader = DataLoader(ds, collate_fn=ds.collate_fn, batch_size=2)
-        batch = next(iter(dataloader))
-        assert batch.data["Pulse"].shape == (2, 1, 200 if pad_duration == "auto" else 400)
+    # PadToLength(length="max"): pads to the longest segment in the batch
+    ext_max = ns.extractors.Pulse(
+        frequency=100.0, event_types="Word", padding=pad.PadToLength()
+    )
+    ds = dl.SegmentDataset({"Pulse": ext_max}, segments)
+    dataloader = DataLoader(ds, collate_fn=ds.collate_fn, batch_size=2)
+    batch = next(iter(dataloader))
+    assert batch.data["Pulse"].shape == (2, 1, 200)
+
+    # PadToDuration: pads to a fixed duration (frequency auto-filled from extractor)
+    ext_dur = ns.extractors.Pulse(
+        frequency=100.0, event_types="Word", padding=pad.PadToDuration(duration=4.0)
+    )
+    ds = dl.SegmentDataset({"Pulse": ext_dur}, segments)
+    dataloader = DataLoader(ds, collate_fn=ds.collate_fn, batch_size=2)
+    batch = next(iter(dataloader))
+    assert batch.data["Pulse"].shape == (2, 1, 400)
 
 
 def test_select() -> None:

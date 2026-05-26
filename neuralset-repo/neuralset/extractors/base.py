@@ -20,6 +20,7 @@ from neuralset import base
 from neuralset.base import Frequency as Frequency
 from neuralset.base import TimedArray as TimedArray
 from neuralset.events import Event, EventTypesHelper, etypes
+from neuralset.extractors import padding as padding_module
 from neuralset.segments import Segment
 
 T = tp.TypeVar("T", bound=torch.Tensor | np.ndarray)
@@ -70,6 +71,11 @@ class BaseExtractor(base._Module, base.NamedModel):
         Output sampling rate in Hz.  Use ``"native"`` to keep the original
         sampling rate of the input data.  ``0`` is reserved for static
         extractors (:class:`BaseStatic`).
+    padding : PaddingStrategy or None
+        Strategy applied at collation time to pad tensors from different
+        segments to a uniform size.  See :mod:`neuralset.extractors.padding`
+        for available strategies (``PadToLength``, ``PadToDuration``).
+        ``None`` disables padding.
     """
 
     event_types: str | tuple[str, ...] = ""
@@ -89,6 +95,7 @@ class BaseExtractor(base._Module, base.NamedModel):
     # builds output even when no corresponding event is provided
     allow_missing: bool = False
     frequency: float | tp.Literal["native"] = 0.0
+    padding: padding_module.PaddingStrategy | None = None
 
     # internal
     _CLASSES: tp.ClassVar[dict[str, tp.Type["BaseExtractor"]]] = {}
@@ -150,10 +157,20 @@ class BaseExtractor(base._Module, base.NamedModel):
         if not (self.frequency or isinstance(self, BaseStatic)):
             msg = f"{name}.frequency=0 is only allowed for static extractors (did you mean 'native'?)"
             raise ValueError(msg)
+        if (
+            isinstance(self.padding, padding_module.PadToDuration)
+            and self.padding._frequency is None
+        ):
+            if not (isinstance(self.frequency, (int, float)) and self.frequency > 0):
+                raise ValueError(
+                    f"{name}: PadToDuration requires a positive numeric frequency, "
+                    f"got extractor frequency={self.frequency!r}"
+                )
+            self.padding._frequency = self.frequency
 
     def _exclude_from_cache_uid(self) -> list[str]:
         # extractor convention from inheriting cache uid exclusion list
-        return ["aggregation", "allow_missing"]
+        return ["aggregation", "allow_missing", "padding"]
 
     def prepare(
         self, obj: pd.DataFrame | tp.Sequence[Event] | tp.Sequence[Segment]
