@@ -55,7 +55,7 @@ class BaseExtractor(base._Module, base.NamedModel):
         Strategy for combining values when multiple matching events fall
         inside the same segment:
 
-        * ``"single"`` — exactly one event expected (raises otherwise).
+        * ``"single"`` — maximum one event at each time instant (raises otherwise).
         * ``"sum"`` / ``"mean"`` — element-wise sum or mean.
         * ``"first"`` / ``"middle"`` / ``"last"`` — pick one event.
         * ``"cat"`` — concatenate along the first dimension.
@@ -330,15 +330,33 @@ class BaseExtractor(base._Module, base.NamedModel):
             # the zero-fill in _tarrays_to_tensor (see test_first_samp).
             ns_events = in_window or ns_events
 
-        if self.aggregation in ("first", "trigger", "single"):
-            if self.aggregation == "single" and len(ns_events) > 1:
-                msg = (
-                    f"Found {len(ns_events)} events in the segment but expected only one "
+        if self.aggregation == "single" and len(ns_events) > 1:
+            # For dynamic extractors compare sample-space slots (matching what
+            # TimedArray.__iadd__ writes into); for static or unresolved 'native',
+            # fall back to continuous-time intervals.
+            freq = (
+                self._effective_frequency
+                if self.frequency == "native"
+                else self.frequency
+            )
+            to_ind = Frequency(freq).to_ind if freq else (lambda x: x)
+            seg_stop = start + duration
+            ranges = []
+            for e in ns_events:
+                o_start = max(e.start, start)
+                o_stop = min(e.start + e.duration, seg_stop)
+                lo = to_ind(o_start - start)
+                hi = lo + to_ind(o_stop - o_start)
+                if hi > lo:
+                    ranges.append((lo, hi))
+            ranges.sort()
+            if any(b_lo < a_hi for (_, a_hi), (b_lo, _) in zip(ranges, ranges[1:])):
+                unit = f"{freq} Hz" if freq else "time"
+                raise ValueError(
+                    f"{self.name}.aggregation='single' but {len(ns_events)} events "
+                    f"overlap at {unit}: {ns_events}. Use aggregation='mean' instead."
                 )
-                msg += f"since {self.name}.aggregation='single'. "
-                msg += "Update it to sum/average/first/trigger/... ?\n"
-                msg += f"{ns_events=}"
-                raise ValueError(msg)
+        elif self.aggregation in ("first", "trigger", "single"):
             ns_events = ns_events[:1]
         elif self.aggregation == "last":
             ns_events = ns_events[-1:]
@@ -370,7 +388,12 @@ class BaseExtractor(base._Module, base.NamedModel):
             tarrays[0].start = start  # fake an overlap as start time does not matter
 
         match aggregation:
-            case "trigger" | "single" | "first" | "middle" | "last":
+            case "single":
+                # `_get_relevant_events` already ensured the events do not
+                # mutually overlap, so summing places each event in its own
+                # disjoint time slot of the segment.
+                aggregation = "sum"
+            case "trigger" | "first" | "middle" | "last":
                 aggregation = "sum"
                 # expect a single Event
                 if not len(tarrays) == 1:

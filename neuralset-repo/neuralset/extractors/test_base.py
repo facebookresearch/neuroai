@@ -225,9 +225,53 @@ def test_single_aggregation_scoped_to_window() -> None:
     ]
     # One overlaps [2, 3): picked, no raise.
     feat(events, start=2.0, duration=1.0)
-    # Two overlap [0, 3): still ambiguous.
-    with pytest.raises(ValueError, match="expected only one"):
-        feat(events, start=0.0, duration=3.0)
+    # Two non-overlapping events in [0, 3): accepted under 'single'.
+    feat(events, start=0.0, duration=3.0)
+
+
+def test_single_aggregation_raises_on_overlapping_events() -> None:
+    """Overlapping events in the segment window remain ambiguous under
+    ``aggregation='single'``."""
+    feat = Time(frequency=3, aggregation="single")
+    events = [
+        etypes.Image(start=0.5, duration=1.0, timeline="stuff", filepath=__file__),
+        etypes.Image(start=1.0, duration=1.0, timeline="stuff", filepath=__file__),
+    ]
+    with pytest.raises(ValueError, match="events overlap"):
+        feat(events, start=0.0, duration=2.0)
+
+
+def test_single_aggregation_raises_on_sample_space_collision() -> None:
+    """Events disjoint in continuous time can still quantize to the same
+    sample slot at low frequencies; ``aggregation='single'`` rejects that
+    case rather than silently double-counting at the boundary."""
+    events = [
+        etypes.Image(start=0.4, duration=0.3, timeline="stuff", filepath=__file__),
+        etypes.Image(start=0.7, duration=0.3, timeline="stuff", filepath=__file__),
+    ]
+    with pytest.raises(ValueError, match="events overlap at 2"):
+        Time(frequency=2, aggregation="single")(events, start=0.0, duration=1.0)
+    # 'mean' handles the collision via _overlapping_data_count.
+    Time(frequency=2, aggregation="mean")(events, start=0.0, duration=1.0)
+
+
+def test_single_aggregation_non_overlapping_events() -> None:
+    """A dynamic extractor with ``aggregation='single'`` accepts a segment
+    that contains two events whose time spans do not overlap each other:
+    the events are placed in their disjoint time slots via the underlying
+    ``sum`` code path."""
+    feat = Time(frequency=10, aggregation="single")
+    events = [
+        etypes.Image(start=0.0, duration=0.3, timeline="stuff", filepath=__file__),
+        etypes.Image(start=0.5, duration=0.3, timeline="stuff", filepath=__file__),
+    ]
+    out = feat(events, start=0.0, duration=1.0)
+    # frequency=10 Hz over a 1 s window -> 10 time samples.
+    assert out.shape[-1] == 10
+    # Output should match calling 'sum' on the same events, since 'single'
+    # with non-overlapping events delegates to the same code path.
+    feat_sum = Time(frequency=10, aggregation="sum")
+    np.testing.assert_array_almost_equal(out, feat_sum(events, start=0.0, duration=1.0))
 
 
 def test_trigger_outside_window() -> None:
