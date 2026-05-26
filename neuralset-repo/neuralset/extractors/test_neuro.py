@@ -1340,26 +1340,61 @@ class _PseudoNifti:  # hack used in nastase
         return self.data
 
 
-def test_fmri_mesh_from_2d() -> None:
-    n_voxels = 40962 * 2  # fsaverage6
-    n_times = 10
-    nii = _PseudoNifti(np.random.rand(n_voxels, n_times))
+def _make_fake_surface_event(data: np.ndarray) -> etypes.Fmri:
+    """Build a fake ``Fmri`` event whose ``read()`` returns a NIfTI-like wrapper."""
+    nii = _PseudoNifti(data)
     event = etypes.Fmri(
         start=0,
-        duration=n_times,
+        duration=data.shape[1] if data.ndim >= 2 else 1,
         frequency=1,
         timeline="foo",
         space="custom",
         subject="blublu",
         filepath="blublu",
     )
-    object.__setattr__(event, "read", lambda: nii)  # fake it
-    projection: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
+    object.__setattr__(event, "read", lambda: nii)
+    return event
+
+
+def test_fmri_mesh_from_2d() -> None:
+    from neuralset.extractors.neuro import SurfaceProjector
+
+    rng = np.random.default_rng(0)
+    n_times = 10
+
+    # default ("prefix"): fsaverage6 → fsaverage5 keeps the first N vertices
+    # of each hemisphere and warns about the SNR loss.
+    data = np.arange(40962 * 2 * n_times, dtype=float).reshape(40962 * 2, n_times)
+    proj = SurfaceProjector(mesh="fsaverage5")  # type: ignore[arg-type]
+    with pytest.warns(UserWarning, match="lowering SNR"):
+        out = proj.apply(_PseudoNifti(data))
+    assert out.shape == (10242 * 2, n_times)
+    np.testing.assert_array_equal(out[:10242], data[:10242])
+    np.testing.assert_array_equal(out[10242:], data[40962 : 40962 + 10242])
+
+    # "voronoi": same source mesh, averages source vertices per cell — finite,
+    # right shape, and constant inputs round-trip exactly.
+    proj_v = SurfaceProjector(mesh="fsaverage5", downsampling_method="voronoi")  # type: ignore[arg-type]
+    down_event = _make_fake_surface_event(rng.standard_normal((40962 * 2, n_times)))
     feat = ns.extractors.FmriExtractor(
-        projection=projection,
-    )  # type: ignore
-    out = feat(event, 0, 5)
-    assert out.shape == (10242 * 2, 5)  # fsaverage5 size
+        projection={  # type: ignore[arg-type]
+            "name": "SurfaceProjector",
+            "mesh": "fsaverage5",
+            "downsampling_method": "voronoi",
+        }
+    )
+    tensor = feat(down_event, 0, 5)
+    assert tensor.shape == (10242 * 2, 5)
+    assert np.isfinite(tensor).all()
+    const = _PseudoNifti(np.full((40962 * 2, 1), 2.5))
+    np.testing.assert_allclose(proj_v.apply(const), 2.5)
+
+    # same mesh → identity (no warning)
+    identity = rng.standard_normal((10242 * 2, n_times))
+    np.testing.assert_array_equal(
+        SurfaceProjector(mesh="fsaverage5").apply(_PseudoNifti(identity)),  # type: ignore[arg-type]
+        identity,
+    )
 
 
 def test_ieeg(test_data_path: Path) -> None:
