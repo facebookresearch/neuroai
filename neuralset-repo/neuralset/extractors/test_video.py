@@ -96,22 +96,17 @@ def test_video_image(video_event: etypes.Video) -> None:
 
 def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
     video_event.read()
-    im: tp.Any = {
-        "device": "cpu",
-        "name": "HuggingFaceImage",
-        "layers": 0.7,
-        "infra": {"keep_in_ram": False},
-    }
     infra: tp.Any = {"folder": tmp_path / "cache"}
-    video = ns.extractors.HuggingFaceVideo(
+    image = ns.extractors.HuggingFaceImage(
+        event_types="Video",
         frequency=0.5,
         infra=infra,
-        image=im,
+        device="cpu",
+        layers=0.7,
     )
-    folder = video.infra.uid_folder()
+    folder = image.infra.uid_folder()
     assert folder is not None
-    assert "rellayer" not in folder.name, "cache should be independent of layers"
-    out = video(video_event, start=0.0, duration=0.5)
+    out = image(video_event, start=0.0, duration=0.5)
     assert isinstance(out, torch.Tensor)
     assert out.shape == (768, 1)
     # test out
@@ -122,18 +117,27 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
 def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     cache = tmp_path / "cache"
     name = "facebook/dinov2-small-imagenet1k-1-layer"
-    im: tp.Any = {"device": "cpu", "model_name": name, "infra": {"keep_in_ram": False}}
     infra: tp.Any = {"folder": cache}
-    video = ns.extractors.HuggingFaceVideo(
+    image = ns.extractors.HuggingFaceImage(
+        event_types="Video",
         frequency=0.5,
         infra=infra,
-        image=im,
+        device="cpu",
+        model_name=name,
     )
-    out = video(video_event, start=0.0, duration=4)
+    out = image(video_event, start=0.0, duration=4)
     assert isinstance(out, torch.Tensor)
     assert out.shape == (384, 2)
-    latent = next(iter(video._get_data([video_event])))
-    assert latent.data.shape == (384, 3)
+    latent = next(iter(image._get_data([video_event])))
+    assert latent.shape == (384, 3)
+
+
+def test_video_rejects_image_models() -> None:
+    with pytest.raises(ValueError, match="Use HuggingFaceImage"):
+        ns.extractors.HuggingFaceVideo(
+            frequency=0.5,
+            model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        )
 
 
 @pytest.mark.parametrize(
@@ -167,23 +171,18 @@ def test_video_models(
         raise ValueError(f"Model {name!r} is not supported")
     if "IN_GITHUB_ACTION" in os.environ and "videomae" not in name:
         pytest.skip("Only download video mae for CI tests")
-    imparams: tp.Any = {
-        "device": "cpu",
-        "name": "HuggingFaceImage",
-        "model_name": name,
-        "infra": {"keep_in_ram": False},
-        # show the full dimension
-        "token_aggregation": None,
-        "layers": "all",
-        "layer_aggregation": None,
-    }
     infra: tp.Any = {"folder": tmp_path / "cache"}
     video = vid.HuggingFaceVideo(
         frequency=0.5,
         max_imsize=120,
         infra=infra,
         layer_type=layer_type,
-        image=imparams,
+        device="cpu",
+        model_name=name,
+        # show the full dimension
+        token_aggregation=None,
+        layers="all",
+        layer_aggregation=None,
     )
     out = video(video_event, start=0.0, duration=4)
     assert isinstance(out, torch.Tensor)

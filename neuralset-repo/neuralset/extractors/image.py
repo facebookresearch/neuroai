@@ -15,10 +15,10 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from neuralset import base, utils
 from neuralset.events import etypes
-from neuralset.utils import warn_once
 
-from .base import BaseStatic, HuggingFaceMixin
+from . import base as extractor_base
 
 logger = logging.getLogger(__name__)
 CLUSTER_DEFAULTS: dict[str, tp.Any] = dict(
@@ -150,7 +150,31 @@ class _ImageDataset(Dataset):
         return images
 
 
-class BaseImage(BaseStatic, HuggingFaceMixin):
+class _VideoImage(etypes.Image):
+    """Image event wrapper for extracting individual frames from a video."""
+
+    start: float = 0.0
+    timeline: str = "fake"
+    duration: float = 1.0
+    video: tp.Any
+    time: float = 0.0
+    filepath: str = ""
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        if self.filepath:
+            raise ValueError("Filepath is automatically filled")
+        self.filepath = f"{self.video.filename}:{self.time:.3f}"
+        super().model_post_init(log__)
+
+    def _read(self) -> tp.Any:
+        import PIL  # noqa
+
+        with utils.ignore_all():
+            img = self.video.get_frame(self.time)
+        return PIL.Image.fromarray(img.astype("uint8"))
+
+
+class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
     """Base class for computing features from image events using batch processing.
 
     This class provides the infrastructure for extracting features from sequences of images
@@ -169,7 +193,7 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
     """
 
     # class attributes
-    event_types: tp.Literal["Image"] = "Image"
+    event_types: tp.Literal["Image", "Video"] = "Image"
     requirements: tp.ClassVar[tuple[str, ...]] = (
         "torchvision>=0.15.2",
         "transformers>=4.29.2",
@@ -179,20 +203,21 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
     # extractor attributes
     batch_size: int = 32
     imsize: int | None = None
+    frequency: float | tp.Literal["native"] = 0.0  # type: ignore[assignment]
     _model: nn.Module = pydantic.PrivateAttr()  # initialized later
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
         return (
             ["batch_size"]
-            + BaseStatic._exclude_from_cls_uid()
-            + HuggingFaceMixin._exclude_from_cls_uid()
+            + extractor_base.BaseStatic._exclude_from_cls_uid()
+            + extractor_base.HuggingFaceMixin._exclude_from_cls_uid()
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        return BaseStatic._exclude_from_cache_uid(
+        return extractor_base.BaseStatic._exclude_from_cache_uid(
             self
-        ) + HuggingFaceMixin._exclude_from_cache_uid(self)
+        ) + extractor_base.HuggingFaceMixin._exclude_from_cache_uid(self)
 
     def _make_transform(self) -> tp.Any:
         from torchvision import transforms
@@ -229,11 +254,17 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
                     latent = self._aggregate_tokens(latent)
                     yield latent.cpu().numpy()
 
-    def get_static(self, event: etypes.Image) -> torch.Tensor:
+    def get_static(self, event: etypes.Event) -> torch.Tensor:
         raise NotImplementedError
 
     def _extract_batched_latents(self, images: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
+
+
+def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
+    if isinstance(event, etypes.Video):
+        return event._splittable_event_uid()
+    return str(event.study_relative_path())
 
 
 class HuggingFaceImage(BaseImage):
@@ -258,22 +289,54 @@ class HuggingFaceImage(BaseImage):
 
     def _exclude_from_cache_uid(self) -> list[str]:
         prev = super()._exclude_from_cache_uid()
-        return prev + ["duration", "frequency"]
+        return prev + ["duration"]
 
     @infra.apply(
-        item_uid=lambda e: str(e.study_relative_path()),
+        item_uid=_huggingface_image_event_uid,
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
         cache_type="MemmapArrayFile",
     )
-    def _get_data(self, events: tp.Sequence[etypes.Image]) -> tp.Iterator[np.ndarray]:
+    def _get_data(
+        self, events: tp.Sequence[etypes.Image | etypes.Video]
+    ) -> tp.Iterator[np.ndarray]:
+        if self.event_types == "Video":
+            for event in tp.cast(tp.Sequence[etypes.Video], events):
+                yield self._get_video_data(event)
+            return
+        yield from self._get_image_data(tp.cast(tp.Sequence[etypes.Image], events))
+
+    def _get_image_data(
+        self, events: tp.Sequence[etypes.Image]
+    ) -> tp.Iterator[np.ndarray]:
         for latents in super()._get_data(events):
             if self.cache_n_layers is None:
                 latents = self._aggregate_layers(latents)
             yield latents
 
+    def _get_video_data(self, event: etypes.Video) -> np.ndarray:
+        if self.frequency == 0:
+            msg = "HuggingFaceImage requires frequency='native' or a positive frequency for Video events."
+            raise ValueError(msg)
+        video = event.read()
+        try:
+            freq = event.frequency if self.frequency == "native" else self.frequency
+            expect_frames = max(1, base.Frequency(freq).to_ind(event.duration))
+            times = np.linspace(0, video.duration, expect_frames + 1)[1:]
+            frames = [_VideoImage(video=video, time=float(t)) for t in times]
+            embeddings = []
+            for embd in BaseImage._get_data(self, frames):
+                if self.cache_n_layers is None:
+                    embd = self._aggregate_layers(embd)
+                embeddings.append(np.asarray(embd))
+            output = np.stack(embeddings, axis=0)
+            output = output.transpose(list(range(1, output.ndim)) + [0])
+            return output.astype(np.float32)
+        finally:
+            video.close()
+
     def model_post_init(self, log__):
         if self.imsize is not None:
-            warn_once(
+            utils.warn_once(
                 f'The effect of "imsize"={self.imsize} might be cancelled by '
                 "the HuggingFace processor."
             )
@@ -311,7 +374,42 @@ class HuggingFaceImage(BaseImage):
         # (batch, n_layers, tokens, n_features)
         return out  # type: ignore
 
+    def _get_timed_arrays(
+        self,
+        events: list[etypes.Image | etypes.Video],
+        start: float,
+        duration: float,
+    ) -> tp.Iterable[base.TimedArray]:
+        if self.event_types == "Video":
+            video_events = tp.cast(list[etypes.Video], events)
+            for event, latents in zip(video_events, self._get_data(video_events)):
+                freq = event.frequency if self.frequency == "native" else self.frequency
+                tarray = base.TimedArray(
+                    data=np.asarray(latents),
+                    frequency=freq,
+                    start=base._UNSET_START,
+                    duration=event.duration,
+                )
+                sub = tarray.with_start(event.start).overlap(
+                    start=start, duration=duration
+                )
+                if self.cache_n_layers is not None:
+                    sub.data = self._aggregate_layers(sub.data)
+                yield sub
+            return
+        for image_event, latents in zip(events, self._get_data(events)):
+            if self.cache_n_layers is not None:
+                latents = self._aggregate_layers(latents)
+            yield base.TimedArray(
+                frequency=0,
+                duration=image_event.duration,
+                start=image_event.start,
+                data=np.asarray(latents),
+            )
+
     def get_static(self, event: etypes.Image) -> torch.Tensor:
+        if self.event_types == "Video":
+            raise TypeError("Use HuggingFaceImage.__call__ for Video events.")
         # layer * patches * size
         latent = next(self._get_data([event]))
         latent = np.array(latent, copy=False)  # make sure it's loaded from memmap
@@ -321,7 +419,7 @@ class HuggingFaceImage(BaseImage):
         return torch.Tensor(np.array(latent, copy=True))
 
 
-class BaseClassicImageExtractor(BaseStatic):
+class BaseClassicImageExtractor(extractor_base.BaseStatic):
     """Base class for classic image extractors, e.g. based on numpy, skimage, OpenCV, etc.
 
     Parameters

@@ -14,65 +14,15 @@ from tqdm import tqdm
 
 from neuralset import base as nsbase
 from neuralset.events import etypes as evts
-from neuralset.utils import ignore_all
 
-from .base import BaseExtractor
-from .image import HuggingFaceImage, _fix_pixel_values
+from . import base as extractor_base
+from . import image as image_extractors
 
 logger = logging.getLogger(__name__)
 # activate with:
 # logging.getLogger("neuralset").setLevel(logging.DEBUG)
 
-
-class _VideoImage(evts.Image):
-    """Image event wrapper for extracting individual frames from a video.
-
-    This class extends the base Image event to enable frame-by-frame processing
-    of videos. It extracts a single frame at a specified time point and presents
-    it as an Image event.
-
-    Parameters
-    ----------
-    start : float, default=0.0
-        The start time of the image event.
-    timeline : str, default="fake"
-        Timeline identifier for the image event. Uses "fake" since this is a virtual
-        event derived from video data rather than an original image event.
-    video : moviepy.editor.VideoFileClip
-        The loaded video object from which to extract frames. Should be a MoviePy
-        VideoFileClip instance with frame extraction capabilities.
-    time : float, default=0.0
-        The exact timestamp (in seconds) within the video at which to extract
-        the frame. Must be within [0, video.duration].
-    duration : float, default=1.0
-        The nominal duration of the image event (in seconds). By convention, it is set to 1.
-    filepath : str, default=""
-        Auto-generated filepath identifier for caching purposes. Automatically
-        constructed as "{video_filename}:{time:.3f}" to ensure unique cache keys
-        for each frame.
-    """
-
-    start: float = 0.0
-    timeline: str = "fake"
-    duration: float = 1.0
-    video: tp.Any
-    time: float = 0.0
-    filepath: str = ""
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        if self.filepath:
-            raise ValueError("Filepath is automatically filled")
-        # create a custom filepath for caching
-        self.filepath = f"{self.video.filename}:{self.time:.3f}"
-        super().model_post_init(log__)
-
-    def _read(self) -> tp.Any:
-        import PIL  # noqa
-
-        # may require: pip install moviepy==2.0.0.dev2
-        with ignore_all():
-            img = self.video.get_frame(self.time)
-        return PIL.Image.fromarray(img.astype("uint8"))
+_VideoImage = image_extractors._VideoImage
 
 
 def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
@@ -95,25 +45,22 @@ def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
     return output
 
 
-class HuggingFaceVideo(BaseExtractor):
-    """Extract video features using a HuggingFace transformer model.
+class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceMixin):
+    """Extract video embeddings using a native HuggingFace video model.
 
-    This feature extractor supports two processing modes:
-
-    1. **Image-based processing**: When using an image model, videos are sampled
-       at the specified frequency and each frame is processed independently.
-
-    2. **Video-based processing**: When using a native video model (e.g., VideoMAE,
-       XClip), videos are divided into clips of `clip_duration` seconds at the
-       specified frequency. Each clip is processed by the video model, and features
-       are aggregated over time.
+    Videos are divided into clips of `clip_duration` seconds at the specified
+    frequency. Each clip is processed by the video model, and features are
+    aggregated over layers/tokens using the HuggingFace extractor options.
 
     Parameters
     ----------
-    image : HuggingFaceImage, default=HuggingFaceImage(model_name="MCG-NJU/videomae-base")
-        Image or video feature extractor configuration. If `image.model_name` refers
-        to an image model (e.g., ViT), frames are extracted and processed independently.
-        If it's a video model, clips are processed using the native video architecture.
+    model_name : str, default="MCG-NJU/videomae-base"
+        HuggingFace video model identifier.
+        Image models are not accepted here; use `HuggingFaceImage` for
+        frame-by-frame video embeddings.
+    pretrained : bool, default=True
+        Whether to load pretrained weights from model. If False, initializes
+        the model with random weights from the model configuration.
     use_audio : bool, default=True
         Whether to include audio alongside video frames during feature extraction.
         Only applicable for models that support multimodal inputs (e.g., LLaVA-Video).
@@ -143,11 +90,8 @@ class HuggingFaceVideo(BaseExtractor):
         "torchvision>=0.15.2",
         "julius>=0.2.7",
     )
-    image: HuggingFaceImage = HuggingFaceImage(
-        model_name="MCG-NJU/videomae-base",
-        infra=MapInfra(keep_in_ram=False),
-        imsize=None,  # type: ignore[arg-type]
-    )
+    model_name: str = "MCG-NJU/videomae-base"
+    pretrained: bool = True
     use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
@@ -163,86 +107,32 @@ class HuggingFaceVideo(BaseExtractor):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        if self.image.infra.keep_in_ram:
-            msg = "video.image.infra.keep_in_ram must be False to avoid overload"
+        if not any(z in self.model_name for z in _HFVideoModel.MODELS):
+            msg = (
+                f"Model {self.model_name!r} is not a supported native video model. "
+                "Use HuggingFaceImage for frame-by-frame video embeddings."
+            )
             raise ValueError(msg)
-        for name in ["folder", "cluster"]:
-            val = getattr(self.image.infra, name)
-            if val is not None:
-                raise ValueError(f"image.infra.{name} must be None, (got {val!r})")
-        model = self.image.model_name
-        if "video" in model and "videomae" not in model:
-            msg = "Currently unclear if this supports any video model but videomae model"
-            raise NotImplementedError(msg)
-        _HFVideoModel.check_layer_type(layer_type=self.layer_type, model_name=model)
-        super().model_post_init(log__)
+        _HFVideoModel.check_layer_type(
+            layer_type=self.layer_type, model_name=self.model_name
+        )
+
+    @classmethod
+    def _exclude_from_cls_uid(cls) -> list[str]:
+        return extractor_base.HuggingFaceMixin._exclude_from_cls_uid()
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        ex = super()._exclude_from_cache_uid()
-        im_ex = self.image._exclude_from_cache_uid()
-        return ex + [f"image.{n}" for n in im_ex]
-
-    def _get_data_from_image_model(
-        self, events: list[evts.Video]
-    ) -> tp.Iterator[nsbase.TimedArray]:
-        # read all videos of the events
-        config = getattr(self.image.model.model, "config", object())
-        config = getattr(config, "vision_config", config)  # xclip
-        if hasattr(config, "num_frames"):
-            name = self.image.model_name
-            msg = f"Model {name!r} seems to be a video model, but treated as image"
-            raise RuntimeError(msg)
-        for event in tqdm(events, desc="Computing video latents"):
-            video = event.read()
-            n_frames = int(video.duration * video.fps)
-            freq = event.frequency if self.frequency == "native" else self.frequency
-            expect_frames = nsbase.Frequency(freq).to_ind(event.duration)
-            logger.debug(
-                "Loaded Video (duration %ss at %sfps, %s frames of shape %s):\n %s",
-                video.duration,
-                video.fps,
-                n_frames,
-                tuple(video.size),
-                event.filepath,
-            )
-            times = np.linspace(0, video.duration, expect_frames)
-            # TODO warn about aspect ratio? resize leads to aspect ratio 1:1
-            ims = [_VideoImage(video=video, time=t) for t in times]
-            output = torch.Tensor([])
-            # pylint: disable=protected-access
-            k = -1
-            for k, embd in enumerate(
-                tqdm(self.image._get_data(ims), total=len(times), leave=False)
-            ):
-                if not k:
-                    output = torch.zeros(len(times), *embd.shape)
-                    logger.debug("Created Tensor with size %s", output.shape)
-                output[k] = torch.Tensor(embd)
-            logger.debug("Finished encoding video at video frame rate")
-            if k != len(times) - 1:
-                raise RuntimeError(f"Expected {len(times)} frames, got {k + 1}")
-            # resample full output
-            if abs(output.shape[0] - expect_frames) > 1:  # some flexibility allowed
-                output = output.to(self.image.device)
-                output = resamp_first_dim(output, expect_frames).cpu()
-                logger.debug("Resampled video embeddings at frequency %s", self.frequency)
-            # set first (time) dim to last
-            output = output.permute(list(range(1, output.dim())) + [0])
-            freq = event.frequency if self.frequency == "native" else self.frequency
-            yield nsbase.TimedArray(
-                data=output.cpu().numpy().astype(np.float32),
-                frequency=freq,
-                start=nsbase._UNSET_START,
-                duration=event.duration,
-            )
+        return extractor_base.BaseExtractor._exclude_from_cache_uid(
+            self
+        ) + extractor_base.HuggingFaceMixin._exclude_from_cache_uid(self)
 
     def _get_timed_arrays(
         self, events: list[evts.Video], start: float, duration: float
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
             sub = ta.with_start(event.start).overlap(start=start, duration=duration)
-            if self.image.cache_n_layers is not None:
-                sub.data = self.image._aggregate_layers(sub.data)
+            if self.cache_n_layers is not None:
+                sub.data = self._aggregate_layers(sub.data)
             yield sub
 
     @infra.apply(
@@ -252,19 +142,15 @@ class HuggingFaceVideo(BaseExtractor):
     def _get_data(self, events: list[evts.Video]) -> tp.Iterator[nsbase.TimedArray]:
         # read all videos of the events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
-        if not any(z in self.image.model_name for z in _HFVideoModel.MODELS):
-            yield from self._get_data_from_image_model(events)
-            return
-
         model = _HFVideoModel(
-            model_name=self.image.model_name,
-            pretrained=self.image.pretrained,
+            model_name=self.model_name,
+            pretrained=self.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
         )
         if model.model.device.type == "cpu":
             # may already be dispatched (with "accelerate")
-            model.model.to(self.image.device)
+            model.model.to(self.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)
         freq = events[0].frequency if self.frequency == "native" else self.frequency
@@ -307,9 +193,9 @@ class HuggingFaceVideo(BaseExtractor):
                 if t_embd.shape[0] != 1:
                     raise RuntimeError(f"Found several batches: {t_embd.shape}")
                 t_embd = t_embd[0]  # aggregate_tokens works on non-batched-data
-                embd = self.image._aggregate_tokens(t_embd).cpu().numpy()
-                if self.image.cache_n_layers is None:
-                    embd = self.image._aggregate_layers(embd)
+                embd = self._aggregate_tokens(t_embd).cpu().numpy()
+                if self.cache_n_layers is None:
+                    embd = self._aggregate_layers(embd)
                 if not output.size:
                     output = np.zeros((len(times),) + embd.shape)
                     logger.debug("Created Tensor with size %s", output.shape)
@@ -463,7 +349,7 @@ class _HFVideoModel:
         kwargs[field] = list(images)
         inputs = self.processor(**kwargs)
         # prevent nans (happening for uniform images)
-        _fix_pixel_values(inputs)
+        image_extractors._fix_pixel_values(inputs)
         inputs = inputs.to(self.model.device)
         with torch.inference_mode():
             pred = self.model(**inputs)

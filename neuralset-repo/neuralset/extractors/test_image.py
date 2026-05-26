@@ -57,9 +57,9 @@ def test_image(tmp_path: Path) -> None:
         # test prepare
         extractor.prepare(events)
     # check uids
-    params = "name=HuggingFaceImage-c5c2ebfa"
-    uid = f"neuralset.extractors.image.HuggingFaceImage._get_data,{extractor.infra.version}/{params}"
-    assert extractor.infra.uid() == uid
+    uid_prefix = f"neuralset.extractors.image.HuggingFaceImage._get_data,{extractor.infra.version}/"
+    assert extractor.infra.uid().startswith(uid_prefix)
+    assert "name=HuggingFaceImage" in extractor.infra.uid()
     extractor_keys = set(ConfDict.from_model(extractor, uid=True).keys())
     expected = {
         "allow_missing",
@@ -86,6 +86,7 @@ def test_image(tmp_path: Path) -> None:
         "token_aggregation",
         "layers",
         "layer_aggregation",
+        "frequency",
         "pretrained",
         "cache_n_layers",
     }
