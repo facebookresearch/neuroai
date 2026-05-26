@@ -1057,6 +1057,55 @@ class FnirsExtractor(MneRaw):
 # ---------------------------------------------------------------------------
 
 
+class FmriConfoundsDenoiser(pydantic.BaseModel):
+    """Configuration for loading fMRIPrep confounds with Nilearn.
+
+    Fields mirror the keyword arguments of
+    ``nilearn.interfaces.fmriprep.load_confounds``.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+    strategy: tuple[
+        tp.Literal[
+            "motion",
+            "wm_csf",
+            "global_signal",
+            "compcor",
+            "ica_aroma",
+            "tedana",
+            "scrub",
+            "high_pass",
+        ],
+        ...,
+    ] = ("motion", "high_pass", "wm_csf")
+    motion: tp.Literal["basic", "power2", "derivatives", "full"] = "full"
+    scrub: int = 5
+    fd_threshold: float = 0.5
+    std_dvars_threshold: float = 1.5
+    wm_csf: tp.Literal["basic", "power2", "derivatives", "full"] = "basic"
+    global_signal: tp.Literal["basic", "power2", "derivatives", "full"] = "basic"
+    compcor: tp.Literal[
+        "anat_combined",
+        "anat_separated",
+        "temporal",
+        "temporal_anat_combined",
+        "temporal_anat_separated",
+    ] = "anat_combined"
+    n_compcor: tp.Literal["all"] | int = "all"
+    ica_aroma: tp.Literal["full", "basic"] = "full"
+    tedana: tp.Literal["aggressive", "non-aggressive"] = "aggressive"
+    demean: bool = True
+
+    def load_confounds(self, event: etypes.Fmri) -> tp.Any:
+        import nilearn.interfaces.fmriprep
+
+        confounds, _sample_mask = nilearn.interfaces.fmriprep.load_confounds(
+            str(event.filepath),
+            **self.model_dump(),
+        )
+        return confounds
+
+
 class FmriCleaner(pydantic.BaseModel):
     """Configuration for fMRI signal cleaning.
 
@@ -1085,12 +1134,13 @@ class FmriCleaner(pydantic.BaseModel):
     filter: tp.Literal["butterworth", "cosine"] | None = None
     ensure_finite: bool = True
 
-    def clean(self, data: np.ndarray, t_r: float) -> np.ndarray:
+    def clean(self, data: np.ndarray, t_r: float, confounds: tp.Any = None) -> np.ndarray:
         if (
             self.detrend
             or self.standardize
             or (self.high_pass is not None)
             or (self.low_pass is not None)
+            or (confounds is not None)
         ):
             import nilearn.signal
 
@@ -1105,6 +1155,7 @@ class FmriCleaner(pydantic.BaseModel):
                 filter=self.filter,
                 detrend=self.detrend,
                 ensure_finite=self.ensure_finite,
+                confounds=confounds,
             )
             data = data.reshape(shape).T
         return data
@@ -1454,7 +1505,8 @@ class FmriExtractor(BaseExtractor):
        MaskProjector (-> [n_voxels, time]), and AtlasProjector (-> [n_parcels, time]).
 
     3. **Signal cleaning** (``cleaning``):
-       If active, cleans the data using ``nilearn.signal.clean``.
+       If active, cleans the data using ``nilearn.signal.clean``, including
+       optional fMRIPrep confounds regression.
 
     4. **Temporal resampling** (``frequency``):
        If active, resamples the data to the target frequency, using np.interp.
@@ -1473,6 +1525,10 @@ class FmriExtractor(BaseExtractor):
     cleaning : FmriCleaner | None
         Signal cleaning config, passed to ``nilearn.signal.clean``.
         ``None`` skips all cleaning.
+    confounds : FmriConfoundsDenoiser | None
+        Optional fMRIPrep confounds loading config. If provided, confounds
+        are loaded with ``nilearn.interfaces.fmriprep.load_confounds`` before
+        signal cleaning and forwarded to ``FmriCleaner.clean``.
     frequency : ``"native"`` | float
         Target sampling frequency.
     padding : int | ``"auto"`` | None
@@ -1495,6 +1551,7 @@ class FmriExtractor(BaseExtractor):
     event_types: tp.Literal["Fmri"] = "Fmri"
     projection: BaseFmriProjector | None = None
     cleaning: FmriCleaner | None = FmriCleaner()
+    confounds: FmriConfoundsDenoiser | None = None
     frequency: tp.Literal["native"] | float = "native"
     padding: int | tp.Literal["auto"] | None = None
     from_space: str | None = None
@@ -1695,8 +1752,15 @@ class FmriExtractor(BaseExtractor):
                 header["affine"] = np.array(rec.affine, dtype=np.float64)
 
         # --- signal cleaning ---
+        confounds = None
+        if self.confounds is not None:
+            confounds = self.confounds.load_confounds(event)
         if self.cleaning is not None:
-            data = self.cleaning.clean(data, t_r=1 / event.frequency)
+            data = self.cleaning.clean(
+                data,
+                t_r=1 / event.frequency,
+                confounds=confounds,
+            )
 
         # --- temporal resampling ---
         if self.frequency not in ("native", event.frequency):
