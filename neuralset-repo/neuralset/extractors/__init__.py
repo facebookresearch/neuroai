@@ -32,6 +32,7 @@ from .neuro import (
     EegExtractor,
     EmgExtractor,
     FmriCleaner,
+    FmriConfoundsDenoiser,
     FmriExtractor,
     FnirsExtractor,
     HrfConvolve,
