@@ -486,9 +486,11 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
-    # Extra kwargs for ``from_pretrained`` when HF accelerate is dispatching the
-    # model across GPUs. Empty otherwise; truthiness == "accelerate is active".
+    # Extra kwargs forwarded to ``from_pretrained``. Currently only populated
+    # when ``device="accelerate"``; consult ``_uses_accelerate`` (not this
+    # field's truthiness) to test whether HF accelerate is dispatching.
     _hf_kwargs: dict[str, tp.Any] = pydantic.PrivateAttr(default_factory=dict)
+    _uses_accelerate: bool = pydantic.PrivateAttr(default=False)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -500,6 +502,7 @@ class HuggingFaceMixin(base.BaseModel):
             # Resolve it once: tensors go to cuda; the model is built with
             # device_map="auto" + fp16 (so callers skip the usual .to(device)).
             self._hf_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+            self._uses_accelerate = True
             self.device = "cuda"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]

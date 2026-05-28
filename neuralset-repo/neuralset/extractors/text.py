@@ -373,7 +373,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             with torch.no_grad():
                 for p in model.parameters():
                     part_reversal(p)
-        if not self._hf_kwargs:
+        if not self._uses_accelerate:
             # accelerate dispatches the model internally; otherwise place it ourselves
             model.to(self.device)
         model.eval()
@@ -489,7 +489,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self._hf_kwargs:
+                if self._uses_accelerate:
                     # accelerate may dispatch across multiple GPUs; free cache "just in case"
                     torch.cuda.empty_cache()
 

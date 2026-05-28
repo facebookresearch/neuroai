@@ -233,7 +233,7 @@ class BaseImage(BaseStatic, HuggingFaceMixin):
                     # - aggregating in cuda avoids transferring too much data to cpu
                     latent = self._aggregate_tokens(latent)
                     yield latent.cpu().numpy()
-                if self._hf_kwargs:
+                if self._uses_accelerate:
                     # accelerate may dispatch across multiple GPUs; free cache "just in case"
                     torch.cuda.empty_cache()
 
@@ -296,7 +296,7 @@ class HuggingFaceImage(BaseImage):
                 pretrained=self.pretrained,
                 model_kwargs=self._hf_kwargs,
             )
-            if not self._hf_kwargs:
+            if not self._uses_accelerate:
                 # accelerate dispatches the model internally; otherwise place it ourselves
                 self._model.to(self.device)
         return self._model
