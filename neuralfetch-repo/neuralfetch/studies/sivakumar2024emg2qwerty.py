@@ -16,21 +16,11 @@ from pathlib import Path
 import mne_bids
 import pandas as pd
 import pydantic
-from mne.io.constants import FIFF
-from mne.utils import check_version
 
 from neuralfetch import download
 from neuralset.events import etypes, study
 
 LOGGER = logging.getLogger(__name__)
-
-# mne_bids ≥ 0.19 reads BDF EMG channels with the correct microvolt
-# units from the BIDS sidecars (``channels.tsv`` / ``_emg.json``).
-# Older releases return the data in volts, so :class:`BidsEmg._read`
-# applies a manual V→µV rescale.  ``10 ** (-FIFF.FIFF_UNITM_MU)`` is
-# the canonical FIFF "micro" multiplier ⇒ ``1e6``.
-_MNE_BIDS_HANDLES_EMG_UNITS: bool = check_version("mne_bids", "0.19")
-_VOLT_TO_MICROVOLT: float = 10 ** (-FIFF.FIFF_UNITM_MU)
 
 # CTC vocabulary from Sivakumar et al. (NeurIPS 2024): 98 keys + blank.
 # Inlined here so the events dataframe can carry pre-computed integer
@@ -53,26 +43,14 @@ PAPER_NUM_CLASSES = PAPER_NULL_CLASS + 1  # 99 — CTC head width
 class BidsEmg(etypes.Emg):
     """BIDS EMG event — reads via ``mne_bids.read_raw_bids``.
 
-    On mne_bids ≥ 0.19 the sidecar load (channel types from
-    ``channels.tsv``, units from ``channels.tsv`` / ``_emg.json``) is
-    correct and the EMG channels are returned in microvolts.  Older
-    mne_bids returns them in volts; in that case we ``load_data`` and
-    apply a V→µV rescale so downstream code can stay version-agnostic.
+    mne_bids ≥ 0.19 reads the channel types from ``channels.tsv`` and the
+    units from ``channels.tsv`` / ``_emg.json``, so the EMG channels are
+    returned in microvolts with no manual rescaling needed.
     """
 
     def _read(self) -> tp.Any:
         bp = mne_bids.get_bids_path_from_fname(self.filepath)
-        raw = mne_bids.read_raw_bids(bp, verbose=False)
-        if _MNE_BIDS_HANDLES_EMG_UNITS:
-            return raw
-        raw.load_data(verbose=False)
-        raw.apply_function(
-            lambda x: x * _VOLT_TO_MICROVOLT,
-            picks=raw.ch_names,
-            channel_wise=False,
-            verbose=False,
-        )
-        return raw
+        return mne_bids.read_raw_bids(bp, verbose=False)
 
 
 class Sivakumar2024Emg2qwerty(study.Study):

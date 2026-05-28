@@ -830,7 +830,7 @@ class Eegdash(BaseDownload):
         EEGDash database to query (``"eegdash"``, ``"eegdash_staging"``, …).
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash>=0.8",)
     database: str = "eegdash"
 
     @staticmethod
