@@ -10,6 +10,7 @@ Extracted from :class:`neuralbench.main.Experiment` to keep the experiment
 lifecycle class focused on orchestration.
 """
 
+import functools
 import inspect
 import logging
 import typing as tp
@@ -35,6 +36,16 @@ from .utils import (
 LOGGER = logging.getLogger(__name__)
 
 
+@functools.cache
+def _braindecode_init_accepts(model_cls: type) -> tuple[frozenset[str], bool]:
+    """Return ``(accepted_names, accepts_var_kw)`` for ``model_cls.__init__``."""
+    params = inspect.signature(model_cls.__init__).parameters
+    return (
+        frozenset(p.name for p in params.values()),
+        any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()),
+    )
+
+
 def build_braindecode_model(
     brain_model_config: BaseBrainDecodeModel,
     downstream_model_wrapper: DownstreamWrapper | None,
@@ -43,12 +54,12 @@ def build_braindecode_model(
     n_times: int,
     n_outputs: int,
 ) -> torch.nn.Module:
-    """Build a braindecode model, handling channel name extraction.
+    """Build a braindecode model.
 
-    Forwards every EEGModuleMixin parameter (``n_chans``, ``n_times``,
-    ``n_outputs``, ``sfreq``, ``input_window_seconds``, ``chs_info``) and
-    drops the ones the target class's ``__init__`` doesn't accept, so the
-    full ``braindecode.models`` catalogue builds without per-model kwargs.
+    Forwards the standard EEG arguments and drops the ones the target
+    class's ``__init__`` doesn't accept, so the full ``braindecode.models``
+    catalogue builds without per-model YAML overrides.  ``input_window_seconds``
+    is intentionally omitted: braindecode derives it from ``n_times / sfreq``.
 
     When *downstream_model_wrapper* is set, ``n_outputs`` is not passed to
     the model (the wrapper's probe handles output projection).
@@ -62,15 +73,15 @@ def build_braindecode_model(
         build_kwargs["n_outputs"] = n_outputs
     neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
     ch_names = list(neuro_extractor._channels.keys())
-    if _needs_ch_names or len(ch_names) == n_in_channels:
+    if _needs_ch_names:
         assert len(ch_names) == n_in_channels, (
             f"Expected {n_in_channels} channels, but got {len(ch_names)} channel names."
         )
+    if len(ch_names) == n_in_channels:
         build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
-    sfreq = float(getattr(neuro_extractor, "frequency", 0.0)) or None
-    if sfreq is not None:
-        build_kwargs["sfreq"] = sfreq
-        build_kwargs["input_window_seconds"] = n_times / sfreq
+    frequency = getattr(neuro_extractor, "frequency", None)
+    if isinstance(frequency, (int, float)):
+        build_kwargs["sfreq"] = float(frequency)
 
     if brain_model_config.from_pretrained_name is not None:
         n_adapter_chans = (
@@ -86,8 +97,9 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
-    accepted = set(inspect.signature(type(brain_model_config)._MODEL_CLASS.__init__).parameters)
-    build_kwargs = {k: v for k, v in build_kwargs.items() if k in accepted}
+    accepted, var_kw = _braindecode_init_accepts(type(brain_model_config)._MODEL_CLASS)
+    if not var_kw:
+        build_kwargs = {k: v for k, v in build_kwargs.items() if k in accepted}
     return brain_model_config.build(**build_kwargs)
 
 

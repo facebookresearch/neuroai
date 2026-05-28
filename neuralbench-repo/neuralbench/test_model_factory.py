@@ -7,37 +7,70 @@
 """Build every classifier-shaped braindecode model via
 :func:`neuralbench.model_factory.build_braindecode_model`.
 
-Drives the catalogue from ``braindecode.models.util.models_dict`` (which
-only includes ``EEGModuleMixin`` subclasses, so naturally excludes TCN
-and helper classes), minus families covered elsewhere (foundation
-models, sleep stagers, EMG/MEG, signal-JEPA, interpolated wrappers).
+Drives the catalogue from ``braindecode.models.util.models_dict`` (only
+``EEGModuleMixin`` subclasses).  ``ALREADY_IMPLEMENTED`` is derived from
+the dedicated YAML configs under ``neuralbench/models/`` so the set
+stays in sync automatically; ``NON_EEG_CLASSIFIERS`` is a short
+hand-maintained list of upstream classes that don't take 22-ch EEG
+input (sleep stagers, EMG/MEG, self-supervised heads).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
+import neuraltrain.models  # noqa: F401  triggers BaseBrainDecodeModel subclass registration
 import pytest
 import torch
 from braindecode.models.util import models_dict
+from neuralbench.registry import load_yaml_config
 from neuraltrain.models import base as bd_base
 
 from neuralbench.model_factory import build_braindecode_model
 
 
-# Foundation models with neuralbench YAMLs + dedicated pretrained-weight
-# pipelines (exp1 probe sweep). Skipped here because they require fixed
-# channel layouts / pretrained checkpoints not present in this fixture.
-ALREADY_IMPLEMENTED = {
-    "BENDR", "BIOT", "Labram",
-    "InterpolatedBENDR", "InterpolatedBIOT",
-    "InterpolatedLaBraM", "InterpolatedSignalJEPA",
-}
-# Architectures incompatible with the EEG fixture (22-ch, 1000 samples).
+def _all_brain_model_configs() -> dict[str, type]:
+    out: dict[str, type] = {}
+    stack = [bd_base.BaseBrainDecodeModel]
+    while stack:
+        cls = stack.pop()
+        out[cls.__name__] = cls
+        stack.extend(cls.__subclasses__())
+    return out
+
+
+def _foundation_class_names() -> set[str]:
+    """Braindecode class names already wired up via dedicated YAMLs."""
+    yaml_dir = Path(__file__).parent / "models"
+    configs = _all_brain_model_configs()
+    names = set()
+    for path in yaml_dir.glob("*.yaml"):
+        cfg = load_yaml_config(path) or {}
+        bm = (cfg.get("brain_model_config") or {})
+        if not isinstance(bm, dict) or "from_pretrained_name" not in bm:
+            continue
+        cfg_cls = configs.get(bm.get("name", ""))
+        if cfg_cls is None:
+            continue
+        cfg_cls._ensure_model_class()
+        underlying = getattr(cfg_cls, "_MODEL_CLASS", None)
+        if underlying is not None and underlying.__name__ in models_dict:
+            names.add(underlying.__name__)
+    # The Interpolated* wrappers reuse the same pretrained weights and are
+    # implicitly covered by the foundation entries above.
+    names.update(n for n in models_dict if n.startswith("Interpolated"))
+    return names
+
+
+ALREADY_IMPLEMENTED = _foundation_class_names()
+# Upstream classes that don't fit a 22-ch EEG fixture (sleep models with
+# minute-scale inputs, EMG/MEG-specific channel layouts, self-supervised
+# pretext nets with no classifier head).
 NON_EEG_CLASSIFIERS = {
-    "AttnSleep", "USleep",                          # sleep-specific input
-    "EMG2QwertyNet", "MetaNeuromotorHand",          # EMG / MEG modality
-    "SignalJEPA", "SignalJEPA_Contextual",          # self-supervised, no head
+    "AttnSleep", "USleep",
+    "EMG2QwertyNet", "MetaNeuromotorHand",
+    "SignalJEPA", "SignalJEPA_Contextual",
 }
 CLASSIFIERS = sorted(
     name for name in models_dict
@@ -60,7 +93,7 @@ def test_build_raises_when_runtime_kwargs_overlap_config() -> None:
     redefining a data-derived value -- ``BaseBrainDecodeModel.build()`` must
     raise so the mismatch surfaces instead of being silently overridden."""
     config = bd_base.EEGNet(kwargs={"sfreq": 250.0})
-    with pytest.raises(ValueError, match="overlap"):
+    with pytest.raises(ValueError, match="kwargs overlap with config kwargs for keys"):
         build_braindecode_model(
             brain_model_config=config,
             downstream_model_wrapper=None,
