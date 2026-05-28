@@ -69,6 +69,13 @@ def build_results_df(
     )
     df["loss_name"] = df.loss.apply(pd.Series).name
     df["metric_name"] = df.loss_name.map(loss_to_metric_mapping)
+    unmapped = df.loc[df["metric_name"].isna(), "loss_name"].unique().tolist()
+    if unmapped:
+        raise KeyError(
+            "No headline metric configured in loss_to_metric_mapping for "
+            f"loss name(s) {unmapped}.  Add an entry to "
+            "neuralbench.aggregator.Aggregator.loss_to_metric_mapping."
+        )
     df["metric_value"] = df.apply(lambda x: x[x["metric_name"]], axis=1)
     _SCALE_TO_PERCENT = {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
     df.loc[df.metric_name.isin(_SCALE_TO_PERCENT), "metric_value"] *= 100.0

@@ -268,7 +268,8 @@ class MultiLoss(nn.Module):
             If provided as a dictionary, the keys must match the loss names provided when
             the class was instantiated.
         """
-        loss_values = {"total": torch.tensor(0.0)}
+        device = x[next(iter(x))].device if isinstance(x, dict) else x.device
+        loss_values = {"total": torch.tensor(0.0, device=device)}
         for name in self.losses:
             _x = x[name] if isinstance(x, dict) else x
             _y = y[name] if isinstance(y, dict) else y

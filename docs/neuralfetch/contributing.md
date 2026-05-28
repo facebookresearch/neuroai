@@ -183,7 +183,7 @@ so populating `_info` is what enables test coverage.
 
 ## Useful References
 
-- [Create Your Own Study tutorial](auto_examples/03_create_new_study) —
+- [Create or share a study tutorial](auto_examples/03_create_new_study) —
   step-by-step Sphinx Gallery tutorial with runnable code.
 - [NeuralSet contributing guide](../neuralset/extending/contributing.md) —
   general coding standards, pre-commit hooks, fork/PR workflow.
