@@ -45,10 +45,10 @@ def build_braindecode_model(
 ) -> torch.nn.Module:
     """Build a braindecode model, handling channel name extraction.
 
-    Some braindecode models (REVE, BENDR, LaBraM) require explicit channel
-    name information via ``chs_info``.  Model-specific adaptation (e.g.
-    temporal embedding resizing for LaBraM) is handled by the model
-    config's own ``build()`` method.
+    Forwards every EEGModuleMixin parameter (``n_chans``, ``n_times``,
+    ``n_outputs``, ``sfreq``, ``input_window_seconds``, ``chs_info``) and
+    drops the ones the target class's ``__init__`` doesn't accept, so the
+    full ``braindecode.models`` catalogue builds without per-model kwargs.
 
     When *downstream_model_wrapper* is set, ``n_outputs`` is not passed to
     the model (the wrapper's probe handles output projection).
@@ -60,13 +60,17 @@ def build_braindecode_model(
             "BIOT requires a downstream_model_wrapper"
         )
         build_kwargs["n_outputs"] = n_outputs
-    if _needs_ch_names:
-        neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
-        ch_names = list(neuro_extractor._channels.keys())
+    neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
+    ch_names = list(neuro_extractor._channels.keys())
+    if _needs_ch_names or len(ch_names) == n_in_channels:
         assert len(ch_names) == n_in_channels, (
             f"Expected {n_in_channels} channels, but got {len(ch_names)} channel names."
         )
         build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
+    sfreq = float(getattr(neuro_extractor, "frequency", 0.0)) or None
+    if sfreq is not None:
+        build_kwargs["sfreq"] = sfreq
+        build_kwargs["input_window_seconds"] = n_times / sfreq
 
     if brain_model_config.from_pretrained_name is not None:
         n_adapter_chans = (
@@ -82,6 +86,8 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
+    accepted = set(inspect.signature(type(brain_model_config)._MODEL_CLASS.__init__).parameters)
+    build_kwargs = {k: v for k, v in build_kwargs.items() if k in accepted}
     return brain_model_config.build(**build_kwargs)
 
 
