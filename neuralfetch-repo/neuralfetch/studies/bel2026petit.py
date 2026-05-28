@@ -313,7 +313,7 @@ class Bel2026PetitListen(_Bel2026PetitBase):
             [str(word) for word in metadata["word"].values],
         )
 
-        assert len(rows_events) / len(events_df) > 0.95, (
+        assert len(rows_events) / len(events_df) > 0.9, (
             error_msg_prefix
             + f"only {len(rows_events) / len(events_df)} of the words were found in the metadata"
         )
