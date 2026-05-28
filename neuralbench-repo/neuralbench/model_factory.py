@@ -10,7 +10,6 @@ Extracted from :class:`neuralbench.main.Experiment` to keep the experiment
 lifecycle class focused on orchestration.
 """
 
-import functools
 import inspect
 import logging
 import typing as tp
@@ -34,16 +33,6 @@ from .utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-@functools.cache
-def _braindecode_init_accepts(model_cls: type) -> tuple[frozenset[str], bool]:
-    """Return ``(accepted_names, accepts_var_kw)`` for ``model_cls.__init__``."""
-    params = inspect.signature(model_cls.__init__).parameters
-    return (
-        frozenset(p.name for p in params.values()),
-        any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()),
-    )
 
 
 def build_braindecode_model(
@@ -97,9 +86,9 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
-    accepted, var_kw = _braindecode_init_accepts(type(brain_model_config)._MODEL_CLASS)
-    if not var_kw:
-        build_kwargs = {k: v for k, v in build_kwargs.items() if k in accepted}
+    params = inspect.signature(type(brain_model_config)._MODEL_CLASS.__init__).parameters
+    if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        build_kwargs = {k: v for k, v in build_kwargs.items() if k in params}
     return brain_model_config.build(**build_kwargs)
 
 
