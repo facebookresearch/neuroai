@@ -182,7 +182,20 @@ class BrainModule(pl.LightningModule):
             )
         else:
             loss = self.loss(y_pred, y_true)
-        self.log(f"{step_name}/loss", loss, **log_kwargs)
+
+        # A loss may return a dict of named components with a ``"total"``
+        # key (e.g. multi-term objectives); CTC and plain losses return a
+        # single tensor and fall through to the ``else`` branch.
+        if isinstance(loss, dict):
+            loss_total = loss["total"]
+            for k, v in loss.items():
+                if k == "total":
+                    self.log(f"{step_name}/loss", v, **log_kwargs)
+                else:
+                    self.log(f"{step_name}/loss_{k}", v, **log_kwargs)
+            loss = loss_total
+        else:
+            self.log(f"{step_name}/loss", loss, **log_kwargs)
 
         # Just update metrics, don't compute or log yet
         for metric_name, metric in self.metrics.items():

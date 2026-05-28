@@ -55,7 +55,8 @@ class BaseExtractor(base._Module, base.NamedModel):
         Strategy for combining values when multiple matching events fall
         inside the same segment:
 
-        * ``"single"`` — exactly one event expected (raises otherwise).
+        * ``"single"`` — at most one event per output sample (raises on
+          collision).
         * ``"sum"`` / ``"mean"`` — element-wise sum or mean.
         * ``"first"`` / ``"middle"`` / ``"last"`` — pick one event.
         * ``"cat"`` — concatenate along the first dimension.
@@ -330,15 +331,7 @@ class BaseExtractor(base._Module, base.NamedModel):
             # the zero-fill in _tarrays_to_tensor (see test_first_samp).
             ns_events = in_window or ns_events
 
-        if self.aggregation in ("first", "trigger", "single"):
-            if self.aggregation == "single" and len(ns_events) > 1:
-                msg = (
-                    f"Found {len(ns_events)} events in the segment but expected only one "
-                )
-                msg += f"since {self.name}.aggregation='single'. "
-                msg += "Update it to sum/average/first/trigger/... ?\n"
-                msg += f"{ns_events=}"
-                raise ValueError(msg)
+        if self.aggregation in ("first", "trigger"):
             ns_events = ns_events[:1]
         elif self.aggregation == "last":
             ns_events = ns_events[-1:]
@@ -353,62 +346,40 @@ class BaseExtractor(base._Module, base.NamedModel):
         start: float,
         duration: float,
         frequency: float,
-        aggregation: (
-            tp.Literal["mean", "sum", "trigger", "cat", "stack"]
-            | tp.Literal[
-                "single", "first", "middle", "last"
-            ]  # equivalent to sum, expect a single tarrays
-        ),
+        aggregation: str,
     ) -> torch.Tensor:
         """Combine a list of time array into a torch Tensor."""
-
-        # aggregate time arrays
-        err_msg = "Something went wrong. There should be only 1 trigger, got %s"
-        if aggregation == "trigger" and not frequency:
-            if not len(tarrays) == 1:
-                raise RuntimeError(err_msg % tarrays)
-            tarrays[0].start = start  # fake an overlap as start time does not matter
-
-        match aggregation:
-            case "trigger" | "single" | "first" | "middle" | "last":
-                aggregation = "sum"
-                # expect a single Event
-                if not len(tarrays) == 1:
-                    raise RuntimeError(err_msg % tarrays)
-            case "mean" | "sum" | "cat" | "stack":
-                pass
-            case _:
-                raise RuntimeError(f"unknown aggregation: {aggregation}")
+        # picker modes: keep the chosen tarray and accumulate as sum
+        if aggregation in ("trigger", "first", "middle", "last"):
+            if len(tarrays) != 1:
+                msg = f"Expected 1 tarray for {aggregation=!r}, got {tarrays}"
+                raise RuntimeError(msg)
+            if aggregation == "trigger" and not frequency:
+                tarrays[0].start = start  # static trigger: fake an overlap
+            aggregation = "sum"
 
         segment_info: dict[str, tp.Any] = {
             "start": start,
             "frequency": frequency,
             "duration": duration,
         }
-
-        if aggregation not in ("cat", "stack"):
-            # Sum event data in that segment
+        if aggregation in ("sum", "mean", "single"):
             tarray = TimedArray(aggregation=aggregation, **segment_info)  # type: ignore
             for ta in tarrays:
                 tarray += ta
-            tensor = torch.from_numpy(tarray.data)
-        else:
-            # Gather all event data
+            data = tarray.data
+        elif aggregation in ("cat", "stack"):
             arrays = []
             for ta in tarrays:
-                # Define the time window to populate the data tensor
-                tarray = TimedArray(**segment_info)
-                # Actually add the data
-                tarray += ta
-                # Concatenate the tensors
-                arrays.append(tarray.data)
-            if aggregation == "cat":
-                data = np.concatenate(arrays, axis=0)
-            else:
-                assert aggregation == "stack"
-                data = np.stack(arrays, axis=0)
-            tensor = torch.from_numpy(data)
+                buf = TimedArray(**segment_info)
+                buf += ta
+                arrays.append(buf.data)
+            combine = np.concatenate if aggregation == "cat" else np.stack
+            data = combine(arrays, axis=0)
+        else:
+            raise RuntimeError(f"unknown aggregation: {aggregation}")
 
+        tensor = torch.from_numpy(data)
         if not tensor.ndim:
             tensor = tensor.unsqueeze(0)
         return tensor

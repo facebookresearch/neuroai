@@ -139,6 +139,23 @@ def test_timed_array(aggreg: str, expected: list[int]) -> None:
     np.testing.assert_array_equal(fill.data[0, :5], expected)
 
 
+def test_timed_array_single_disjoint() -> None:
+    seg = base.TimedArray(start=0, duration=4, frequency=1, aggregation="single")
+    seg += base.TimedArray(data=np.ones((2, 2)), start=0, frequency=1)
+    seg += base.TimedArray(data=2 * np.ones((2, 2)), start=2, frequency=1)
+    np.testing.assert_array_equal(seg.data, [[1, 1, 2, 2], [1, 1, 2, 2]])
+
+
+@pytest.mark.parametrize("frequency,match", [(1, r"\[0, 1\)s"), (0, "static slot")])
+def test_timed_array_single_raises(frequency: float, match: str) -> None:
+    kw: tp.Any = dict(start=0, duration=1, frequency=frequency)
+    seg = base.TimedArray(aggregation="single", **kw)
+    add = base.TimedArray(data=np.array([1.0]), **kw)
+    seg += add
+    with pytest.raises(ValueError, match=match):
+        seg += add
+
+
 @pytest.mark.parametrize(
     "start,duration,ostart,oduration,num",
     [
