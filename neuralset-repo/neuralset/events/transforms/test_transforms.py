@@ -916,6 +916,112 @@ def create_wav(fp: Path, fs: int = 44100, duration: float = 10) -> None:
     scipy.io.wavfile.write(fp, fs, y)
 
 
+def test_extract_words_from_audio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wav_filepath = tmp_path / "speech.wav"
+    transcript = pd.DataFrame(
+        [
+            {
+                "text": "hello",
+                "start": 0.5,
+                "duration": 0.4,
+                "sequence_id": 0,
+                "sentence": "hello world",
+            },
+            {
+                "text": "world",
+                "start": 1.0,
+                "duration": 0.5,
+                "sequence_id": 0,
+                "sentence": "hello world",
+            },
+        ]
+    )
+    calls = []
+
+    def fake_transcript(wav_filename: Path, language: str) -> pd.DataFrame:
+        calls.append((wav_filename, language))
+        return transcript
+
+    monkeypatch.setattr(
+        _transf.ExtractWordsFromAudio,
+        "_get_transcript_from_audio",
+        staticmethod(fake_transcript),
+    )
+    events = pd.DataFrame(
+        [
+            {
+                "type": "Audio",
+                "start": 10.0,
+                "duration": 5.0,
+                "offset": 2.0,
+                "timeline": "tl1",
+                "filepath": str(wav_filepath),
+                "subject": "subject1",
+                "task": "listening",
+            }
+        ]
+    )
+
+    out = _transf.ExtractWordsFromAudio(language="english")(events)
+
+    assert calls == [(wav_filepath, "english")]
+    assert wav_filepath.with_suffix(".tsv").exists()
+    words = out.loc[out.type == "Word"].reset_index(drop=True)
+    assert words.text.tolist() == ["hello", "world"]
+    assert words.start.tolist() == pytest.approx([12.5, 13.0])
+    assert words.duration.tolist() == pytest.approx([0.4, 0.5])
+    assert set(words.timeline) == {"tl1"}
+    assert set(words.subject) == {"subject1"}
+    assert set(words.task) == {"listening"}
+    assert set(words.language) == {"english"}
+
+
+def test_extract_words_from_audio_uses_cached_transcript(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wav_filepath = tmp_path / "speech.wav"
+    pd.DataFrame(
+        [
+            {
+                "text": "bonjour",
+                "start": 0.25,
+                "duration": 0.75,
+                "sequence_id": 0,
+                "sentence": "bonjour",
+            }
+        ]
+    ).to_csv(wav_filepath.with_suffix(".tsv"), sep="\t", index=False)
+
+    def fail_transcript(wav_filename: Path, language: str) -> pd.DataFrame:
+        raise AssertionError("cached transcript should be used")
+
+    monkeypatch.setattr(
+        _transf.ExtractWordsFromAudio,
+        "_get_transcript_from_audio",
+        staticmethod(fail_transcript),
+    )
+    events = pd.DataFrame(
+        [
+            {
+                "type": "Audio",
+                "start": 1.0,
+                "duration": 2.0,
+                "timeline": "tl1",
+                "filepath": str(wav_filepath),
+            }
+        ]
+    )
+
+    out = _transf.ExtractWordsFromAudio(language="french")(events)
+
+    words = out.loc[out.type == "Word"].reset_index(drop=True)
+    assert words.text.tolist() == ["bonjour"]
+    assert words.start.tolist() == pytest.approx([1.25])
+    assert words.language.tolist() == ["french"]
+
+
 def test_deterministic_splitter() -> None:
     with pytest.raises(ValueError):
         splitter = _tutils.DeterministicSplitter(ratios=dict(train=0.5))
