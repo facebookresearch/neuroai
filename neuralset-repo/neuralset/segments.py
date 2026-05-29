@@ -326,7 +326,7 @@ class Segment:
 
 def list_segments(
     events: pd.DataFrame,
-    triggers: pd.Series,
+    triggers: pd.Series | None,
     *,
     start: float = 0.0,
     duration: float | None = None,
@@ -339,8 +339,9 @@ def list_segments(
     ----------
     events : pd.DataFrame
         DataFrame containing events, must be normalized first using :func:`~neuralset.events.standardize_events`.
-    triggers : pd.Series
-        Boolean mask of events to use for defining segments.
+    triggers : pd.Series or None
+        Boolean mask of events to use for defining segments. If None, ``stride``
+        must be provided and windows are created over each full timeline.
     start : float, optional
         Start offset (in seconds) of segments relative to reference events or stride.
         Use negative values to start before the reference. Default is 0.0.
@@ -356,16 +357,19 @@ def list_segments(
     Returns
     -------
     list of Segment
-        List of segments with populated :attr:`ns_events` field and :attr:`trigger` containing the event
-        that triggered the segment.
+        List of segments with populated :attr:`ns_events` field and
+        :attr:`trigger` containing the event that triggered the segment, or
+        None for triggerless windows.
 
     Notes
     -----
-    Two segmentation modes are supported:
+    Three segmentation modes are supported:
 
     1. Single window: each event specified by `triggers` yields a single segment.
     2. Sliding window: for each event specified by `triggers`, create strided
        windows of duration `duration` and step size `stride`.
+    3. Triggerless sliding window: if `triggers` is None, create strided
+       windows from each timeline's first event start to its last event stop.
 
     Examples
     --------
@@ -387,47 +391,66 @@ def list_segments(
 
     if not hasattr(events, "stop"):
         raise ValueError("Run standardize_events on the DataFrame first")
-    if not isinstance(triggers, pd.Series):
+    if triggers is None and stride is None:
+        raise ValueError("triggers can only be None when stride is provided")
+    if triggers is not None and not isinstance(triggers, pd.Series):
         raise TypeError(
             f"triggers must be a boolean pd.Series, got {type(triggers).__name__}"
         )
 
     store = _EventStore.from_dataframe(events)
 
-    trigger_df = events.loc[triggers]
-    if not len(trigger_df):
-        raise ValueError("Empty trigger events")
-
-    df_to_pos = events.index.get_indexer(trigger_df.index)
-
     seg_starts: list[tp.Any] = []
     seg_durations: list[tp.Any] = []
     trigger_positions: list[tp.Any] = []
     trigger_timelines: list[tp.Any] = []
 
-    if stride is None:
-        seg_starts = (trigger_df["start"] + start).tolist()
-        seg_durations = (
-            trigger_df["duration"].tolist()
-            if duration is None
-            else [duration] * len(trigger_df)
-        )
-        trigger_positions = df_to_pos.tolist()
-        trigger_timelines = trigger_df["timeline"].tolist()
-    else:
-        assert duration is not None
-        for i, trig in enumerate(trigger_df.itertuples()):
+    if triggers is None:
+        assert stride is not None and duration is not None
+        if not len(events):
+            raise ValueError("Cannot create triggerless segments from empty events")
+        for timeline, timeline_events in events.groupby("timeline", sort=False):
             s, d = _prepare_strided_windows(
-                float(trig.start) + start,  # type: ignore
-                float(trig.stop),  # type: ignore
+                float(timeline_events["start"].min()) + start,
+                float(timeline_events["stop"].max()),
                 stride,
                 duration,
                 drop_incomplete=stride_drop_incomplete,
             )
             seg_starts.extend(s)
             seg_durations.extend(d)
-            trigger_positions.extend([df_to_pos[i]] * len(s))
-            trigger_timelines.extend([str(trig.timeline)] * len(s))
+            trigger_positions.extend([None] * len(s))
+            trigger_timelines.extend([str(timeline)] * len(s))
+    else:
+        trigger_df = events.loc[triggers]
+        if not len(trigger_df):
+            raise ValueError("Empty trigger events")
+
+        df_to_pos = events.index.get_indexer(trigger_df.index)
+
+        if stride is None:
+            seg_starts = (trigger_df["start"] + start).tolist()
+            seg_durations = (
+                trigger_df["duration"].tolist()
+                if duration is None
+                else [duration] * len(trigger_df)
+            )
+            trigger_positions = df_to_pos.tolist()
+            trigger_timelines = trigger_df["timeline"].tolist()
+        else:
+            assert duration is not None
+            for i, trig in enumerate(trigger_df.itertuples()):
+                s, d = _prepare_strided_windows(
+                    float(trig.start) + start,  # type: ignore
+                    float(trig.stop),  # type: ignore
+                    stride,
+                    duration,
+                    drop_incomplete=stride_drop_incomplete,
+                )
+                seg_starts.extend(s)
+                seg_durations.extend(d)
+                trigger_positions.extend([df_to_pos[i]] * len(s))
+                trigger_timelines.extend([str(trig.timeline)] * len(s))
 
     segments: list[Segment] = []
     for s, d, trig_idx, tl in zip(

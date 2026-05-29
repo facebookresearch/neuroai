@@ -220,6 +220,23 @@ def test_list_segments_idx_stride(
     assert all(d == duration for d in durations), f"Got {durations}"
 
 
+def test_list_segments_stride_without_triggers() -> None:
+    data = [
+        dict(type="Word", start=10, duration=1, text="a", timeline="tl0"),
+        dict(type="Word", start=12, duration=2, text="b", timeline="tl0"),
+        dict(type="Word", start=100, duration=3, text="c", timeline="tl1"),
+    ]
+    events = standardize_events(pd.DataFrame(data))
+    segs = list_segments(events=events, triggers=None, duration=2, stride=2)
+
+    assert [(s.timeline, s.start, s.duration) for s in segs] == [
+        ("tl0", 10.0, 2.0),
+        ("tl0", 12.0, 2.0),
+        ("tl1", 100.0, 2.0),
+    ]
+    assert [s.trigger for s in segs] == [None, None, None]
+
+
 def test_find_incomplete_segments(tmp_path: Path) -> None:
     sentence = ("This is a sentence for the unit tests").split(" ")
     words = [

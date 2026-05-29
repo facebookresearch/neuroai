@@ -477,7 +477,8 @@ class Segmenter(base.BaseModel):
         Dataframe query selecting which events act as :term:`triggers <trigger>`
         — segments are time-locked to the matching events
         (see :data:`base.Query`).
-        At least one of ``trigger_query`` or ``stride`` must be provided.
+        If None, ``stride`` must be provided and strided segments are created
+        across each full timeline.
     stride: optional float
         Stride (in seconds) to use to define sliding window segments.
     stride_drop_incomplete: optional bool
@@ -539,13 +540,13 @@ class Segmenter(base.BaseModel):
                     f"the trigger query: {self.trigger_query} led to an empty set."
                 )
         else:
-            trigger_idx = pd.Series(dtype=int)
+            trigger_idx = None
 
         # TODO fixme class typing: self.duration cannot be trigger
         duration = None if self.duration == "trigger" else self.duration
 
         # Drop events not used by extractors or triggers
-        if self.drop_unused_events:
+        if self.drop_unused_events and trigger_idx is not None:
             event_types = []
             for extractor in self.extractors.values():
                 event_types.extend(EventTypesHelper(extractor.event_types).names)
