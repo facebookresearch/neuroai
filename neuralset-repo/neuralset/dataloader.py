@@ -91,6 +91,8 @@ class SegmentsMixin:
     @property
     def triggers(self) -> pd.DataFrame:
         triggers = [s.trigger for s in self.segments]
+        if all(t is None for t in triggers):
+            return pd.DataFrame()
         if any(t is None for t in triggers):
             raise RuntimeError(f"Segments did not all have a trigger: {triggers}")
         df = pd.DataFrame([t.to_dict() for t in triggers])  # type: ignore
@@ -530,6 +532,17 @@ class Segmenter(base.BaseModel):
         super().model_post_init(log__)
         if self.trigger_query is None and self.stride is None:
             raise ValueError("trigger_query can only be None when stride is provided")
+        if self.trigger_query is None:
+            trigger_extractors = [
+                name
+                for name, extractor in self.extractors.items()
+                if extractor.aggregation == "trigger"
+            ]
+            if trigger_extractors:
+                raise ValueError(
+                    "trigger_query is required for extractors with "
+                    f"aggregation='trigger': {trigger_extractors}"
+                )
 
     def apply(self, events: pd.DataFrame) -> SegmentDataset:
         # Segment the events based on stride and/or triggers

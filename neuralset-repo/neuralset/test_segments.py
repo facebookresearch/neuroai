@@ -235,6 +235,21 @@ def test_list_segments_stride_without_triggers() -> None:
         ("tl1", 100.0, 2.0),
     ]
     assert [s.trigger for s in segs] == [None, None, None]
+    assert dl.SegmentDataset(extractors={}, segments=segs).triggers.empty
+
+
+def test_segmenter_rejects_trigger_extractor_without_trigger_query() -> None:
+    with pytest.raises(ValueError, match="trigger_query is required for extractors with"):
+        dl.Segmenter(
+            extractors={
+                "trigger_word": ns.extractors.Pulse(
+                    aggregation="trigger", event_types="Word"
+                )
+            },
+            trigger_query=None,
+            duration=2.0,
+            stride=2.0,
+        )
 
 
 def test_find_incomplete_segments(tmp_path: Path) -> None:
