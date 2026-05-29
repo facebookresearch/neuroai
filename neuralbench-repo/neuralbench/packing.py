@@ -22,105 +22,58 @@ from neuraltrain.utils import BaseExperiment
 LOGGER = logging.getLogger(__name__)
 
 
+def _safe_run(exp: BaseExperiment) -> tp.Any:
+    """Run one experiment, returning ``None`` on failure.
+
+    A packed job bundles heterogeneous experiments; one incompatible model
+    must not abort the rest (each ``run`` is cached individually by exca, so
+    successes persist and only the broken one is missing).
+    """
+    try:
+        return exp.run()
+    except Exception:
+        LOGGER.exception("Packed experiment failed; skipping")
+        return None
+
+
 class PackedExperiment(BaseModel):
     """Run a batch of :class:`BaseExperiment` instances inside one scheduler job.
 
-    The packed UID is derived from ``experiments`` and ``infra``; ``n_jobs`` and
-    ``fault_isolated`` are excluded so the cache key is insensitive to runtime
-    execution choices. ``SerializeAsAny`` keeps subclass-specific fields in the
-    UID. Use :func:`pack_experiments_for_submission` to build instances.
+    The packed UID is derived from ``experiments`` and ``infra``; ``n_jobs`` is
+    excluded so the cache key is insensitive to local-parallelism choices.
+    ``SerializeAsAny`` keeps subclass-specific fields in the UID. Use
+    :func:`pack_experiments_for_submission` to build instances.
 
-    **Fault isolation (default).** A packed job bundles heterogeneous
-    experiments — different models on different tasks. One model that is
-    genuinely incompatible with a task's data (wrong channel count, an
-    architecture that needs a longer window, a missing kwarg) must NOT abort
-    the other 14 experiments sharing the scheduler job, nor cache a
-    pack-level failure that masks every retry. With ``fault_isolated=True``
-    each experiment runs independently; failures are logged (with traceback)
-    and skipped, and the pack still returns successfully. Each ``exp.run()``
-    is individually cached by exca, so successful experiments persist and only
-    genuinely-broken ones are absent from the results.
-
-    Set ``fault_isolated=False`` to restore strict fail-fast behaviour (first
-    failure aborts the batch) — appropriate for a homogeneous grid where any
-    failure is a real bug worth surfacing immediately.
+    Experiments are fault-isolated: a single failure yields ``None`` for that
+    slot (see :func:`_safe_run`) rather than aborting the whole packed job.
     """
 
     experiments: list[SerializeAsAny[BaseExperiment]] = Field(min_length=1)
     n_jobs: int = Field(default=1, ge=1)
-    fault_isolated: bool = True
 
-    # Bump ``version`` whenever :meth:`run` semantics change. Kept at "1":
-    # fault isolation only changes behaviour when an experiment *fails* (old
-    # caches were all-success → identical return, or all-failure → already
-    # cleared), so cached successes remain valid.
+    # Bump ``version`` whenever :meth:`run` semantics change.
     infra: exca.TaskInfra = exca.TaskInfra(version="1")
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["n_jobs", "fault_isolated"]
-
-    def _run_one(self, idx: int, exp: BaseExperiment) -> tp.Any:
-        """Run one experiment, isolating failures when configured."""
-        try:
-            return exp.run()
-        except Exception:
-            if not self.fault_isolated:
-                raise
-            LOGGER.exception(
-                "PackedExperiment: experiment %d/%d failed (continuing; "
-                "fault_isolated=True)",
-                idx + 1,
-                len(self.experiments),
-            )
-            return None
+        return ["n_jobs"]
 
     @infra.apply
     def run(self) -> list[tp.Any]:
         if self.n_jobs == 1 or len(self.experiments) <= 1:
-            results = [self._run_one(i, exp) for i, exp in enumerate(self.experiments)]
-            self._log_failures(results)
-            return results
+            return [_safe_run(exp) for exp in self.experiments]
 
         max_workers = min(self.n_jobs, len(self.experiments))
         ctx = multiprocessing.get_context("spawn")  # CUDA-safe
-        # Manual lifecycle + ``as_completed`` gather. When fault_isolated, we
-        # collect every result and never cancel pending work, so one bad
-        # experiment cannot abort the rest. When not fault_isolated, the first
-        # failure re-raises and ``cancel_futures=True`` aborts the remainder.
         pool = ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx)
-        results: list[tp.Any] = [None] * len(self.experiments)
-        cancel = False
         try:
-            futures = {pool.submit(exp.run): i for i, exp in enumerate(self.experiments)}
+            futures = {pool.submit(_safe_run, exp): i for i, exp in enumerate(self.experiments)}
+            results: list[tp.Any] = [None] * len(self.experiments)
             for future in as_completed(futures):
-                idx = futures[future]
-                try:
-                    results[idx] = future.result()
-                except Exception:
-                    if not self.fault_isolated:
-                        cancel = True
-                        raise
-                    LOGGER.exception(
-                        "PackedExperiment: experiment %d/%d failed (continuing; "
-                        "fault_isolated=True)",
-                        idx + 1,
-                        len(self.experiments),
-                    )
-            self._log_failures(results)
+                results[futures[future]] = future.result()
             return results
         finally:
-            pool.shutdown(wait=True, cancel_futures=cancel)
-
-    def _log_failures(self, results: list[tp.Any]) -> None:
-        n_failed = sum(1 for r in results if r is None)
-        if n_failed:
-            LOGGER.warning(
-                "PackedExperiment: %d/%d experiment(s) failed in this pack "
-                "(see tracebacks above). Successful experiments are cached.",
-                n_failed,
-                len(self.experiments),
-            )
+            pool.shutdown(wait=True)
 
 
 def _should_submit_experiment(experiment: BaseExperiment) -> bool:
