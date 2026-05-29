@@ -181,17 +181,19 @@ class ExtractWordsFromAudio(EventsTransform):
             "offset",
             "stop",
         }
-        for audio_event in audio_events.itertuples(index=False):
-            transcript = transcripts[str(Path(audio_event.filepath))].copy(deep=True)
+        for _, audio_event in audio_events.iterrows():
+            audio_filepath = Path(tp.cast(str, audio_event["filepath"]))
+            transcript = transcripts[str(audio_filepath)].copy(deep=True)
             if transcript.empty:
                 continue
-            for key, value in audio_event._asdict().items():
+            for key, value in audio_event.items():
                 if key not in ignored_fields:
-                    transcript.loc[:, key] = value
+                    transcript[tp.cast(str, key)] = value
             transcript["type"] = "Word"
             transcript["language"] = self.language
-            offset = getattr(audio_event, "offset", 0.0)
-            transcript["start"] += audio_event.start + offset
+            offset = float(audio_event.get("offset", 0.0))
+            audio_start = float(audio_event["start"])
+            transcript["start"] = transcript["start"].astype(float) + audio_start + offset
             all_transcripts.append(transcript)
 
         if not all_transcripts:
