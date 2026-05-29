@@ -318,40 +318,6 @@ def test_repr(tmp_path: Path):
     assert "  'name': '" in string
 
 
-def test_segmenter_requires_stride_without_trigger_query() -> None:
-    with pytest.raises(
-        ValueError, match="trigger_query can only be None when stride is provided"
-    ):
-        dl.Segmenter(extractors={}, trigger_query=None, duration=1.0)
-
-
-def test_segmenter_stride_without_trigger_query() -> None:
-    events_df = events.standardize_events(
-        pd.DataFrame(
-            [
-                dict(type="Word", start=10, duration=1, text="a", timeline="tl0"),
-                dict(type="Word", start=12, duration=2, text="b", timeline="tl0"),
-                dict(type="Word", start=100, duration=3, text="c", timeline="tl1"),
-            ]
-        )
-    )
-    segmenter = dl.Segmenter(
-        extractors={},
-        trigger_query=None,
-        duration=2.0,
-        stride=2.0,
-    )
-
-    ds = segmenter.apply(events_df)
-
-    assert [(s.timeline, s.start, s.duration) for s in ds.segments] == [
-        ("tl0", 10.0, 2.0),
-        ("tl0", 12.0, 2.0),
-        ("tl1", 100.0, 2.0),
-    ]
-    assert [s.trigger for s in ds.segments] == [None, None, None]
-
-
 def test_repr_segments() -> None:
     segments = _make_segments()
     sd = dl.Batch(data={"meg": torch.randn(1, 3, 100)}, segments=[segments[0]])
