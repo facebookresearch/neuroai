@@ -51,10 +51,17 @@ def infra(tmp_path: Path) -> tp.Any:
     return {"cluster": "auto", "folder": tmp_path, "mode": "force"}
 
 
-def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
+def _run_locally(
+    packed: PackedExperiment, n_jobs: int = 1, fault_isolated: bool = True
+) -> list[tp.Any]:
     cfg: tp.Any = packed.infra.model_dump(mode="python")
     cfg["cluster"] = None
-    return type(packed)(experiments=packed.experiments, infra=cfg, n_jobs=n_jobs).run()
+    return type(packed)(
+        experiments=packed.experiments,
+        infra=cfg,
+        n_jobs=n_jobs,
+        fault_isolated=fault_isolated,
+    ).run()
 
 
 # ---- _should_submit_experiment truth table ---------------------------------
@@ -161,12 +168,48 @@ def test_pack_uid_order_independent(
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
-def test_packed_experiment_propagates_errors(infra: tp.Any, n_jobs: int) -> None:
+def test_packed_experiment_propagates_errors_fail_fast(
+    infra: tp.Any, n_jobs: int
+) -> None:
+    """With fault_isolated=False the first failure aborts the batch."""
     failing = [FailingExperiment(value=i, infra=infra) for i in range(2)]
     packed = pack_experiments_for_submission(failing, experiments_per_job="all")
     assert len(packed) == 1
     with pytest.raises(RuntimeError, match="intentional failure"):
-        _run_locally(packed[0], n_jobs=n_jobs)
+        _run_locally(packed[0], n_jobs=n_jobs, fault_isolated=False)
+
+
+# ---- fault isolation (default): one failure must not abort the others ------
+
+
+@pytest.mark.parametrize("n_jobs", [1, 2])
+def test_packed_experiment_isolates_failures(infra: tp.Any, n_jobs: int) -> None:
+    """A failing experiment in the middle must not stop the good ones.
+
+    Mirrors the real NeuralBench sweep: a model incompatible with a task's
+    data should be skipped (result ``None``) while the other models in the
+    same packed job still run and return their values.
+    """
+    experiments: list[BaseExperiment] = [
+        ValueExperiment(value=10, infra=infra),
+        FailingExperiment(value=99, infra=infra),  # broken in the middle
+        ValueExperiment(value=20, infra=infra),
+    ]
+    packed = pack_experiments_for_submission(experiments, experiments_per_job="all")
+    assert len(packed) == 1
+    # Order is UID-sorted inside the pack, so locate results by value rather
+    # than position. Good experiments return their int; the failing one None.
+    results = _run_locally(packed[0], n_jobs=n_jobs, fault_isolated=True)
+    assert sorted(r for r in results if r is not None) == [10, 20], results
+    assert results.count(None) == 1, results
+
+
+def test_packed_experiment_all_success_unchanged(infra: tp.Any) -> None:
+    """Fault isolation does not alter the all-success path."""
+    experiments = [ValueExperiment(value=i, infra=infra) for i in range(3)]
+    packed = pack_experiments_for_submission(experiments, experiments_per_job="all")
+    results = _run_locally(packed[0], n_jobs=1, fault_isolated=True)
+    assert sorted(results) == [0, 1, 2], results
 
 
 # ---- PackedExperiment constructor validation ------------------------------
