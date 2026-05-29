@@ -163,8 +163,12 @@ def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) 
         assert "".join(events.loc[actual].text) == "f"
 
         expected_list = "d", "da", "dacb", "dacb", "e", "f"
+        # triggering on every event includes two Words at the same start/timeline
         actual_segments = seg.list_segments(
-            events, pd.Series(True, index=events.index), duration=0.1
+            events,
+            pd.Series(True, index=events.index),
+            duration=0.1,
+            on_trigger_overlap="allow",
         )
         for act, exp in zip(actual_segments, expected_list):
             sub = events.loc[[e._index for e in act.ns_events]]
