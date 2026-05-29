@@ -318,6 +318,13 @@ def test_repr(tmp_path: Path):
     assert "  'name': '" in string
 
 
+def test_segmenter_requires_stride_without_trigger_query() -> None:
+    with pytest.raises(
+        ValueError, match="trigger_query can only be None when stride is provided"
+    ):
+        dl.Segmenter(extractors={}, trigger_query=None, duration=1.0)
+
+
 def test_segmenter_stride_without_trigger_query() -> None:
     events_df = events.standardize_events(
         pd.DataFrame(

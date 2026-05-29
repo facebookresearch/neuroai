@@ -529,7 +529,7 @@ class Segmenter(base.BaseModel):
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         if self.trigger_query is None and self.stride is None:
-            raise ValueError("At least one of trigger_query or stride must be provided.")
+            raise ValueError("trigger_query can only be None when stride is provided")
 
     def apply(self, events: pd.DataFrame) -> SegmentDataset:
         # Segment the events based on stride and/or triggers
