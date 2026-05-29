@@ -475,10 +475,6 @@ def _check_trigger_overlap(
     """
     if mode == "allow":
         return
-    if mode not in ("raise", "warn"):
-        raise ValueError(
-            f"on_trigger_overlap must be 'raise', 'warn' or 'allow', got {mode!r}"
-        )
 
     keys = ["type", "timeline", "start"]
     if not all(k in trigger_df.columns for k in keys):
