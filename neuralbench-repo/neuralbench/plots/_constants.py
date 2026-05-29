@@ -62,6 +62,7 @@ METRIC_DISPLAY_NAMES: dict[str, str] = {
     "test/f1_score_macro": "F1 score (macro)",
     "test/pearsonr": "Pearson R",
     "test/rmse": "RMSE",
+    "test/bmae": "Binned MAE (s)",
     "test/full_retrieval/top5_acc_subject-agg": "Top-5 accuracy (per-subject)",
 }
 
@@ -70,6 +71,7 @@ METRIC_HIGHER_IS_BETTER: dict[str, bool] = {
     "test/f1_score_macro": True,
     "test/pearsonr": True,
     "test/rmse": False,
+    "test/bmae": False,
     "test/full_retrieval/top5_acc_subject-agg": True,
 }
 
@@ -78,6 +80,7 @@ METRIC_PERFECT_SCORE: dict[str, float] = {
     "test/f1_score_macro": 1.0,
     "test/pearsonr": 1.0,
     "test/rmse": 0.0,
+    "test/bmae": 0.0,
     "test/full_retrieval/top5_acc_subject-agg": 100.0,
 }
 
@@ -104,6 +107,7 @@ TASK_DISPLAY_NAMES: dict[str, str] = {
     "mental_workload": "Workload",
     "sleep_stage": "Sleep stage",
     "sleep_arousal": "Sleep arousal",
+    "sleep_onset": "Sleep onset",
     "reaction_time": "Reaction time",
 }
 
@@ -217,6 +221,7 @@ TASK_CATEGORIES: dict[str, list[str]] = {
     ],
     "Sleep": [
         "sleep_arousal",
+        "sleep_onset",
         "sleep_stage",
     ],
     "Phenotyping": [
@@ -241,7 +246,8 @@ CATEGORY_ROW_GROUPS: list[list[str]] = [
     ["Clinical"],
     ["Internal State"],
     ["Phenotyping"],
-    ["Sleep", "Misc"],
+    ["Sleep"],
+    ["Misc"],
 ]
 
 CATEGORY_ORDER: list[str] = [

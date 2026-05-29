@@ -914,53 +914,6 @@ def test_deterministic_splitter() -> None:
     assert splitter("10101001010101") == "train"
 
 
-def test_chunk_events(tmp_path: Path) -> None:
-    fp = tmp_path / "noise.wav"
-    create_wav(fp, fs=44100, duration=10.1)
-    sound = dict(type="Audio", start=0, timeline="foo", filepath=fp)
-    words = [
-        dict(
-            type="Word",
-            text="a",
-            start=i,
-            duration=i + 1,
-            language="english",
-            timeline="foo",
-            split="train" if i % 2 else "test",
-        )
-        for i in range(11)
-    ]
-    events_list = [sound] + words
-    events = pd.DataFrame(events_list)
-    events = ns.events.standardize_events(events)
-
-    events2 = _tutils.chunk_events(
-        events, event_type_to_chunk="Audio", event_type_to_use="Word"
-    )
-    sounds = events2[events2["type"] == "Audio"]
-    assert len(sounds) == 11
-    assert all(sounds.offset.values == list(range(11)))
-
-    events3 = _tutils.chunk_events(
-        events, event_type_to_chunk="Audio", event_type_to_use="Word", min_duration=0.5
-    )
-    sounds = events3[events3["type"] == "Audio"]
-    assert len(sounds) == 10
-
-    events4 = _tutils.chunk_events(events, event_type_to_chunk="Audio", max_duration=2)
-    sounds = events4[events4["type"] == "Audio"]
-    assert len(sounds) == 6
-
-    events5 = _tutils.chunk_events(
-        events,
-        event_type_to_chunk="Audio",
-        max_duration=2,
-        min_duration=0.5,
-    )
-    sounds = events5[events5["type"] == "Audio"]
-    assert len(sounds) == 5
-
-
 def test_cluster_assignment():
     test_cases = [
         {

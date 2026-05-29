@@ -280,7 +280,7 @@ class TimedArray:
         start: float,
         data: np.ndarray | None = None,
         duration: float | None = None,
-        aggregation: tp.Literal["sum", "mean"] = "sum",
+        aggregation: tp.Literal["sum", "mean", "single"] = "sum",
         header: dict[str, tp.Any] | None = None,
     ) -> None:
         """
@@ -299,9 +299,10 @@ class TimedArray:
             ``frequency > 0``, the last dimension is checked for
             consistency. If ``data`` is not provided, shape is inferred
             from the first data added.
-        aggregation: "sum" or "mean"
-            Aggregation mode on the time domain when adding to the
-            timed array.
+        aggregation: "sum", "mean" or "single"
+            Aggregation mode on the time domain when adding to the timed
+            array. ``"single"`` raises if any output sample receives a
+            second contribution.
         header: optional dict
             Domain-specific attributes (channel names, electrode
             positions, space info, etc.) persisted alongside the data.
@@ -341,9 +342,9 @@ class TimedArray:
             raise ValueError(f"duration must be provided if {frequency=}")
         else:
             self.duration = duration
-        # averaging
+        # per-sample contribution count (mean: online average; single: collision check)
         self._overlapping_data_count: None | np.ndarray = None
-        if aggregation == "mean":
+        if aggregation in ("mean", "single"):
             num = self.data.shape[-1] if self.frequency else 1
             self._overlapping_data_count = np.zeros(num, dtype=int)
         elif aggregation != "sum":
@@ -390,7 +391,26 @@ class TimedArray:
         other_data = np.asarray(other.data[..., other_slice])
         if self._overlapping_data_count is None:  # sum
             self.data[..., self_slice] += other_data
-        else:  # average
+        elif self.aggregation == "single":
+            counts = self._overlapping_data_count[..., self_slice]
+            if counts.any():
+                freq = self.frequency
+                if freq:
+                    assert self_slice is not None
+                    offsets = np.flatnonzero(counts)
+                    lo = self.start + freq.to_sec(self_slice.start + int(offsets[0]))
+                    hi = self.start + freq.to_sec(self_slice.start + int(offsets[-1]) + 1)
+                    where = f"output samples [{lo:g}, {hi:g})s at {freq}Hz"
+                else:
+                    where = f"the static slot at start={self.start}s (frequency=0)"
+                raise ValueError(
+                    f"aggregation='single' got a colliding contribution on "
+                    f"{where} — added arrays cover overlapping time ranges. "
+                    "Use 'sum' or 'mean' if merging is intended."
+                )
+            self.data[..., self_slice] += other_data
+            counts += 1
+        else:  # mean: online average
             counts = self._overlapping_data_count[..., self_slice]
             upd = counts / (1.0 + counts)
             self.data[..., self_slice] *= upd

@@ -279,6 +279,6 @@ on a laptop.
 .. raw:: html
 
    <div class="page-nav">
-     <a href="explore_studies.html" class="page-nav-btn page-nav-btn--outline">&larr; Explore Studies</a>
+     <a href="index.html" class="page-nav-btn page-nav-btn--outline">&larr; Overview</a>
      <a href="contributing.html" class="page-nav-btn">Contributing: New Studies &rarr;</a>
    </div>

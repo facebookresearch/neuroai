@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - `neuralbench`: pack pending experiments into fewer scheduler jobs via
-  `--experiments-per-job` (#PR).
+  `--experiments-per-job` (#PR 79).
+- `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind the `NSD_ACCEPT_LICENCE` env var.
 
 ## [0.2.1] - 2026-05-13
 

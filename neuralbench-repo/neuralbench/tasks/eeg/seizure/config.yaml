@@ -32,7 +32,8 @@ data:
   duration: 5.0
   stride: 5.0
   stride_drop_incomplete: true
-  use_weighted_sampler: true
+  sampler:
+    name: ClassificationSampler
   summary_columns: [state]
 compute_class_weights: false
 brain_model_output_size: &brain_model_output_size 2

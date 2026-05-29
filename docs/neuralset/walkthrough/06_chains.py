@@ -169,9 +169,6 @@ print(f"Named steps: {list(chain.steps.keys())}, {len(events)} events")
 #    ])
 #
 #    events = exp.events_builder.run()
-#
-# See :doc:`/neuralfetch/auto_examples/02_plot_study_anatomy` for
-# a runnable example.
 
 # %%
 # Next Steps

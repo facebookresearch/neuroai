@@ -277,6 +277,116 @@ def make_weighted_sampler(
     return sampler
 
 
+def _compute_regression_bin_weights(
+    targets: torch.Tensor,
+    bin_edges: tp.Sequence[float],
+) -> torch.Tensor:
+    """Compute per-sample inverse-frequency weights from a regression target tensor.
+
+    Targets are bucketised into ``len(bin_edges) - 1`` bins defined by
+    ``bin_edges``.  Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
+    ``i < n_bins - 1``; the top bin is closed on the right
+    (``[bin_edges[-2], bin_edges[-1]]``) so that targets exactly at
+    ``bin_edges[-1]`` (e.g. the cap value in ``AddSleepOnsetTargets``) are
+    counted in the top bin.  This matches the bin semantics of
+    :class:`~neuralbench.metrics.BinnedMAE`.
+
+    Targets falling outside ``[bin_edges[0], bin_edges[-1]]`` receive a weight
+    of ``0`` (they are effectively excluded from sampling) and do not
+    contribute to any bin's count.
+
+    Each sample's weight is ``1 / count_in_its_bin`` so that, in expectation,
+    every populated bin contributes the same total mass to a weighted sampler.
+
+    Parameters
+    ----------
+    targets : torch.Tensor
+        1-D float tensor of shape ``(n_samples,)``.  Trailing singleton dims are
+        not handled here; squeeze upstream.
+    bin_edges : Sequence[float]
+        Strictly increasing sequence of length ``>= 2``.
+
+    Returns
+    -------
+    torch.Tensor
+        1-D float tensor of shape ``(n_samples,)`` with per-sample sampling
+        weights.  Empty bins and out-of-range samples contribute zero weight.
+    """
+    if targets.ndim != 1:
+        raise ValueError(f"Expected 1-D targets, got shape {tuple(targets.shape)}.")
+    if len(bin_edges) < 2:
+        raise ValueError(
+            f"bin_edges must have length >= 2, got {len(bin_edges)}: {list(bin_edges)}"
+        )
+
+    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
+    n_bins = len(bin_edges) - 1
+    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+
+    in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
+    counts = torch.bincount(bin_idx[in_range], minlength=n_bins).to(dtype=torch.float32)
+    inv_counts = torch.where(counts > 0, 1.0 / counts, torch.zeros_like(counts))
+
+    weights = torch.zeros(targets.shape[0], dtype=torch.float32, device=targets.device)
+    weights[in_range] = inv_counts[bin_idx[in_range]]
+    return weights
+
+
+def make_regression_bin_sampler(
+    dataset: SegmentDataset,
+    bin_edges: tp.Sequence[float],
+    logger: logging.Logger,
+    generator: torch.Generator | None = None,
+) -> torch.utils.data.WeightedRandomSampler:
+    """Create a regression-bin stratified weighted sampler.
+
+    Materialises the dataset's targets, bins them by ``bin_edges`` and assigns
+    inverse-frequency sampling weights so that, in expectation, every populated
+    bin contributes equally to each training epoch.  This is the regression
+    counterpart of :func:`make_weighted_sampler`.
+
+    Parameters
+    ----------
+    dataset : SegmentDataset
+        Training segment dataset; its ``target`` extractor must yield a scalar
+        regression target per sample.
+    bin_edges : Sequence[float]
+        Strictly increasing bin edges.  Targets outside
+        ``[bin_edges[0], bin_edges[-1]]`` receive zero sampling weight (matches
+        the bin semantics of :class:`~neuralbench.metrics.BinnedMAE`).
+    logger : logging.Logger
+        Logger used to report per-bin counts and the number of out-of-range
+        targets.
+    """
+    targets = get_targets_from_dataset(dataset)
+    if targets.ndim == 2 and targets.shape[-1] == 1:
+        targets = targets.squeeze(-1)
+    weights = _compute_regression_bin_weights(targets, bin_edges)
+
+    n_bins = len(bin_edges) - 1
+    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
+    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
+    counts = torch.bincount(bin_idx[in_range], minlength=n_bins).tolist()
+    bin_labels = [
+        f"[{bin_edges[i]:g}, {bin_edges[i + 1]:g}" + ("]" if i == n_bins - 1 else ")")
+        for i in range(n_bins)
+    ]
+    logger.info(
+        "Regression-bin sampler counts: %s (out-of-range: %d)",
+        dict(zip(bin_labels, counts)),
+        int((~in_range).sum().item()),
+    )
+
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=weights.tolist(),
+        num_samples=len(weights),
+        replacement=True,
+        generator=generator,
+    )
+    return sampler
+
+
 class TrainerConfig(ns.BaseModel):
     """Joint configuration for Trainer and some callbacks."""
 
