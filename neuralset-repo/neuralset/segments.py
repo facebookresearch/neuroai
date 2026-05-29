@@ -410,16 +410,10 @@ def list_segments(
         keys = ["type", "timeline", "start"]
         collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
         if len(collisions):
-            groups = collisions.groupby(keys, observed=True).size()
-            examples = "; ".join(
-                f"{int(n)}x type={typ!r} on timeline={tl!r} at start={st}"
-                for (typ, tl, st), n in groups.items()
-            )
             msg = (
-                f"Found {len(collisions)} trigger events of the same type starting "
-                f"at the same time on the same timeline ({examples}). Narrow the "
-                "`triggers` mask so each segment has a single trigger, or pass "
-                "on_trigger_overlap='allow' to bypass this check."
+                f"{len(collisions)} triggers of the same type start at the same time "
+                f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` "
+                "mask, or pass on_trigger_overlap='allow' to bypass."
             )
             if on_trigger_overlap == "raise":
                 raise ValueError(msg)
