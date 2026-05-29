@@ -55,10 +55,15 @@ class BenchmarkAggregator(ns.BaseModel):
 
     output_dir: str = Field(default_factory=_default_output_dir)
 
+    # Each unique loss name picks one headline metric for plots/tables.  This
+    # is a per-loss (not per-task) mapping: when two tasks would share a loss
+    # but need different headline metrics, give one of them a dedicated loss
+    # class (or, as the sleep-onset task does, wrap it in ``MultiLoss``).
     loss_to_metric_mapping: dict[str, str] = {
         "CrossEntropyLoss": "test/bal_acc",
         "BCEWithLogitsLoss": "test/f1_score_macro",
         "MSELoss": "test/pearsonr",
+        "MultiLoss": "test/bmae",  # currently sleep-onset only
         "ClipLoss": "test/full_retrieval/top5_acc_subject-agg",
     }
 

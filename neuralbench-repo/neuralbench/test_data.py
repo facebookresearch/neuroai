@@ -13,8 +13,8 @@ sequence from ``train_loader.sampler``, which is the ground-truth signal that
 ``Data.seed`` actually controls shuffling.
 
 The ``build_data`` factory fixture (see ``conftest.py``) owns the Data
-construction config, so tests here only have to vary ``seed`` /
-``use_weighted_sampler``.
+    construction config, so tests here only have to vary ``seed`` /
+    ``sampler``.
 """
 
 import random
@@ -31,7 +31,7 @@ def _train_indices(loaders: dict[str, DataLoader]) -> list[int]:
     """Return the first-epoch train-loader index sequence.
 
     For ``shuffle=True``, ``loader.sampler`` is a ``RandomSampler`` whose
-    generator was set in ``Data.prepare``; for ``use_weighted_sampler=True``
+    generator was set in ``Data.prepare``; for ``sampler=ClassificationSampler()``
     it's the ``WeightedRandomSampler`` we constructed.  In both cases iterating
     the sampler yields the per-epoch index permutation, which is the
     seed-controlled signal we care about.
@@ -95,14 +95,14 @@ def test_weighted_sampler_is_seeded_independently_of_global_rng(
 ) -> None:
     """``WeightedRandomSampler`` draws are determined by ``Data.seed`` and
     immune to global-RNG changes between calls."""
-    loaders_a = build_data(seed=7, use_weighted_sampler=True).prepare()
+    loaders_a = build_data(seed=7, sampler={"name": "ClassificationSampler"}).prepare()
 
     torch.manual_seed(999)
 
-    loaders_b = build_data(seed=7, use_weighted_sampler=True).prepare()
+    loaders_b = build_data(seed=7, sampler={"name": "ClassificationSampler"}).prepare()
     assert _train_indices(loaders_a) == _train_indices(loaders_b)
 
-    loaders_c = build_data(seed=8, use_weighted_sampler=True).prepare()
+    loaders_c = build_data(seed=8, sampler={"name": "ClassificationSampler"}).prepare()
     assert _train_indices(loaders_a) != _train_indices(loaders_c)
 
 

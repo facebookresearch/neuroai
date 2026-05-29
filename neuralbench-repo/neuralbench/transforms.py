@@ -12,7 +12,25 @@ import pydantic
 from sklearn.model_selection import train_test_split
 
 import neuralset as ns
+from neuralset.events import etypes as _etypes
 from neuralset.events import transforms as _transf
+
+
+class SleepOnsetMarker(_etypes.Event):
+    """Pre-onset region marker for the sleep-onset prediction task.
+
+    Emitted by :class:`AddSleepOnsetTargets`: one marker per timeline, spanning
+    the trainable pre-N2 region (typically
+    ``[t_onset - max_pre_n2_s, t_onset]``).  The ``n2_onset`` field carries
+    the absolute timestamp of the first scored N2 epoch on that timeline.
+    Downstream, the segmenter tiles this marker via ``stride`` to produce
+    analysis segments, and
+    :class:`~neuralbench.extractors.SleepOnsetTargetExtractor` reads
+    ``n2_onset`` from the marker to compute the per-segment
+    ``clip(n2_onset - segment.stop, 0, cap_s)`` regression target on the fly.
+    """
+
+    n2_onset: float = 0.0
 
 
 class TextPreprocessor(_transf.EventsTransform):
@@ -309,6 +327,79 @@ class CropSleepRecordings(_transf.EventsTransform):
         ).sort_values(by=["timeline", "start"])
 
         return events
+
+
+class AddSleepOnsetTargets(_transf.EventsTransform):
+    """Emit a single ``SleepOnsetMarker`` event per timeline spanning the pre-onset region.
+
+    For each timeline, finds the first scored N2 epoch (the global N2 onset)
+    and emits one ``SleepOnsetMarker`` event that spans
+    ``[max(rec_start, t_onset - max_pre_n2_s), min(t_onset, rec_stop)]`` and
+    carries the absolute ``n2_onset`` timestamp as a field.  Downstream, the
+    segmenter tiles this marker via ``stride`` to produce analysis segments,
+    and :class:`~neuralbench.extractors.SleepOnsetTargetExtractor` computes
+    the per-segment ``clip(n2_onset - segment.stop, 0, cap_s)`` target on
+    the fly -- so target alignment is exact even if the segment ``duration``
+    and ``stride`` differ from any value set on this transform.
+
+    Timelines without any N2 epoch are left untouched (no marker is emitted),
+    so they produce no trigger events for the downstream sleep-onset task
+    and contribute zero segments to training/evaluation.
+
+    Parameters
+    ----------
+    max_pre_n2_s : float | None
+        If set, restrict the marker to at most this many seconds ending at
+        N2 onset (i.e. the marker spans
+        ``[max(rec_start, t_onset - max_pre_n2_s), min(t_onset, rec_stop)]``).
+        Used to limit the cap-mass dominance of the regression target
+        distribution.  When ``None`` (the default), the marker spans the
+        full pre-N2 portion of the recording.
+    n2_stage : str
+        Stage label used to identify N2 sleep in ``SleepStage.stage``.
+    """
+
+    max_pre_n2_s: float | None = None
+    n2_stage: str = "N2"
+
+    def _emit_for_timeline(self, evs: pd.DataFrame) -> pd.DataFrame:
+        n2 = evs[(evs.type == "SleepStage") & (evs.stage == self.n2_stage)]
+        if n2.empty:
+            return pd.DataFrame()
+        t_onset = float(n2["start"].min())
+        eeg = evs[evs.type == "Eeg"]
+        if eeg.empty:
+            return pd.DataFrame()
+        rec_start = float(eeg["start"].min())
+        rec_stop = float(eeg["stop"].max())
+        t0 = max(rec_start, 0.0)
+        if self.max_pre_n2_s is not None:
+            t0 = max(t0, t_onset - self.max_pre_n2_s)
+        t_stop = min(t_onset, rec_stop)
+        if t_stop <= t0:
+            return pd.DataFrame()
+        return pd.DataFrame(
+            {
+                "type": ["SleepOnsetMarker"],
+                "start": [t0],
+                "duration": [t_stop - t0],
+                "stop": [t_stop],
+                "n2_onset": [t_onset],
+            }
+        )
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        new_rows_per_tl: list[pd.DataFrame] = []
+        for timeline, group in events.groupby("timeline", sort=False):
+            emitted = self._emit_for_timeline(group)
+            if emitted.empty:
+                continue
+            emitted["timeline"] = timeline
+            new_rows_per_tl.append(emitted)
+        if not new_rows_per_tl:
+            return events
+        new_rows = pd.concat(new_rows_per_tl, ignore_index=True)
+        return pd.concat([events, new_rows], ignore_index=True, axis=0)
 
 
 class CropTimelines(_transf.EventsTransform):
