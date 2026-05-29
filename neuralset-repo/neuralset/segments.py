@@ -332,6 +332,7 @@ def list_segments(
     duration: float | None = None,
     stride: float | None = None,
     stride_drop_incomplete: bool = True,
+    on_trigger_overlap: tp.Literal["raise", "warn", "allow"] = "raise",
 ) -> list[Segment]:
     """Create a list of segments based on events, sliding windows, or both.
 
@@ -352,6 +353,14 @@ def list_segments(
     stride_drop_incomplete : bool, optional
         If True and stride is not None, drop segments not fully contained within
         the valid time range. Default is True.
+    on_trigger_overlap : {"raise", "warn", "allow"}, optional
+        How to handle two or more trigger events of the same ``type`` starting at
+        the same time on the same ``timeline`` (e.g. two ``Fmri`` events at the
+        same timestamp differing only by metadata). Such simultaneous,
+        similarly-typed triggers are almost always a mistake: they silently
+        create duplicate/ambiguous segments and can corrupt train/test splits.
+        ``"raise"`` (default) errors out, ``"warn"`` logs a warning and keeps
+        going, ``"allow"`` disables the check. Default is ``"raise"``.
 
     Returns
     -------
@@ -397,6 +406,8 @@ def list_segments(
     trigger_df = events.loc[triggers]
     if not len(trigger_df):
         raise ValueError("Empty trigger events")
+
+    _check_trigger_overlap(trigger_df, on_trigger_overlap)
 
     df_to_pos = events.index.get_indexer(trigger_df.index)
 
@@ -449,6 +460,49 @@ def list_segments(
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
+
+
+def _check_trigger_overlap(
+    trigger_df: pd.DataFrame, mode: tp.Literal["raise", "warn", "allow"]
+) -> None:
+    """Detect same-type trigger events starting simultaneously on a timeline.
+
+    Two triggers of the same ``type`` with the same ``start`` on the same
+    ``timeline`` define overlapping/duplicate segments, which is almost always
+    an upstream data-modeling mistake (e.g. several ``Fmri`` events that only
+    differ by metadata such as ``space``/``preproc``). See discussion in
+    https://github.com/fairinternal/brainai/pull/2531#issuecomment-4073936157.
+    """
+    if mode == "allow":
+        return
+    if mode not in ("raise", "warn"):
+        raise ValueError(
+            f"on_trigger_overlap must be 'raise', 'warn' or 'allow', got {mode!r}"
+        )
+
+    keys = ["type", "timeline", "start"]
+    if not all(k in trigger_df.columns for k in keys):
+        return
+    collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
+    if not len(collisions):
+        return
+
+    groups = collisions.groupby(keys, observed=True).size()
+    examples = "; ".join(
+        f"{int(n)}x type={typ!r} on timeline={tl!r} at start={st}"
+        for (typ, tl, st), n in groups.items()
+    )
+    msg = (
+        f"Found {len(collisions)} trigger events of the same type starting at "
+        f"the same time on the same timeline ({examples}). Such simultaneous, "
+        "similarly-typed triggers create duplicate/ambiguous segments and can "
+        "corrupt train/test splits. Narrow the `triggers` mask (e.g. filter by "
+        "metadata) so each segment has a single unambiguous trigger, or pass "
+        "on_trigger_overlap='allow' to bypass this check."
+    )
+    if mode == "raise":
+        raise ValueError(msg)
+    logger.warning(msg)
 
 
 def _prepare_strided_windows(

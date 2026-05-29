@@ -55,6 +55,52 @@ def test_segment() -> None:
     assert set(s._to_extractor()) == {"events", "start", "duration", "trigger"}
 
 
+def test_on_trigger_overlap(caplog: pytest.LogCaptureFixture) -> None:
+    # Two same-type triggers starting at the same time on the same timeline
+    # (e.g. two Fmri events differing only by metadata).
+    events = standardize_events(
+        pd.DataFrame(
+            [
+                dict(type="Word", start=10.0, duration=0.5, text="Hello", timeline="x"),
+                dict(type="Word", start=10.0, duration=0.5, text="world", timeline="x"),
+            ]
+        )
+    )
+    triggers = events.type == "Word"
+
+    # default is "raise"
+    with pytest.raises(ValueError, match="same time"):
+        list_segments(events, triggers=triggers, duration=1.0)
+    with pytest.raises(ValueError, match="same time"):
+        list_segments(events, triggers=triggers, duration=1.0, on_trigger_overlap="raise")
+
+    # "warn" logs but still builds the (duplicate) segments
+    with caplog.at_level("WARNING"):
+        segments = list_segments(
+            events, triggers=triggers, duration=1.0, on_trigger_overlap="warn"
+        )
+    assert len(segments) == 2
+    assert "same time" in caplog.text
+
+    # "allow" silently builds the segments
+    segments = list_segments(
+        events, triggers=triggers, duration=1.0, on_trigger_overlap="allow"
+    )
+    assert len(segments) == 2
+
+    # distinct start times never collide, even with the default
+    events2 = standardize_events(
+        pd.DataFrame(
+            [
+                dict(type="Word", start=10.0, duration=0.5, text="Hello", timeline="x"),
+                dict(type="Word", start=12.0, duration=0.5, text="world", timeline="x"),
+            ]
+        )
+    )
+    segments = list_segments(events2, triggers=events2.type == "Word", duration=1.0)
+    assert len(segments) == 2
+
+
 @pytest.mark.parametrize("reloaded", (True, False))
 def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) -> None:
     #  |-----A----|
