@@ -48,10 +48,9 @@ Dataset Notes
   ``<DATA_DIR>/Sivakumar2024Emg2qwerty/download/sub-*/…``.
   Users with an existing BIDS copy should symlink it into ``download/``.
 * **BIDS-aware reader**: the Study reads via
-  :py:func:`mne_bids.read_raw_bids` (``≥ 0.18``); channel types come
-  from the BIDS sidecars.  On ``mne_bids ≥ 0.19`` the EMG-unit fix
-  lands the data in microvolts directly; on older versions
-  ``BidsEmg._read`` applies a V→µV rescale.
+  :py:func:`mne_bids.read_raw_bids` (``≥ 0.19``); channel types and
+  units come from the BIDS sidecars, so ``BidsEmg._read`` returns the
+  EMG channels in microvolts directly — no manual rescaling.
 * **Windowing**: 5-s sliding windows with a 4-s stride (0.9 s left +
   4-s core + 0.1 s right); ``CroppedExtractor`` restricts label
   collection to the core, so the 4-s cores tile each session
