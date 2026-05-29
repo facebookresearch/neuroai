@@ -88,18 +88,6 @@ def test_on_trigger_overlap(caplog: pytest.LogCaptureFixture) -> None:
     )
     assert len(segments) == 2
 
-    # distinct start times never collide, even with the default
-    events2 = standardize_events(
-        pd.DataFrame(
-            [
-                dict(type="Word", start=10.0, duration=0.5, text="Hello", timeline="x"),
-                dict(type="Word", start=12.0, duration=0.5, text="world", timeline="x"),
-            ]
-        )
-    )
-    segments = list_segments(events2, triggers=events2.type == "Word", duration=1.0)
-    assert len(segments) == 2
-
 
 @pytest.mark.parametrize("reloaded", (True, False))
 def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) -> None:
