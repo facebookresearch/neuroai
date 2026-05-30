@@ -27,10 +27,12 @@ _EVENTS_TSV = (
 
 
 def _make_bids_tree(root, subdir="download"):
-    """Build a synthetic single-(subject, session) BIDS tree under ``root /
-    subdir``. Returns ``(subject, session, bids_root)``."""
+    """Build a synthetic single-(subject, session) BIDS tree under
+    ``root/subdir/<dataset_id>`` (eegdash's ``cache_dir/<dataset_id>``
+    layout). Returns ``(subject, session, bids_root)``."""
     sub, ses = "00000001", "0000000001"
-    bids_root = root / subdir if subdir else root
+    base = root / subdir if subdir else root
+    bids_root = base / Sivakumar2024Emg2qwerty.NEMAR_DATASET_ID
     emg_dir = bids_root / f"sub-{sub}" / f"ses-{ses}" / "emg"
     emg_dir.mkdir(parents=True)
     stem = f"sub-{sub}_ses-{ses}_task-typing"
@@ -100,7 +102,13 @@ def test_load_timeline_events_strips_only_literal_suffix(bids_tree, raw_text, ex
     root, sub, ses = bids_tree
     stem = f"sub-{sub}_ses-{ses}_task-typing"
     events_path = (
-        root / "download" / f"sub-{sub}" / f"ses-{ses}" / "emg" / f"{stem}_events.tsv"
+        root
+        / "download"
+        / Sivakumar2024Emg2qwerty.NEMAR_DATASET_ID
+        / f"sub-{sub}"
+        / f"ses-{ses}"
+        / "emg"
+        / f"{stem}_events.tsv"
     )
     events_path.write_text(
         f"onset\tduration\tvalue\tprompt_text\tkey\n0.10\t1.5\tprompt\t{raw_text}\t\n"

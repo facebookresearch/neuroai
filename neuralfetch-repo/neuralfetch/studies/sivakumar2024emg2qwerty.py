@@ -90,19 +90,19 @@ class Sivakumar2024Emg2qwerty(study.Study):
     def bids_root(self) -> Path:
         """Path to the BIDS-formatted dataset root.
 
-        ``Study.download`` writes under ``self.path / "download"``; that
-        is the only supported layout.  Users with an existing NM000104
-        BIDS tree should symlink it into ``download/``.
+        eegdash downloads under ``self.path / "download" / <dataset_id>``
+        (its canonical ``cache_dir/<dataset_id>`` layout).  Users with an
+        existing NM000104 BIDS tree should symlink it there.
         """
         if self._bids_root_cache is not None:
             return self._bids_root_cache
-        candidate = Path(self.path) / "download"
+        candidate = Path(self.path) / "download" / self.NEMAR_DATASET_ID
         if not (candidate.is_dir() and any(candidate.glob("sub-*"))):
             raise FileNotFoundError(
                 f"No BIDS tree found under {candidate!s}: expected "
                 f"``sub-*`` directories.  Run ``Study.download()`` first, "
-                f"or symlink an existing BIDS-formatted copy of NM000104 "
-                f"into ``{candidate!s}``."
+                f"or symlink an existing BIDS-formatted copy of "
+                f"{self.NEMAR_DATASET_ID} into ``{candidate!s}``."
             )
         self._bids_root_cache = candidate
         return candidate
