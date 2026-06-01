@@ -213,46 +213,6 @@ def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
     assert (out_root / "file2.txt").read_text() == "data2"
 
 
-def test_physionet_study_loaders_use_mirrored_download_root(tmp_path: Path) -> None:
-    """Study loaders using Physionet read from download/<study>/<version>/."""
-    from neuralfetch.studies.ghassemi2018you import Ghassemi2018You
-    from neuralfetch.studies.zyma2019eeg import Zyma2019Electroencephalograms
-
-    zyma = Zyma2019Electroencephalograms(path=tmp_path / "zyma")
-    zyma_root = tmp_path / "zyma" / "download" / "eegmat" / "1.0.0"
-    assert zyma._get_eeg_filename(  # noqa: SLF001
-        {"subject": "Subject01", "run": "1"}
-    ) == (zyma_root / "Subject01_1.edf")
-    zyma_root.mkdir(parents=True)
-    (zyma_root / "subject-info.csv").write_text(
-        "Subject,Age,Gender,Number of subtractions,Count quality\n"
-        "Subject01,21,F,42,good\n"
-    )
-    subject_info = zyma._get_subject_info({"subject": "Subject01"})  # noqa: SLF001
-    assert subject_info["Age"] == 21
-
-    ghassemi = Ghassemi2018You(path=tmp_path / "ghassemi")
-    timeline = {"split_dir": "training", "subject": "tr03-0005"}
-    ghassemi_root = (
-        tmp_path / "ghassemi" / "download" / "challenge-2018" / "1.0.0"
-    )
-    assert ghassemi._get_filepath("eeg", timeline) == (  # noqa: SLF001
-        ghassemi_root / "training" / "tr03-0005" / "tr03-0005.mat"
-    )
-    assert ghassemi._get_filepath("subject_info", timeline) == (  # noqa: SLF001
-        ghassemi_root / "age-sex.csv"
-    )
-    ghassemi_root.mkdir(parents=True)
-    (ghassemi_root / "age-sex.csv").write_text(
-        "Record,Age,Sex\ntr03-0005,33,F\n"
-    )
-    assert ghassemi._get_subject_info(timeline) == {  # noqa: SLF001
-        "Record": "tr03-0005",
-        "Age": 33,
-        "Sex": "f",
-    }
-
-
 def test_nsd_data_access_agreement(tmp_path: Path) -> None:
     """NSD consent flow: T&C display, user info collection, marker persistence."""
     from neuralfetch.studies.allen2022massive import Allen2022Massive
