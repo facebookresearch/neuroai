@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind the `NSD_ACCEPT_LICENCE` env var.
+- `neuralbench`: added a `CLUSTER` key to `~/.neuralbench/config.json` to force fully local execution (`null`) without `--debug`, keep the default SLURM auto-detection (`"auto"`), or always submit to SLURM (`"slurm"`); honored by `--prepare`.
+- `neuralbench`: a blank `WANDB_HOST` now genuinely disables Weights & Biases logging (previously `wandb.login` was still invoked).
 
 ## [0.2.1] - 2026-05-13
 

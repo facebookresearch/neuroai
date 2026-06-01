@@ -41,7 +41,7 @@ neuralbench eeg audiovisual_stimulus --prepare    # 2. Prepare cache (preprocess
 neuralbench eeg audiovisual_stimulus              # 3. Run the full grid
 ```
 
-Steps 2 and 3 dispatch to SLURM when it is auto-detected on your machine; step 3 additionally requires `SLURM_PARTITION` to be set in your neuralbench config. Pass `--debug` to either step to force local execution. Step 2 is mostly useful for larger datasets that benefit from parallel preprocessing with SLURM, and is not strictly necessary for `audiovisual_stimulus`. Add `--debug` to any command for a fast local sanity-check run with a subsampled dataset and a limited number of epochs:
+Steps 2 and 3 dispatch to SLURM when it is auto-detected on your machine; step 3 additionally requires `SLURM_PARTITION` to be set in your neuralbench config. Pass `--debug` to either step to force local execution. To run the full config locally (no SLURM, full epochs and batches), set `"CLUSTER": null` in `~/.neuralbench/config.json` (the default `"auto"` uses SLURM when available; `"slurm"` always submits). Step 2 is mostly useful for larger datasets that benefit from parallel preprocessing with SLURM, and is not strictly necessary for `audiovisual_stimulus`. Add `--debug` to any command for a fast local sanity-check run with a subsampled dataset and a limited number of epochs:
 
 ```console
 neuralbench eeg audiovisual_stimulus --debug      # Local validation run
