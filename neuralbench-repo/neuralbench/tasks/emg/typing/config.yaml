@@ -73,6 +73,11 @@ data:
     name: CroppedExtractor
     offset: 0.9
     duration: 4.0
+    # Sliding windows that land in typing gaps legitimately contain no
+    # Keystroke events; permit them (empty CTC target, handled by
+    # ``zero_infinity=True``).  ``CroppedExtractor`` does not inherit
+    # ``allow_missing`` from its wrapped extractor, so set it here too.
+    allow_missing: true
     extractor:
       # Reads the pre-computed integer ``label`` column written by the
       # study's events-dataframe construction (in
