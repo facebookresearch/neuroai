@@ -75,7 +75,7 @@ def test_expand_bids_fmri(tmp_path: Path) -> None:
 
 
 def test_validated_parquet_no_nullable_dtypes(tmp_path: Path) -> None:
-    """ValidatedParquet round-trip must produce np.nan, not pd.NA.
+    """ValidatedParquet load must produce np.nan, not pd.NA.
 
     The parent class reads with dtype_backend="numpy_nullable", turning
     float64 into Float64. On Float64, diff() produces pd.NA (not np.nan)
@@ -92,6 +92,36 @@ def test_validated_parquet_no_nullable_dtypes(tmp_path: Path) -> None:
     ctx = cachedict.DumpContext(folder=tmp_path)
     loaded = utils.ValidatedParquet.__load_from_info__(ctx, "events.parquet")
     assert np.isnan(loaded.start.diff().iloc[0])
+
+
+def test_validated_parquet_load_does_not_standardize(tmp_path: Path) -> None:
+    """Cache load should return the cached parquet frame unchanged."""
+    events = pd.DataFrame(
+        [
+            dict(type="Word", start=1.0, duration=0.5, timeline="t1"),
+            dict(type="Word", start=0.0, duration=0.5, timeline="t1"),
+        ]
+    )
+    fp = tmp_path / "events.parquet"
+    events.to_parquet(fp)
+    ctx = cachedict.DumpContext(folder=tmp_path)
+    loaded = utils.ValidatedParquet.__load_from_info__(ctx, "events.parquet")
+    pd.testing.assert_frame_equal(loaded, events)
+
+
+def test_validated_parquet_dump_keeps_stop_column(tmp_path: Path) -> None:
+    """Dump should persist the standardized frame, including derived columns."""
+    events = pd.DataFrame(
+        [
+            dict(type="Word", text="hello", start=0.0, duration=0.5, timeline="t1"),
+            dict(type="Word", text="world", start=1.0, duration=0.25, timeline="t1"),
+        ]
+    )
+    ctx = cachedict.DumpContext(folder=tmp_path, key="events")
+    utils.ValidatedParquet.__dump_info__(ctx, events)
+    [fp] = tmp_path.rglob("*.parquet")
+    stored = pd.read_parquet(fp)
+    assert stored["stop"].tolist() == [0.5, 1.25]
 
 
 def test_mixed_type_column_parquet(tmp_path: Path) -> None:

@@ -401,18 +401,15 @@ def _coerce_event(event: pd.Series) -> dict[str, tp.Any]:
 
 @DumpContext.register
 class ValidatedParquet(ParquetPandasDataFrame):
-    """Parquet cache type that coerces events before dumping and
-    normalizes on load.
+    """Parquet cache type that coerces events before dumping.
 
-    Dump: coerces each event through its pydantic model (safety net),
-    strips the derived ``stop`` column before writing.
-    Load: normalizes (re-sorts, fills BIDS columns, recomputes ``stop``).
+    Dump: coerces each event through its pydantic model (safety net).
+    Load: returns the cached parquet data unchanged.
     """
 
     @classmethod
     def __dump_info__(cls, ctx: DumpContext, value: tp.Any) -> dict[str, tp.Any]:
         value = standardize_events(value)
-        value = value.drop(columns=["stop"], errors="ignore")
         # Cast object-dtype columns with mixed types (e.g. int + str) to str
         # so pyarrow can serialize them without ArrowInvalid errors.
         for col in value.columns:
@@ -424,8 +421,7 @@ class ValidatedParquet(ParquetPandasDataFrame):
 
     @classmethod
     def __load_from_info__(cls, ctx: DumpContext, filename: str) -> tp.Any:
-        df = pd.read_parquet(ctx.folder / filename)
-        return standardize_events(df, auto_fill=False)
+        return pd.read_parquet(ctx.folder / filename)
 
 
 class SpecialLoader:
