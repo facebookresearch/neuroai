@@ -158,10 +158,10 @@ def test_make_regression_bin_sampler_balances_bins(mocker):
 # --- SequenceLabelEncoder -------------------------------------------------
 #
 # The CTC head's target stream comes from a fixed-length integer-label
-# extractor that lives in ``neuralbench`` (not ``neuralset``): per
-# Hubert's review #34 we keep this CTC-specific shape out of the base
-# ``LabelEncoder`` and read the pre-computed ``label`` field that the
-# emg/typing study writes onto each Keystroke event.
+# extractor that lives in ``neuralbench`` (not ``neuralset``). We keep
+# this CTC-specific shape out of the base ``LabelEncoder`` and read the
+# pre-computed ``label`` field that the emg/typing study writes onto
+# each Keystroke event.
 
 _KS_PAD = 27  # blank index for the toy 27-class vocab below
 
