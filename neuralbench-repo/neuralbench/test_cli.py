@@ -26,11 +26,11 @@ def test_build_all_datasets() -> None:
     assert total_studies > 50
 
 
-@pytest.mark.parametrize("dataset", [None, "schalk2004bci"])
+@pytest.mark.parametrize("dataset", [None, "schalk2004bci2000"])
 def test_prepare_task_configs(dataset: str | None) -> None:
     """Merged config produces a valid Data with a Chain study.
 
-    schalk2004bci uses =replace= which wipes the study dict; _restore_default_source
+    schalk2004bci2000 uses =replace= which wipes the study dict; _restore_default_source
     must re-inject path and infra from the defaults.
     """
     config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
