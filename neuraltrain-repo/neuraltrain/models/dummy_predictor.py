@@ -234,6 +234,4 @@ class DummyCtcSequenceModel(nn.Module):
         self.register_buffer("emissions", emissions)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return (
-            self.emissions.to(X.device).unsqueeze(0).expand(X.shape[0], -1, -1)
-        )
+        return self.emissions.to(X.device).unsqueeze(0).expand(X.shape[0], -1, -1)
