@@ -1704,6 +1704,54 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
         feat.prepare(cross)
 
 
+def test_fmri_prepare_skips_uncached_precompute(tmp_path: Path) -> None:
+    events = []
+    for index in range(2):
+        event_dir = tmp_path / f"event{index}"
+        event_dir.mkdir()
+        events.append(
+            test_etypes.make_fmri_event(
+                event_dir,
+                space="T1w",
+                shape=(1, 1, 1, 4),
+            )
+        )
+
+    def fake_preprocess(event: etypes.Fmri) -> FmriTimedArray:
+        calls.append(event)
+        return FmriTimedArray(
+            data=np.ones((1, 1, 1, 4), dtype=np.float32),
+            frequency=event.frequency,
+            start=event.start,
+            duration=event.duration,
+            header={"preproc": event.preproc, "space": event.space},
+        )
+
+    calls: list[etypes.Fmri] = []
+    extractor = ns.extractors.FmriExtractor(cleaning=None)
+    object.__setattr__(extractor, "_preprocess_event", fake_preprocess)
+    extractor.prepare(events)
+
+    assert calls == []
+    assert extractor._effective_frequency == 1.0
+    assert extractor._missing_default is None
+
+    out = extractor(events[0], start=0.0, duration=1.0, trigger=events[0])
+    assert out.shape == torch.Size([1, 1, 1, 1])
+    assert calls == [events[0]]
+
+    calls = []
+    cached_extractor = ns.extractors.FmriExtractor(
+        cleaning=None,
+        infra={"folder": tmp_path / "cache", **_NO_CLUSTER},  # type: ignore[arg-type]
+    )
+    object.__setattr__(cached_extractor, "_preprocess_event", fake_preprocess)
+    cached_extractor.prepare(events)
+
+    assert len(calls) == len(events)
+    assert {event.filepath for event in calls} == {event.filepath for event in events}
+
+
 def test_fmri_smoothing(test_data_path: Path) -> None:
     study = ns.Study(
         name="Test2023Fmri",
