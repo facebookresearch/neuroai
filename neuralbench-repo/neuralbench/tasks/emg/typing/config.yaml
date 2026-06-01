@@ -26,6 +26,18 @@ lightning_optimizer_config:
       div_factor: 1.0e+5
       final_div_factor: 1.0e+3
   interval: step
+# Default backbone for this task is the paper's CTC sequence model.  Models
+# that don't override ``brain_model_config`` (notably ``chance``) inherit it,
+# so ``chance`` becomes an *untrained* EMG2QwertyNet — a sequence-shaped
+# (B, T_out, 99) emitter compatible with the CTC head/metric — rather than the
+# global EEGNet default, whose single-vector output is incompatible with CTC.
+# ``dummy`` and ``emg2qwerty`` replace this via their own ``=replace=``.
+brain_model_config:
+  =replace=: true
+  name: EMG2QwertyNet
+  kwargs:
+    log_softmax: true
+    spec_augment: true
 data:
   batch_size: 16
   study:
@@ -67,9 +79,9 @@ data:
   target:
     =replace=: true
     # CroppedExtractor restricts label collection to the un-padded 4 s
-    # "core" of the padded 5 s window; the inner LabelEncoder turns the
-    # keystrokes in that core into a fixed-length blank-padded CTC target
-    # of shape ``(128,)``.
+    # "core" of the padded 5 s window; the inner SequenceLabelEncoder
+    # turns the keystrokes in that core into a fixed-length blank-padded
+    # CTC target of shape ``(128,)``.
     name: CroppedExtractor
     offset: 0.9
     duration: 4.0

@@ -90,9 +90,11 @@ class Sivakumar2024Emg2qwerty(study.Study):
     def bids_root(self) -> Path:
         """Path to the BIDS-formatted dataset root.
 
-        eegdash downloads under ``self.path / "download" / <dataset_id>``
-        (its canonical ``cache_dir/<dataset_id>`` layout).  Users with an
-        existing NM000104 BIDS tree should symlink it there.
+        eegdash caches a dataset's BIDS tree under
+        ``cache_dir / <dataset_id>`` (see ``EEGDashBaseDataset``).  With
+        ``cache_dir`` set to ``self.path / "download"``, the ``sub-*``
+        tree therefore lives at ``self.path / "download" / <dataset_id>``.
+        Users with an existing NM000104 BIDS tree should symlink it there.
         """
         if self._bids_root_cache is not None:
             return self._bids_root_cache

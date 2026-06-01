@@ -163,6 +163,7 @@ def build_brain_model(
     train_loader: DataLoader,
     val_loader: DataLoader | None = None,
     wandb_logger: WandbLogger | None = None,
+    loss: tp.Any = None,
 ) -> tuple[torch.nn.Module, int, int]:
     """Build, initialise and optionally wrap a brain model.
 
@@ -185,14 +186,21 @@ def build_brain_model(
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
     feat = batch.data["target"]
-    # Some extractors (integer-target ``LabelEncoder``,
-    # ``SequenceLabelEncoder`` for CTC) produce shapes whose last dim
-    # doesn't reveal the head width; they expose ``n_classes`` instead.
-    # Fall back to ``feat.shape[-1]`` for one-hot / scalar targets.
-    target_extractor = getattr(train_loader.dataset, "extractors", {}).get("target")
+    # Some target extractors expose an explicit head width via
+    # ``n_classes`` because their target shape doesn't reveal it -- e.g.
+    # ``SequenceLabelEncoder`` for CTC, whose ``(max_length,)`` target is
+    # padded class indices, not a one-hot row.  Unwrap meta-extractors
+    # (e.g. ``CroppedExtractor``, which nests its inner extractor under
+    # ``.extractor``) to reach the leaf that may carry it; fall back to
+    # ``feat.shape[-1]`` for one-hot / scalar targets.
+    leaf = getattr(train_loader.dataset, "extractors", {}).get("target")
+    while (
+        leaf is not None and not hasattr(leaf, "n_classes") and hasattr(leaf, "extractor")
+    ):
+        leaf = leaf.extractor
     n_outputs = (
-        target_extractor.n_classes
-        if target_extractor is not None and hasattr(target_extractor, "n_classes")
+        leaf.n_classes
+        if leaf is not None and hasattr(leaf, "n_classes")
         else feat.shape[-1]
     )
 
@@ -223,7 +231,16 @@ def build_brain_model(
         else:
             y_fit = y_train
             LOGGER.info("DummyPredictor: fitting on N_train = %d targets.", n_train)
-        brain_model = brain_model_config.build(y_train=y_fit)
+        # CTC sequence tasks (e.g. emg/typing) need a per-frame sequence
+        # emitter rather than a single constant row; signal this to the
+        # DummyPredictor via the loss's blank index so it builds a
+        # most-frequent-character CTC baseline.
+        ctc_blank: int | None = None
+        if loss is not None and type(loss).__name__ == "CTCLoss":
+            ctc_blank = int(loss.kwargs.get("blank", 0))
+        brain_model = brain_model_config.build(
+            y_train=y_fit, blank_idx=ctc_blank, n_classes=n_outputs
+        )
     elif isinstance(brain_model_config, SklearnBaseline):
         LOGGER.info(
             "Preparing SklearnBaseline model (%s)...",

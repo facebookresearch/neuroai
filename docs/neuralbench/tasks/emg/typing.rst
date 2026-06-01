@@ -45,8 +45,9 @@ Dataset Notes
 * **Auto-fetch**: ``--download`` pulls NM000104 from NEMAR
   (``s3://nemar/nm000104``) via :py:class:`neuralfetch.download.Eegdash`
   -- 1136 files, ~239 GB, under
-  ``<DATA_DIR>/Sivakumar2024Emg2qwerty/download/sub-*/...``.
-  Users with an existing BIDS copy should symlink it into ``download/``.
+  ``<DATA_DIR>/Sivakumar2024Emg2qwerty/download/nm000104/sub-*/...``.
+  Users with an existing BIDS copy should symlink it into
+  ``download/nm000104/``.
 * **BIDS-aware reader**: the Study reads via
   :py:func:`mne_bids.read_raw_bids` (``>= 0.19``); channel types and
   units come from the BIDS sidecars, so ``BidsEmg._read`` returns the

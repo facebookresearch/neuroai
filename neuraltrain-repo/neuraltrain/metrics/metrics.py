@@ -750,8 +750,8 @@ class CharacterErrorRates(torchmetrics.text.CharErrorRate):
         are recovered as ``(y_true != blank_idx).sum(-1)``.
     """
 
-    def __init__(self, blank_idx: int = 0, **kwargs: tp.Any) -> None:
-        super().__init__(**kwargs)
+    def __init__(self, blank_idx: int = 0) -> None:
+        super().__init__()
         self._blank = blank_idx
 
     def update(  # type: ignore[override]

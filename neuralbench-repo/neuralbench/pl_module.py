@@ -166,7 +166,7 @@ class BrainModule(pl.LightningModule):
             # ``nn.CTCLoss`` needs four arguments and a transposed time axis.
             # ``y_pred`` is ``(B, T_out, C)`` log-probs from a CTC head;
             # ``y_true`` is ``(B, max_length)`` integer labels padded with
-            # the blank index (see ``LabelEncoder`` with
+            # the blank index (see ``SequenceLabelEncoder`` with
             # ``aggregation='cat'`` + ``max_length``).
             blank = self.loss.blank
             y_true = y_true.long()

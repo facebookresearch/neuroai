@@ -471,7 +471,15 @@ class SequenceLabelEncoder(LabelEncoder):
         return self.pad_value + 1
 
     def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
+        # Skip ``LabelEncoder.model_post_init``: its "missing events ->
+        # all-zero default" warning is a false positive here (missing
+        # segments are encoded as an empty sequence padded with
+        # ``pad_value`` -- see ``__call__`` -- not zeros), and its
+        # ``predefined_mapping`` validation doesn't apply (labels are read
+        # as integers, no string->int mapping).  Run the grandparent
+        # (``EventField``) init only -- mirrors how ``prepare`` deliberately
+        # bypasses ``LabelEncoder.prepare``.
+        super(LabelEncoder, self).model_post_init(log__)
         if self.max_length <= 0:
             raise ValueError(f"max_length must be > 0, got {self.max_length}.")
         if self.pad_value < 0:

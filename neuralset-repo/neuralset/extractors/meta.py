@@ -377,31 +377,24 @@ class CroppedExtractor(base.BaseStatic):  # can be static or not
         The offset (in seconds) from the start of the event to begin the crop.
     duration: PositiveFloat | None
         The duration (in seconds) of the crop. If None, the crop extends to the end of the event.
-    frequency: Literal["native"]
-        The frequency of the cropped extractor. Must be "native". Never used
+    frequency: float | Literal["native"]
+        Mirrors the wrapped extractor's frequency (set in ``model_post_init``).
+        Defaults to "native"; may be a float for static extractors. Never used
     """
 
     event_types: str | tuple[str, ...] = "Event"
     extractor: base.BaseExtractor
     offset: float = 0
     duration: pydantic.PositiveFloat | None = None
-    frequency: tp.Literal["native"] = "native"  # type: ignore
+    # Mirrors the wrapped extractor's frequency in ``model_post_init`` (can be
+    # a float for static extractors), so the annotation must permit floats too
+    # for the dump/validate round-trip in ``infra.clone_obj`` to succeed.
+    frequency: float | tp.Literal["native"] = "native"  # type: ignore
 
     def model_post_init(self, log__: tp.Any) -> None:
         self.event_types = self.extractor.event_types
         self.frequency = self.extractor.frequency  # type: ignore
         super().model_post_init(log__)
-
-    @property
-    def n_classes(self) -> int:
-        """Forward ``n_classes`` from the wrapped extractor.
-
-        Raises ``AttributeError`` when the inner extractor doesn't expose
-        it, so ``hasattr(cropped, "n_classes")`` mirrors the wrapped
-        contract (used by ``neuralbench.model_factory`` for CTC head
-        sizing).
-        """
-        return self.extractor.n_classes  # type: ignore[attr-defined]
 
     def __call__(
         self,

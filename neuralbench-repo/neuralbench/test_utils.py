@@ -221,8 +221,9 @@ def test_sequence_label_encoder_padded_layout(
 
 def test_cropped_sequence_label_encoder_composition():
     """``CroppedExtractor`` wrapping ``SequenceLabelEncoder`` restricts label
-    collection to the cropped sub-window and forwards ``n_classes`` so
-    ``model_factory`` can size the CTC head through the composition."""
+    collection to the cropped sub-window; ``model_factory`` unwraps the
+    ``.extractor`` chain to read ``n_classes`` off the inner encoder and
+    size the CTC head through the composition."""
     inner = SequenceLabelEncoder(
         event_types="Keystroke",
         event_field="label",
@@ -238,7 +239,11 @@ def test_cropped_sequence_label_encoder_composition():
     assert out.shape == (8,)
     assert out[:2].tolist() == [2, 3]
     assert (out[2:] == _KS_PAD).all()
-    assert cropped.n_classes == _KS_PAD + 1
+    # ``CroppedExtractor`` itself doesn't carry ``n_classes``; the head
+    # width lives on the wrapped encoder, which ``model_factory`` reaches
+    # by unwrapping ``.extractor``.
+    assert not hasattr(cropped, "n_classes")
+    assert cropped.extractor.n_classes == _KS_PAD + 1
 
 
 def test_sequence_label_encoder_truncation_warns_once(_fresh_warn_registry):

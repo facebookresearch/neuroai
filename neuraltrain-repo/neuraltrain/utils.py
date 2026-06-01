@@ -52,23 +52,13 @@ def convert_to_pydantic(
     if "name" in sig.parameters:
         raise RuntimeError("Cannot convert class with attribute 'name' to pydantic")
 
-    # Drop ``*args`` / ``**kwargs`` from the auto-discovered fields: they
-    # would otherwise surface as required ``Any`` fields on the Builder
-    # and force every YAML to declare a nested ``kwargs:`` block.
-    # ``BaseTorchMetric`` / ``BaseTorchLoss`` keep their own explicit
-    # ``kwargs: dict[str, Any] = {}`` field for the torchmetrics /
-    # torch-loss spread path; that one is declared on the parent, not
-    # discovered here.
     fields = {
         k: (
             v.annotation if v.annotation != empty else tp.Any,
             v.default if v.default != empty else ...,
         )
         for k, v in sig.parameters.items()
-        if k != "self"
-        and not k.startswith("_")
-        and v.kind
-        not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        if k != "self" and not k.startswith("_")
     }
 
     # add name for pydantic.discriminator (unless using DiscriminatedModel)
