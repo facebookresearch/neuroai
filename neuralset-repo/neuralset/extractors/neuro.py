@@ -1521,27 +1521,6 @@ class FmriExtractor(BaseExtractor):
     def _exclude_from_cache_uid(self) -> list[str]:
         return super()._exclude_from_cache_uid() + ["offset", "padding"]
 
-    def _prepare_uncached(self, events: list[etypes.Fmri]) -> None:
-        """Populate cheap prepare metadata without precomputing fMRI data."""
-        if not events:
-            return
-        if self.frequency == "native" and hasattr(events[0], "frequency"):
-            freqs = set(e.frequency for e in events)
-            cls = self.__class__.__name__
-            if len(freqs) > 1:
-                msg = f"frequency='native' in {cls} with several different frequencies: {freqs}"
-                msg += "\n(all data will not be processing at the same frequency, "
-                msg += "should you set the extractor frequency?"
-                logger.warning(msg)
-            elif len(freqs) == 1:
-                freq = next(iter(freqs))
-                logger.info(
-                    "Processing to native frequency in %s.prepare: %sHz", cls, freq
-                )
-                self._effective_frequency = float(freq)
-        elif self.frequency != "native":
-            self._effective_frequency = float(self.frequency)
-
     def _auto_filter_fmri_events(
         self, fmri_events: list[etypes.Fmri]
     ) -> list[etypes.Fmri]:
@@ -1632,16 +1611,6 @@ class FmriExtractor(BaseExtractor):
             self.infra.clone_obj(padding=None).prepare(events)
             self._padding = max(ta.data.shape[0] for ta in self._get_data(events))  # type: ignore
             # (recompute prepare to just fill the missing default value)
-        if self.infra.folder is None:
-            self._prepare_uncached(events)
-            if self.allow_missing and events:
-                self(
-                    events[0],
-                    start=events[0].start,
-                    duration=0.001,
-                    trigger=events[0],
-                )
-            return
         super().prepare(events)
 
     @staticmethod

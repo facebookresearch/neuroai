@@ -160,10 +160,11 @@ class BaseExtractor(base._Module, base.NamedModel):
     ) -> None:
         """Pre-compute and cache extractor data for a collection of events.
 
-        This method triggers ``_get_data`` on every matching event so that
-        expensive computation (e.g. model inference) is done once and cached.
-        It then calls the extractor on a single event to populate the output
-        shape, which is needed when ``allow_missing=True``.
+        When an extractor uses a persistent cache folder, this method triggers
+        ``_get_data`` on every matching event so expensive computation (e.g.
+        model inference) is done once and cached. It then calls the extractor
+        on a single event to populate the output shape, which is needed when
+        ``allow_missing=True``.
 
         Call ``prepare`` before using the extractor in a dataloader.
 
@@ -188,7 +189,9 @@ class BaseExtractor(base._Module, base.NamedModel):
                 freq = list(freqs)[0]
                 msg = f"Processing to native frequency in {cls}.prepare: {freq}Hz"
                 logger.info(msg)
-        self._get_data(events)
+        infra = getattr(self, "infra", None)
+        if infra is None or infra.folder is not None:
+            self._get_data(events)
         if events:  # run extractor on 1 event to populate shape
             self(
                 events[0],
