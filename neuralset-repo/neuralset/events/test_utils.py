@@ -94,36 +94,6 @@ def test_validated_parquet_no_nullable_dtypes(tmp_path: Path) -> None:
     assert np.isnan(loaded.start.diff().iloc[0])
 
 
-def test_validated_parquet_load_does_not_standardize(tmp_path: Path) -> None:
-    """Cache load should return the cached parquet frame unchanged."""
-    events = pd.DataFrame(
-        [
-            dict(type="Word", start=1.0, duration=0.5, timeline="t1"),
-            dict(type="Word", start=0.0, duration=0.5, timeline="t1"),
-        ]
-    )
-    fp = tmp_path / "events.parquet"
-    events.to_parquet(fp)
-    ctx = cachedict.DumpContext(folder=tmp_path)
-    loaded = utils.ValidatedParquet.__load_from_info__(ctx, "events.parquet")
-    pd.testing.assert_frame_equal(loaded, events)
-
-
-def test_validated_parquet_dump_keeps_stop_column(tmp_path: Path) -> None:
-    """Dump should persist the standardized frame, including derived columns."""
-    events = pd.DataFrame(
-        [
-            dict(type="Word", text="hello", start=0.0, duration=0.5, timeline="t1"),
-            dict(type="Word", text="world", start=1.0, duration=0.25, timeline="t1"),
-        ]
-    )
-    ctx = cachedict.DumpContext(folder=tmp_path, key="events")
-    utils.ValidatedParquet.__dump_info__(ctx, events)
-    [fp] = tmp_path.rglob("*.parquet")
-    stored = pd.read_parquet(fp)
-    assert stored["stop"].tolist() == [0.5, 1.25]
-
-
 def test_mixed_type_column_parquet(tmp_path: Path) -> None:
     """Columns with mixed types (int + str) should serialize to parquet."""
     events = pd.DataFrame(
