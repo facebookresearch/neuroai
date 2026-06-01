@@ -18,6 +18,7 @@ from warnings import warn
 import yaml
 from exca import ConfDict
 
+from neuralbench.config_manager import get_config
 from neuralbench.registry import (
     DEBUG_STUDY_QUERIES,
     _resolve_model_config_path,
@@ -58,23 +59,21 @@ def _apply_debug_overlay(config: ConfDict) -> None:
 
 def _apply_prepare_overlay(config: ConfDict) -> None:
     """Apply prepare-mode overrides: single run to warm the preprocessing cache."""
-    from neuralbench.config_manager import get_config
-
     LOGGER.info("--- RUNNING SINGLE EXPERIMENT TO PREPARE CACHE ---")
+    # Use the configured CLUSTER for both the run and the extractor/target
+    # caches. "auto" already fans out to SLURM when available (submitit's auto
+    # executor) and falls back to local otherwise, so we avoid hard-coding
+    # "slurm", which would fail on machines without a SLURM cluster.
     cluster = get_config().get("CLUSTER", "auto")
-    # When CLUSTER forces local execution (None), keep cache preparation local
-    # too; otherwise use "slurm" (rather than "auto") so prepare_extractors
-    # launches the extractor jobs concurrently.
-    cache_cluster = None if cluster is None else "slurm"
     config["infra.cluster"] = cluster
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
-    config["data.neuro.infra.cluster"] = cache_cluster
+    config["data.neuro.infra.cluster"] = cluster
     config["data.neuro.infra.min_samples_per_job"] = 8
     target_cfg = config.get("data", {}).get("target", {})
     if isinstance(target_cfg, dict) and "infra" in target_cfg:
-        config["data.target.infra.cluster"] = cache_cluster
+        config["data.target.infra.cluster"] = cluster
         config["data.target.infra.min_samples_per_job"] = 8
     if "trainer_config" in config:
         config["trainer_config"] = {
@@ -268,7 +267,7 @@ def _warn_slurm_partition(
     import os
     import shutil
 
-    from neuralbench.config_manager import get_config, get_default_config_path
+    from neuralbench.config_manager import get_default_config_path
 
     if debug or prepare or download:
         return

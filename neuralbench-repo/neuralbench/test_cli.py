@@ -79,21 +79,22 @@ def test_cluster_config_wires_all_infra_clusters(
     assert raw["data"]["target"]["infra"]["cluster"] == cluster
 
 
-@pytest.mark.parametrize(
-    "cluster,expected_cache",
-    [(None, None), ("auto", "slurm"), ("slurm", "slurm")],
-)
+@pytest.mark.parametrize("cluster", [None, "auto", "slurm"])
 def test_prepare_overlay_respects_cluster(
-    patch_config: Callable[..., None], cluster: str | None, expected_cache: str | None
+    patch_config: Callable[..., None], cluster: str | None
 ) -> None:
-    """``--prepare`` runs caches locally when CLUSTER is null, else on slurm."""
+    """``--prepare`` uses the configured CLUSTER for the run and both caches.
+
+    "auto" fans out to SLURM when available and runs locally otherwise, so the
+    cache infra is never hard-coded to "slurm" (which would fail without SLURM).
+    """
     patch_config(CLUSTER=cluster)
     config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
     _apply_prepare_overlay(config)
     flat = config.flat()
     assert flat["infra.cluster"] == cluster
-    assert flat["data.neuro.infra.cluster"] == expected_cache
-    assert flat["data.target.infra.cluster"] == expected_cache
+    assert flat["data.neuro.infra.cluster"] == cluster
+    assert flat["data.target.infra.cluster"] == cluster
 
 
 def _capture_assembled_experiments(
