@@ -7,6 +7,7 @@
 import inspect
 import logging
 import typing as tp
+import warnings
 from collections import defaultdict
 from itertools import compress
 
@@ -1140,15 +1141,33 @@ class BaseFmriProjector(DiscriminatedModel, discriminator_key="name"):
 class SurfaceProjector(BaseFmriProjector):
     """Project data to an fsaverage surface mesh.
     For volumetric data, this uses ``nilearn.surface.vol_to_surf`` to project the data to the surface.
-    For surface data, this simply downsamples the data to the target mesh resolution.
+    For surface data, this downsamples the data to the target mesh resolution.
 
-    Fields beyond ``mesh`` mirror the keyword arguments of
-    ``nilearn.surface.vol_to_surf`` and are forwarded to it.
+    Two downsampling methods are available (``downsampling_method``):
+
+    * ``"prefix"`` (default): keep the first ``V_target`` vertices of each
+      hemisphere. fsaverage meshes are hierarchically nested by icosahedral
+      subdivision so this returns the exact target-mesh vertices, but it
+      discards the rest instead of averaging them in, which lowers SNR per
+      retained vertex. A ``UserWarning`` is emitted whenever this path
+      actually shortens the input. Targeting ``fsaverage3`` or ``fsaverage4``
+      with this method raises a ``ValueError`` because nilearn ships those
+      two meshes with a vertex ordering that does not match fsaverage5+
+      (see https://github.com/nilearn/nilearn/issues/3415), making the
+      prefix slice incorrect — switch to ``"voronoi"`` instead.
+    * ``"voronoi"``: average source vertices within each target Voronoi
+      cell on the inflated mesh (with a nearest-source fallback for the
+      rare empty cells caused by inflated meshes not being perfectly nested
+      across fsaverage levels).
+
+    Upsampling is not supported. Fields beyond ``mesh`` mirror the keyword
+    arguments of ``nilearn.surface.vol_to_surf`` and are forwarded to it.
 
     Examples
     --------
     >>> SurfaceProjector(mesh="fsaverage5")
     >>> SurfaceProjector(mesh="fsaverage6", radius=5.0, interpolation="nearest")
+    >>> SurfaceProjector(mesh="fsaverage3", downsampling_method="voronoi")
     """
 
     mesh: str
@@ -1158,6 +1177,7 @@ class SurfaceProjector(BaseFmriProjector):
     n_samples: int | None = None
     mask_img: tp.Any | None = None
     depth: list[float] | None = None
+    downsampling_method: tp.Literal["prefix", "voronoi"] = "prefix"
 
     _mesh: tp.Any | None = pydantic.PrivateAttr(default=None)
 
@@ -1173,6 +1193,44 @@ class SurfaceProjector(BaseFmriProjector):
             fsaverage = datasets.fetch_surf_fsaverage(self.mesh)
             self._mesh = fsaverage
         return self._mesh
+
+    def _voronoi_downsample(self, data: np.ndarray, in_mesh: str) -> np.ndarray:
+        """Average source vertices within each target Voronoi cell, per hemisphere.
+
+        Empty cells (which occur because nilearn's inflated meshes are not
+        perfectly nested across fsaverage levels) fall back to the value of
+        their nearest source vertex.
+        """
+        import nibabel as nib
+        from nilearn import datasets
+        from scipy.spatial import cKDTree
+
+        fs_in = datasets.fetch_surf_fsaverage(in_mesh)
+        fs_out = self.get_mesh()
+        n_in = data.shape[0] // 2
+
+        def _coords(fs: tp.Any, hemi: str) -> np.ndarray:
+            gii = tp.cast(nib.GiftiImage, nib.load(fs[f"infl_{hemi}"]))
+            return gii.darrays[0].data
+
+        results = []
+        for hemi_idx, hemi in enumerate(("left", "right")):
+            values = data[hemi_idx * n_in : (hemi_idx + 1) * n_in]
+            in_xyz = _coords(fs_in, hemi)
+            out_xyz = _coords(fs_out, hemi)
+            n_out = out_xyz.shape[0]
+            _, owner = cKDTree(out_xyz).query(in_xyz, k=1)
+            counts = np.bincount(owner, minlength=n_out)
+            sums = np.zeros((n_out,) + values.shape[1:], dtype=np.float64)
+            np.add.at(sums, owner, values)
+            empty = counts == 0
+            if empty.any():
+                _, nearest_in = cKDTree(in_xyz).query(out_xyz[empty], k=1)
+                sums[empty] = values[nearest_in]
+                counts[empty] = 1
+            counts = counts.reshape((-1,) + (1,) * (values.ndim - 1))
+            results.append(sums / counts)
+        return np.concatenate(results, axis=0)
 
     def apply(self, rec: tp.Any) -> np.ndarray:
         if len(rec.shape) == 4:
@@ -1208,11 +1266,34 @@ class SurfaceProjector(BaseFmriProjector):
                 raise NotImplementedError(
                     f"Cannot upsample from {n_vertices} vertices to {n_vertices_resampled} vertices"
                 )
-            if n_vertices > n_vertices_resampled:
+            if n_vertices == n_vertices_resampled:
+                return data
+            in_mesh = next(
+                name for name, size in FSAVERAGE_SIZES.items() if size == n_vertices
+            )
+            if self.downsampling_method == "prefix":
+                if self.mesh in ("fsaverage3", "fsaverage4"):
+                    raise ValueError(
+                        f"downsampling_method='prefix' to {self.mesh} is not "
+                        "supported: nilearn ships fsaverage3/4 with a different "
+                        "vertex ordering than fsaverage5+, so the first N "
+                        "vertices of the input do not correspond to the target "
+                        "mesh's vertices (see "
+                        "https://github.com/nilearn/nilearn/issues/3415). Use "
+                        "downsampling_method='voronoi' instead."
+                    )
+                warnings.warn(
+                    "SurfaceProjector(downsampling_method='prefix') keeps the first"
+                    " N vertices of each hemisphere; this discards higher-resolution"
+                    " vertices rather than averaging them, lowering SNR. Pass"
+                    " downsampling_method='voronoi' for a proper Voronoi-based"
+                    " resampling.",
+                    stacklevel=2,
+                )
                 left = data[:n_vertices_resampled, :]
                 right = data[n_vertices : n_vertices + n_vertices_resampled, :]
-                data = np.concatenate([left, right], axis=0)
-            return data
+                return np.concatenate([left, right], axis=0)
+            return self._voronoi_downsample(data, in_mesh=in_mesh)
         else:
             raise ValueError(
                 f"Unexpected shape {rec.shape} (should have 2 or 4 dimensions)"
