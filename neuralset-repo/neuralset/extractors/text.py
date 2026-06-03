@@ -361,7 +361,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         elif "Llama-3.2-11B-Vision" in self.model_name:
             from transformers import MllamaForConditionalGeneration as Model
         # instantiate
-        kwargs = {**self.hf_kwargs, **kwargs}
+        kwargs = {**self.model_build_kwargs, **kwargs}
         model = Model.from_pretrained(self.model_name, **kwargs)
         if not self.pretrained:
             rawmodel = Model.from_config(model.config)

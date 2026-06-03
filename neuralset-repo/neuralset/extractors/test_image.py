@@ -160,7 +160,10 @@ def test_image_accelerate_device_resolution() -> None:
     # real torch device (tensors go there) while the model is dispatched by HF.
     extractor = ns.extractors.HuggingFaceImage(use_accelerate=True)
     assert extractor.use_accelerate
-    assert extractor.hf_kwargs == {"device_map": "auto", "torch_dtype": torch.float16}
+    assert extractor.model_build_kwargs == {
+        "device_map": "auto",
+        "torch_dtype": torch.float16,
+    }
     assert extractor.device in ("cpu", "cuda")
     if torch.cuda.is_available():
         torch.empty(0).to(extractor.device)

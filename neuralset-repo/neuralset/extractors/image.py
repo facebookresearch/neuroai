@@ -294,7 +294,7 @@ class HuggingFaceImage(BaseImage):
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
-                model_kwargs=self.hf_kwargs,
+                model_kwargs=self.model_build_kwargs,
             )
             if not self.use_accelerate:
                 # accelerate dispatches the model internally; otherwise place it ourselves

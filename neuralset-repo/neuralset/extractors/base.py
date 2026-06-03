@@ -491,7 +491,7 @@ class HuggingFaceMixin(base.BaseModel):
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     @property
-    def hf_kwargs(self) -> dict[str, tp.Any]:
+    def model_build_kwargs(self) -> dict[str, tp.Any]:
         """Extra kwargs forwarded to ``from_pretrained``. Populated only when
         ``use_accelerate`` is set, in which case HF dispatches the model across
         GPUs with fp16 (callers should then skip the usual ``.to(device)``).

@@ -261,7 +261,7 @@ class HuggingFaceVideo(BaseExtractor):
             pretrained=self.image.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
-            model_kwargs=self.image.hf_kwargs,
+            model_kwargs=self.image.model_build_kwargs,
         )
         if model.model.device.type == "cpu":
             # may already be dispatched (with "accelerate")
