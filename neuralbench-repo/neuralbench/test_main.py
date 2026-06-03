@@ -8,8 +8,12 @@ import typing as tp
 from types import SimpleNamespace
 
 import lightning.pytorch as pl
+import numpy as np
+import pandas as pd
+import pytest
 import torch
 from exca import TaskInfra
+from exca.cachedict import CacheDict
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -174,3 +178,84 @@ def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
     assert events[-2:] == ["prepare_pl_module", "cleanup"]
     assert result["n_total_params"] is None
     assert result["n_trainable_params"] is None
+
+
+_PREDS = {
+    "metadata": pd.DataFrame({"timeline": ["rec0", "rec1"], "batch_idx": [0, 0]}),
+    "y_true": np.array([[0.0, 1.0], [1.0, 0.0]]),
+    "y_pred": np.array([[0.2, 0.8], [0.7, 0.3]]),
+}
+
+
+def _make_eval_experiment(save_test_predictions: bool) -> Experiment:
+    class _DummyData:
+        def prepare(self) -> dict[str, object]:
+            return {"train": object(), "val": object(), "test": object()}
+
+    return Experiment.model_construct(
+        data=tp.cast(Data, _DummyData()),
+        brain_model_config=tp.cast(BaseModelConfig, object()),
+        trainer_config=tp.cast(TrainerConfig, object()),
+        loss=tp.cast(BaseLoss, _DummyLoss()),
+        lightning_optimizer_config=tp.cast(LightningOptimizer, object()),
+        metrics=[],
+        eval_only=True,
+        infra=TaskInfra(version="1", gpus_per_node=0),
+        save_test_predictions=save_test_predictions,
+    )
+
+
+def test_run_writes_test_predictions_when_flag_set(monkeypatch) -> None:
+    """``save_test_predictions`` gates persisting predictions in run():
+    True writes the artifacts and records a marker, False (default) leaves it
+    out so existing caches stay valid."""
+
+    def fake_prepare_pl_module(self, train_loader, val_loader=None) -> None:
+        del train_loader, val_loader
+        self._brain_module = SimpleNamespace(test_predictions=_PREDS)
+
+    written: list[dict] = []
+    monkeypatch.setattr(Experiment, "setup_run", lambda self: None)
+    monkeypatch.setattr(Experiment, "setup_trainer", lambda self, *a, **kw: SimpleNamespace(global_rank=0))
+    monkeypatch.setattr(Experiment, "prepare_pl_module", fake_prepare_pl_module)
+    monkeypatch.setattr(Experiment, "_test", lambda self, loaders, ckpt: {"test/acc": 1.0})
+    monkeypatch.setattr(Experiment, "_cleanup", lambda self, trainer: None)
+    monkeypatch.setattr(Experiment, "_write_test_predictions", lambda self, preds: written.append(preds))
+
+    # Call the unwrapped run() body directly: invoking the exca-wrapped method on
+    # a ``model_construct`` instance is order-dependent (binding happens in a
+    # pydantic validator that ``model_construct`` skips), which is irrelevant here.
+    raw_run = Experiment.model_fields["infra"].default._infra_method.method
+    result = raw_run(_make_eval_experiment(True))
+    assert result["test_predictions_dir"] == Experiment._TEST_PREDICTIONS_DIR
+    assert written and written[0] is _PREDS
+    assert "test_predictions_dir" not in raw_run(_make_eval_experiment(False))
+
+
+def test_test_predictions_roundtrip(monkeypatch, tmp_path) -> None:
+    """Predictions written via CacheDict round-trip through the accessor:
+    metadata as a DataFrame, arrays as memmaps."""
+    experiment = _make_eval_experiment(save_test_predictions=True)
+    folder = str(tmp_path / "test_predictions")
+    # Fresh CacheDict per call on the same folder -> a genuine disk round-trip.
+    monkeypatch.setattr(
+        Experiment, "_test_predictions_cache", lambda self: CacheDict(folder=folder)
+    )
+
+    experiment._write_test_predictions(_PREDS)
+    monkeypatch.setattr(
+        Experiment, "run", lambda self: {"test_predictions_dir": "test_predictions"}
+    )
+    out = experiment.test_predictions()
+
+    pd.testing.assert_frame_equal(out["metadata"], _PREDS["metadata"])
+    assert np.array_equal(np.asarray(out["y_true"]), _PREDS["y_true"])
+    assert np.array_equal(np.asarray(out["y_pred"]), _PREDS["y_pred"])
+
+
+def test_test_predictions_accessor_errors_when_unsaved(monkeypatch) -> None:
+    """The accessor errors when predictions were not saved."""
+    experiment = _make_eval_experiment(save_test_predictions=False)
+    monkeypatch.setattr(Experiment, "run", lambda self: {"test/acc": 1.0})
+    with pytest.raises(ValueError, match="save_test_predictions=True"):
+        experiment.test_predictions()
