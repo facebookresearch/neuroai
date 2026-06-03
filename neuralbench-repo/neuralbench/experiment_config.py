@@ -18,6 +18,7 @@ from warnings import warn
 import yaml
 from exca import ConfDict
 
+from neuralbench.config_manager import get_config
 from neuralbench.registry import (
     DEBUG_STUDY_QUERIES,
     _resolve_model_config_path,
@@ -59,17 +60,20 @@ def _apply_debug_overlay(config: ConfDict) -> None:
 def _apply_prepare_overlay(config: ConfDict) -> None:
     """Apply prepare-mode overrides: single run to warm the preprocessing cache."""
     LOGGER.info("--- RUNNING SINGLE EXPERIMENT TO PREPARE CACHE ---")
-    config["infra.cluster"] = "auto"
+    # Use the configured CLUSTER for both the run and the extractor/target
+    # caches. "auto" already fans out to SLURM when available (submitit's auto
+    # executor) and falls back to local otherwise, so we avoid hard-coding
+    # "slurm", which would fail on machines without a SLURM cluster.
+    cluster = get_config().get("CLUSTER", "auto")
+    config["infra.cluster"] = cluster
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
-    # Parallel SLURM-based caching for the extractors (use "slurm" rather than
-    # "auto" so that prepare_extractors launches them concurrently)
-    config["data.neuro.infra.cluster"] = "slurm"
+    config["data.neuro.infra.cluster"] = cluster
     config["data.neuro.infra.min_samples_per_job"] = 8
     target_cfg = config.get("data", {}).get("target", {})
     if isinstance(target_cfg, dict) and "infra" in target_cfg:
-        config["data.target.infra.cluster"] = "slurm"
+        config["data.target.infra.cluster"] = cluster
         config["data.target.infra.min_samples_per_job"] = 8
     if "trainer_config" in config:
         config["trainer_config"] = {
@@ -256,17 +260,21 @@ def _warn_slurm_partition(
     """Warn when SLURM is detected but no partition is configured.
 
     Skipped when the run does not actually submit jobs (``debug``,
-    ``prepare``, ``download``).  The warning surfaces the resolved config
-    path, honoring the ``NEURALBENCH_CONFIG`` environment variable.
+    ``prepare``, ``download``, or ``CLUSTER`` forcing local execution).  The
+    warning surfaces the resolved config path, honoring the
+    ``NEURALBENCH_CONFIG`` environment variable.
     """
     import os
     import shutil
 
-    from neuralbench.config_manager import get_config, get_default_config_path
+    from neuralbench.config_manager import get_default_config_path
 
     if debug or prepare or download:
         return
     config = get_config()
+    # CLUSTER=null forces fully local execution, so no SLURM jobs are submitted.
+    if config.get("CLUSTER", "auto") is None:
+        return
     if not config.get("SLURM_PARTITION") and shutil.which("srun") is not None:
         config_path = os.environ.get("NEURALBENCH_CONFIG") or str(
             get_default_config_path()
@@ -275,5 +283,5 @@ def _warn_slurm_partition(
             "SLURM is available on this machine but SLURM_PARTITION is not set "
             f"in your neuralbench config ({config_path}). Non-debug runs will "
             f"fail when submitting jobs. Either set SLURM_PARTITION in "
-            f"{config_path}, or use --debug to run locally."
+            f'{config_path}, set "CLUSTER": null to run locally, or use --debug.'
         )

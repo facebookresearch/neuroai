@@ -4,11 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# Model seed: controls weight initialization, dropout, and batch ordering via
-# pl.seed_everything(). Each seed produces one independent run.
-# Data split seeds (valid_random_state, test_random_state) are intentionally
-# kept fixed (=33 in each task config) so that all runs share the same
-# train/val/test partition, and variance reflects model stochasticity only.
+# Experiment.seed: controls model-side stochasticity (weight initialization,
+# dropout) via pl.seed_everything(). Each seed produces one independent run.
+#
+# Data-side seeds are intentionally kept fixed across the grid so variance
+# across runs reflects model stochasticity only:
+# - data.seed (=33 in defaults/config.yaml) seeds the DataLoader shuffle,
+#   WeightedRandomSampler draws, and per-worker numpy/random RNGs.
+# - Split seeds (valid_random_state, test_random_state in each task config)
+#   keep the train/val/test partition identical across runs.
 seed:
   - 33
   - 34

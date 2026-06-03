@@ -1,7 +1,7 @@
 [project]
 name = "neuralbench"
 readme = "README.md"
-version = "0.2.1"
+version = "0.2.2"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -13,7 +13,7 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode",
+  "braindecode>=1.5.2",
   "neuralset",
   "neuraltrain",
   "exca",

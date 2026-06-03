@@ -1,0 +1,55 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Kemp2000Analysis
+    annotate_sleep_onset:
+      name: AddSleepOnsetTargets
+      max_pre_n2_s: 1200.0
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,
+  # Pz-Oz) whose MNE ch_locs are NaN, so the default ``ch_locs``-derived
+  # position mapping in ``ChannelPositions`` produces all-``INVALID_VALUE``
+  # positions.  Explicitly use the standard_1020 montage so the split-on-``-``
+  # fallback resolves Fpz-Cz -> Fpz and Pz-Oz -> Pz to real 3D coordinates.
+  channel_positions:
+    layout_or_montage_name: standard_1020
+  target:
+    =replace=: true
+    name: SleepOnsetTargetExtractor
+    event_types: SleepOnsetMarker
+    aggregation: trigger
+    cap_s: 600.0
+  trigger_event_type: SleepOnsetMarker
+  start: 0.0
+  duration: 5.0
+  stride: 5.0
+  sampler:
+    name: RegressionBinSampler
+    bin_edges: [0.0, 40.0, 90.0, 300.0, 600.0]
+  summary_columns: [n2_onset]
+brain_model_output_size: &brain_model_output_size 1
+trainer_config:
+  monitor: val/bmae
+  mode: min
+  patience: 7
+  n_epochs: 40
+loss:
+  name: MultiLoss
+  losses:
+    mse:
+      name: MSELoss
+  weights:
+    mse: 0.0001  # targets are in [0, 600] s; weight=0.0001 (0.01^2) keeps MSE <= ~36 so gradient clipping does not saturate.
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_sleep_onset_metric_configs []

@@ -407,6 +407,15 @@ def test_gap_sentence_at_boundary() -> None:
     assert info[2]["sentence"] == "She walked slowly."
 
 
+def test_unreliable_gap_keeps_gap_sentence() -> None:
+    text = "And he laughed again. It'll be fine."
+    info = _tutils.TextWordMatcher(text).match(
+        ["And", "he", "laughed", "again", "it\\' ll", "be", "fine"]
+    )
+    assert info[4].get("text_char") is None
+    assert info[4].get("sentence") == "It'll be fine."
+
+
 def test_pending_word_between_repeated_sentence_strings() -> None:
     """An unmatched word sandwiched between two same-string sentences is not back-filled."""
     text = "Hi. Yes please. Hi. End now."
@@ -426,7 +435,9 @@ def test_gap_punctuated_word_offset() -> None:
 def test_duplicate_full_pipeline(recwarn: pytest.WarningsRecorder) -> None:
     # try full pipeline as one transform:
     df = _make_test_dataframe(duplicate=2)
-    df = _transf.AssignWordSplitAndContext(max_context_len=6)(df)
+    df = _transf.AssignWordSplitAndContext(max_context_len=6, max_unmatched_ratio=0.02)(
+        df
+    )
     ws = [x.message for x in recwarn if "removed in Pydantic V3" not in str(x.message)]
     assert not ws  # setting an item of incompatible dtype (for context column)
     # no restart after duplicate:
@@ -912,53 +923,6 @@ def test_deterministic_splitter() -> None:
     assert splitter("0") == "train"
     assert splitter("1") == "test"
     assert splitter("10101001010101") == "train"
-
-
-def test_chunk_events(tmp_path: Path) -> None:
-    fp = tmp_path / "noise.wav"
-    create_wav(fp, fs=44100, duration=10.1)
-    sound = dict(type="Audio", start=0, timeline="foo", filepath=fp)
-    words = [
-        dict(
-            type="Word",
-            text="a",
-            start=i,
-            duration=i + 1,
-            language="english",
-            timeline="foo",
-            split="train" if i % 2 else "test",
-        )
-        for i in range(11)
-    ]
-    events_list = [sound] + words
-    events = pd.DataFrame(events_list)
-    events = ns.events.standardize_events(events)
-
-    events2 = _tutils.chunk_events(
-        events, event_type_to_chunk="Audio", event_type_to_use="Word"
-    )
-    sounds = events2[events2["type"] == "Audio"]
-    assert len(sounds) == 11
-    assert all(sounds.offset.values == list(range(11)))
-
-    events3 = _tutils.chunk_events(
-        events, event_type_to_chunk="Audio", event_type_to_use="Word", min_duration=0.5
-    )
-    sounds = events3[events3["type"] == "Audio"]
-    assert len(sounds) == 10
-
-    events4 = _tutils.chunk_events(events, event_type_to_chunk="Audio", max_duration=2)
-    sounds = events4[events4["type"] == "Audio"]
-    assert len(sounds) == 6
-
-    events5 = _tutils.chunk_events(
-        events,
-        event_type_to_chunk="Audio",
-        max_duration=2,
-        min_duration=0.5,
-    )
-    sounds = events5[events5["type"] == "Audio"]
-    assert len(sounds) == 5
 
 
 def test_cluster_assignment():

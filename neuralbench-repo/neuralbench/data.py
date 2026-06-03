@@ -5,14 +5,20 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
+import typing as tp
 
+import numpy as np
+import torch
+from pydantic import field_validator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
 
+from .extractors import SleepOnsetTargetExtractor  # noqa: F401
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
+    AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
     OffsetEvents,
@@ -22,9 +28,113 @@ from .transforms import (  # noqa: F401
     SklearnSplit,
     TextPreprocessor,
 )
-from .utils import make_weighted_sampler
+from .utils import make_regression_bin_sampler, make_weighted_sampler, seed_worker
 
 LOGGER = logging.getLogger(__name__)
+
+
+class BaseSampler(ns.base.NamedModel):
+    """Base configuration for a train-time DataLoader sampler.
+
+    Subclasses define how training examples are drawn from a
+    :class:`~neuralset.dataloader.SegmentDataset` -- typically to counteract
+    class or target imbalance -- by overriding :meth:`build`.  Concrete
+    samplers are selected from YAML via the ``name`` discriminator, e.g.
+    ``sampler: {name: ClassificationSampler}``.
+
+    Only the training DataLoader uses the configured sampler; the val and
+    test DataLoaders always iterate the dataset in order.
+    """
+
+    def build(
+        self,
+        dataset: ns.dataloader.SegmentDataset,
+        generator: torch.Generator | None = None,
+    ) -> torch.utils.data.Sampler:
+        """Build the sampler for the training ``dataset``.
+
+        Parameters
+        ----------
+        dataset
+            Training segment dataset; subclasses typically materialise its
+            targets to compute per-sample weights.
+        generator
+            Optional :class:`torch.Generator` consumed by the returned
+            sampler.  When set, the sampling sequence depends only on the
+            generator's seed -- not on the global ``torch`` RNG -- which is
+            what :class:`~neuralbench.data.Data` relies on for reproducible
+            training runs.
+        """
+        raise NotImplementedError
+
+
+class ClassificationSampler(BaseSampler):
+    """Inverse-frequency weighted sampler for class-imbalanced classification.
+
+    Computes balanced class weights from the training targets and yields a
+    :class:`torch.utils.data.WeightedRandomSampler` whose per-sample weights
+    equal the inverse class frequency.  In expectation, every class
+    contributes the same total mass to each training epoch.
+
+    Use for multi-class classification with skewed label distributions
+    (e.g. seizure detection, sleep arousal).  Multilabel targets are not
+    yet supported -- see the TODO in :func:`make_weighted_sampler`.
+    """
+
+    def build(
+        self,
+        dataset: ns.dataloader.SegmentDataset,
+        generator: torch.Generator | None = None,
+    ) -> torch.utils.data.Sampler:
+        return make_weighted_sampler(dataset, logger=LOGGER, generator=generator)
+
+
+class RegressionBinSampler(BaseSampler):
+    """Inverse-frequency weighted sampler stratified by binned regression targets.
+
+    The regression counterpart of :class:`ClassificationSampler`.  Targets
+    are bucketised by ``bin_edges`` and assigned inverse-frequency sampling
+    weights so that, in expectation, every populated bin contributes the
+    same total mass to each training epoch.
+
+    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`:
+
+    * Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
+      ``i < n_bins - 1``; the top bin is closed on the right so targets
+      exactly at ``bin_edges[-1]`` are counted in the top bin.
+    * Targets outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero
+      weight** -- they are excluded from sampling and do not contribute to
+      any bin's count.
+
+    Parameters
+    ----------
+    bin_edges
+        Strictly increasing sequence of length ``>= 2`` defining the bins,
+        e.g. ``[0.0, 40.0, 90.0, 300.0, 600.0]`` for the sleep-onset task.
+    """
+
+    bin_edges: list[float]
+
+    @field_validator("bin_edges")
+    @classmethod
+    def _validate_bin_edges(cls, value: list[float]) -> list[float]:
+        if len(value) < 2:
+            raise ValueError(
+                f"bin_edges must have length >= 2 to define at least one bin, "
+                f"got {value}."
+            )
+        if any(value[i + 1] <= value[i] for i in range(len(value) - 1)):
+            raise ValueError(f"bin_edges must be strictly increasing, got {value}.")
+        return value
+
+    def build(
+        self,
+        dataset: ns.dataloader.SegmentDataset,
+        generator: torch.Generator | None = None,
+    ) -> torch.utils.data.Sampler:
+        return make_regression_bin_sampler(
+            dataset, bin_edges=self.bin_edges, logger=LOGGER, generator=generator
+        )
 
 
 class Data(ns.BaseModel):
@@ -41,13 +151,14 @@ class Data(ns.BaseModel):
     stride: float | None = None
     stride_drop_incomplete: bool = True
     # Dataloaders
-    use_weighted_sampler: bool = False
+    sampler: BaseSampler | None = None
     batch_size: int = 64
     num_workers: int = 0
     drop_last: bool = False
     pin_memory: bool = True
     persistent_workers: bool = True
     prefetch_factor: int | None = None
+    seed: int | None = None
     # Others
     summary_columns: list[str] = []
 
@@ -117,6 +228,38 @@ class Data(ns.BaseModel):
         dataset = segmenter.apply(events)
         dataset.prepare()
 
+        # Derive four independent RNG streams from ``self.seed`` so that each
+        # consumer (train DataLoader shuffle + train worker base-seeds, train
+        # WeightedRandomSampler multinomial draws, val worker base-seeds,
+        # test worker base-seeds) is a pure function of its own sub-seed.
+        # Per-split DataLoader generators matter when ``num_workers > 0``:
+        # ``DataLoader.__iter__`` consumes one int64 from ``generator`` to
+        # derive each worker's base seed, so sharing one generator across
+        # splits would couple the train shuffle stream to how often Lightning
+        # iterates val/test (sanity check, per-epoch validation, etc.).
+        loader_gens: dict[str, torch.Generator | None]
+        sampler_gen: torch.Generator | None
+        worker_init_fn: tp.Callable[[int], None] | None
+        if self.seed is None:
+            LOGGER.info(
+                "Data.seed=None; dataloader shuffling and weighted sampling "
+                "will follow the caller's global torch RNG state."
+            )
+            loader_gens = {"train": None, "val": None, "test": None}
+            sampler_gen = None
+            worker_init_fn = None
+        else:
+            train_state, sampler_state, val_state, test_state = np.random.SeedSequence(
+                self.seed
+            ).generate_state(4)
+            loader_gens = {
+                "train": torch.Generator().manual_seed(int(train_state)),
+                "val": torch.Generator().manual_seed(int(val_state)),
+                "test": torch.Generator().manual_seed(int(test_state)),
+            }
+            sampler_gen = torch.Generator().manual_seed(int(sampler_state))
+            worker_init_fn = seed_worker
+
         # Create the dataloaders
         loaders = {}
         for split in tqdm(["train", "val", "test"], desc="Preparing segments"):
@@ -124,8 +267,8 @@ class Data(ns.BaseModel):
             LOGGER.info(f"# {split} segments: {len(split_dataset)} \n")
 
             sampler = None
-            if split == "train" and self.use_weighted_sampler:
-                sampler = make_weighted_sampler(split_dataset, logger=LOGGER)
+            if split == "train" and self.sampler is not None:
+                sampler = self.sampler.build(split_dataset, generator=sampler_gen)
 
             persistent_workers = self.persistent_workers and self.num_workers > 0
             loaders[split] = DataLoader(
@@ -139,6 +282,8 @@ class Data(ns.BaseModel):
                 pin_memory=self.pin_memory,
                 persistent_workers=persistent_workers,
                 prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+                generator=loader_gens[split],
+                worker_init_fn=worker_init_fn,
             )
 
         return loaders

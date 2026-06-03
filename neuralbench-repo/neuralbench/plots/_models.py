@@ -109,7 +109,7 @@ class ModelEntry:
 
     name: str
     family: Literal["classic", "foundation"]
-    device: Literal["eeg", "fmri"]
+    device: Literal["eeg", "fmri", "emg"]
     bibtex: str | None = None
     year: int | None = None
     config_name: str | None = None
@@ -139,6 +139,20 @@ def _make_classic_braindecode_builder(cls_name: str) -> Callable[[], "torch.nn.M
         )
 
     return _build
+
+
+def _build_emg2qwerty() -> "torch.nn.Module":
+    import braindecode.models as bdm
+
+    # ``n_chans`` must equal ``num_bands * electrodes_per_band`` (2 * 16 = 32),
+    # and ``n_times`` must exceed the encoder's receptive field; 10000 matches
+    # the emg/typing 5 s @ 2 kHz window.  ``final_layer`` is the CTC head and is
+    # subtracted to report the backbone count.
+    return bdm.EMG2QwertyNet(
+        n_chans=32,
+        n_times=10000,
+        n_outputs=99,
+    )
 
 
 def _build_simpleconv_time_agg() -> "torch.nn.Module":
@@ -444,6 +458,18 @@ MODELS: list[ModelEntry] = [
         config_name="CTNet",
         cli_name="ctnet",
         builder=_make_classic_braindecode_builder("CTNet"),
+        backbone_subtract=("final_layer",),
+    ),
+    # Task-specific EMG model (emg/typing CTC task).
+    ModelEntry(
+        name="EMG2QwertyNet",
+        family="classic",
+        device="emg",
+        year=2024,
+        bibtex="sivakumar2024emg2qwerty",
+        config_name="EMG2QwertyNet",
+        cli_name="emg2qwerty",
+        builder=_build_emg2qwerty,
         backbone_subtract=("final_layer",),
     ),
     # fMRI baselines (kept in the registry to feed FMRI_CLASSIC_DISPLAY and

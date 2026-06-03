@@ -32,7 +32,7 @@ class ConvSequence(nn.Module):
         self,
         channels: tp.Sequence[int],
         kernel: int = 4,
-        dilation_growth: int = 1,
+        dilation_growth: float = 1,
         dilation_period: int | None = None,
         stride: int = 2,
         dropout: float = 0.0,
@@ -52,7 +52,7 @@ class ConvSequence(nn.Module):
         activation: tp.Any = None,
     ) -> None:
         super().__init__()
-        dilation = 1
+        dilation: float = 1
         channels = tuple(channels)
         self.skip = skip
         self.sequence = nn.ModuleList()
@@ -77,7 +77,7 @@ class ConvSequence(nn.Module):
                     raise ValueError(f"Odd kernel required with dilation, got {kernel}")
             if dilation_period and (k % dilation_period) == 0:
                 dilation = 1
-            pad = kernel // 2 * dilation
+            pad = kernel // 2 * int(dilation)
             layers.append(
                 Conv(
                     chin,
@@ -85,11 +85,11 @@ class ConvSequence(nn.Module):
                     kernel,
                     stride,
                     pad,
-                    dilation=dilation,
+                    dilation=int(dilation),
                     groups=groups if k > 0 else 1,
                 )
             )
-            dilation *= dilation_growth
+            dilation = dilation * dilation_growth
             # non-linearity
             if activation_on_last or not is_last:
                 if batch_norm:
@@ -149,7 +149,7 @@ class SimpleConv(BaseModelConfig):
         Kernel size for every convolutional layer (must be odd).
     growth : float
         Multiplicative channel growth factor per layer.
-    dilation_growth : int
+    dilation_growth : float
         Multiplicative dilation growth factor per layer.
     dilation_period : int or None
         If set, reset dilation to 1 every *dilation_period* layers.
@@ -211,7 +211,7 @@ class SimpleConv(BaseModelConfig):
     # Conv layer
     kernel_size: int = 5
     growth: float = 1.0
-    dilation_growth: int = 2
+    dilation_growth: float = 2
     dilation_period: int | None = None
     skip: bool = False
     post_skip: bool = False

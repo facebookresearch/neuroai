@@ -38,7 +38,7 @@ def test_neuralfetch_discovery() -> None:
 
 def test_physionet_study_download_root(tmp_path: Path) -> None:
     """A Physionet-backed study should resolve files under download/<study>/<version>/."""
-    from neuralfetch.studies.zyma2019eeg import Zyma2019Electroencephalograms
+    from neuralfetch.studies.zyma2019electroencephalograms import Zyma2019Electroencephalograms
 
     study = Zyma2019Electroencephalograms(path=tmp_path / "zyma")
     expected_root = (

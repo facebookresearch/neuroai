@@ -29,7 +29,7 @@ def all_subclasses(cls: tp.Type[X]) -> tp.Set[tp.Type[X]]:
 
 
 def match_list(A, B, on_replace="delete"):
-    """Match two lists of different sizes and return corresponding indice
+    """Match two lists of different sizes and return corresponding indices
     Parameters
     ----------
     A: list | array, shape (n,)
