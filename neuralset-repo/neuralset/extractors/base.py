@@ -452,7 +452,9 @@ class HuggingFaceMixin(base.BaseModel):
         - cpu: for cpu computation
         - cuda: for using gpu0
         - auto: to use gpu if available else cpu
-        - accelerate: to use huggingface accelerate (maps to multiple-gpus + use float16)
+    use_accelerate: bool
+        If True, dispatch the model with HuggingFace accelerate
+        (device_map="auto" + float16), distributing it across available GPUs.
     layers: float | list[float] | "all"
         Specifies the layers to keep.
         - "all": keep all layers
@@ -479,31 +481,30 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
+    device: tp.Literal["auto", "cpu", "cuda"] = "auto"
+    use_accelerate: bool = False
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
-    # Extra kwargs forwarded to ``from_pretrained``. Currently only populated
-    # when ``device="accelerate"``; consult ``_uses_accelerate`` (not this
-    # field's truthiness) to test whether HF accelerate is dispatching.
-    _hf_kwargs: dict[str, tp.Any] = pydantic.PrivateAttr(default_factory=dict)
-    _uses_accelerate: bool = pydantic.PrivateAttr(default=False)
+
+    @property
+    def hf_kwargs(self) -> dict[str, tp.Any]:
+        """Extra kwargs forwarded to ``from_pretrained``. Populated only when
+        ``use_accelerate`` is set, in which case HF dispatches the model across
+        GPUs with fp16 (callers should then skip the usual ``.to(device)``).
+        """
+        if self.use_accelerate:
+            return {"device_map": "auto", "torch_dtype": torch.float16}
+        return {}
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if self.device == "accelerate":
-            # "accelerate" is a HF dispatch sentinel, not a torch device.
-            # Resolve it once: tensors go to cuda; the model is built with
-            # device_map="auto" + fp16 (so callers skip the usual .to(device)).
-            self._hf_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
-            self._uses_accelerate = True
-            self.device = "cuda"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -540,10 +541,10 @@ class HuggingFaceMixin(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device"]
+        return ["device", "use_accelerate"]
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["device"]
+        excluded = ["device", "use_accelerate"]
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded

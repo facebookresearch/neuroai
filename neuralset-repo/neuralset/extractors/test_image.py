@@ -156,14 +156,14 @@ def test_image_token_aggregation(
 
 
 def test_image_accelerate_device_resolution() -> None:
-    # Regression: device="accelerate" used to leak through to tensor.to(...),
-    # which raises since "accelerate" is a HF dispatch sentinel, not a torch
-    # device. It must be resolved to a real device at init.
-    extractor = ns.extractors.HuggingFaceImage(device="accelerate")
-    assert extractor._uses_accelerate
-    assert extractor.device != "accelerate"
+    # use_accelerate must not interfere with device resolution: device stays a
+    # real torch device (tensors go there) while the model is dispatched by HF.
+    extractor = ns.extractors.HuggingFaceImage(use_accelerate=True)
+    assert extractor.use_accelerate
+    assert extractor.hf_kwargs == {"device_map": "auto", "torch_dtype": torch.float16}
+    assert extractor.device in ("cpu", "cuda")
     if torch.cuda.is_available():
-        torch.empty(0).to(extractor.device)  # used to raise
+        torch.empty(0).to(extractor.device)
 
 
 @pytest.mark.skipif(
@@ -172,7 +172,7 @@ def test_image_accelerate_device_resolution() -> None:
 def test_image_accelerate_end_to_end(cat_event: etypes.Image, tmp_path: Path) -> None:
     infra: tp.Any = dict(folder=tmp_path)
     extractor = ns.extractors.HuggingFaceImage(
-        device="accelerate",
+        use_accelerate=True,
         model_name="facebook/dinov2-small-imagenet1k-1-layer",
         infra=infra,
     )
