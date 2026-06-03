@@ -16,6 +16,7 @@ import lightning.pytorch as pl
 import torch
 import yaml
 from exca import TaskInfra
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import (
     Callback,
     EarlyStopping,
@@ -49,6 +50,7 @@ from .callbacks import (
     PlotRegressionVectors,
     RecordingLevelEval,
     TestFullRetrievalMetrics,
+    WindowPredictionCollector,
 )
 from .data import Data as Data  # noqa: F401
 from .model_factory import build_brain_model
@@ -88,6 +90,9 @@ class Experiment(BaseExperiment):
     validate_before_training: bool = True
     test_full_metrics: list[BaseMetric] = []
     test_full_retrieval_metrics: list[BaseMetric] = []
+    # When True, raw per-window test predictions/targets are folded into the
+    # cached ``run`` result (see ``WindowPredictionCollector``).
+    save_test_predictions: bool = False
 
     # Weights & Biases
     csv_config: CsvLoggerConfig | None = None
@@ -264,6 +269,8 @@ class Experiment(BaseExperiment):
                 labels = [ind_to_label[i] for i in sorted(ind_to_label)]
             callbacks.append(PlotConfusionMatrix(labels=labels))
         if is_test:
+            if self.save_test_predictions:
+                callbacks.append(WindowPredictionCollector())
             if self.test_full_metrics:
                 callbacks.append(RecordingLevelEval())
             if self.test_full_retrieval_metrics:
@@ -450,6 +457,18 @@ class Experiment(BaseExperiment):
 
         if trainer.global_rank == 0:
             test_results.update(self._test(loaders, best_model_path))
+            # Persist raw per-window predictions (a byproduct of the test loop)
+            # as side artifacts in the uid folder, via exca's CacheDict: the
+            # metadata is stored as CSV (human-readable) and the potentially
+            # large y_true/y_pred arrays via the MemmapArray handler (lazy,
+            # RAM-flat on load). They live next to ``job.pkl`` so they survive
+            # cache hits without bloating the cached result dict, which only
+            # records a small marker pointing at the artifact folder.
+            if self.save_test_predictions:
+                predictions = getattr(self._brain_module, "test_predictions", None)
+                if predictions is not None:
+                    self._write_test_predictions(predictions)
+                    test_results["test_predictions_dir"] = self._TEST_PREDICTIONS_DIR
 
         self._cleanup(trainer)
 
@@ -463,6 +482,53 @@ class Experiment(BaseExperiment):
             }
         )
         return test_results
+
+    # Subfolder (under ``infra.uid_folder()``) holding the per-window test
+    # prediction artifacts written via exca's ``CacheDict``.
+    _TEST_PREDICTIONS_DIR: tp.ClassVar[str] = "test_predictions"
+
+    def _test_predictions_cache(self) -> CacheDict:
+        """``CacheDict`` over the per-window prediction artifact folder."""
+        uid_folder = self.infra.uid_folder()
+        if uid_folder is None:
+            raise RuntimeError(
+                "Cannot store test predictions without an infra cache folder; "
+                "configure ``infra.folder``."
+            )
+        return CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
+
+    def _write_test_predictions(self, predictions: dict[str, tp.Any]) -> None:
+        """Dump per-window predictions as side artifacts (CSV + memmap)."""
+        cache = self._test_predictions_cache()
+        cache.clear()  # avoid CacheDict's no-overwrite error on re-runs
+        with cache.write():
+            for key, value in predictions.items():
+                cache[key] = value
+
+    def test_predictions(self) -> dict[str, tp.Any]:
+        """Raw per-window test predictions.
+
+        Requires ``save_test_predictions=True``. Returns a dict with:
+
+        - ``"metadata"``: a :class:`pandas.DataFrame` with one row per test
+          window (``timeline``, ``batch_idx``, and ``subject_id`` when
+          available);
+        - ``"y_true"`` / ``"y_pred"``: arrays of shape ``(n_windows, ...)``
+          aligned with ``metadata``, returned as lazy ``np.memmap`` views.
+
+        The predictions are stored as side artifacts in the uid folder by
+        exca's ``CacheDict`` (metadata as CSV, arrays via the memmap handler),
+        so they survive cache hits and are read here without re-running.
+        """
+        results = self.run()
+        if "test_predictions_dir" not in results:
+            raise ValueError(
+                "Test predictions are unavailable. Set "
+                "save_test_predictions=True and (re)run the experiment "
+                "(toggling the flag yields a fresh cache entry)."
+            )
+        cache = self._test_predictions_cache()
+        return {key: cache[key] for key in cache.keys()}
 
 
 # BenchmarkAggregator lives in aggregator.py and forward-references Experiment
