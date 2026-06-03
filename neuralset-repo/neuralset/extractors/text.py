@@ -291,6 +291,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     # initialized later
     _model: nn.Module = pydantic.PrivateAttr()
     _tokenizer: tp.Any = pydantic.PrivateAttr()
+    _max_length: int | None = pydantic.PrivateAttr(None)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -384,6 +385,24 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         self.model
         return self._tokenizer
 
+    def _get_max_length(self) -> int | None:
+        """Token truncation limit, falling back to the model's positional capacity."""
+        if self._max_length is not None:
+            return self._max_length
+        tok_max = self.tokenizer.model_max_length
+        # HF "infinite" sentinel (~1e30) would disable truncation (overflows OPT)
+        if isinstance(tok_max, int) and tok_max < int(1e29):
+            self._max_length = tok_max
+            return self._max_length
+        # learned-position table is sized capacity + offset, so the offset cancels
+        config = self.model.config
+        for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
+            value = getattr(config, attr, None)
+            if isinstance(value, int) and value > 0:
+                self._max_length = value
+                return self._max_length
+        return None
+
     def _get_timed_arrays(
         self,
         events: list[_ev.etypes.Word | _ev.etypes.Sentence],
@@ -444,6 +463,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         return_tensors="pt",
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
+                        max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
                     ).to(device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
