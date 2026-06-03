@@ -302,6 +302,23 @@ def test_sentence_to_word_standard() -> None:
     # TODO paragraphs
 
 
+def test_add_sentence_to_words_multiple_text_contexts() -> None:
+    common = dict(timeline="foo", language="english")
+    events = [
+        dict(type="Text", start=-0.1, duration=2, text="he runs.", **common),
+        dict(type="Text", start=2.0, duration=2, text="she eats", **common),
+        dict(type="Word", start=0.0, duration=0.1, text="he", **common),
+        dict(type="Word", start=0.5, duration=0.1, text="runs", **common),
+        dict(type="Word", start=2.5, duration=0.1, text="she", **common),
+        dict(type="Word", start=3.0, duration=0.1, text="eats", **common),
+    ]
+    df = ns.events.standardize_events(pd.DataFrame(events))
+    out = _transf.AddSentenceToWords()(df)
+    sentences = out.loc[out.type == "Sentence", "text"]
+    assert len(sentences) == 2
+    assert set(sentences) == {"he runs.", "she eats"}
+
+
 def test_sentence_to_word_missing_word(caplog: pytest.LogCaptureFixture) -> None:
     text = "le petit prince"
     words = ("le", "pince")
