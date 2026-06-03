@@ -460,6 +460,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         return_tensors="pt",
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
+                        max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
                     ).to(self.device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
