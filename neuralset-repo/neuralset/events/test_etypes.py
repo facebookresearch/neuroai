@@ -469,3 +469,18 @@ def test_fmri_volume_chunked_read(tmp_path: Path) -> None:
     assert [c.duration for c in chunks] == [6.0, 8.0, 6.0]
     concat = np.concatenate([ch.read().get_fdata() for ch in chunks], axis=-1)
     np.testing.assert_array_equal(concat, full)
+def test_hfo_event() -> None:
+    hfo = etypes.Hfo(start=1.5, timeline="t", channel="LAF3", detector="ste", state="spkHFO")
+    assert hfo.type == "Hfo"
+    assert hfo.channel == "LAF3"
+    assert hfo.detector == "ste"
+    assert hfo.state == "spkHFO"
+    # unlabelled detection (no expert review)
+    hfo_unlabelled = etypes.Hfo(start=2.0, timeline="t", channel="LAF4", detector="ste")
+    assert hfo_unlabelled.state is None
+    # round-trip through dict
+    reconstructed = etypes.Event.from_dict(hfo.to_dict())
+    assert reconstructed.state == "spkHFO"  # type: ignore[attr-defined]
+    assert reconstructed.channel == "LAF3"  # type: ignore[attr-defined]
+    # registered in Event._CLASSES
+    assert "Hfo" in etypes.Event._CLASSES

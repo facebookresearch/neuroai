@@ -835,6 +835,35 @@ class Background(CategoricalEvent):
     """'Background' activity, i.e. no specific epilepsy or arousal event happening during this time."""
 
 
+class Hfo(CategoricalEvent):
+    """High-Frequency Oscillation (HFO) event in an iEEG recording.
+
+    HFOs are brief bursts of oscillatory activity (80–500 Hz) detected in
+    intracranial EEG and used as biomarkers of epileptogenic tissue.  They
+    are algorithmically detected (e.g. with STE, MNI, or Hilbert detectors)
+    and may optionally carry an expert classification label.
+
+    Parameters
+    ----------
+    channel : str
+        Electrode channel on which the HFO was detected (e.g. ``"LAF3"``).
+    detector : str
+        Algorithm used to detect the HFO (e.g. ``"ste"``, ``"mni"``,
+        ``"hilbert"``).
+    state : {'spkHFO', 'nonSpkHFO', 'artifact'} or None
+        Expert classification label.  ``None`` when only algorithmic
+        detection is available (no expert review).
+
+    See Also
+    --------
+    Duan2026OmniIeeg : Example usage
+    """
+
+    channel: str = ""
+    detector: str = ""
+    state: tp.Literal["spkHFO", "nonSpkHFO", "artifact"] | None = None
+
+
 class SleepStage(CategoricalEvent):
     """Sleep stage event following AASM manual classification [sleep1]_.
 
