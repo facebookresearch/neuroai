@@ -180,7 +180,7 @@ def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
     assert result["n_trainable_params"] is None
 
 
-_PREDS = {
+_PREDS: dict[str, tp.Any] = {
     "metadata": pd.DataFrame({"timeline": ["rec0", "rec1"], "batch_idx": [0, 0]}),
     "y_true": np.array([[0.0, 1.0], [1.0, 0.0]]),
     "y_pred": np.array([[0.2, 0.8], [0.7, 0.3]]),
