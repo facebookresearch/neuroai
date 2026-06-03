@@ -373,6 +373,9 @@ def ensure_imagenet22k(
     return imagenet_path
 
 
+THINGS_PASSWORD_ENV = "NEURALFETCH_THINGS_PASSWORD"
+
+
 def download_things_images(
     study_path: Path,
     fail_on_error: bool = False,
@@ -401,11 +404,13 @@ def download_things_images(
 
     logger.warning(f"THINGS-images not found at expected location: {things_images_path}")
 
-    password = os.environ.get("NEURALFETCH_THINGS_PASSWORD")
-    if password is None:
+    # Licence gate: only required once we actually need to download (an
+    # already-present dataset above short-circuits before this).
+    password = os.environ.get(THINGS_PASSWORD_ENV)
+    if not password:
         raise RuntimeError(
             "THINGS-images requires accepting a licence agreement.\n"
-            "Please export NEURALFETCH_THINGS_PASSWORD=<pwd> where the password can be found "
+            f"Please export {THINGS_PASSWORD_ENV}=<pwd> where the password can be found "
             "in password_images.txt at https://osf.io/jum2f/files/52wrx"
         )
 

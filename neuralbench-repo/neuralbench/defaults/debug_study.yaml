@@ -11,14 +11,22 @@ Accou2024Sparrkulee: "subject == 'Accou2024Sparrkulee/001'"
 Albrecht2019Increased: "subject in ['Albrecht2019Increased/CC_EEG_s128_P', 'Albrecht2019Increased/CC_EEG_s130_P', 'Albrecht2019Increased/CC_EEG_s132_P', 'Albrecht2019Increased/CC_EEG_s134_P', 'Albrecht2019Increased/CC_EEG_s136_P', 'Albrecht2019Increased/CC_EEG_s149_N', 'Albrecht2019Increased/CC_EEG_s151_N', 'Albrecht2019Increased/CC_EEG_s153_N', 'Albrecht2019Increased/CC_EEG_s155_N', 'Albrecht2019Increased/CC_EEG_s157_N']"
 Allen2022Massive: "timeline_index < 4"
 Allen2022MassiveRaw: "timeline_index < 4"
+Alvarez2022Haaglanden: "subject_index < 5"
 Brennan2019Hierarchical: "subject_index == 0"
 Broderick2018Electrophysiological: "subject_index == 0"
+Chang2019Bold5000: "timeline_index < 6"
 Chen2023Large: "subject_index < 5"
+Hebart2023ThingsBold: "timeline_index < 6"
 Hebart2023ThingsMeg: "timeline_index < 6"
 Dan2023Bids: "subject_index < 5"
 Fuglsang2017Noise: "subject_index == 0"
+# All Ghassemi-backed tasks (sleep_stage, sleep_arousal, sleep_onset) filter to
+# the labeled "train" split. Test-split record IDs sort before training-split IDs
+# alphabetically, so the labeled training subjects are at the high indices -- hence
+# selecting subject_index > 1978 keeps the debug subset within the train split.
 Ghassemi2018You: "subject_index > 1978"
 Gifford2022Large: "timeline_index < 6"
+Grootswagers2022Human: "subject_index < 5"
 Grootswagers2024Mapping: "subject_index < 5"
 Hamid2020Tuar: "subject_index < 10"
 # Designed to contain all 6 labels and timelines from both splits
@@ -48,6 +56,9 @@ Singh2021Timing: "subject in ['Singh2021Timing/PD1025', 'Singh2021Timing/PD1795'
 Levy2025BrainMeg: "subject_index == 0"
 Levy2025BrainEeg: "subject_index == 0"
 Sivakumar2024Emg2qwerty: "subject_index < 5"
+Sivakumar2024Emg2qwerty: "subject_index < 5"
+Xu2024Alljoined: "subject_index < 5"
+Xu2025Alljoined: "subject_index < 5"
 Zhang2024Chisco: "timeline_index < 8"
 Zyma2019Electroencephalograms: "subject_index < 10"
 

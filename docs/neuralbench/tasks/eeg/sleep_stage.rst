@@ -32,8 +32,24 @@ Dataset Notes
 
 * Recordings are cropped to start 30 minutes before the first occurrence of a sleep stage and end 30 minutes after the last occurrence of a sleep stage to avoid imbalances due to long periods of wakefulness at the beginning and end of the recordings.
 
+Additional Datasets
+~~~~~~~~~~~~~~~~~~~
+
+The following additional polysomnography datasets can also be used with this task:
+
+* ``Ghassemi2018You`` (PhysioNet/CinC Challenge 2018) -- 1,985 whole-night recordings annotated for sleep stage and arousal; only the labelled training split is used here [Ghassemi2018You]_.
+* ``Alvarez2022Haaglanden`` (HMC) -- 151 whole-night polysomnographic recordings from clinical sleep-center patients [Alvarez2022Haaglanden]_.
+
+To run with an alternate dataset:
+
+.. code-block:: bash
+
+   neuralbench eeg sleep_stage --dataset alvarez2022haaglanden
+
 References
 ~~~~~~~~~~
 
 .. [Rechtschaffen1968] A Rechtschaffen, AE Kales. A manual of standardized terminology, techniques and scoring systems for sleep stages of human subjects. Los Angeles, CA: UCLA Brain Information Service. Brain Research Institute 10 (1968).
 .. [Kemp2000] B Kemp, AH Zwinderman, B Tuk, HAC Kamphuisen, JJL Oberyé. Analysis of a sleep-dependent neuronal feedback loop: the slow-wave microcontinuity of the EEG. IEEE-BME 47(9):1185-1194 (2000).
+.. [Ghassemi2018You] Ghassemi, Mohammad M., et al. "You Snooze, You Win: The PhysioNet/Computing in Cardiology Challenge 2018." Computing in Cardiology 45 (2018).
+.. [Alvarez2022Haaglanden] Alvarez-Estevez, Diego, and Roselyne Rijsman. "Haaglanden Medisch Centrum Sleep Staging Database." PhysioNet (2022).
