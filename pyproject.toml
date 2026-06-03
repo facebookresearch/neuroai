@@ -1,6 +1,15 @@
 # this is used for the pre-commit hooks
 # and when running from the root folder (eg: in the CI)
 
+[tool.uv]
+# Ignore releases younger than this to let compromised uploads get flagged.
+exclude-newer = "3 days"
+
+# Packages we publish — exempt from the window above.
+[tool.uv.exclude-newer-package]
+exca = "2099-01-01"
+submitit = "2099-01-01"
+
 [tool.ruff]
 line-length = 90
 exclude = [

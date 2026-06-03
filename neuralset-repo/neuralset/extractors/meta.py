@@ -377,15 +377,19 @@ class CroppedExtractor(base.BaseStatic):  # can be static or not
         The offset (in seconds) from the start of the event to begin the crop.
     duration: PositiveFloat | None
         The duration (in seconds) of the crop. If None, the crop extends to the end of the event.
-    frequency: Literal["native"]
-        The frequency of the cropped extractor. Must be "native". Never used
+    frequency: float | Literal["native"]
+        Mirrors the wrapped extractor's frequency (set in ``model_post_init``).
+        Defaults to "native"; may be a float for static extractors. Never used
     """
 
     event_types: str | tuple[str, ...] = "Event"
     extractor: base.BaseExtractor
     offset: float = 0
     duration: pydantic.PositiveFloat | None = None
-    frequency: tp.Literal["native"] = "native"  # type: ignore
+    # Mirrors the wrapped extractor's frequency in ``model_post_init`` (can be
+    # a float for static extractors), so the annotation must permit floats too
+    # for the dump/validate round-trip in ``infra.clone_obj`` to succeed.
+    frequency: float | tp.Literal["native"] = "native"  # type: ignore
 
     def model_post_init(self, log__: tp.Any) -> None:
         self.event_types = self.extractor.event_types

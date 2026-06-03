@@ -819,8 +819,10 @@ class Dryad(BaseDownload):
 class Eegdash(BaseDownload):
     """Download datasets from the EEGDash cloud archive.
 
-    Uses the ``eegdash`` library for record discovery and the :class:`S3`
-    downloader for the actual file transfer.
+    Thin wrapper over :class:`eegdash.EEGDashDataset`: record discovery, NEMAR
+    git-annex resolution, the anonymous ``s3fs`` transfer of recordings, and
+    sidecar fetching (from data.nemar.org via ``nemar-py``) are all delegated
+    to eegdash's ``download_all``.
 
     Parameters
     ----------
@@ -832,68 +834,19 @@ class Eegdash(BaseDownload):
         EEGDash database to query (``"eegdash"``, ``"eegdash_staging"``, …).
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash>=0.8.2",)
     database: str = "eegdash"
 
-    @staticmethod
-    def _parse_s3_uri(uri: str) -> tuple[str, str]:
-        """Split ``s3://bucket/key/prefix`` into ``("bucket", "key/prefix")``."""
-        without_scheme = uri.removeprefix("s3://")
-        bucket, _, prefix = without_scheme.partition("/")
-        return bucket, prefix
-
     def _download(self) -> None:
-        from eegdash import EEGDash  # type: ignore[import-not-found]
+        from eegdash import EEGDashDataset  # type: ignore[import-not-found]
 
-        client = EEGDash(database=self.database)
-        records = client.find(dataset=self.study)
-        if not records:
-            raise RuntimeError(
-                f"No records found for dataset '{self.study}' "
-                f"in database '{self.database}'"
-            )
-
-        # Group files by bucket so we can batch them into S3 downloaders.
-        per_bucket: dict[str, list[tuple[str, str]]] = {}
-        for rec in records:
-            storage = rec.get("storage", {})
-            base = storage.get("base", "")
-            raw_key = storage.get("raw_key", "")
-            dep_keys: list[str] = storage.get("dep_keys", [])
-            bids_rel = rec.get("bids_relpath", raw_key)
-
-            if not base or not raw_key:
-                logger.warning("Skipping record with incomplete storage info: %s", rec)
-                continue
-
-            bucket, prefix = self._parse_s3_uri(base)
-
-            s3_key = f"{prefix}/{raw_key}" if prefix else raw_key
-            local_path = str(self._dl_dir / bids_rel)
-            per_bucket.setdefault(bucket, []).append((s3_key, local_path))
-
-            for dep in dep_keys:
-                dep_s3_key = f"{prefix}/{dep}" if prefix else dep
-                per_bucket.setdefault(bucket, []).append(
-                    (dep_s3_key, str(self._dl_dir / dep))
-                )
-
-        total_files = sum(len(v) for v in per_bucket.values())
-        if total_files == 0:
-            raise RuntimeError(f"No downloadable files found for '{self.study}'")
-
-        for bucket, file_pairs in per_bucket.items():
-            dl = S3(
-                study=self.study,
-                dset_dir=Path(self.dset_dir),
-                bucket=bucket,
-                files_with_destinations=file_pairs,
-                anonymous=True,
-                skip_existing=True,
-            )
-            dl._download()
-
-        print(f"\nDownloaded {total_files} files for {self.study}")
+        EEGDashDataset(
+            cache_dir=self._dl_dir,
+            dataset=self.study,
+            database=self.database,
+            download=True,
+        ).download_all()
+        logger.info("Downloaded %s", self.study)
 
 
 class Figshare(BaseDownload):

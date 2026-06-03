@@ -93,6 +93,10 @@ def setup_config(config_path: Path | None = None) -> dict[str, Any]:
     config["SLURM_CONSTRAINT"] = ""
     config["N_CPUS"] = 10
 
+    # Execution cluster: "auto" (SLURM if available, else local), null/None
+    # (force local), or "slurm". Can be overridden later in config.json.
+    config["CLUSTER"] = "auto"
+
     # Prompt for paths
     print("\nPlease provide the following paths:")
     print()
@@ -155,6 +159,7 @@ def _default_config() -> dict[str, Any]:
         "SLURM_PARTITION": "",
         "SLURM_CONSTRAINT": "",
         "N_CPUS": 10,
+        "CLUSTER": "auto",
     }
     for key in ["CACHE_DIR", "SAVE_DIR", "DATA_DIR"]:
         Path(str(config[key])).mkdir(parents=True, exist_ok=True)
@@ -215,12 +220,13 @@ if TYPE_CHECKING:
     SLURM_PARTITION: str
     SLURM_CONSTRAINT: str
     N_CPUS: int
+    CLUSTER: str | None
 
 
 def _initialize_module_vars() -> None:
     """Initialize module-level variables from config."""
     global USER, ENTITY_NAME, PROJECT_NAME, DATA_DIR, CACHE_DIR, SAVE_DIR
-    global WANDB_HOST, SLURM_PARTITION, SLURM_CONSTRAINT, N_CPUS
+    global WANDB_HOST, SLURM_PARTITION, SLURM_CONSTRAINT, N_CPUS, CLUSTER
     config = get_config()
     USER = config["USER"]
     ENTITY_NAME = config["ENTITY_NAME"]
@@ -232,6 +238,7 @@ def _initialize_module_vars() -> None:
     SLURM_PARTITION = config.get("SLURM_PARTITION", "")
     SLURM_CONSTRAINT = config.get("SLURM_CONSTRAINT", "")
     N_CPUS = config.get("N_CPUS", 10)
+    CLUSTER = config.get("CLUSTER", "auto")
 
 
 # Lazy module-level config variables for YAML compatibility
@@ -249,6 +256,7 @@ _LAZY_CONFIG_KEYS = {
     "SLURM_PARTITION",
     "SLURM_CONSTRAINT",
     "N_CPUS",
+    "CLUSTER",
 }
 _initialized = False
 

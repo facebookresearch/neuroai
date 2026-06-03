@@ -407,6 +407,15 @@ def test_gap_sentence_at_boundary() -> None:
     assert info[2]["sentence"] == "She walked slowly."
 
 
+def test_unreliable_gap_keeps_gap_sentence() -> None:
+    text = "And he laughed again. It'll be fine."
+    info = _tutils.TextWordMatcher(text).match(
+        ["And", "he", "laughed", "again", "it\\' ll", "be", "fine"]
+    )
+    assert info[4].get("text_char") is None
+    assert info[4].get("sentence") == "It'll be fine."
+
+
 def test_pending_word_between_repeated_sentence_strings() -> None:
     """An unmatched word sandwiched between two same-string sentences is not back-filled."""
     text = "Hi. Yes please. Hi. End now."
@@ -426,7 +435,9 @@ def test_gap_punctuated_word_offset() -> None:
 def test_duplicate_full_pipeline(recwarn: pytest.WarningsRecorder) -> None:
     # try full pipeline as one transform:
     df = _make_test_dataframe(duplicate=2)
-    df = _transf.AssignWordSplitAndContext(max_context_len=6)(df)
+    df = _transf.AssignWordSplitAndContext(max_context_len=6, max_unmatched_ratio=0.02)(
+        df
+    )
     ws = [x.message for x in recwarn if "removed in Pydantic V3" not in str(x.message)]
     assert not ws  # setting an item of incompatible dtype (for context column)
     # no restart after duplicate:

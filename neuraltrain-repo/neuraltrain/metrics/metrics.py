@@ -16,6 +16,7 @@ import pandas as pd
 import scipy as sp
 import torch
 import torchmetrics
+import torchmetrics.text  # noqa: F401  -- registers ``torchmetrics.text.CharErrorRate``
 import torchvision.models as tvmodels
 import torchvision.transforms as T
 from scipy.stats import binom
@@ -730,3 +731,56 @@ class GroupedMetric(torchmetrics.Metric):
 
     def __repr__(self) -> str:
         return f"GroupedMetric({self.base_metric_cls.__name__})"
+
+
+class CharacterErrorRates(torchmetrics.text.CharErrorRate):
+    """CTC greedy-decoded character error rate, returned in percent.
+
+    Wraps :class:`torchmetrics.text.CharErrorRate` for a CTC head:
+    greedy-decodes ``y_pred`` (collapse repeats + drop blanks), maps the
+    integer label IDs to a private per-character alphabet via ``chr``,
+    and delegates the Levenshtein accumulation to the parent class.
+
+    Inputs
+    ------
+    y_pred : ``(B, T_out, n_classes)``
+        Log-probs from a CTC head.
+    y_true : ``(B, max_target_length)``
+        Integer labels padded with ``blank_idx``.  Per-row label counts
+        are recovered as ``(y_true != blank_idx).sum(-1)``.
+    """
+
+    def __init__(self, blank_idx: int = 0) -> None:
+        super().__init__()
+        self._blank = blank_idx
+
+    def update(  # type: ignore[override]
+        self, y_pred: torch.Tensor, y_true: torch.Tensor
+    ) -> None:
+        argmax = y_pred.argmax(dim=-1).long()
+        blank = self._blank
+        targets = y_true.long()
+        # Coalesce the per-row sync into a single D2H copy.
+        target_lengths = (targets != blank).sum(dim=-1).tolist()
+
+        preds_str: list[str] = []
+        targets_str: list[str] = []
+        for i, target_len in enumerate(target_lengths):
+            preds_i = torch.unique_consecutive(argmax[i])
+            preds_i = preds_i[preds_i != blank].tolist()
+            targets_i = targets[i, :target_len].tolist()
+            # chr() gives each label id a distinct single-codepoint
+            # "character" so torchmetrics' string-typed CER sees the
+            # right alphabet without us touching its accumulation.
+            preds_str.append("".join(chr(p) for p in preds_i))
+            targets_str.append("".join(chr(t) for t in targets_i))
+
+        super().update(preds_str, targets_str)
+
+    def compute(self) -> torch.Tensor:
+        # Parent returns CER in [0, 1]; keep the historical percent
+        # contract.  ``total`` may be 0 if no batches have updated yet
+        # (e.g. an all-empty validation split); avoid a NaN/Inf return.
+        if int(self.total) == 0:
+            return torch.zeros_like(self.errors)
+        return super().compute() * 100.0

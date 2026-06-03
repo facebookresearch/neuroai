@@ -109,9 +109,8 @@ class TextWordMatcher:
     2. Character-level fallback for unmatched words, using the raw text
        spans between surrounding matched tokens.
 
-    After matching, each word gets ``sentence``, ``sentence_char``, and
-    ``text_char`` when a reliable match is found.  Words sandwiched
-    between neighbours in the same sentence inherit the sentence label.
+    Each word gets ``sentence``, ``sentence_char``, and ``text_char``
+    populated to the extent the matcher can resolve them.
     """
 
     _PUNCT_RE = re.compile(r"^[\W_]+|[\W_]+$", re.UNICODE)
@@ -179,7 +178,11 @@ class TextWordMatcher:
         raw = self.text[char_start:char_end].lower()
         subtext, orig_pos = _normalize_with_positions(raw)
         concat = " ".join(self.normalize(w["_word"]) for w in gap)
+        gap_sentence = self._gap_sentence(left_tok, right_tok)
         if not subtext or not concat:
+            if gap_sentence is not None:
+                for w in gap:
+                    w["sentence"] = gap_sentence
             return
         sub_match, concat_match = _ns_utils.match_list(subtext, concat)
 
@@ -196,6 +199,8 @@ class TextWordMatcher:
         for w, nlen in zip(gap, norm_lens):
             votes: list[int] | None = w.pop("_votes", None)
             if not votes:
+                if gap_sentence is not None:
+                    w["sentence"] = gap_sentence
                 continue
             best = max(votes, key=votes.count)
             if votes.count(best) / max(nlen, 1) <= 0.5:
@@ -204,6 +209,8 @@ class TextWordMatcher:
                     w["_word"],
                     subtext,
                 )
+                if gap_sentence is not None:
+                    w["sentence"] = gap_sentence
                 continue
             found = self.text[best : best + len(w["_word"])]
             if self.normalize(w["_word"]) != self.normalize(found):
@@ -220,6 +227,15 @@ class TextWordMatcher:
             w["text_char"] = best
             w["sentence"] = nearest.sent.text_with_ws
             w["sentence_char"] = best - nearest.sent[0].idx
+
+    def _gap_sentence(self, left_tok: int | None, right_tok: int | None) -> str | None:
+        """Sentence string shared by every spaCy token in the gap, else None."""
+        start = 0 if left_tok is None else left_tok + 1
+        stop = len(self.tokens) if right_tok is None else right_tok
+        toks = [tok for tok in self.tokens[start:stop] if self.normalize(tok.text)]
+        if not toks or len({tok.sent.start for tok in toks}) != 1:
+            return None
+        return toks[0].sent.text_with_ws
 
     # -- finalization -------------------------------------------------------
 
