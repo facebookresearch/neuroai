@@ -9,3 +9,10 @@ from . import (
     transforms as _transforms,  # noqa: F401  # registers custom Event/Step subclasses
 )
 from .cli import run_benchmark, run_benchmark_cli
+from .utils import SequenceLabelEncoder
+
+# ``SequenceLabelEncoder`` is re-exported so importing ``neuralbench``
+# registers it in the ``exca`` discriminator and YAML configs (e.g.
+# ``emg/typing/config.yaml``) can resolve ``name: SequenceLabelEncoder``
+# without an explicit import.
+__all__ = ["SequenceLabelEncoder", "run_benchmark", "run_benchmark_cli"]

@@ -3354,7 +3354,7 @@ class Schaeff2012Exploring(_BaseMoabb):
     )
 
 
-# Suffixed to avoid collision with hand-written Schalk2004Bci2000 in schalk2004bci.py
+# Suffixed to avoid collision with hand-written Schalk2004Bci2000 in schalk2004bci2000.py
 class Schalk2004Bci2000Moabb(_BaseMoabb):
     """Subset of MOABB: PhysionetMI.
 

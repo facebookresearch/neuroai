@@ -26,7 +26,7 @@ dependencies = [
 [project.optional-dependencies]
     all = ["neuraltrain[models,metrics,lightning]"]
     models = [
-        "braindecode>=1.4.0",
+        "braindecode>=1.5.2",
         "x_transformers>=1.27.20",
         "dalle2_pytorch",
         "vit_pytorch",

@@ -1,0 +1,13 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# EMG2QwertyNet (Sivakumar et al., NeurIPS 2024) — pairs with emg/typing.
+brain_model_config:
+  =replace=: true
+  name: EMG2QwertyNet
+  kwargs:
+    log_softmax: true
+    spec_augment: true

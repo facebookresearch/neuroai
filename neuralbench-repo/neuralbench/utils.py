@@ -21,6 +21,9 @@ from torch import nn
 
 import neuralset as ns
 from neuralset.dataloader import SegmentDataset
+from neuralset.events import etypes
+from neuralset.extractors import LabelEncoder
+from neuralset.utils import warn_once
 
 LOGGER = logging.getLogger(__name__)
 
@@ -438,4 +441,91 @@ class TrainerConfig(ns.BaseModel):
             logger=logger,
             callbacks=callbacks,
             enable_model_summary=False,
+        )
+
+
+class SequenceLabelEncoder(LabelEncoder):
+    """Fixed-length integer-label sequence extractor for CTC training.
+
+    Reads a pre-computed integer ``event_field`` from events,
+    concatenates the per-segment values, and pads or truncates the
+    result to ``max_length`` with ``pad_value`` (the canonical CTC
+    blank index).  Labels are assumed already in ``[0, pad_value)`` --
+    no string→int mapping happens at encode time; upstream code (e.g.
+    the study's events-dataframe construction) is responsible for
+    dropping OOV rows and assigning the canonical paper labels.
+
+    Inheriting from :class:`neuralset.extractors.LabelEncoder` keeps
+    the shared Pydantic surface (``event_types``, ``event_field``,
+    ``aggregation``, ``allow_missing``) while replacing the
+    string-encoding machinery with a direct integer read.
+    """
+
+    max_length: int
+    pad_value: int
+    aggregation: tp.Literal["cat"] = "cat"
+
+    @property
+    def n_classes(self) -> int:
+        """CTC head width: ``pad_value`` labels + one blank = ``pad_value + 1``."""
+        return self.pad_value + 1
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        # Skip ``LabelEncoder.model_post_init``: its "missing events ->
+        # all-zero default" warning is a false positive here (missing
+        # segments are encoded as an empty sequence padded with
+        # ``pad_value`` -- see ``__call__`` -- not zeros), and its
+        # ``predefined_mapping`` validation doesn't apply (labels are read
+        # as integers, no string->int mapping).  Run the grandparent
+        # (``EventField``) init only -- mirrors how ``prepare`` deliberately
+        # bypasses ``LabelEncoder.prepare``.
+        super(LabelEncoder, self).model_post_init(log__)
+        if self.max_length <= 0:
+            raise ValueError(f"max_length must be > 0, got {self.max_length}.")
+        if self.pad_value < 0:
+            raise ValueError(f"pad_value must be >= 0, got {self.pad_value}.")
+
+    def prepare(self, obj: tp.Any) -> None:
+        # Skip ``LabelEncoder.prepare`` which would try to learn a
+        # string→int mapping from the integer ``label`` field — it
+        # builds a *sorted-enumerate* mapping, so missing values in
+        # ``obj`` would corrupt the canonical ``[0, pad_value)``
+        # layout.  ``EventField.prepare`` (one level up the MRO) still
+        # validates the field's dtype, and the one-shot ``self(...)``
+        # call populates the output shape used when
+        # ``allow_missing=True``.
+        super(LabelEncoder, self).prepare(obj)
+        events = self._event_types_helper.extract(obj)
+        if events:
+            self(events[0], events[0].start, duration=0.001, trigger=events[0])
+
+    def get_static(self, event: etypes.Event) -> torch.Tensor:  # type: ignore[override]
+        return torch.tensor(
+            [int(event._get_field_or_extra(self.event_field))],
+            dtype=torch.long,
+        )
+
+    def __call__(  # type: ignore[override]
+        self,
+        events: tp.Any,
+        start: float,
+        duration: float,
+        trigger: tp.Any = None,
+    ) -> torch.Tensor:
+        # CTC accepts length-0 targets; short-circuit empty segments
+        # instead of letting ``BaseExtractor`` synthesize a 1-label
+        # ``_missing_default`` fallback (which would land in the
+        # middle of the vocabulary).
+        if self.allow_missing and not any(
+            start <= e.start < start + duration
+            for e in self._event_types_helper.extract(events)
+        ):
+            return torch.full((self.max_length,), self.pad_value, dtype=torch.long)
+        seq = super().__call__(events, start, duration, trigger=trigger)
+        n = int(seq.numel())
+        if n > self.max_length:
+            warn_once(f"{self.name}: truncating labels to max_length={self.max_length}")
+            seq, n = seq[: self.max_length], self.max_length
+        return torch.nn.functional.pad(
+            seq, (0, self.max_length - n), value=self.pad_value
         )

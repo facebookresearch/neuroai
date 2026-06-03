@@ -9,6 +9,7 @@ import typing as tp
 
 import numpy as np
 import pandas as pd
+import pydantic
 import pytest
 import torch
 
@@ -247,6 +248,34 @@ def test_llm_long_context() -> None:
     word.context = " ".join([str(k) for k in range(1024)])
     # should work even though context is larger that 1024=maximum (~1500)
     _ = extractor(word, 0, 1)
+
+
+def test_max_length_real_limit() -> None:
+    extractor = text.HuggingFaceText(model_name="openai-community/gpt2", device="cpu")
+    assert extractor.tokenizer.model_max_length == 1024
+    assert extractor._get_max_length() == 1024
+
+
+@pytest.mark.skipif("IN_GITHUB_ACTION" in os.environ, reason="OPT not in CI cache")
+def test_max_length_sentinel_fallback() -> None:
+    """OPT's tokenizer reports the HF 'infinite' sentinel, so _max_length must
+    fall back to the model's position table and an over-length context must
+    truncate instead of overflowing OPT's learned positions."""
+    word = _make_word()
+    word.context = " ".join(str(k) for k in range(4000))  # >2050 tokens
+    try:
+        extractor = text.HuggingFaceText(
+            model_name="facebook/opt-125m",
+            contextualized=True,
+            device="cpu",
+        )
+        tokenizer = extractor.tokenizer
+        assert tokenizer.model_max_length >= int(1e29)  # sentinel, not a real limit
+        config: tp.Any = extractor.model.config  # type: ignore[union-attr]
+        assert extractor._get_max_length() == config.max_position_embeddings
+        _ = extractor(word, 0, 1)
+    except (OSError, RuntimeError, pydantic.ValidationError):
+        pytest.skip("opt-125m unreachable")
 
 
 @pytest.mark.skipif(

@@ -127,14 +127,12 @@ class AddSentenceToWords(EventsTransform):
     For each sentence found in the Text rows, it:
 
     1. Creates a new Sentence row for each sentence.
-    2. Assigns `sentence` and `sentence_char` annotations to Word rows to indicate
-       which sentence each word belongs to, and which character the word starts at in the sentence.
+    2. Assigns `sentence`, `sentence_char`, and `text_char` annotations to Word rows.
 
     Parameters
     ----------
     max_unmatched_ratio : float
-        Maximum allowed ratio of word rows that do not match any sentence.
-        Raises an error if this ratio is exceeded.
+        Maximum ratio of words without a character-positioned match.
     override_sentences : bool, default=False
         Whether to replace existing Sentence rows if they are already present.
     """
@@ -181,6 +179,7 @@ class AddSentenceToWords(EventsTransform):
         words = events[events.type.isin(wtypes.names)]
         events.loc[:, "sentence_char"] = np.nan
         events["sentence"] = ""
+        events["text_char"] = np.nan
 
         sentences: list[dict[str, tp.Any]] = []
         for context in contexts.itertuples():
@@ -218,11 +217,13 @@ class AddSentenceToWords(EventsTransform):
         words = events[events.type.isin(wtypes.names)]
         if len(words) == 0:
             return events
-        ratio = sum(not s or not isinstance(s, str) for s in words.sentence) / len(words)
+        ratio = int(words["text_char"].isna().sum()) / len(words)
         if ratio > self.max_unmatched_ratio:
             max_unmatched_ratio = self.max_unmatched_ratio
             cls = self.__class__.__name__
-            msg = f"Ratio of unmatched words is {ratio:.4f} on {len(words)} words "
+            msg = (
+                f"Ratio of words without text_char is {ratio:.4f} on {len(words)} words "
+            )
             msg += f"while {cls}.{max_unmatched_ratio=}"
             raise RuntimeError(msg)
         return events

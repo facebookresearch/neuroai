@@ -63,6 +63,7 @@ METRIC_DISPLAY_NAMES: dict[str, str] = {
     "test/pearsonr": "Pearson R",
     "test/rmse": "RMSE",
     "test/bmae": "Binned MAE (s)",
+    "test/CER": "Character error rate (%)",
     "test/full_retrieval/top5_acc_subject-agg": "Top-5 accuracy (per-subject)",
 }
 
@@ -72,6 +73,7 @@ METRIC_HIGHER_IS_BETTER: dict[str, bool] = {
     "test/pearsonr": True,
     "test/rmse": False,
     "test/bmae": False,
+    "test/CER": False,
     "test/full_retrieval/top5_acc_subject-agg": True,
 }
 
@@ -81,6 +83,7 @@ METRIC_PERFECT_SCORE: dict[str, float] = {
     "test/pearsonr": 1.0,
     "test/rmse": 0.0,
     "test/bmae": 0.0,
+    "test/CER": 0.0,
     "test/full_retrieval/top5_acc_subject-agg": 100.0,
 }
 
@@ -145,7 +148,12 @@ MEEG_CLASSIC_DISPLAY: list[str] = [
 FMRI_CLASSIC_DISPLAY: list[str] = [
     m.name for m in MODELS if m.family == "classic" and m.device == "fmri"
 ]
-CLASSIC_DISPLAY: list[str] = MEEG_CLASSIC_DISPLAY + FMRI_CLASSIC_DISPLAY
+EMG_CLASSIC_DISPLAY: list[str] = [
+    m.name for m in MODELS if m.family == "classic" and m.device == "emg"
+]
+CLASSIC_DISPLAY: list[str] = (
+    MEEG_CLASSIC_DISPLAY + FMRI_CLASSIC_DISPLAY + EMG_CLASSIC_DISPLAY
+)
 MEEG_FM_DISPLAY: list[str] = [
     m.name for m in MODELS if m.family == "foundation" and m.device == "eeg"
 ]
