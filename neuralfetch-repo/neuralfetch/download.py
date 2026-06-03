@@ -568,7 +568,7 @@ class Datalad(BaseDownload):
             # raise RuntimeError(f"Clone Failed: {proc.stderr}")
 
     def _dl_item(self, cur_path: Path | str) -> None:
-        threads_ = "" if self.threads > 1 else f" -J {self.threads}"
+        threads_ = f" -J {self.threads}" if self.threads > 1 else ""
         cmd = f'datalad get "{cur_path}"{threads_}'
         self._datalad(cmd, self._dl_dir / self.repo_name)
 
