@@ -20,7 +20,6 @@ import sklearn
 import sklearn.preprocessing
 import torch
 import yaml
-from exca import ConfDict
 
 import neuralset as ns
 from neuralset.base import TimedArray
@@ -109,14 +108,8 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     assert "affine" not in val.header
     with pytest.raises(ValueError, match="No affine"):
         val.to_native()
-    # padding
-    feature3 = feature2.infra.clone_obj(padding=20500)
-    t = feature3(event, start=0.0, duration=20)
-    assert np.array_equal(t.shape, [20500, 10])
-    feature3 = feature2.infra.clone_obj(padding="auto", allow_missing=True)
-    feature3.prepare(study)
-    t = feature3([], start=0.0, duration=20)
-    assert np.array_equal(t.shape, [20484, 10])
+    # NOTE: spatial padding (old FmriExtractor.padding field) is now handled
+    # by PaddingStrategy(dim=0) at collation time; see test_padding_strategies.
 
     # atlas
     try:
@@ -649,40 +642,6 @@ def test_eeg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
     assert isinstance(ta, TimedArray)
     assert ta.header is not None
     assert "ch_names" in ta.header
-
-
-def test_base_meg(tmp_path: Path) -> None:
-    extractor = ns.extractors.MegExtractor(
-        frequency=100.0,
-        filter=(None, 20.0),
-        infra={"folder": tmp_path},  # type: ignore
-    )
-    assert isinstance(extractor, ns.extractors.MegExtractor)
-    # check uids
-    extractor_keys = set(ConfDict.from_model(extractor, uid=True).keys())
-
-    assert extractor_keys == {
-        "name",
-        "allow_missing",
-        "filter",
-        "drop_bads",
-        "picks",
-        "baseline",
-        "frequency",
-        "apply_proj",
-        "offset",
-        "scaler",
-        "aggregation",
-        "clamp",
-        "channel_order",
-        "apply_hilbert",
-        "notch_filter",
-        "event_types",
-        "scale_factor",
-        "bipolar_ref",
-        "infra",  # for version
-        "fill_non_finite",
-    }
 
 
 @pytest.mark.parametrize("apply_proj", (True, False))

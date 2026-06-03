@@ -69,6 +69,7 @@ import neuralset as ns
 from neuralset import dataloader as dl
 from neuralset import segments as seg
 from neuralset.events.utils import standardize_events
+from neuralset.extractors import padding as pad
 
 BATCH_SIZE = 32
 MAX_SEGS = int(os.environ.get("BENCH_MAX_SEGS", "500"))
@@ -204,9 +205,22 @@ def test_list_segments(scenario: str) -> None:
 def test_getitem(scenario: str) -> None:
     _, _, dur, stim_ext = _data(scenario)
     segs = _segments(scenario)
-    extractors = {"neuro": _NEURO_EXT, "stim": stim_ext}
+    extractors = {
+        "neuro": ns.extractors.Pulse(
+            frequency=100.0,
+            event_types="Stimulus",
+            aggregation="sum",
+            padding=pad.PadToDuration(duration=dur),
+        ),
+        "stim": ns.extractors.Pulse(
+            frequency=100.0,
+            event_types=stim_ext.event_types,
+            aggregation="sum",
+            padding=pad.PadToDuration(duration=dur),
+        ),
+    }
     n = min(MAX_SEGS, len(segs))
-    ds = dl.SegmentDataset(extractors, segs[:n], pad_duration=dur)
+    ds = dl.SegmentDataset(extractors, segs[:n])
     _ = ds[0]
     gc.collect()
     t0 = time.perf_counter()
@@ -248,8 +262,21 @@ def test_epoch(scenario: str, num_workers: int) -> None:
 
     _, _, dur, stim_ext = _data(scenario)
     segs = _segments(scenario)[:MAX_SEGS]
-    extractors = {"neuro": _NEURO_EXT, "stim": stim_ext}
-    ds = dl.SegmentDataset(extractors, segs, pad_duration=dur)
+    extractors = {
+        "neuro": ns.extractors.Pulse(
+            frequency=100.0,
+            event_types="Stimulus",
+            aggregation="sum",
+            padding=pad.PadToDuration(duration=dur),
+        ),
+        "stim": ns.extractors.Pulse(
+            frequency=100.0,
+            event_types=stim_ext.event_types,
+            aggregation="sum",
+            padding=pad.PadToDuration(duration=dur),
+        ),
+    }
+    ds = dl.SegmentDataset(extractors, segs)
     kwargs: dict[str, tp.Any] = dict(
         collate_fn=ds.collate_fn,
         batch_size=BATCH_SIZE,

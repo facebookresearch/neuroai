@@ -425,8 +425,15 @@ def test_dataset_pickle_carries_store() -> None:
     ] + [dict(type="Stimulus", start=0.0, duration=10.0, timeline="tl0")]
     df = standardize_events(pd.DataFrame(rows))
     segments = list_segments(df, triggers=df.type == "Word", duration=2.0)
-    ext = ns.extractors.Pulse(frequency=100.0, event_types="Stimulus", aggregation="sum")
-    ds = dl.SegmentDataset({"pulse": ext}, segments, pad_duration=2.0)
+    from .extractors import padding as pad
+
+    ext = ns.extractors.Pulse(
+        frequency=100.0,
+        event_types="Stimulus",
+        aggregation="sum",
+        padding=pad.PadToDuration(duration=2.0),
+    )
+    ds = dl.SegmentDataset({"pulse": ext}, segments)
 
     blob = pickle.dumps(ds)
     old_registry = dict(seg._EventStore._REGISTRY)

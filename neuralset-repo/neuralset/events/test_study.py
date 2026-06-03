@@ -28,6 +28,7 @@ from neuralset import events as _events
 from neuralset import segments
 from neuralset.events import etypes, transforms
 from neuralset.events import study as base
+from neuralset.events.testing import mne2013sample as _mne2013sample  # noqa: F401
 
 from .transforms import test_transforms
 
