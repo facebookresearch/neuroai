@@ -1097,16 +1097,27 @@ class Openneuro(BaseDownload):
     ``'sub-1/**/*run-01*'``. The pattern ``**`` will match any files and
     zero or more directories, subdirectories and symbolic links to
     directories.
+
+    The ``nworkers`` parameter controls how many files are downloaded in
+    parallel (forwarded to ``openneuro.download`` as
+    ``max_concurrent_downloads``). The openneuro-py default is 5; raise it to
+    speed up datasets with many files when network bandwidth allows.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2025.2.0",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.4.0",)
     excluded_patterns: list[str] = []
     include: list[str] | None = None
+    nworkers: int = 5
 
     def _download(self) -> None:
         import openneuro as on
 
-        on.download(dataset=self.study, target_dir=self._dl_dir, include=self.include)
+        on.download(
+            dataset=self.study,
+            target_dir=self._dl_dir,
+            include=self.include,
+            max_concurrent_downloads=self.nworkers,
+        )
 
 
 class Osf(BaseDownload):
