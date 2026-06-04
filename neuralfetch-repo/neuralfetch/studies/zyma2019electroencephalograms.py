@@ -90,12 +90,7 @@ class Zyma2019Electroencephalograms(study.Study):
         physionet.download(overwrite=overwrite)
 
     def _download_root(self) -> Path:
-        return (
-            self.path
-            / "download"
-            / self._PHYSIONET_STUDY
-            / self._PHYSIONET_VERSION
-        )
+        return self.path / "download" / self._PHYSIONET_STUDY / self._PHYSIONET_VERSION
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         task_map = {"1": "rest", "2": "mental_arithmetic"}

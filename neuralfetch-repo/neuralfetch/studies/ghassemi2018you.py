@@ -173,12 +173,7 @@ class Ghassemi2018You(study.Study):
         physionet.download()
 
     def _download_root(self) -> Path:
-        return (
-            self.path
-            / "download"
-            / self._PHYSIONET_STUDY
-            / self._PHYSIONET_VERSION
-        )
+        return self.path / "download" / self._PHYSIONET_STUDY / self._PHYSIONET_VERSION
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         folder = self._download_root()
