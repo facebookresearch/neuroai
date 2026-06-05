@@ -154,6 +154,8 @@ class Miltiadous2023DiceSample(Miltiadous2023Dice):
     Data: 19-channel EEG, 500 Hz, resting-state eyes-closed
     """
 
+    folder_name: tp.ClassVar[str | None] = "Miltiadous2023Dice"
+
     description: tp.ClassVar[str] = (
         "Sample Miltiadous2023Dice: 3 subjects (one per diagnosis group) for rapid testing. "
         "EEG resting-state eyes-closed recordings."

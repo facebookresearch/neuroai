@@ -294,6 +294,8 @@ class Li2022PetitSample(Li2022Petit):
     scanning issues. EN057's section 1 corresponds to run 15 in the files.
     """
 
+    folder_name: tp.ClassVar[str | None] = "Li2022Petit"
+
     description: tp.ClassVar[str] = (
         "Ultra-minimal Le Petit Prince fMRI: Single subject (EN057), run 1 only. "
         "Lightweight (~80MB) for rapid CI/CD testing and validation."

@@ -557,6 +557,8 @@ class Bel2026PetitListenSample(Bel2026PetitListen):
     OpenNeuro dataset: https://openneuro.org/datasets/ds007523
     """
 
+    folder_name: tp.ClassVar[str | None] = "Bel2026PetitListen"
+
     description: tp.ClassVar[str] = (
         "Sample Bel2026PetitListen: MEG listening to Le Petit Prince (subject 26, run 01)"
     )
@@ -627,6 +629,8 @@ class Bel2026PetitReadSample(Bel2026PetitRead):
 
     OpenNeuro dataset: https://openneuro.org/datasets/ds007524
     """
+
+    folder_name: tp.ClassVar[str | None] = "Bel2026PetitRead"
 
     description: tp.ClassVar[str] = (
         "Sample Bel2026PetitRead: MEG reading Le Petit Prince (subject 26, run 01)"

@@ -262,7 +262,8 @@ class Study(base.Step):
         Root directory for the study data. All studies can use the same
         ``path`` (e.g. ``path="/data"``): each study automatically
         resolves its own subfolder (e.g. ``/data/MyStudy``), so you
-        only need to configure one path for your entire data store.
+        only need to configure one path for your entire data store. Set
+        :attr:`folder_name` on subclasses that share a parent data folder.
     infra_timelines : MapInfra
         Caching/compute backend for per-timeline event loading. Uses
         multiprocessing by default (``cluster="processpool"``); set
@@ -308,6 +309,7 @@ class Study(base.Step):
     bibtex: tp.ClassVar[str] = ""
     licence: tp.ClassVar[str] = ""
     description: tp.ClassVar[str] = ""
+    folder_name: tp.ClassVar[str | None] = None
 
     @classmethod
     def catalog(cls) -> dict[str, tp.Type["Study"]]:
@@ -380,8 +382,8 @@ class Study(base.Step):
     @tp.final
     def download(self, **kwargs: tp.Any) -> None:
         self._check_requirements()
-        # Ensure download goes into a subfolder named after the study
-        name = self.__class__.__name__
+        # Ensure download goes into the configured study data folder.
+        name = self._folder_name()
         if self.path.name.lower() != name.lower():
             self.path = self.path / name
             STUDY_PATHS[self.__class__.__name__] = self.path
@@ -428,6 +430,9 @@ class Study(base.Step):
     def _exclude_from_cls_uid(cls) -> list[str]:
         return super()._exclude_from_cls_uid() + ["path"]
 
+    def _folder_name(self) -> str:
+        return self.folder_name or self.__class__.__name__
+
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         if type(self) is Study:
@@ -435,7 +440,7 @@ class Study(base.Step):
                 "Study cannot be instantiated directly — use a subclass, "
                 "or pass name= to dispatch: Study(name='MyStudy2024', path=...)"
             )
-        name = self.__class__.__name__
+        name = self._folder_name()
         self.path = _identify_study_subfolder(self.path, name)
         STUDY_PATHS[self.__class__.__name__] = self.path  # record for path lookup
         # Auto-propagate cache folder and mode so users only need to set it once

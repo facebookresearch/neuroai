@@ -201,6 +201,8 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
     to access the image files, but this is a much smaller download than the full EEG dataset.
     """
 
+    folder_name: tp.ClassVar[str | None] = "Grootswagers2022Human"
+
     description: tp.ClassVar[str] = (
         "Sample Grootswagers2022: OpenNeuro EEG + image events for sub-01."
     )

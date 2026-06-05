@@ -645,6 +645,8 @@ class Allen2022MassiveRaw(Allen2022Massive):
         - Paradigm: passive viewing of 73,000 natural images from COCO dataset
     """
 
+    folder_name: tp.ClassVar[str | None] = "Allen2022Massive"
+
     description: tp.ClassVar[str] = (
         "Natural Scenes Dataset: 7T BOLD fMRI from 8 participants viewing "
         "73,000 natural images from Microsoft COCO dataset (BIDS/deepprep variant)"
@@ -897,6 +899,8 @@ class Allen2022MassiveSample(Allen2022Massive):
 
     Uses preprocessed timeseries for subject 1, session 1, runs 1-4.
     """
+
+    folder_name: tp.ClassVar[str | None] = "Allen2022Massive"
 
     description: tp.ClassVar[str] = (
         "Mini NSD: preprocessed 7T BOLD fMRI for subject 1, session 1, "
