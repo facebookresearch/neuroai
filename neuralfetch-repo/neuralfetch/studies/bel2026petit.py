@@ -77,6 +77,7 @@ def _clean_text(text: str) -> str:
 
 
 class _Bel2026PetitBase(study.Study):
+    folder_name: tp.ClassVar[str | None] = "Bel2026Petit"
     requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py",)
 
     task: tp.ClassVar[str]
@@ -207,7 +208,6 @@ class Bel2026PetitListen(_Bel2026PetitBase):
         - Some runs are excluded due to poor trigger alignment (see BAD_RUNS_LIST_LISTEN).
     """
 
-    folder_name: tp.ClassVar[str | None] = "Bel2026PetitListen"
     aliases: tp.ClassVar[tuple[str, ...]] = ("LPP-Listen", "LPP MEG Listen")
     bibtex: tp.ClassVar[str] = """
     @article{bel2026petit,
@@ -381,7 +381,6 @@ class Bel2026PetitRead(_Bel2026PetitBase):
         - Words that cannot be aligned to triggers are kept as MissedWord events.
     """
 
-    folder_name: tp.ClassVar[str | None] = "Bel2026PetitRead"
     aliases: tp.ClassVar[tuple[str, ...]] = ("LPP-Read", "LPP MEG Read")
     bibtex: tp.ClassVar[str] = """
     @article{bel2026petit,
