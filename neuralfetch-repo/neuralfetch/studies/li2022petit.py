@@ -56,6 +56,7 @@ class Li2022Petit(study.Study):
         - Multiple text fixes applied for alignment between audio and transcripts.
     """
 
+    folder_name: tp.ClassVar[str | None] = "Li2022Petit"
     aliases: tp.ClassVar[tuple[str, ...]] = ("Le Petit Prince fMRI Corpus", "LPPC-fMRI")
 
     bibtex: tp.ClassVar[str] = """
@@ -293,8 +294,6 @@ class Li2022PetitSample(Li2022Petit):
     Note: The Li2022Petit dataset uses different run numbering in filenames due to
     scanning issues. EN057's section 1 corresponds to run 15 in the files.
     """
-
-    folder_name: tp.ClassVar[str | None] = "Li2022Petit"
 
     description: tp.ClassVar[str] = (
         "Ultra-minimal Le Petit Prince fMRI: Single subject (EN057), run 1 only. "

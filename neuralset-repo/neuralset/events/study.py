@@ -262,8 +262,8 @@ class Study(base.Step):
         Root directory for the study data. All studies can use the same
         ``path`` (e.g. ``path="/data"``): each study automatically
         resolves its own subfolder (e.g. ``/data/MyStudy``), so you
-        only need to configure one path for your entire data store. Set
-        :attr:`folder_name` on subclasses that share a parent data folder.
+        only need to configure one path for your entire data store. Parent
+        studies can set :attr:`folder_name` when their children share a data folder.
     infra_timelines : MapInfra
         Caching/compute backend for per-timeline event loading. Uses
         multiprocessing by default (``cluster="processpool"``); set

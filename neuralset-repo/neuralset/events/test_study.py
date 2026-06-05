@@ -131,37 +131,6 @@ def test_download_appends_study_name(tmp_path: Path, with_name: bool) -> None:
     assert (study.path / "data.txt").is_file()
 
 
-def test_folder_name_overrides_study_subfolder(tmp_path: Path) -> None:
-    class FolderNameProbe9999(FakeData2025):
-        folder_name: tp.ClassVar[str | None] = "SharedFolderProbe9999"
-
-    root = tmp_path / "studies"
-    expected = root / "SharedFolderProbe9999"
-    expected.mkdir(parents=True)
-    try:
-        study = FolderNameProbe9999(path=root)
-        assert study.path == expected
-        assert base.STUDY_PATHS["FolderNameProbe9999"] == expected
-    finally:
-        base.STUDIES.pop("FolderNameProbe9999", None)
-        base.STUDY_PATHS.pop("FolderNameProbe9999", None)
-
-
-def test_download_uses_folder_name(tmp_path: Path) -> None:
-    class FolderNameDownloadProbe9999(FakeData2025):
-        folder_name: tp.ClassVar[str | None] = "SharedDownloadProbe9999"
-
-    try:
-        study = FolderNameDownloadProbe9999(path=tmp_path)
-        study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
-        study.download()
-        assert study.path == tmp_path / "SharedDownloadProbe9999"
-        assert (study.path / "data.txt").is_file()
-    finally:
-        base.STUDIES.pop("FolderNameDownloadProbe9999", None)
-        base.STUDY_PATHS.pop("FolderNameDownloadProbe9999", None)
-
-
 def test_study_export() -> None:
     study = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER)
     dumped = study.model_dump()

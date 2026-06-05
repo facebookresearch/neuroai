@@ -33,6 +33,7 @@ class Miltiadous2023Dice(study.Study):
 
     """
 
+    folder_name: tp.ClassVar[str | None] = "Miltiadous2023Dice"
     bibtex: tp.ClassVar[str] = """
     @article{miltiadous2023dice,
         title={{{DICE-Net}}: {{A Novel Convolution-Transformer Architecture}} for {{Alzheimer Detection}} in {{EEG Signals}}},
@@ -153,8 +154,6 @@ class Miltiadous2023DiceSample(Miltiadous2023Dice):
     OpenNeuro dataset: https://openneuro.org/datasets/ds004504/
     Data: 19-channel EEG, 500 Hz, resting-state eyes-closed
     """
-
-    folder_name: tp.ClassVar[str | None] = "Miltiadous2023Dice"
 
     description: tp.ClassVar[str] = (
         "Sample Miltiadous2023Dice: 3 subjects (one per diagnosis group) for rapid testing. "

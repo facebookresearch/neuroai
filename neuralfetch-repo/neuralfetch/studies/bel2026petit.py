@@ -207,6 +207,7 @@ class Bel2026PetitListen(_Bel2026PetitBase):
         - Some runs are excluded due to poor trigger alignment (see BAD_RUNS_LIST_LISTEN).
     """
 
+    folder_name: tp.ClassVar[str | None] = "Bel2026PetitListen"
     aliases: tp.ClassVar[tuple[str, ...]] = ("LPP-Listen", "LPP MEG Listen")
     bibtex: tp.ClassVar[str] = """
     @article{bel2026petit,
@@ -380,6 +381,7 @@ class Bel2026PetitRead(_Bel2026PetitBase):
         - Words that cannot be aligned to triggers are kept as MissedWord events.
     """
 
+    folder_name: tp.ClassVar[str | None] = "Bel2026PetitRead"
     aliases: tp.ClassVar[tuple[str, ...]] = ("LPP-Read", "LPP MEG Read")
     bibtex: tp.ClassVar[str] = """
     @article{bel2026petit,
@@ -557,8 +559,6 @@ class Bel2026PetitListenSample(Bel2026PetitListen):
     OpenNeuro dataset: https://openneuro.org/datasets/ds007523
     """
 
-    folder_name: tp.ClassVar[str | None] = "Bel2026PetitListen"
-
     description: tp.ClassVar[str] = (
         "Sample Bel2026PetitListen: MEG listening to Le Petit Prince (subject 26, run 01)"
     )
@@ -629,8 +629,6 @@ class Bel2026PetitReadSample(Bel2026PetitRead):
 
     OpenNeuro dataset: https://openneuro.org/datasets/ds007524
     """
-
-    folder_name: tp.ClassVar[str | None] = "Bel2026PetitRead"
 
     description: tp.ClassVar[str] = (
         "Sample Bel2026PetitRead: MEG reading Le Petit Prince (subject 26, run 01)"

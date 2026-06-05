@@ -48,6 +48,7 @@ class Grootswagers2022Human(study.Study):
         - Participants 49-50 have 127 channels; all others have 63
     """
 
+    folder_name: tp.ClassVar[str | None] = "Grootswagers2022Human"
     aliases: tp.ClassVar[tuple[str, ...]] = ("THINGS-EEG1",)
     licence: tp.ClassVar[str] = "CC0-1.0"
     bibtex: tp.ClassVar[str] = """
@@ -200,8 +201,6 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
     Still needs to download the full THINGS-images database (shared across THINGS studies)
     to access the image files, but this is a much smaller download than the full EEG dataset.
     """
-
-    folder_name: tp.ClassVar[str | None] = "Grootswagers2022Human"
 
     description: tp.ClassVar[str] = (
         "Sample Grootswagers2022: OpenNeuro EEG + image events for sub-01."

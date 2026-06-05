@@ -678,8 +678,6 @@ class HaratiAbhishaike2015Tuev(Harati2015Tuev):
     reused in BIOT, LaBraM, CBraMod, etc.
     """
 
-    folder_name: tp.ClassVar[str | None] = "Harati2015Tuev"
-
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=518,
         num_subjects=370,
