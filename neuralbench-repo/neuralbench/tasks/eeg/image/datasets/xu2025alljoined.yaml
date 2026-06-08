@@ -1,0 +1,22 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    =replace=: true
+    source:
+      name: Xu2025Alljoined
+    filter_stimuli:
+      name: QueryEvents
+      query: "type != 'Image' or label in ['stim_train', 'stim_test']"
+    split:
+      name: PredefinedSplit
+      test_split_query: "label == 'stim_test'"
+      col_name: split
+      valid_split_by: timeline
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  summary_columns: [filepath]

@@ -25,6 +25,11 @@ data:
   # fallback resolves Fpz-Cz -> Fpz and Pz-Oz -> Pz to real 3D coordinates.
   channel_positions:
     layout_or_montage_name: standard_1020
+  # Force serial MNE resample/filter for the whole task so everything is
+  # in-process (no worker, no re-import, no lock); plenty fast for the
+  # cached per-timeline extraction.
+  neuro:
+    mne_cpus: 1
   target:
     =replace=: true
     name: LabelEncoder

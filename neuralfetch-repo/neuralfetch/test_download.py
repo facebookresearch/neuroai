@@ -187,6 +187,32 @@ def test_globus_missing_credentials_raises(tmp_path: Path) -> None:
         )
 
 
+def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
+    """Physionet sets prefix/output_dir and writes under download/<study>/<version>/."""
+    physionet = download.Physionet(
+        study="eegmat",
+        version="1.0.0",
+        dset_dir=tmp_path / "study",
+    )
+
+    def mock_s3_download(self: download.S3) -> None:
+        assert self.prefix == "eegmat/1.0.0"
+        assert self.output_dir == self._dl_dir / "eegmat" / "1.0.0"
+        out_dir = tp.cast(Path, self.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "file1.txt").write_text("data1")
+        (out_dir / "file2.txt").write_text("data2")
+
+    with patch.object(download.S3, "_download", mock_s3_download):
+        physionet._download()
+
+    out_root = tmp_path / "study" / "download" / "eegmat" / "1.0.0"
+    assert (out_root / "file1.txt").exists()
+    assert (out_root / "file2.txt").exists()
+    assert (out_root / "file1.txt").read_text() == "data1"
+    assert (out_root / "file2.txt").read_text() == "data2"
+
+
 @pytest.mark.parametrize("study_name", ["Allen2022Massive", "Allen2022MassiveRaw"])
 def test_nsd_data_access_agreement(tmp_path: Path, study_name: str) -> None:
     """NSD consent flow: env-var gate, T&C display, user info collection, marker persistence.

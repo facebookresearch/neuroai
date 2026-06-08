@@ -43,6 +43,7 @@ facebook/dinov2-small-imagenet1k-1-layer
 facebook/dpt-dinov2-base-kitti
 facebook/hf-seamless-m4t-medium
 facebook/opt-1.3b
+facebook/opt-125m
 facebook/opt-13b
 facebook/opt-2.7b
 facebook/opt-6.7b

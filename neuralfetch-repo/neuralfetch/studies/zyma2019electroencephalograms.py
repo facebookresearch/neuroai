@@ -78,12 +78,19 @@ class Zyma2019Electroencephalograms(study.Study):
         frequency=500.0,
     )
     requirements: tp.ClassVar[tuple[str, ...]] = ("boto3", "botocore")
+    _PHYSIONET_STUDY: tp.ClassVar[str] = "eegmat"
+    _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
     def _download(self, overwrite=False) -> None:
         physionet = download.Physionet(
-            study="eegmat", version="1.0.0", dset_dir=self.path
+            study=self._PHYSIONET_STUDY,
+            version=self._PHYSIONET_VERSION,
+            dset_dir=self.path,
         )
         physionet.download(overwrite=overwrite)
+
+    def _download_root(self) -> Path:
+        return self.path / "download" / self._PHYSIONET_STUDY / self._PHYSIONET_VERSION
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         task_map = {"1": "rest", "2": "mental_arithmetic"}
@@ -111,11 +118,10 @@ class Zyma2019Electroencephalograms(study.Study):
         return eeg_events
 
     def _get_eeg_filename(self, timeline: dict[str, tp.Any]) -> Path:
-        folder = self.path / "download"
-        return folder / f"{timeline['subject']}_{timeline['run']}.edf"
+        return self._download_root() / f"{timeline['subject']}_{timeline['run']}.edf"
 
     def _get_subject_info(self, timeline: dict[str, tp.Any]) -> pd.Series:
-        file_path = self.path / "download" / "subject-info.csv"
+        file_path = self._download_root() / "subject-info.csv"
         subj_info = pd.read_csv(file_path)
         output = subj_info[subj_info.Subject == timeline["subject"]].squeeze()
         assert isinstance(output, pd.Series)

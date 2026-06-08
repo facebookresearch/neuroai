@@ -568,7 +568,7 @@ class Datalad(BaseDownload):
             # raise RuntimeError(f"Clone Failed: {proc.stderr}")
 
     def _dl_item(self, cur_path: Path | str) -> None:
-        threads_ = "" if self.threads > 1 else f" -J {self.threads}"
+        threads_ = f" -J {self.threads}" if self.threads > 1 else ""
         cmd = f'datalad get "{cur_path}"{threads_}'
         self._datalad(cmd, self._dl_dir / self.repo_name)
 
@@ -1097,16 +1097,27 @@ class Openneuro(BaseDownload):
     ``'sub-1/**/*run-01*'``. The pattern ``**`` will match any files and
     zero or more directories, subdirectories and symbolic links to
     directories.
+
+    The ``nworkers`` parameter controls how many files are downloaded in
+    parallel (forwarded to ``openneuro.download`` as
+    ``max_concurrent_downloads``). The openneuro-py default is 5; raise it to
+    speed up datasets with many files when network bandwidth allows.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2025.2.0",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.4.0",)
     excluded_patterns: list[str] = []
     include: list[str] | None = None
+    nworkers: int = 5
 
     def _download(self) -> None:
         import openneuro as on
 
-        on.download(dataset=self.study, target_dir=self._dl_dir, include=self.include)
+        on.download(
+            dataset=self.study,
+            target_dir=self._dl_dir,
+            include=self.include,
+            max_concurrent_downloads=self.nworkers,
+        )
 
 
 class Osf(BaseDownload):
@@ -1158,7 +1169,7 @@ class Physionet(S3):
 
     Extends ``S3`` with the convention that Physionet datasets live under
     ``<study>/<version>/`` in the ``physionet-open`` bucket. After download,
-    the versioned directory is flattened into ``_dl_dir``.
+    the versioned directory is ``_dl_dir/<study>/<version>``.
     """
 
     bucket: str = "physionet-open"
@@ -1166,19 +1177,13 @@ class Physionet(S3):
 
     def _download(self, overwrite=False) -> None:
         self.prefix = f"{self.study}/{self.version}"
-        temp_folder = self._dl_dir.parent / "temp"
-        self.output_dir = temp_folder
+        self.output_dir = self._dl_dir / self.study / self.version
 
-        # Download into a temp directory first because Physionet stores
-        # objects under <study>/<version>/, which the S3 base class
-        # mirrors on disk.  After downloading we flatten by renaming
-        # temp/<study>/<version>/ directly into _dl_dir.
+        # Preserve PhysioNet source structure locally:
+        # - list only keys under <study>/<version> via `prefix`
+        # - S3 strips that prefix from each key before writing
+        # - write under download/<study>/<version>/
         super()._download()
-
-        inner = temp_folder / self.study / self.version
-        inner.rename(self._dl_dir)
-        inner.parent.rmdir()
-        temp_folder.rmdir()
 
 
 synapse_msg = """Requires creating a Synapse account with 2FA.

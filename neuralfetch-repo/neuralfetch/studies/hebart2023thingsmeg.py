@@ -5,9 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-import os
 import re
-import shutil
 import typing as tp
 import warnings
 from functools import lru_cache
@@ -90,8 +88,8 @@ class Hebart2023ThingsMeg(study.Study):
         - CTF MEG data format
         - Includes event timing and image annotations
         - Multiple train/test split strategies
-        - Preprocessed images available in preprocessed/images/
-        - Shared THINGS image database expected in ../THINGS-images/
+        - Image stimuli are sourced from the shared THINGS image database in
+          ../THINGS-images/ (downloaded automatically; see Download Requirements)
 
     Download Requirements:
         - OpenNeuro dataset: ds004212
@@ -101,7 +99,6 @@ class Hebart2023ThingsMeg(study.Study):
             * Read license terms in password_images.txt
             * Extract with password to agree to terms
             * Place at ../THINGS-images/ (sibling directory to study folder)
-        - Note: Preprocessed images extraction requires password (currently disabled)
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("THINGS-MEG1",)
@@ -131,7 +128,7 @@ class Hebart2023ThingsMeg(study.Study):
         "THINGS-data: MEG recordings from 4 participants viewing 1,854 diverse "
         "object concepts."
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("pyunpack", "boto3", "osfclient>=0.0.5")
+    requirements: tp.ClassVar[tuple[str, ...]] = ("boto3", "osfclient>=0.0.5")
 
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=480,
@@ -143,51 +140,12 @@ class Hebart2023ThingsMeg(study.Study):
     )
 
     def _download(self) -> None:
-        # Check for / Download THINGS-images database (used across multiple THINGS studies)
+        # Image stimuli are sourced from the shared THINGS-images database (used
+        # across multiple THINGS studies); the OpenNeuro dataset bundles the same
+        # object images as password-protected archives, but extracting them is
+        # redundant with the shared DB, so we skip it.
         utils.download_things_images(self.path)
         download.Openneuro("ds004212", self.path).download()  # type: ignore
-
-        # Decompress
-        parts = "A-C", "D-K", "L-Q", "R-S", "T-Z"
-        prep_dir = self.path / "preprocessed" / "images"
-        prep_dir.mkdir(parents=True, exist_ok=True)
-        for part in parts:
-            success = prep_dir / f"{part}_success.txt"
-            if success.exists():
-                continue
-            from pyunpack import Archive  # noqa
-
-            password = os.environ.get("NEURALHUB_THINGS_PASSWORD")
-            if not password:
-                raise RuntimeError(
-                    "THINGS-images requires accepting a licence agreement.\n"
-                    "Please export NEURALHUB_THINGS_PASSWORD=<pwd> where the password can be found "
-                    "in password_images.txt at https://osf.io/jum2f/files/52wrx"
-                )
-
-            img_dir = (
-                self.path / "download" / "stimuli" / "download" / "THINGS" / "Images"
-            )
-            zip_file = img_dir / f"object_images_{part}.zip"
-            print(f"Unzipping {zip_file.name}...")
-            Archive(str(zip_file), password=password).extractall(str(prep_dir))
-
-            # fix bad unzipping: the L-Q archive extracts into a nested subdirectory
-            if part == "L-Q":
-                bad_dir = prep_dir / "object_images_L-Q"
-                if bad_dir.exists():
-                    for folder in bad_dir.iterdir():
-                        if folder.is_file():
-                            continue
-
-                        target_dir = prep_dir / folder.name
-                        target_dir.mkdir(exist_ok=True)
-                        for file in folder.iterdir():
-                            print(file)
-                            shutil.move(str(file), str(target_dir / file.name))
-
-            with open(success, "w") as f:
-                f.write("done")
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
@@ -246,8 +204,8 @@ class Hebart2023ThingsMeg(study.Study):
         if not all(events.duration < 0.550):
             raise RuntimeError("Some durations are too long")
 
-        # specify image path
-        img_dir = self.path / "prepare"
+        # specify image path (shared THINGS-images database)
+        img_dir = (self.path / ".." / "THINGS-images").resolve(strict=False)
 
         def format_path(img_path):
             if not img_path.endswith(".jpg"):
@@ -272,11 +230,14 @@ class Hebart2023ThingsMeg(study.Study):
         events.loc[~check, "split"] = None
         events.loc[~check, "valid"] = False
 
-        # Add shared filepaths
+        # Add shared filepaths (same shared THINGS-images database as `filepath`,
+        # built element-wise so each row gets its own path)
         shared_things_path = (self.path / ".." / "THINGS-images").resolve(strict=False)
         if shared_things_path.exists():
-            fp = f"{shared_things_path}/{events.category}/{events.stem}.jpg"
-            events["shared_filepath"] = fp
+            base = str(shared_things_path)
+            events["shared_filepath"] = (
+                base + "/" + events.category + "/" + events.stem + ".jpg"
+            )
 
         events["type"] = "Image"
         events["filepath"] = events.filepath.apply(str)

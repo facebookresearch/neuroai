@@ -20,7 +20,7 @@ from neuralset.events.utils import extract_events
 
 class Mne2013Sample(study.Study):
     # Study level
-    url: tp.ClassVar[str] = "https://mne.tools/stable/overview/datasets_index.html#sample"
+    url: tp.ClassVar[str] = "https://mne.tools/stable/documentation/datasets.html#sample"
     bibtex: tp.ClassVar[str] = """
     @article{gramfort2013meg,
         title = {{{MEG}} and {{EEG}} Data Analysis with {{MNE-Python}}},

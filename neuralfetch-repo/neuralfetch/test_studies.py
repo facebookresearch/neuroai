@@ -36,6 +36,27 @@ def test_neuralfetch_discovery() -> None:
     )
 
 
+def test_physionet_study_download_root(tmp_path: Path) -> None:
+    """A Physionet-backed study should resolve files under download/<study>/<version>/."""
+    from neuralfetch.studies.zyma2019electroencephalograms import (
+        Zyma2019Electroencephalograms,
+    )
+
+    study = Zyma2019Electroencephalograms(path=tmp_path / "zyma")
+    expected_root = (
+        tmp_path
+        / "zyma"
+        / "download"
+        / study._PHYSIONET_STUDY  # noqa: SLF001
+        / study._PHYSIONET_VERSION  # noqa: SLF001
+    )
+
+    assert study._download_root() == expected_root  # noqa: SLF001
+    assert study._get_eeg_filename(  # noqa: SLF001
+        {"subject": "Subject01", "run": "1"}
+    ) == (expected_root / "Subject01_1.edf")
+
+
 @pytest.mark.parametrize("name", INFO_STUDIES)
 def test_study_info(name: str, tmp_path: Path) -> None:
     """Validate that a study's declared ``_info`` matches its actual data.
