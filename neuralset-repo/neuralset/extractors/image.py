@@ -284,39 +284,7 @@ class HuggingFaceImage(BaseImage):
         _fix_pixel_values(inputs)
         inputs = inputs.to(self.model.device)
         with torch.inference_mode():
-            pred = self.model(**inputs, output_hidden_states=True)
-            vision_output = getattr(pred, "vision_model_output", None)
-            if (
-                vision_output is not None
-                and vision_output.hidden_states is None
-                and "pixel_values" in inputs
-            ):
-                states = self._clip_vision_hidden_states(inputs["pixel_values"])
-                if states is not None:
-                    vision_output.hidden_states = states
-            return pred
-
-    def _clip_vision_hidden_states(
-        self, pixel_values: torch.Tensor
-    ) -> tuple[torch.Tensor, ...] | None:
-        """Collect CLIP vision states when Transformers does not return them."""
-        vision_model: tp.Any = getattr(self.model, "vision_model", None)
-        if not all(
-            hasattr(vision_model, attr)
-            for attr in ("embeddings", "pre_layrnorm", "encoder")
-        ):
-            return None
-        hidden_states = vision_model.embeddings(pixel_values)
-        hidden_states = vision_model.pre_layrnorm(hidden_states)
-        states = [hidden_states]
-        for encoder_layer in vision_model.encoder.layers:
-            layer_output = encoder_layer(hidden_states, attention_mask=None)
-            if isinstance(layer_output, tuple):
-                hidden_states = layer_output[0]
-            else:
-                hidden_states = getattr(layer_output, "last_hidden_state", layer_output)
-            states.append(hidden_states)
-        return tuple(states)
+            return self.model(**inputs, output_hidden_states=True)
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
         """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
