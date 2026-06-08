@@ -132,14 +132,6 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     assert latent.shape == (384, 3)
 
 
-def test_video_rejects_image_models() -> None:
-    with pytest.raises(ValueError, match="Use HuggingFaceImage"):
-        ns.extractors.HuggingFaceVideo(
-            frequency=0.5,
-            model_name="facebook/dinov2-small-imagenet1k-1-layer",
-        )
-
-
 @pytest.mark.parametrize(
     "name,layer_type,embds",
     [

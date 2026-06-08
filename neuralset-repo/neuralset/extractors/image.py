@@ -285,7 +285,7 @@ class HuggingFaceImage(BaseImage):
     # extractor attributes
     pretrained: bool = True
     # for precomputing/caching
-    infra: MapInfra = MapInfra(version="v5", **CLUSTER_DEFAULTS)
+    infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
 
     def _exclude_from_cache_uid(self) -> list[str]:
         prev = super()._exclude_from_cache_uid()
@@ -396,16 +396,20 @@ class HuggingFaceImage(BaseImage):
                 if self.cache_n_layers is not None:
                     sub.data = self._aggregate_layers(sub.data)
                 yield sub
+        elif self.event_types == "Image":
+            for image_event, latents in zip(events, self._get_data(events)):
+                if self.cache_n_layers is not None:
+                    latents = self._aggregate_layers(latents)
+                yield base.TimedArray(
+                    frequency=0,
+                    duration=image_event.duration,
+                    start=image_event.start,
+                    data=np.asarray(latents),
+                )
             return
-        for image_event, latents in zip(events, self._get_data(events)):
-            if self.cache_n_layers is not None:
-                latents = self._aggregate_layers(latents)
-            yield base.TimedArray(
-                frequency=0,
-                duration=image_event.duration,
-                start=image_event.start,
-                data=np.asarray(latents),
-            )
+        else:
+            msg = f"Unsupported event_types={self.event_types!r} for HuggingFaceImage"
+            raise ValueError(msg)
 
     def get_static(self, event: etypes.Image) -> torch.Tensor:
         if self.event_types == "Video":

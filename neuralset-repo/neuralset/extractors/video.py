@@ -8,6 +8,7 @@ import logging
 import typing as tp
 
 import numpy as np
+import pydantic
 import torch
 from exca import MapInfra
 from tqdm import tqdm
@@ -105,14 +106,34 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         version="v5",
     )
 
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        if not any(z in self.model_name for z in _HFVideoModel.MODELS):
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _reject_previous_api(cls, data: tp.Any) -> tp.Any:
+        if isinstance(data, dict) and "image" in data:
             msg = (
-                f"Model {self.model_name!r} is not a supported native video model. "
-                "Use HuggingFaceImage for frame-by-frame video embeddings."
+                "HuggingFaceVideo no longer accepts the previous API "
+                "`image=HuggingFaceImage(...)`. For frame-by-frame video "
+                "embeddings, instantiate HuggingFaceImage with event_types='Video'. "
+                "For native video models, pass the model name directly as "
+                "HuggingFaceVideo(model_name=...)."
             )
             raise ValueError(msg)
+        return data
+
+    @pydantic.field_validator("model_name")
+    @classmethod
+    def _validate_model_name(cls, model_name: str) -> str:
+        if any(z in model_name for z in _HFVideoModel.MODELS):
+            return model_name
+        msg = (
+            "The HuggingFaceVideo API now only supports native video models. "
+            "For the previous frame-by-frame API, instantiate HuggingFaceImage "
+            f"with event_types='Video' instead of using model_name={model_name!r}."
+        )
+        raise ValueError(msg)
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
         _HFVideoModel.check_layer_type(
             layer_type=self.layer_type, model_name=self.model_name
         )
