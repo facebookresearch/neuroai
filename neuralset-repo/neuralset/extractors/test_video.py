@@ -101,7 +101,7 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
         layers=0.7,
     )
     folder = image.infra.uid_folder()
@@ -122,7 +122,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
         model_name=name,
     )
     out = image(video_event, start=0.0, duration=4)
@@ -170,7 +170,7 @@ def test_video_models(
         max_imsize=120,
         infra=infra,
         layer_type=layer_type,
-        hf_config={"device_map": "cpu"} | hf_config,
+        hf_config={"device_map": "cpu"} | hf_config,  # type: ignore[arg-type]
         model_name=name,
         # show the full dimension
         token_aggregation=None,
@@ -186,7 +186,7 @@ def test_video_huggingface() -> None:
     extractor = vid.HuggingFaceVideo(
         frequency=0.5,
         model_name="MCG-NJU/videomae-base",
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     hf = _HFVideoModel(extractor=extractor)
     config = tp.cast(tp.Any, hf.model.config)
@@ -211,7 +211,7 @@ def test_video_vjepa2_requires_auto_video_processor(
         vid.HuggingFaceVideo(**kwargs)
     vid.HuggingFaceVideo(
         **kwargs,
-        hf_config={"processor_cls_name": "AutoVideoProcessor"},
+        hf_config={"processor_cls_name": "AutoVideoProcessor"},  # type: ignore[arg-type]
     )
 
 

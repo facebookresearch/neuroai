@@ -100,7 +100,9 @@ def test_wav2vec_layers(
     event = etypes.Audio(start=0, timeline="whatever", filepath=fp)
     m = "facebook/wav2vec2-base"
     feat = audio.HuggingFaceAudio(
-        model_name=m, layers=layers, hf_config={"device_map": "cpu"}
+        model_name=m,
+        layers=layers,
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     out = feat(event, start=8, duration=4)
 
@@ -113,7 +115,9 @@ def test_wav2vec_cache_n_layers(tmp_path: Path) -> None:
     event = etypes.Audio(start=0, timeline="whatever", filepath=fp)
     infra = {"folder": tmp_path / "cache"}
     cfg: dict[str, tp.Any] = dict(
-        frequency=50, hf_config={"device_map": "cpu"}, infra=infra
+        frequency=50,
+        hf_config={"device_map": "cpu"},
+        infra=infra,
     )
     cfg["model_name"] = "facebook/wav2vec2-base"
     layers = [0, 0.1, 0.2]

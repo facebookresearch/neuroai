@@ -247,7 +247,7 @@ def test_llm_long_context() -> None:
         aggregation="sum",
         contextualized=True,
         model_name="openai-community/gpt2",
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     word = _make_word()
     word.context = " ".join([str(k) for k in range(1024)])
@@ -257,7 +257,8 @@ def test_llm_long_context() -> None:
 
 def test_max_length_real_limit() -> None:
     extractor = text.HuggingFaceText(
-        model_name="openai-community/gpt2", hf_config={"device_map": "cpu"}
+        model_name="openai-community/gpt2",
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     assert extractor.tokenizer.model_max_length == 1024
     assert extractor._get_max_length() == 1024
@@ -274,7 +275,7 @@ def test_max_length_sentinel_fallback() -> None:
         extractor = text.HuggingFaceText(
             model_name="facebook/opt-125m",
             contextualized=True,
-            hf_config={"device_map": "cpu"},
+            hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
         )
         tokenizer = extractor.tokenizer
         assert tokenizer.model_max_length >= int(1e29)  # sentinel, not a real limit
@@ -293,7 +294,7 @@ def test_bart() -> None:
         aggregation="sum",
         contextualized=True,
         model_name="facebook/bart-base",
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     word = _make_word()
     _ = extractor(word, 0, 1)
@@ -306,7 +307,7 @@ def test_llm_pretrained() -> None:
         text.HuggingFaceText(
             aggregation="sum",
             contextualized=True,
-            hf_config={"device_map": device},
+            hf_config={"device_map": device},  # type: ignore[arg-type]
             pretrained=pretrained,
         )(word, 0, 1)
         for pretrained in [True, False]
@@ -332,7 +333,7 @@ def test_contextualized_token_slicing(word_text: str, n_target_tokens: int) -> N
         contextualized=True,
         token_aggregation=None,
         model_name="openai-community/gpt2",
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
     )
     encode: tp.Any = extractor.tokenizer.encode
     # GPT-2 tokenizes " internationalization" as 2 sub-tokens;
@@ -350,7 +351,7 @@ def test_batched_target_slice_excludes_pads() -> None:
         contextualized=True,
         token_aggregation="sum",
         model_name="openai-community/gpt2",
-        hf_config={"device_map": "cpu"},
+        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
         batch_size=2,
     )
     # alone vs batched would otherwise hit the same MapInfra cache entry
