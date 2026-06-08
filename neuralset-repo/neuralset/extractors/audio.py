@@ -379,11 +379,8 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
             self._feature_extractor = self._get_feature_extractor(self.model_name)
         return self._feature_extractor
 
-    @property
-    def model(self) -> nn.Module:
-        if not hasattr(self, "_model"):
-            self._model = self._get_sound_model(self.model_name)
-        return self._model
+    def _load_cached_model(self) -> torch.nn.Module:
+        return self._get_sound_model(self.model_name)
 
     def _get_feature_extractor(self, model_name: str) -> torch.nn.Module:
         from transformers import AutoFeatureExtractor

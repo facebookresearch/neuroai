@@ -438,7 +438,30 @@ DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
 
 
 class HuggingFaceConfig(base.BaseModel):
-    """Common HuggingFace model construction options."""
+    """Common HuggingFace model construction options.
+
+    This config is shared by text, audio, image, and video extractors so that
+    HuggingFace models are instantiated consistently across modalities.
+
+    Parameters
+    ----------
+    device_map : {"auto", "cpu", "cuda"}, default="auto"
+        Device placement passed to ``from_pretrained``. For randomly initialized
+        models, ``"auto"`` resolves to CUDA when available and CPU otherwise.
+    torch_dtype : {"auto", "float16", "float32", "float64", "bfloat16"} | None, default=None
+        Optional dtype passed as ``torch_dtype`` when loading pretrained
+        weights. If ``None``, Transformers chooses its default dtype.
+    attn_implementation : str | None, default=None
+        Optional attention implementation forwarded to model construction.
+    revision : str | None, default=None
+        Optional HuggingFace Hub revision used for configs, models, and processors.
+    trust_remote_code : bool, default=False
+        Whether to allow custom modeling code from the HuggingFace repository.
+    model_cls_name : str | None, default=None
+        Name of a class in ``transformers`` to use instead of ``AutoModel``.
+    processor_cls_name : str | None, default=None
+        Name of a class in ``transformers`` to use instead of ``AutoProcessor``.
+    """
 
     device_map: tp.Literal["auto", "cpu", "cuda"] = "auto"
     torch_dtype: (
@@ -601,6 +624,15 @@ class HuggingFaceMixin(base.BaseModel):
         if device_map == "auto":
             return "cuda" if torch.cuda.is_available() else "cpu"
         return device_map
+
+    @property
+    def model(self) -> torch.nn.Module:
+        if not hasattr(self, "_model") or self._model is None:
+            self._model = self._load_cached_model()
+        return self._model
+
+    def _load_cached_model(self) -> torch.nn.Module:
+        return self.load_model()
 
     def load_model(self) -> torch.nn.Module:
         """Load or instantiate a HuggingFace model with shared config."""

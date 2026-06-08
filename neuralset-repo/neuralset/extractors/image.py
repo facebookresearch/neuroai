@@ -261,12 +261,6 @@ class HuggingFaceImage(BaseImage):
         super().model_post_init(log__)
 
     @property
-    def model(self) -> nn.Module:
-        if not hasattr(self, "_model") or self._model is None:
-            self._model = self.load_model()
-        return self._model
-
-    @property
     def processor(self) -> tp.Any:
         if not hasattr(self, "_processor"):
             Processor = self.hf_config.processor_cls()
