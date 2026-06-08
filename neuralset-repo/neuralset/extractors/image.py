@@ -51,9 +51,6 @@ class _HuggingFace(nn.Module):
     output_hidden_states : bool, default=False
         Whether to extract hidden states from all transformer layers. If False, only the hidden state from the
         last layer is returned.
-    pretrained : bool, default=True
-        Whether to load pretrained weights. If False, initializes the model with
-        random weights from the model configuration.
     """
 
     def __init__(
@@ -62,11 +59,11 @@ class _HuggingFace(nn.Module):
         output_hidden_states: bool = False,
     ) -> None:
         super().__init__()
-        from transformers import AutoProcessor
 
         self.model = extractor.load_model(output_hidden_states=output_hidden_states)
+        Processor = extractor._hf_processor_cls()
         # do_rescale=False because ToTensor does the rescaling
-        self.processor = AutoProcessor.from_pretrained(
+        self.processor = Processor.from_pretrained(
             extractor.model_name,
             do_rescale=False,
             **extractor._hf_processor_kwargs(),
@@ -253,9 +250,6 @@ class HuggingFaceImage(BaseImage):
     ----------
     model_name : str, default="facebook/dinov2-base"
         HuggingFace model identifier.
-    pretrained : bool, default=True
-        Whether to load pretrained weights from model. If False, initializes the model with
-        random weights from the model configuration.
 
     """
 

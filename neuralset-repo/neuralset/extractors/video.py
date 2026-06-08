@@ -59,9 +59,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         HuggingFace video model identifier.
         Image models are not accepted here; use `HuggingFaceImage` for
         frame-by-frame video embeddings.
-    pretrained : bool, default=True
-        Whether to load pretrained weights from model. If False, initializes
-        the model with random weights from the model configuration.
     use_audio : bool, default=True
         Whether to include audio alongside video frames during feature extraction.
         Only applicable for models that support multimodal inputs (e.g., LLaVA-Video).
@@ -236,9 +233,6 @@ class _HFVideoModel:
     model_name : str
         HuggingFace model identifier.
         The model will be loaded from the HuggingFace Hub. Please note that you may have to install additional dependencies to load it correctly.
-    pretrained : bool, default=True
-        Whether to load pretrained weights. If False, initializes the model with
-        random weights from the model configuration.
     layer_type: str, default=""
         Specific layer extraction mode for certain models:
         - For XClip: Use "mit" to extract from Multi-frame Integration Transformer
@@ -272,18 +266,8 @@ class _HFVideoModel:
         model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        Processor: tp.Any
-        from transformers import AutoProcessor as Processor
-
+        Processor = extractor._hf_processor_cls()
         processor_extra = {"do_rescale": True} | extractor._hf_processor_kwargs()
-        if "google/vivit" in model_name:
-            from transformers import VivitImageProcessor as Processor
-        if "LLaVA" in model_name:
-            from transformers import LlavaNextVideoProcessor as Processor
-        if "Phi-4" in model_name:
-            processor_extra["trust_remote_code"] = extractor.hf_config.trust_remote_code
-        if "vjepa2" in model_name:
-            from transformers import AutoVideoProcessor as Processor
 
         self.model = extractor.load_model(output_hidden_states=True)
         # use do_rescale=True -> don't use totensor

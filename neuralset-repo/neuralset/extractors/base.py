@@ -447,6 +447,7 @@ class HuggingFaceConfig(base.BaseModel):
     revision: str | None = None
     trust_remote_code: bool = False
     cls_name: str | None = None
+    processor_cls_name: str | None = None
 
     @pydantic.field_validator("dtype")
     @classmethod
@@ -461,7 +462,48 @@ class HuggingFaceConfig(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device"]
+        return ["device", "attn_implementation", "trust_remote_code"]
+
+    def _transformers_cls(self, name: str | None, default: str, kind: str) -> tp.Any:
+        import transformers
+
+        cls_name = name or default
+        try:
+            return getattr(transformers, cls_name)
+        except AttributeError as e:
+            msg = f"transformers has no {kind} class {cls_name!r}"
+            raise ValueError(msg) from e
+
+    def model_cls(self) -> tp.Any:
+        return self._transformers_cls(self.cls_name, "AutoModel", "model")
+
+    def processor_cls(self) -> tp.Any:
+        return self._transformers_cls(
+            self.processor_cls_name,
+            "AutoProcessor",
+            "processor",
+        )
+
+    def check_model_instantiates(
+        self,
+        model_name: str,
+        config_kwargs: dict[str, tp.Any],
+    ) -> None:
+        from transformers import AutoConfig
+
+        Model = self.model_cls()
+        config = AutoConfig.from_pretrained(model_name, **config_kwargs)
+        try:
+            with torch.device("meta"):
+                Model.from_config(config)
+        except Exception as e:
+            cls_name = self.cls_name or "AutoModel"
+            msg = (
+                f"Could not instantiate {cls_name!r} from the config for "
+                f"{model_name!r}. Set hf_config.cls_name to a compatible "
+                "transformers model class."
+            )
+            raise ValueError(msg) from e
 
 
 class HuggingFaceMixin(base.BaseModel):
@@ -526,6 +568,11 @@ class HuggingFaceMixin(base.BaseModel):
             raise ValueError(msg)
         if not self._skip_repo_check and not self.repo_exists():
             raise ValueError(f"The model {self.model_name} does not exist")
+        if not self._skip_repo_check:
+            self.hf_config.check_model_instantiates(
+                self.model_name,
+                self._hf_config_kwargs(),
+            )
 
     def repo_exists(self) -> bool:
         fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
@@ -586,6 +633,7 @@ class HuggingFaceMixin(base.BaseModel):
 
     def _hf_model_kwargs(self) -> dict[str, tp.Any]:
         kwargs = self._hf_config_kwargs()
+        kwargs["device_map"] = self.hf_config.device
         if self.hf_config.attn_implementation is not None:
             kwargs["attn_implementation"] = self.hf_config.attn_implementation
         torch_dtype = self._hf_torch_dtype()
@@ -597,14 +645,10 @@ class HuggingFaceMixin(base.BaseModel):
         return self._hf_config_kwargs()
 
     def _hf_model_cls(self) -> tp.Any:
-        import transformers
+        return self.hf_config.model_cls()
 
-        cls_name = self.hf_config.cls_name or "AutoModel"
-        try:
-            return getattr(transformers, cls_name)
-        except AttributeError as e:
-            msg = f"transformers has no model class {cls_name!r}"
-            raise ValueError(msg) from e
+    def _hf_processor_cls(self) -> tp.Any:
+        return self.hf_config.processor_cls()
 
     def load_model(
         self,
@@ -632,7 +676,7 @@ class HuggingFaceMixin(base.BaseModel):
             model = Model.from_config(config)
             if torch_dtype is not None:
                 model.to(dtype=torch_dtype)
-        model.to(self._hf_device())
+            model.to(self._hf_device())
         model.eval()
         return model
 

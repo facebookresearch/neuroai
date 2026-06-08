@@ -257,9 +257,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         Batch size for the language model.
     contextualized: bool
         True by default, the context of the event is used to compute the embeddings.
-    pretrained: bool
-        Use pretrained model weights if True, otherwise instantiate the model from
-        its config without loading pretrained weights.
 
     Note
     ----
