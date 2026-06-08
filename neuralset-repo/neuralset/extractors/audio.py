@@ -20,12 +20,7 @@ from torch.nn import functional as F
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from .base import (
-    BaseExtractor,
-    HuggingFaceConfig,
-    HuggingFaceConfigInput,
-    HuggingFaceMixin,
-)
+from .base import BaseExtractor, HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
 
@@ -391,7 +386,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         from transformers import AutoFeatureExtractor
 
         return AutoFeatureExtractor.from_pretrained(
-            model_name, **self._hf_config.config_kwargs
+            model_name, **self.hf_config.config_kwargs
         )
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
@@ -475,7 +470,7 @@ class Wav2VecBert(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/w2v-bert-2.0"
-    hf_config: HuggingFaceConfigInput = HuggingFaceConfig(
+    hf_config: HuggingFaceConfig = HuggingFaceConfig(
         model_cls_name="Wav2Vec2BertModel",
     )
 
@@ -496,7 +491,7 @@ class SeamlessM4T(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/hf-seamless-m4t-medium"
-    hf_config: HuggingFaceConfigInput = HuggingFaceConfig(
+    hf_config: HuggingFaceConfig = HuggingFaceConfig(
         model_cls_name="SeamlessM4TModel",
     )
 
@@ -523,7 +518,7 @@ class Whisper(HuggingFaceAudio):
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
-    hf_config: HuggingFaceConfigInput = HuggingFaceConfig(
+    hf_config: HuggingFaceConfig = HuggingFaceConfig(
         torch_dtype="float32",
         model_cls_name="WhisperModel",
     )

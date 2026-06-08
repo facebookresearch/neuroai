@@ -315,7 +315,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         if not hasattr(self, "_model"):
             from transformers import AutoTokenizer
 
-            kwargs = self._hf_config.config_kwargs
+            kwargs = self.hf_config.config_kwargs
             # pinned for `_get_data`'s slicing: target at tail, pads trailing
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,

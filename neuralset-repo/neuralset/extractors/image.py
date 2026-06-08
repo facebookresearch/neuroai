@@ -263,13 +263,12 @@ class HuggingFaceImage(BaseImage):
     @property
     def processor(self) -> tp.Any:
         if not hasattr(self, "_processor"):
-            hf_config = self._hf_config
-            Processor = hf_config.processor_cls()
+            Processor = self.hf_config.processor_cls()
             # do_rescale=False because ToTensor does the rescaling
             self._processor = Processor.from_pretrained(
                 self.model_name,
                 do_rescale=False,
-                **hf_config.config_kwargs,
+                **self.hf_config.config_kwargs,
             )
         return self._processor
 

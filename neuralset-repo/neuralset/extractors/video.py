@@ -132,7 +132,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         super().model_post_init(log__)
         if (
             "vjepa2" in self.model_name.lower()
-            and self._hf_config.processor_cls_name != "AutoVideoProcessor"
+            and self.hf_config.processor_cls_name != "AutoVideoProcessor"
         ):
             msg = (
                 "V-JEPA2 models require "
@@ -275,7 +275,7 @@ class _HFVideoModel:
         model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        hf_config = extractor._hf_config
+        hf_config = extractor.hf_config
         Processor = hf_config.processor_cls()
         processor_extra = {"do_rescale": True} | hf_config.config_kwargs
 

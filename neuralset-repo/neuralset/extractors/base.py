@@ -551,9 +551,6 @@ class HuggingFaceConfig(base.BaseModel):
             raise ValueError(msg) from e
 
 
-HuggingFaceConfigInput = HuggingFaceConfig | dict[str, tp.Any]
-
-
 class HuggingFaceMixin(base.BaseModel):
     """Mixin for extractors that use a HuggingFace model.
     These extractors all return a tensor of shape (n_layers, n_tokens, *embedding_shape).
@@ -595,20 +592,13 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    hf_config: HuggingFaceConfigInput = HuggingFaceConfig()
+    hf_config: HuggingFaceConfig = HuggingFaceConfig()
     pretrained: bool = True
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
-
-    @pydantic.field_validator("hf_config", mode="before")
-    @classmethod
-    def _coerce_hf_config(cls, value: tp.Any) -> tp.Any:
-        if isinstance(value, dict):
-            return HuggingFaceConfig(**value)
-        return value
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -620,7 +610,7 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self._hf_config.check_model_instantiates(self.model_name)
+        self.hf_config.check_model_instantiates(self.model_name)
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -634,14 +624,10 @@ class HuggingFaceMixin(base.BaseModel):
 
     @property
     def device(self) -> str:
-        device_map = self._hf_config.device_map
+        device_map = self.hf_config.device_map
         if device_map == "auto":
             return "cuda" if torch.cuda.is_available() else "cpu"
         return device_map
-
-    @property
-    def _hf_config(self) -> HuggingFaceConfig:
-        return tp.cast(HuggingFaceConfig, self.hf_config)
 
     @property
     def model(self) -> torch.nn.Module:
@@ -656,7 +642,7 @@ class HuggingFaceMixin(base.BaseModel):
         """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
 
-        hf_config = self._hf_config
+        hf_config = self.hf_config
         Model = hf_config.model_cls()
         torch_dtype = hf_config.torch_dtype_value
         if self.pretrained:
