@@ -441,6 +441,8 @@ class _HFVideoModel:
         field = "images"
         if "xclip" in self.model_name:
             field = "videos"
+        elif "videomae" in self.model_name:
+            del kwargs["text"]
         elif "llava" in self.model_name.lower():
             field = "videos"
             kwargs["text"] = self.layer_type
