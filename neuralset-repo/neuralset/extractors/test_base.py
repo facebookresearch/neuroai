@@ -393,9 +393,9 @@ def test_huggingface_load_model_pretrained_false_uses_config(
     )
     extractor = base.HuggingFaceMixin(
         model_name="gpt2",
-        cls_name="DummyModel",
         pretrained=False,
         hf_config={
+            "cls_name": "DummyModel",
             "device": "cpu",
             "revision": "abc",
             "trust_remote_code": True,
@@ -424,8 +424,8 @@ def test_huggingface_load_model_forwards_model_kwargs(
     monkeypatch.setattr(transformers, "DummyModel", DummyModel, raising=False)
     extractor = base.HuggingFaceMixin(
         model_name="gpt2",
-        cls_name="DummyModel",
         hf_config={
+            "cls_name": "DummyModel",
             "device": "cpu",
             "dtype": "float16",
             "attn_implementation": "eager",

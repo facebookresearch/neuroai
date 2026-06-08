@@ -76,7 +76,6 @@ def test_image(tmp_path: Path) -> None:
         "imsize",
         "aggregation",
         "pretrained",
-        "cls_name",
         "cache_n_layers",
         "infra",  # provides version
     }
@@ -93,7 +92,6 @@ def test_image(tmp_path: Path) -> None:
         "layer_aggregation",
         "frequency",
         "pretrained",
-        "cls_name",
         "cache_n_layers",
     }
     assert set(extractor.infra.config().keys()) == expected

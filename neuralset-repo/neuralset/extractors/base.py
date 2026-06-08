@@ -446,6 +446,7 @@ class HuggingFaceConfig(base.BaseModel):
     attn_implementation: str | None = None
     revision: str | None = None
     trust_remote_code: bool = False
+    cls_name: str | None = None
 
     @pydantic.field_validator("dtype")
     @classmethod
@@ -478,8 +479,6 @@ class HuggingFaceMixin(base.BaseModel):
     pretrained: bool
         If True, load pretrained model weights. If False, instantiate from the
         pretrained config without loading pretrained weights.
-    cls_name: str | None
-        Transformers model class name. If None, use AutoModel.
     layers: float | list[float] | "all"
         Specifies the layers to keep.
         - "all": keep all layers
@@ -508,7 +507,6 @@ class HuggingFaceMixin(base.BaseModel):
     model_name: str
     hf_config: HuggingFaceConfig = HuggingFaceConfig()
     pretrained: bool = True
-    cls_name: str | None = None
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
@@ -601,7 +599,7 @@ class HuggingFaceMixin(base.BaseModel):
     def _hf_model_cls(self) -> tp.Any:
         import transformers
 
-        cls_name = self.cls_name or "AutoModel"
+        cls_name = self.hf_config.cls_name or "AutoModel"
         try:
             return getattr(transformers, cls_name)
         except AttributeError as e:

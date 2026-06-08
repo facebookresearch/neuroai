@@ -108,12 +108,13 @@ def test_llm(
 ) -> None:
     events = _make_test_events()
     cls_name = "AutoModelForTextEncoding" if "t5" in model_name else None
+    hf_config = {"cls_name": cls_name} if cls_name is not None else None
     extractor = text.HuggingFaceText(
         aggregation="sum",
         layers=layer,
         contextualized=contextualized,
         model_name=model_name,
-        cls_name=cls_name,
+        **({"hf_config": hf_config} if hf_config is not None else {}),
         cache_n_layers=cache_n_layers,
     )
     if hasattr(extractor, "model_name"):
