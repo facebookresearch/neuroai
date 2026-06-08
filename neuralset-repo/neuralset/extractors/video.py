@@ -92,7 +92,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         "julius>=0.2.7",
     )
     model_name: str = "MCG-NJU/videomae-base"
-    pretrained: bool = True
     use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
@@ -164,14 +163,10 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         # read all videos of the events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
         model = _HFVideoModel(
-            model_name=self.model_name,
-            pretrained=self.pretrained,
+            extractor=self,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
         )
-        if model.model.device.type == "cpu":
-            # may already be dispatched (with "accelerate")
-            model.model.to(self.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)
         freq = events[0].frequency if self.frequency == "native" else self.frequency
@@ -269,43 +264,28 @@ class _HFVideoModel:
 
     def __init__(
         self,
-        model_name: str,
-        pretrained: bool = True,
+        extractor: extractor_base.HuggingFaceMixin,
         layer_type: str = "",
         num_frames: int | None = None,
     ) -> None:
         super().__init__()
+        model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        Model: tp.Any  # ignore typing as we'll override the imports
         Processor: tp.Any
-        from transformers import AutoModel as Model
         from transformers import AutoProcessor as Processor
 
-        extra: dict[str, tp.Any] = {}
-        processor_extra: dict[str, tp.Any] = {"do_rescale": True}
+        processor_extra = {"do_rescale": True} | extractor._hf_processor_kwargs()
         if "google/vivit" in model_name:
             from transformers import VivitImageProcessor as Processor
-            from transformers import VivitModel as Model  # type: ignore
         if "LLaVA" in model_name:
-            from transformers import LlavaNextVideoForConditionalGeneration as Model
             from transformers import LlavaNextVideoProcessor as Processor
-
-            extra = {"torch_dtype": torch.float16}
-            if "34B" in model_name:
-                extra["device_map"] = "auto"  # uses accelerate
         if "Phi-4" in model_name:
-            from transformers import AutoModelForCausalLM as Model
-
-            extra = {"_attn_implementation": "eager", "trust_remote_code": True}
-            processor_extra["trust_remote_code"] = True
+            processor_extra["trust_remote_code"] = extractor.hf_config.trust_remote_code
         if "vjepa2" in model_name:
             from transformers import AutoVideoProcessor as Processor
 
-        self.model = Model.from_pretrained(model_name, output_hidden_states=True, **extra)
-        if not pretrained:
-            self.model = Model.from_config(self.model.config)
-        self.model.eval()
+        self.model = extractor.load_model(output_hidden_states=True)
         # use do_rescale=True -> don't use totensor
         self.processor = Processor.from_pretrained(model_name, **processor_extra)
         self.model_name = model_name

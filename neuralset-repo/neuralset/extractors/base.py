@@ -438,6 +438,31 @@ def _skip_new_event_types(key, val, prev):
 DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
 
 
+class HuggingFaceConfig(base.BaseModel):
+    """Common HuggingFace model construction options."""
+
+    device: tp.Literal["auto", "cpu", "cuda"] = "auto"
+    dtype: str | None = None
+    attn_implementation: str | None = None
+    revision: str | None = None
+    trust_remote_code: bool = False
+
+    @pydantic.field_validator("dtype")
+    @classmethod
+    def _validate_dtype(cls, dtype: str | None) -> str | None:
+        if dtype is None:
+            return None
+        name = dtype.removeprefix("torch.")
+        value = getattr(torch, name, None)
+        if not isinstance(value, torch.dtype):
+            raise ValueError(f"Unknown torch dtype: {dtype!r}")
+        return name
+
+    @classmethod
+    def _exclude_from_cls_uid(cls) -> list[str]:
+        return ["device"]
+
+
 class HuggingFaceMixin(base.BaseModel):
     """Mixin for extractors that use a HuggingFace model.
     These extractors all return a tensor of shape (n_layers, n_tokens, *embedding_shape).
@@ -447,12 +472,14 @@ class HuggingFaceMixin(base.BaseModel):
     ----------
     model_name: str
         Name of the model to use.
-    device: str
-        Device to use for the model:
-        - cpu: for cpu computation
-        - cuda: for using gpu0
-        - auto: to use gpu if available else cpu
-        - accelerate: to use huggingface accelerate (maps to multiple-gpus + use float16)
+    hf_config: HuggingFaceConfig
+        Shared HuggingFace loading options such as device, dtype, revision,
+        attention implementation, and trust_remote_code.
+    pretrained: bool
+        If True, load pretrained model weights. If False, instantiate from the
+        pretrained config without loading pretrained weights.
+    cls_name: str | None
+        Transformers model class name. If None, use AutoModel.
     layers: float | list[float] | "all"
         Specifies the layers to keep.
         - "all": keep all layers
@@ -479,7 +506,9 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
+    hf_config: HuggingFaceConfig = HuggingFaceConfig()
+    pretrained: bool = True
+    cls_name: str | None = None
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
@@ -490,8 +519,6 @@ class HuggingFaceMixin(base.BaseModel):
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
-        if self.device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -528,13 +555,88 @@ class HuggingFaceMixin(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device"]
+        return []
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["device"]
+        excluded: list[str] = []
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
+
+    def _hf_device(self) -> str:
+        device = self.hf_config.device
+        if device == "auto":
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return device
+
+    def _hf_torch_dtype(self) -> torch.dtype | None:
+        dtype = self.hf_config.dtype
+        if dtype is None:
+            return None
+        value = getattr(torch, dtype)
+        if not isinstance(value, torch.dtype):
+            raise RuntimeError(f"Invalid torch dtype stored in hf_config: {dtype!r}")
+        return value
+
+    def _hf_config_kwargs(self) -> dict[str, tp.Any]:
+        kwargs: dict[str, tp.Any] = {}
+        if self.hf_config.revision is not None:
+            kwargs["revision"] = self.hf_config.revision
+        if self.hf_config.trust_remote_code:
+            kwargs["trust_remote_code"] = self.hf_config.trust_remote_code
+        return kwargs
+
+    def _hf_model_kwargs(self) -> dict[str, tp.Any]:
+        kwargs = self._hf_config_kwargs()
+        if self.hf_config.attn_implementation is not None:
+            kwargs["attn_implementation"] = self.hf_config.attn_implementation
+        torch_dtype = self._hf_torch_dtype()
+        if torch_dtype is not None:
+            kwargs["torch_dtype"] = torch_dtype
+        return kwargs
+
+    def _hf_processor_kwargs(self) -> dict[str, tp.Any]:
+        return self._hf_config_kwargs()
+
+    def _hf_model_cls(self) -> tp.Any:
+        import transformers
+
+        cls_name = self.cls_name or "AutoModel"
+        try:
+            return getattr(transformers, cls_name)
+        except AttributeError as e:
+            msg = f"transformers has no model class {cls_name!r}"
+            raise ValueError(msg) from e
+
+    def load_model(
+        self,
+        *,
+        model_cls: tp.Any | None = None,
+        pretrained: bool | None = None,
+        **kwargs: tp.Any,
+    ) -> torch.nn.Module:
+        """Load or instantiate a HuggingFace model with shared config."""
+        from transformers import AutoConfig
+
+        Model = self._hf_model_cls() if model_cls is None else model_cls
+        should_load_weights = self.pretrained if pretrained is None else pretrained
+        model_kwargs = self._hf_model_kwargs() | kwargs
+        torch_dtype = self._hf_torch_dtype()
+        if should_load_weights:
+            model = Model.from_pretrained(self.model_name, **model_kwargs)
+        else:
+            config = AutoConfig.from_pretrained(
+                self.model_name,
+                **self._hf_config_kwargs(),
+            )
+            for key, value in kwargs.items():
+                setattr(config, key, value)
+            model = Model.from_config(config)
+            if torch_dtype is not None:
+                model.to(dtype=torch_dtype)
+        model.to(self._hf_device())
+        model.eval()
+        return model
 
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
         """

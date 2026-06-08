@@ -58,41 +58,20 @@ class _HuggingFace(nn.Module):
 
     def __init__(
         self,
-        model_name: str,
+        extractor: "extractor_base.HuggingFaceMixin",
         output_hidden_states: bool = False,
-        pretrained: bool = True,
     ) -> None:
         super().__init__()
-        Model: tp.Any  # ignore typing as we'll override the imports
-        Processor: tp.Any
-        from transformers import AutoModel as Model
-        from transformers import AutoProcessor as Processor
+        from transformers import AutoProcessor
 
-        if model_name == "facebook/dpt-dinov2-base-kitti":
-            from transformers import DPTForDepthEstimation as Model
-        try:
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
-        except ValueError as e:
-            # handle specific cases
-            if "VisionEncoderDecoderConfig" in str(e):
-                from transformers import VisionEncoderDecoderModel as Model
-                from transformers import ViTImageProcessor as Processor
-            elif "vit-hybrid" in str(e):
-                from transformers import ViTHybridForImageClassification as Model
-                from transformers import ViTHybridImageProcessor as Processor
-            elif "UperNetConfig" in str(e):
-                from transformers import UperNetForSemanticSegmentation as Model
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
-        if not pretrained:
-            self.model = Model.from_config(self.model.config)
-        self.model.eval()
+        self.model = extractor.load_model(output_hidden_states=output_hidden_states)
         # do_rescale=False because ToTensor does the rescaling
-        self.processor = Processor.from_pretrained(model_name, do_rescale=False)
-        self.model_name = model_name
+        self.processor = AutoProcessor.from_pretrained(
+            extractor.model_name,
+            do_rescale=False,
+            **extractor._hf_processor_kwargs(),
+        )
+        self.model_name = extractor.model_name
 
     def _full_predict(  # return the raw output, used in tests
         self, images: torch.Tensor, text: str | list[str] = ""
@@ -242,9 +221,9 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
         with torch.no_grad():
             for batch_images in dloader:
                 if isinstance(batch_images, torch.Tensor):
-                    batch_images = batch_images.to(self.device)
+                    batch_images = batch_images.to(self._hf_device())
                 else:  # should be list of different sizes
-                    batch_images = [i.to(self.device) for i in batch_images]
+                    batch_images = [i.to(self._hf_device()) for i in batch_images]
                 with torch.no_grad():
                     latents = self._extract_batched_latents(batch_images)
                 for latent in latents:
@@ -282,8 +261,6 @@ class HuggingFaceImage(BaseImage):
 
     # class attributes
     model_name: str = "facebook/dinov2-base"
-    # extractor attributes
-    pretrained: bool = True
     # for precomputing/caching
     infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
 
@@ -346,11 +323,9 @@ class HuggingFaceImage(BaseImage):
     def model(self) -> nn.Module:
         if not hasattr(self, "_model") or self._model is None:
             self._model = _HuggingFace(
-                model_name=self.model_name,
+                extractor=self,
                 output_hidden_states=True,
-                pretrained=self.pretrained,
             )
-            self._model.to(self.device)
         return self._model
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:

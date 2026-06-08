@@ -101,7 +101,7 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        device="cpu",
+        hf_config={"device": "cpu"},
         layers=0.7,
     )
     folder = image.infra.uid_folder()
@@ -122,7 +122,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name=name,
     )
     out = image(video_event, start=0.0, duration=4)
@@ -169,7 +169,7 @@ def test_video_models(
         max_imsize=120,
         infra=infra,
         layer_type=layer_type,
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name=name,
         # show the full dimension
         token_aggregation=None,
@@ -182,7 +182,12 @@ def test_video_models(
 
 
 def test_video_huggingface() -> None:
-    hf = _HFVideoModel(model_name="MCG-NJU/videomae-base")
+    extractor = vid.HuggingFaceVideo(
+        frequency=0.5,
+        model_name="MCG-NJU/videomae-base",
+        hf_config={"device": "cpu"},
+    )
+    hf = _HFVideoModel(extractor=extractor)
     data = np.random.rand(hf.model.config.num_frames, 3, 64, 64)
     out = hf.predict_hidden_states(data)
     assert out.shape == (1, 13, 1568, 768)

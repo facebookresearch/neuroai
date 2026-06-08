@@ -20,7 +20,7 @@ from torch.nn import functional as F
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from .base import BaseExtractor, HuggingFaceMixin
+from .base import BaseExtractor, HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
 
@@ -388,15 +388,12 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     def _get_feature_extractor(self, model_name: str) -> torch.nn.Module:
         from transformers import AutoFeatureExtractor
 
-        return AutoFeatureExtractor.from_pretrained(model_name)
+        return AutoFeatureExtractor.from_pretrained(
+            model_name, **self._hf_processor_kwargs()
+        )
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        from transformers import AutoModel
-
-        _model = AutoModel.from_pretrained(model_name)
-        _model.to(self.device)
-        _model.eval()
-        return _model
+        return self.load_model()
 
     def _get_features(self, wav):
         out = self._feature_extractor(
@@ -424,7 +421,9 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
         features = self._get_features(wav)
         with torch.no_grad():
-            outputs = self.model(features.to(self.device), output_hidden_states=True)
+            outputs = self.model(
+                features.to(self._hf_device()), output_hidden_states=True
+            )
         if self.layer_type == "transformer":
             out: tp.Any = outputs.get("hidden_states")
         elif self.layer_type == "convolution":
@@ -476,14 +475,7 @@ class Wav2VecBert(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/w2v-bert-2.0"
-
-    def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        from transformers import Wav2Vec2BertModel
-
-        _model = Wav2Vec2BertModel.from_pretrained(model_name)
-        _model.to(self.device)
-        _model.eval()
-        return _model
+    cls_name: str | None = "Wav2Vec2BertModel"
 
 
 class SeamlessM4T(HuggingFaceAudio):
@@ -502,14 +494,10 @@ class SeamlessM4T(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/hf-seamless-m4t-medium"
+    cls_name: str | None = "SeamlessM4TModel"
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        from transformers import SeamlessM4TModel
-
-        _model = SeamlessM4TModel.from_pretrained(model_name).speech_encoder.to(
-            self.device
-        )
-        _model.to(self.device)
+        _model = self.load_model().speech_encoder
         _model.eval()
         return _model
 
@@ -531,13 +519,10 @@ class Whisper(HuggingFaceAudio):
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
+    cls_name: str | None = "WhisperModel"
+    hf_config: HuggingFaceConfig = HuggingFaceConfig(dtype="float32")
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        from transformers import WhisperModel
-
-        _model = WhisperModel.from_pretrained(
-            model_name, torch_dtype=torch.float32
-        ).encoder
-        _model.to(self.device)
+        _model = self.load_model().encoder
         _model.eval()
         return _model

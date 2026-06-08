@@ -107,11 +107,13 @@ def test_llm(
     contextualized: bool, layer: int, cache_n_layers: int | None, model_name: str
 ) -> None:
     events = _make_test_events()
+    cls_name = "AutoModelForTextEncoding" if "t5" in model_name else None
     extractor = text.HuggingFaceText(
         aggregation="sum",
         layers=layer,
         contextualized=contextualized,
         model_name=model_name,
+        cls_name=cls_name,
         cache_n_layers=cache_n_layers,
     )
     if hasattr(extractor, "model_name"):
@@ -242,7 +244,7 @@ def test_llm_long_context() -> None:
         aggregation="sum",
         contextualized=True,
         model_name="openai-community/gpt2",
-        device="cpu",
+        hf_config={"device": "cpu"},
     )
     word = _make_word()
     word.context = " ".join([str(k) for k in range(1024)])
@@ -251,7 +253,9 @@ def test_llm_long_context() -> None:
 
 
 def test_max_length_real_limit() -> None:
-    extractor = text.HuggingFaceText(model_name="openai-community/gpt2", device="cpu")
+    extractor = text.HuggingFaceText(
+        model_name="openai-community/gpt2", hf_config={"device": "cpu"}
+    )
     assert extractor.tokenizer.model_max_length == 1024
     assert extractor._get_max_length() == 1024
 
@@ -267,7 +271,7 @@ def test_max_length_sentinel_fallback() -> None:
         extractor = text.HuggingFaceText(
             model_name="facebook/opt-125m",
             contextualized=True,
-            device="cpu",
+            hf_config={"device": "cpu"},
         )
         tokenizer = extractor.tokenizer
         assert tokenizer.model_max_length >= int(1e29)  # sentinel, not a real limit
@@ -286,7 +290,7 @@ def test_bart() -> None:
         aggregation="sum",
         contextualized=True,
         model_name="facebook/bart-base",
-        device="cpu",
+        hf_config={"device": "cpu"},
     )
     word = _make_word()
     _ = extractor(word, 0, 1)
@@ -299,15 +303,13 @@ def test_llm_pretrained() -> None:
         text.HuggingFaceText(
             aggregation="sum",
             contextualized=True,
-            device=device,
-            pretrained=pretrained,  # type: ignore
+            hf_config={"device": device},
+            pretrained=pretrained,
         )(word, 0, 1)
-        for pretrained in [True, False, "part-reversal"]
+        for pretrained in [True, False]
     ]
     with pytest.raises(AssertionError):
         np.testing.assert_array_almost_equal(outputs[0], outputs[1])
-    with pytest.raises(AssertionError):
-        np.testing.assert_array_almost_equal(outputs[0], outputs[2])
 
 
 @pytest.mark.parametrize(
@@ -327,7 +329,7 @@ def test_contextualized_token_slicing(word_text: str, n_target_tokens: int) -> N
         contextualized=True,
         token_aggregation=None,
         model_name="openai-community/gpt2",
-        device="cpu",
+        hf_config={"device": "cpu"},
     )
     encode: tp.Any = extractor.tokenizer.encode
     # GPT-2 tokenizes " internationalization" as 2 sub-tokens;
@@ -345,7 +347,7 @@ def test_batched_target_slice_excludes_pads() -> None:
         contextualized=True,
         token_aggregation="sum",
         model_name="openai-community/gpt2",
-        device="cpu",
+        hf_config={"device": "cpu"},
         batch_size=2,
     )
     # alone vs batched would otherwise hit the same MapInfra cache entry

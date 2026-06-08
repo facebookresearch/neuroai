@@ -42,14 +42,16 @@ def test_image(tmp_path: Path) -> None:
 
     # For each event, we need to specify how these discrete events
     # can be converted into a dense time series.
-    extractor = ns.extractors.HuggingFaceImage(device="cpu")
+    extractor = ns.extractors.HuggingFaceImage(hf_config={"device": "cpu"})
     data = extractor(events, start=10.0, duration=0.5)
     (n_dims,) = data.shape
     assert n_dims > 0
     assert data.max() > 0
     infra: tp.Any = dict(folder=tmp_path)
     for _ in range(2):
-        extractor = ns.extractors.HuggingFaceImage(infra=infra, device="cpu")
+        extractor = ns.extractors.HuggingFaceImage(
+            infra=infra, hf_config={"device": "cpu"}
+        )
         data = extractor(events, start=10.0, duration=0.5)
         (n_dims,) = data.shape
         assert data.max() > 0
@@ -66,6 +68,7 @@ def test_image(tmp_path: Path) -> None:
         "name",
         "model_name",
         "event_types",
+        "hf_config",
         "token_aggregation",
         "layer_aggregation",
         "layers",
@@ -73,6 +76,7 @@ def test_image(tmp_path: Path) -> None:
         "imsize",
         "aggregation",
         "pretrained",
+        "cls_name",
         "cache_n_layers",
         "infra",  # provides version
     }
@@ -83,11 +87,13 @@ def test_image(tmp_path: Path) -> None:
         "imsize",
         "infra",
         "event_types",
+        "hf_config",
         "token_aggregation",
         "layers",
         "layer_aggregation",
         "frequency",
         "pretrained",
+        "cls_name",
         "cache_n_layers",
     }
     assert set(extractor.infra.config().keys()) == expected
@@ -150,7 +156,7 @@ def test_image_token_aggregation(
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("Cuda not available")
     extractor = ns.extractors.HuggingFaceImage(
-        device=device, token_aggregation=token_aggregation
+        hf_config={"device": device}, token_aggregation=token_aggregation
     )
     out = extractor.get_static(cat_event)
     assert out.ndim == 2 if token_aggregation is None else 1
@@ -162,7 +168,7 @@ def test_openai_clip(
     token_aggregation: tp.Literal["mean", "first", None],
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name="openai/clip-vit-base-patch32",
         token_aggregation=token_aggregation,
     )
@@ -190,7 +196,7 @@ def test_openai_clip_layer(
     token_aggregation: tp.Literal["mean", "first", None],
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name="openai/clip-vit-base-patch32",
         pretrained=pretrained,
         token_aggregation=token_aggregation,
@@ -226,7 +232,7 @@ def test_openai_clip_layer(
 
 def test_hf_dinov2(cat_event: etypes.Image) -> None:
     extractor = ns.extractors.HuggingFaceImage(
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name="facebook/dinov2-small-imagenet1k-1-layer",
         token_aggregation=None,
     )
@@ -241,7 +247,7 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
 
     # now check labels are correct with the appropriate classif model (hacky)
     extractor = ns.extractors.HuggingFaceImage(  # new cache
-        device="cpu",
+        hf_config={"device": "cpu"},
         model_name="facebook/dinov2-small-imagenet1k-1-layer",
     )
     from transformers import AutoModelForImageClassification

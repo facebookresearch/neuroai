@@ -10,6 +10,7 @@ from pathlib import Path
 import exca
 import numpy as np
 import pandas as pd
+import pydantic
 import pytest
 import torch
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
@@ -340,6 +341,105 @@ def test_huggingface_model_exists():
     base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(ValueError):
         base.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_config_rejects_accelerate() -> None:
+    with pytest.raises(pydantic.ValidationError):
+        base.HuggingFaceMixin(
+            model_name="gpt2",
+            hf_config={"device": "accelerate"},
+        )
+
+
+def test_huggingface_config_auto_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    extractor = base.HuggingFaceMixin(model_name="gpt2")
+    assert extractor._hf_device() == "cpu"
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert extractor._hf_device() == "cuda"
+
+
+def test_huggingface_load_model_pretrained_false_uses_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformers
+
+    calls: list[str] = []
+
+    class DummyConfig:
+        output_hidden_states: bool = False
+
+    class DummyModel(torch.nn.Module):
+        @classmethod
+        def from_pretrained(cls, *args: tp.Any, **kwargs: tp.Any) -> "DummyModel":
+            calls.append("from_pretrained")
+            return cls()
+
+        @classmethod
+        def from_config(cls, config: DummyConfig) -> "DummyModel":
+            assert config.output_hidden_states is True
+            calls.append("from_config")
+            return cls()
+
+    def from_pretrained_config(*args: tp.Any, **kwargs: tp.Any) -> DummyConfig:
+        assert kwargs == {"revision": "abc", "trust_remote_code": True}
+        calls.append("config")
+        return DummyConfig()
+
+    monkeypatch.setattr(transformers, "DummyModel", DummyModel, raising=False)
+    monkeypatch.setattr(
+        transformers.AutoConfig, "from_pretrained", from_pretrained_config
+    )
+    extractor = base.HuggingFaceMixin(
+        model_name="gpt2",
+        cls_name="DummyModel",
+        pretrained=False,
+        hf_config={
+            "device": "cpu",
+            "revision": "abc",
+            "trust_remote_code": True,
+        },
+    )
+
+    model = extractor.load_model(output_hidden_states=True)
+
+    assert isinstance(model, DummyModel)
+    assert calls == ["config", "from_config"]
+
+
+def test_huggingface_load_model_forwards_model_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformers
+
+    received: dict[str, tp.Any] = {}
+
+    class DummyModel(torch.nn.Module):
+        @classmethod
+        def from_pretrained(cls, *args: tp.Any, **kwargs: tp.Any) -> "DummyModel":
+            received.update(kwargs)
+            return cls()
+
+    monkeypatch.setattr(transformers, "DummyModel", DummyModel, raising=False)
+    extractor = base.HuggingFaceMixin(
+        model_name="gpt2",
+        cls_name="DummyModel",
+        hf_config={
+            "device": "cpu",
+            "dtype": "float16",
+            "attn_implementation": "eager",
+        },
+    )
+
+    model = extractor.load_model(output_hidden_states=True)
+
+    assert isinstance(model, DummyModel)
+    assert received == {
+        "attn_implementation": "eager",
+        "torch_dtype": torch.float16,
+        "output_hidden_states": True,
+    }
 
 
 @pytest.mark.parametrize(

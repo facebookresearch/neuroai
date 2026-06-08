@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import itertools
 import typing as tp
 from abc import abstractmethod
 
@@ -258,9 +257,9 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         Batch size for the language model.
     contextualized: bool
         True by default, the context of the event is used to compute the embeddings.
-    pretrained: bool or "part-reversal"
-        use pretrained model if True, untrained initial model if False, or custom
-        scrambling of the model pretrained weights if "part-reveral"
+    pretrained: bool
+        Use pretrained model weights if True, otherwise instantiate the model from
+        its config without loading pretrained weights.
 
     Note
     ----
@@ -286,7 +285,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     # extractor attributes
     batch_size: int = 32
     contextualized: bool = True
-    pretrained: bool | tp.Literal["part-reversal"] = True
 
     # initialized later
     _model: nn.Module = pydantic.PrivateAttr()
@@ -320,9 +318,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         if not hasattr(self, "_model"):
             from transformers import AutoTokenizer
 
-            kwargs: dict[str, tp.Any] = {}
-            if self.model_name.lower().startswith("microsoft/phi"):
-                kwargs["trust_remote_code"] = True
+            kwargs = self._hf_processor_kwargs()
             # pinned for `_get_data`'s slicing: target at tail, pads trailing
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
@@ -338,47 +334,12 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 # simpler to use existing EOS token:
                 self._tokenizer.pad_token = self._tokenizer.eos_token
             try:
-                self._model = self._load_model()
+                self._model = self.load_model()
             except Exception as e:
                 # some exceptions (AttributeError in particular)
                 # are hidden by pydantic
                 raise RuntimeError("Model loading went wrong") from e
         return self._model
-
-    def _load_model(self, **kwargs: tp.Any) -> nn.Module:
-        # do all the loading in a function without modifying
-        # self, so that if an intermediate bug is caught, the
-        # model is never in cache
-        # (pydantic seems to catch some of the exceptions in the
-        # model property, which creates weird silent bugs)
-        Model: tp.Any  # ignore typing as we'll override the imports
-        from transformers import AutoModel as Model
-
-        if "t5" in self.model_name or "bert" in self.model_name:
-            from transformers import AutoModelForTextEncoding as Model
-        elif "Phi-3" in self.model_name:
-            from transformers import AutoModelForCausalLM as Model
-        elif "Llama-3.2-11B-Vision" in self.model_name:
-            from transformers import MllamaForConditionalGeneration as Model
-        # instantiate
-        if self.device == "accelerate":
-            kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
-        model = Model.from_pretrained(self.model_name, **kwargs)
-        if not self.pretrained:
-            rawmodel = Model.from_config(model.config)
-            with torch.no_grad():
-                for p1, p2 in itertools.zip_longest(
-                    model.parameters(), rawmodel.parameters()
-                ):
-                    p1.data = p2.to(p1)
-        elif self.pretrained == "part-reversal":
-            with torch.no_grad():
-                for p in model.parameters():
-                    part_reversal(p)
-        if self.device != "accelerate":
-            model.to(self.device)
-        model.eval()
-        return model
 
     @property
     def tokenizer(self) -> tp.Any:
@@ -442,9 +403,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = "auto" if self.device == "accelerate" else self.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self._hf_device()
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -512,8 +471,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.device == "accelerate" and torch.cuda.is_available():
-                    # in case of multi-GPU models, explicitly empty cache "just in case"
+                if device == "cuda":
                     torch.cuda.empty_cache()
 
 
