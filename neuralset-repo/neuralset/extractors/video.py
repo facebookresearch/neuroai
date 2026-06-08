@@ -269,7 +269,7 @@ class _HFVideoModel:
         Processor = extractor._hf_processor_cls()
         processor_extra = {"do_rescale": True} | extractor._hf_processor_kwargs()
 
-        self.model = extractor.load_model(output_hidden_states=True)
+        self.model = extractor.load_model()
         # use do_rescale=True -> don't use totensor
         self.processor = Processor.from_pretrained(model_name, **processor_extra)
         self.model_name = model_name
@@ -337,7 +337,7 @@ class _HFVideoModel:
         image_extractors._fix_pixel_values(inputs)
         inputs = inputs.to(self.model.device)
         with torch.inference_mode():
-            pred = self.model(**inputs)
+            pred = self.model(**inputs, output_hidden_states=True)
         return pred
 
     def predict_hidden_states(

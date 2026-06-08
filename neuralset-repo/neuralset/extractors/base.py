@@ -7,7 +7,6 @@
 import logging
 import typing as tp
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -551,8 +550,6 @@ class HuggingFaceMixin(base.BaseModel):
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
-    _REPOS: tp.ClassVar[list[str]] = []
-    _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -564,37 +561,10 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        if not self._skip_repo_check and not self.repo_exists():
-            raise ValueError(f"The model {self.model_name} does not exist")
-        if not self._skip_repo_check:
-            self.hf_config.check_model_instantiates(
-                self.model_name,
-                self._hf_config_kwargs(),
-            )
-
-    def repo_exists(self) -> bool:
-        fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
-        name = self.model_name
-        if not self._REPOS:  # load offline huggingface white list
-            if not fp.exists():
-                raise RuntimeError(f"Please reinstall neuralset: missing file {fp}")
-            self._REPOS.extend(fp.read_text("utf8").splitlines())
-        if name in self._REPOS:
-            return True
-        else:
-            from huggingface_hub import repo_info
-
-            try:  # if not in whitelist, check through API and save it if it exists
-                repo_info(name)
-                self._REPOS.append(name)
-                self._REPOS.sort()
-                try:
-                    fp.write_text("\n".join(self._REPOS))
-                except Exception:
-                    pass  # nevermind if there is no write permission
-                return True
-            except Exception:
-                return False
+        self.hf_config.check_model_instantiates(
+            self.model_name,
+            self._hf_config_kwargs(),
+        )
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -651,29 +621,20 @@ class HuggingFaceMixin(base.BaseModel):
     def _hf_processor_cls(self) -> tp.Any:
         return self.hf_config.processor_cls()
 
-    def load_model(
-        self,
-        *,
-        model_cls: tp.Any | None = None,
-        pretrained: bool | None = None,
-        **kwargs: tp.Any,
-    ) -> torch.nn.Module:
+    def load_model(self) -> torch.nn.Module:
         """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
 
-        Model = self._hf_model_cls() if model_cls is None else model_cls
-        should_load_weights = self.pretrained if pretrained is None else pretrained
-        model_kwargs = self._hf_model_kwargs() | kwargs
+        Model = self._hf_model_cls()
+        model_kwargs = self._hf_model_kwargs()
         torch_dtype = self._hf_torch_dtype()
-        if should_load_weights:
+        if self.pretrained:
             model = Model.from_pretrained(self.model_name, **model_kwargs)
         else:
             config = AutoConfig.from_pretrained(
                 self.model_name,
                 **self._hf_config_kwargs(),
             )
-            for key, value in kwargs.items():
-                setattr(config, key, value)
             model = Model.from_config(config)
             if isinstance(torch_dtype, torch.dtype):
                 model.to(dtype=torch_dtype)

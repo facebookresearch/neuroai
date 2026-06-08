@@ -48,19 +48,15 @@ class _HuggingFace(nn.Module):
     model_name : str
         HuggingFace model identifier (e.g., "facebook/dinov2-base").
         The model will be loaded from the HuggingFace Hub. Please note that you may have to install additional dependencies to load it correctly.
-    output_hidden_states : bool, default=False
-        Whether to extract hidden states from all transformer layers. If False, only the hidden state from the
-        last layer is returned.
     """
 
     def __init__(
         self,
         extractor: "extractor_base.HuggingFaceMixin",
-        output_hidden_states: bool = False,
     ) -> None:
         super().__init__()
 
-        self.model = extractor.load_model(output_hidden_states=output_hidden_states)
+        self.model = extractor.load_model()
         Processor = extractor._hf_processor_cls()
         # do_rescale=False because ToTensor does the rescaling
         self.processor = Processor.from_pretrained(
@@ -82,7 +78,7 @@ class _HuggingFace(nn.Module):
         _fix_pixel_values(inputs)
         inputs = inputs.to(self.model.device)
         with torch.inference_mode():
-            pred = self.model(**inputs)
+            pred = self.model(**inputs, output_hidden_states=True)
         return pred
 
     def forward(self, images) -> torch.Tensor:
@@ -318,7 +314,6 @@ class HuggingFaceImage(BaseImage):
         if not hasattr(self, "_model") or self._model is None:
             self._model = _HuggingFace(
                 extractor=self,
-                output_hidden_states=True,
             )
         return self._model
 

@@ -337,10 +337,13 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
-def test_huggingface_model_exists():
+def test_huggingface_model_instantiates():
     base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(ValueError):
-        base.HuggingFaceMixin(model_name="not_a_model")
+        base.HuggingFaceMixin(
+            model_name="gpt2",
+            hf_config={"cls_name": "NotAModelClass"},
+        )
 
 
 def test_huggingface_config_rejects_invalid_device_map() -> None:
@@ -368,7 +371,7 @@ def test_huggingface_load_model_pretrained_false_uses_config(
     calls: list[str] = []
 
     class DummyConfig:
-        output_hidden_states: bool = False
+        pass
 
     class DummyModel(torch.nn.Module):
         @classmethod
@@ -378,7 +381,6 @@ def test_huggingface_load_model_pretrained_false_uses_config(
 
         @classmethod
         def from_config(cls, config: DummyConfig) -> "DummyModel":
-            assert config.output_hidden_states is True
             calls.append("from_config")
             return cls()
 
@@ -403,7 +405,7 @@ def test_huggingface_load_model_pretrained_false_uses_config(
     )
     calls.clear()
 
-    model = extractor.load_model(output_hidden_states=True)
+    model = extractor.load_model()
 
     assert isinstance(model, DummyModel)
     assert calls == ["config", "from_config"]
@@ -437,14 +439,13 @@ def test_huggingface_load_model_forwards_model_kwargs(
         },
     )
 
-    model = extractor.load_model(output_hidden_states=True)
+    model = extractor.load_model()
 
     assert isinstance(model, DummyModel)
     assert received == {
         "device_map": "cpu",
         "attn_implementation": "eager",
         "torch_dtype": torch.float16,
-        "output_hidden_states": True,
     }
 
 
