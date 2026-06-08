@@ -38,56 +38,6 @@ def _fix_pixel_values(inputs: dict[str, tp.Any]) -> None:
             inputs["pixel_values"] = inputs["pixel_values"].float()
 
 
-class _HuggingFace(nn.Module):
-    """Wrapper that provides a unified interface for loading and using various HuggingFace
-    image models (ViT, DINOv2, CLIP, etc.) with support for hidden state extraction
-    from all layers.
-
-    Parameters
-    ----------
-    model_name : str
-        HuggingFace model identifier (e.g., "facebook/dinov2-base").
-        The model will be loaded from the HuggingFace Hub. Please note that you may have to install additional dependencies to load it correctly.
-    """
-
-    def __init__(
-        self,
-        extractor: "extractor_base.HuggingFaceMixin",
-    ) -> None:
-        super().__init__()
-
-        self.model = extractor.load_model()
-        Processor = extractor.hf_config.processor_cls()
-        # do_rescale=False because ToTensor does the rescaling
-        self.processor = Processor.from_pretrained(
-            extractor.model_name,
-            do_rescale=False,
-            **extractor.hf_config.config_kwargs,
-        )
-        self.model_name = extractor.model_name
-
-    def _full_predict(  # return the raw output, used in tests
-        self, images: torch.Tensor, text: str | list[str] = ""
-    ) -> tp.Any:
-        kwargs: dict[str, tp.Any] = dict(
-            images=[i.float() for i in images], return_tensors="pt"
-        )
-        if text:
-            kwargs["text"] = text
-        inputs = self.processor(**kwargs)
-        _fix_pixel_values(inputs)
-        inputs = inputs.to(self.model.device)
-        with torch.inference_mode():
-            pred = self.model(**inputs, output_hidden_states=True)
-        return pred
-
-    def forward(self, images) -> torch.Tensor:
-        pred = self._full_predict(images)
-        pred = getattr(pred, "vision_model_output", pred)  # for clip
-        outputs = pred.last_hidden_state
-        return outputs
-
-
 class _ImageDataset(Dataset):
     """PyTorch Dataset for loading and transforming image events.
 
@@ -177,6 +127,7 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
     imsize: int | None = None
     frequency: float | tp.Literal["native"] = 0.0  # type: ignore[assignment]
     _model: nn.Module = pydantic.PrivateAttr()  # initialized later
+    _processor: tp.Any = pydantic.PrivateAttr()
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -312,15 +263,39 @@ class HuggingFaceImage(BaseImage):
     @property
     def model(self) -> nn.Module:
         if not hasattr(self, "_model") or self._model is None:
-            self._model = _HuggingFace(
-                extractor=self,
-            )
+            self._model = self.load_model()
         return self._model
+
+    @property
+    def processor(self) -> tp.Any:
+        if not hasattr(self, "_processor"):
+            Processor = self.hf_config.processor_cls()
+            # do_rescale=False because ToTensor does the rescaling
+            self._processor = Processor.from_pretrained(
+                self.model_name,
+                do_rescale=False,
+                **self.hf_config.config_kwargs,
+            )
+        return self._processor
+
+    def _full_predict(  # return the raw output, used in tests
+        self, images: torch.Tensor, text: str | list[str] = ""
+    ) -> tp.Any:
+        kwargs: dict[str, tp.Any] = dict(
+            images=[i.float() for i in images], return_tensors="pt"
+        )
+        if text:
+            kwargs["text"] = text
+        inputs = self.processor(**kwargs)
+        _fix_pixel_values(inputs)
+        inputs = inputs.to(self.model.device)
+        with torch.inference_mode():
+            return self.model(**inputs, output_hidden_states=True)
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
         """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
         # this method is overridden in experimental extractors for more hugging face models
-        out = self.model._full_predict(images)  # type: ignore
+        out = self._full_predict(images)
         out = getattr(out, "vision_model_output", out)  # for clip
         states = out.hidden_states
         if states is None:
