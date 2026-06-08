@@ -446,8 +446,9 @@ class HuggingFaceConfig(base.BaseModel):
     Parameters
     ----------
     device_map : {"auto", "cpu", "cuda"}, default="auto"
-        Device placement passed to ``from_pretrained``. For randomly initialized
-        models, ``"auto"`` resolves to CUDA when available and CPU otherwise.
+        Controls model placement. ``"auto"`` is passed to ``from_pretrained`` as
+        a Transformers device map. ``"cpu"`` and ``"cuda"`` load normally, then
+        move the model to that device.
     torch_dtype : {"auto", "float16", "float32", "float64", "bfloat16"} | None, default=None
         Optional dtype passed as ``torch_dtype`` when loading pretrained
         weights. If ``None``, Transformers chooses its default dtype.
@@ -523,7 +524,9 @@ class HuggingFaceConfig(base.BaseModel):
 
     @property
     def model_kwargs(self) -> dict[str, tp.Any]:
-        kwargs = self.config_kwargs | {"device_map": self.device_map}
+        kwargs = self.config_kwargs.copy()
+        if self.device_map == "auto":
+            kwargs["device_map"] = self.device_map
         if self.attn_implementation is not None:
             kwargs["attn_implementation"] = self.attn_implementation
         if self.torch_dtype_value is not None:
@@ -600,6 +603,13 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
 
+    @pydantic.field_validator("hf_config", mode="before")
+    @classmethod
+    def _coerce_hf_config(cls, value: tp.Any) -> tp.Any:
+        if isinstance(value, dict):
+            return HuggingFaceConfig(**value)
+        return value
+
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
@@ -651,6 +661,8 @@ class HuggingFaceMixin(base.BaseModel):
         torch_dtype = hf_config.torch_dtype_value
         if self.pretrained:
             model = Model.from_pretrained(self.model_name, **hf_config.model_kwargs)
+            if hf_config.device_map != "auto":
+                model.to(self.device)
         else:
             config = AutoConfig.from_pretrained(
                 self.model_name,

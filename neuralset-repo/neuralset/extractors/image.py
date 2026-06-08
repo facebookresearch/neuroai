@@ -311,7 +311,11 @@ class HuggingFaceImage(BaseImage):
         hidden_states = vision_model.pre_layrnorm(hidden_states)
         states = [hidden_states]
         for encoder_layer in vision_model.encoder.layers:
-            hidden_states = encoder_layer(hidden_states, attention_mask=None)
+            layer_output = encoder_layer(hidden_states, attention_mask=None)
+            if isinstance(layer_output, tuple):
+                hidden_states = layer_output[0]
+            else:
+                hidden_states = getattr(layer_output, "last_hidden_state", layer_output)
             states.append(hidden_states)
         return tuple(states)
 
