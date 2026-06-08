@@ -130,6 +130,15 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
+        if (
+            "vjepa2" in self.model_name.lower()
+            and self.hf_config.processor_cls_name != "AutoVideoProcessor"
+        ):
+            msg = (
+                "V-JEPA2 models require "
+                "hf_config.processor_cls_name='AutoVideoProcessor'."
+            )
+            raise ValueError(msg)
         _HFVideoModel.check_layer_type(
             layer_type=self.layer_type, model_name=self.model_name
         )
