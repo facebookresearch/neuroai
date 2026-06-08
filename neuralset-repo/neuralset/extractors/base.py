@@ -441,28 +441,26 @@ DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
 class HuggingFaceConfig(base.BaseModel):
     """Common HuggingFace model construction options."""
 
-    device: tp.Literal["auto", "cpu", "cuda"] = "auto"
-    dtype: str | None = None
+    device_map: tp.Literal["auto", "cpu", "cuda"] = "auto"
+    torch_dtype: (
+        tp.Literal[
+            "auto",
+            "float16",
+            "float32",
+            "float64",
+            "bfloat16",
+        ]
+        | None
+    ) = None
     attn_implementation: str | None = None
     revision: str | None = None
     trust_remote_code: bool = False
     cls_name: str | None = None
     processor_cls_name: str | None = None
 
-    @pydantic.field_validator("dtype")
-    @classmethod
-    def _validate_dtype(cls, dtype: str | None) -> str | None:
-        if dtype is None:
-            return None
-        name = dtype.removeprefix("torch.")
-        value = getattr(torch, name, None)
-        if not isinstance(value, torch.dtype):
-            raise ValueError(f"Unknown torch dtype: {dtype!r}")
-        return name
-
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device", "attn_implementation", "trust_remote_code"]
+        return ["device_map", "attn_implementation", "trust_remote_code"]
 
     def _transformers_cls(self, name: str | None, default: str, kind: str) -> tp.Any:
         import transformers
@@ -516,8 +514,8 @@ class HuggingFaceMixin(base.BaseModel):
     model_name: str
         Name of the model to use.
     hf_config: HuggingFaceConfig
-        Shared HuggingFace loading options such as device, dtype, revision,
-        attention implementation, and trust_remote_code.
+        Shared HuggingFace loading options such as device_map, torch_dtype,
+        revision, attention implementation, and trust_remote_code.
     pretrained: bool
         If True, load pretrained model weights. If False, instantiate from the
         pretrained config without loading pretrained weights.
@@ -608,16 +606,19 @@ class HuggingFaceMixin(base.BaseModel):
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
 
-    def _hf_device(self) -> str:
-        device = self.hf_config.device
-        if device == "auto":
+    @property
+    def device(self) -> str:
+        device_map = self.hf_config.device_map
+        if device_map == "auto":
             return "cuda" if torch.cuda.is_available() else "cpu"
-        return device
+        return device_map
 
-    def _hf_torch_dtype(self) -> torch.dtype | None:
-        dtype = self.hf_config.dtype
+    def _hf_torch_dtype(self) -> torch.dtype | tp.Literal["auto"] | None:
+        dtype = self.hf_config.torch_dtype
         if dtype is None:
             return None
+        if dtype == "auto":
+            return "auto"
         value = getattr(torch, dtype)
         if not isinstance(value, torch.dtype):
             raise RuntimeError(f"Invalid torch dtype stored in hf_config: {dtype!r}")
@@ -633,7 +634,7 @@ class HuggingFaceMixin(base.BaseModel):
 
     def _hf_model_kwargs(self) -> dict[str, tp.Any]:
         kwargs = self._hf_config_kwargs()
-        kwargs["device_map"] = self.hf_config.device
+        kwargs["device_map"] = self.hf_config.device_map
         if self.hf_config.attn_implementation is not None:
             kwargs["attn_implementation"] = self.hf_config.attn_implementation
         torch_dtype = self._hf_torch_dtype()
@@ -674,9 +675,9 @@ class HuggingFaceMixin(base.BaseModel):
             for key, value in kwargs.items():
                 setattr(config, key, value)
             model = Model.from_config(config)
-            if torch_dtype is not None:
+            if isinstance(torch_dtype, torch.dtype):
                 model.to(dtype=torch_dtype)
-            model.to(self._hf_device())
+            model.to(self.device)
         model.eval()
         return model
 

@@ -400,7 +400,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = self._hf_device()
+        device = self.device
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context

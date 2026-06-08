@@ -101,7 +101,7 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device": "cpu"},
+        hf_config={"device_map": "cpu"},
         layers=0.7,
     )
     folder = image.infra.uid_folder()
@@ -122,7 +122,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device": "cpu"},
+        hf_config={"device_map": "cpu"},
         model_name=name,
     )
     out = image(video_event, start=0.0, duration=4)
@@ -143,7 +143,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
         # ("microsoft/xclip-base-patch16", "mit", (2, 8, 512), {}),
         # ("google/vivit-b-16x2-kinetics400", "", (13, 3137, 768), {"cls_name": "VivitModel", "processor_cls_name": "VivitImageProcessor"}),
         # ("facebook/timesformer-base-finetuned-k600", "", (13, 1569, 768), {}),
-        # ("llava-hf/LLaVA-NeXT-Video-7B-hf", "Describe <video>", (33, 1156, 4096), {"cls_name": "LlavaNextVideoForConditionalGeneration", "processor_cls_name": "LlavaNextVideoProcessor", "dtype": "float16"}),
+        # ("llava-hf/LLaVA-NeXT-Video-7B-hf", "Describe <video>", (33, 1156, 4096), {"cls_name": "LlavaNextVideoForConditionalGeneration", "processor_cls_name": "LlavaNextVideoProcessor", "torch_dtype": "float16"}),
         #
         # other versions of same families:
         # ("microsoft/xclip-base-patch32-16-frames", "", 768, {}),  # works
@@ -170,7 +170,7 @@ def test_video_models(
         max_imsize=120,
         infra=infra,
         layer_type=layer_type,
-        hf_config={"device": "cpu"} | hf_config,
+        hf_config={"device_map": "cpu"} | hf_config,
         model_name=name,
         # show the full dimension
         token_aggregation=None,
@@ -186,7 +186,7 @@ def test_video_huggingface() -> None:
     extractor = vid.HuggingFaceVideo(
         frequency=0.5,
         model_name="MCG-NJU/videomae-base",
-        hf_config={"device": "cpu"},
+        hf_config={"device_map": "cpu"},
     )
     hf = _HFVideoModel(extractor=extractor)
     data = np.random.rand(hf.model.config.num_frames, 3, 64, 64)

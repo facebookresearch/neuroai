@@ -343,21 +343,21 @@ def test_huggingface_model_exists():
         base.HuggingFaceMixin(model_name="not_a_model")
 
 
-def test_huggingface_config_rejects_accelerate() -> None:
+def test_huggingface_config_rejects_invalid_device_map() -> None:
     with pytest.raises(pydantic.ValidationError):
         base.HuggingFaceMixin(
             model_name="gpt2",
-            hf_config={"device": "accelerate"},
+            hf_config={"device_map": "not-a-device-map"},
         )
 
 
 def test_huggingface_config_auto_device(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     extractor = base.HuggingFaceMixin(model_name="gpt2")
-    assert extractor._hf_device() == "cpu"
+    assert extractor.device == "cpu"
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
-    assert extractor._hf_device() == "cuda"
+    assert extractor.device == "cuda"
 
 
 def test_huggingface_load_model_pretrained_false_uses_config(
@@ -396,11 +396,12 @@ def test_huggingface_load_model_pretrained_false_uses_config(
         pretrained=False,
         hf_config={
             "cls_name": "DummyModel",
-            "device": "cpu",
+            "device_map": "cpu",
             "revision": "abc",
             "trust_remote_code": True,
         },
     )
+    calls.clear()
 
     model = extractor.load_model(output_hidden_states=True)
 
@@ -421,13 +422,17 @@ def test_huggingface_load_model_forwards_model_kwargs(
             received.update(kwargs)
             return cls()
 
+        @classmethod
+        def from_config(cls, *args: tp.Any, **kwargs: tp.Any) -> "DummyModel":
+            return cls()
+
     monkeypatch.setattr(transformers, "DummyModel", DummyModel, raising=False)
     extractor = base.HuggingFaceMixin(
         model_name="gpt2",
         hf_config={
             "cls_name": "DummyModel",
-            "device": "cpu",
-            "dtype": "float16",
+            "device_map": "cpu",
+            "torch_dtype": "float16",
             "attn_implementation": "eager",
         },
     )
@@ -436,6 +441,7 @@ def test_huggingface_load_model_forwards_model_kwargs(
 
     assert isinstance(model, DummyModel)
     assert received == {
+        "device_map": "cpu",
         "attn_implementation": "eager",
         "torch_dtype": torch.float16,
         "output_hidden_states": True,
