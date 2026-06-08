@@ -112,7 +112,7 @@ def test_image_model_load_options_excluded_from_cache_uid(tmp_path: Path) -> Non
     other_model = ns.extractors.HuggingFaceImage(
         infra=infra,
         device="cpu",
-        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
     )
     assert other_model.infra.uid() != base_extractor.infra.uid()
     assert other_model.infra.config()["model"] == {
@@ -184,7 +184,7 @@ def test_openai_clip(
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model_name="openai/clip-vit-base-patch32",
+        model={"model_name": "openai/clip-vit-base-patch32"},
         token_aggregation=token_aggregation,
     )
     record = RecordedOutputs.as_mocked_method(
@@ -212,7 +212,7 @@ def test_openai_clip_layer(
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model_name="openai/clip-vit-base-patch32",
+        model={"model_name": "openai/clip-vit-base-patch32"},
         pretrained=pretrained,
         token_aggregation=token_aggregation,
         cache_n_layers=cache_n_layers,
@@ -248,7 +248,7 @@ def test_openai_clip_layer(
 def test_hf_dinov2(cat_event: etypes.Image) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
         token_aggregation=None,
     )
     latent = next(iter(extractor._get_data([cat_event])))
@@ -263,7 +263,7 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     # now check labels are correct with the appropriate classif model (hacky)
     extractor = ns.extractors.HuggingFaceImage(  # new cache
         device="cpu",
-        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
     )
     from transformers import AutoModelForImageClassification
 

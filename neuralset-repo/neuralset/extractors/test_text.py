@@ -111,7 +111,7 @@ def test_llm(
         aggregation="sum",
         layers=layer,
         contextualized=contextualized,
-        model_name=model_name,
+        model={"model_name": model_name},
         cache_n_layers=cache_n_layers,
     )
     if hasattr(extractor, "model_name"):
@@ -129,7 +129,7 @@ def test_layer_aggregation(
 ):
     events = _make_test_events()
     extractor = text.HuggingFaceText(
-        model_name="gpt2",
+        model={"model_name": "gpt2"},
         layer_aggregation=layer_aggregation,
         layers=[0, 0.5, 1],
         aggregation="sum",
@@ -206,7 +206,7 @@ def test_llm_explicit_error() -> None:
         aggregation="sum",
         layers=1,
         contextualized=True,
-        model_name="openai-community/gpt2",
+        model={"model_name": "openai-community/gpt2"},
     )
     word = etypes.Word(text="word", start=0, duration=1, timeline="x")
     with pytest.raises(ValueError):
@@ -219,7 +219,7 @@ def test_dynamic_text() -> None:
         aggregation="sum",
         layers=1,
         contextualized=False,
-        model_name="openai-community/gpt2",
+        model={"model_name": "openai-community/gpt2"},
     )
     word = etypes.Word(text="word", start=1, duration=1, timeline="x")
     out = extractor(word, start=0, duration=3).cpu().numpy()
@@ -241,7 +241,7 @@ def test_llm_long_context() -> None:
     extractor = text.HuggingFaceText(
         aggregation="sum",
         contextualized=True,
-        model_name="openai-community/gpt2",
+        model={"model_name": "openai-community/gpt2"},
         device="cpu",
     )
     word = _make_word()
@@ -251,7 +251,9 @@ def test_llm_long_context() -> None:
 
 
 def test_max_length_real_limit() -> None:
-    extractor = text.HuggingFaceText(model_name="openai-community/gpt2", device="cpu")
+    extractor = text.HuggingFaceText(
+        model={"model_name": "openai-community/gpt2"}, device="cpu"
+    )
     assert extractor.tokenizer.model_max_length == 1024
     assert extractor._get_max_length() == 1024
 
@@ -265,7 +267,7 @@ def test_max_length_sentinel_fallback() -> None:
     word.context = " ".join(str(k) for k in range(4000))  # >2050 tokens
     try:
         extractor = text.HuggingFaceText(
-            model_name="facebook/opt-125m",
+            model={"model_name": "facebook/opt-125m"},
             contextualized=True,
             device="cpu",
         )
@@ -285,7 +287,7 @@ def test_bart() -> None:
     extractor = text.HuggingFaceText(
         aggregation="sum",
         contextualized=True,
-        model_name="facebook/bart-base",
+        model={"model_name": "facebook/bart-base"},
         device="cpu",
     )
     word = _make_word()
@@ -326,7 +328,7 @@ def test_contextualized_token_slicing(word_text: str, n_target_tokens: int) -> N
         aggregation="sum",
         contextualized=True,
         token_aggregation=None,
-        model_name="openai-community/gpt2",
+        model={"model_name": "openai-community/gpt2"},
         device="cpu",
     )
     encode: tp.Any = extractor.tokenizer.encode
@@ -344,7 +346,7 @@ def test_batched_target_slice_excludes_pads() -> None:
         aggregation="sum",
         contextualized=True,
         token_aggregation="sum",
-        model_name="openai-community/gpt2",
+        model={"model_name": "openai-community/gpt2"},
         device="cpu",
         batch_size=2,
     )

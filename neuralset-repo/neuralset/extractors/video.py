@@ -110,7 +110,7 @@ class HuggingFaceVideo(BaseExtractor):
 
     Parameters
     ----------
-    image : HuggingFaceImage, default=HuggingFaceImage(model_name="MCG-NJU/videomae-base")
+    image : HuggingFaceImage, default=HuggingFaceImage(model={"model_name": "MCG-NJU/videomae-base"})
         Image or video feature extractor configuration. If `image.model_name` refers
         to an image model (e.g., ViT), frames are extracted and processed independently.
         If it's a video model, clips are processed using the native video architecture.
@@ -144,7 +144,7 @@ class HuggingFaceVideo(BaseExtractor):
         "julius>=0.2.7",
     )
     image: HuggingFaceImage = HuggingFaceImage(
-        model_name="MCG-NJU/videomae-base",
+        model={"model_name": "MCG-NJU/videomae-base"},
         infra=MapInfra(keep_in_ram=False),
         imsize=None,  # type: ignore[arg-type]
     )

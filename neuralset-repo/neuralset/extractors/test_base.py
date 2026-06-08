@@ -338,9 +338,9 @@ def test_hf_aggregate_tokens(
 
 
 def test_huggingface_model_exists():
-    base.HuggingFaceMixin(model_name="gpt2")
+    base.HuggingFaceMixin(model={"model_name": "gpt2"})
     with pytest.raises(ValueError):
-        base.HuggingFaceMixin(model_name="not_a_model")
+        base.HuggingFaceMixin(model={"model_name": "not_a_model"})
 
 
 def test_huggingface_model_config():
@@ -353,8 +353,10 @@ def test_huggingface_model_config():
         "torch_dtype": torch.float16,
         "device_map": "auto",
     }
+    with pytest.raises(pydantic.ValidationError, match=r"Use HuggingFaceMixin\(model="):
+        base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(pydantic.ValidationError):
-        base.HuggingFaceMixin(model_name="gpt2", device="accelerate")
+        base.HuggingFaceMixin(model={"model_name": "gpt2"}, device="accelerate")
 
 
 @pytest.mark.parametrize(

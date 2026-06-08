@@ -124,7 +124,11 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
 def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     cache = tmp_path / "cache"
     name = "facebook/dinov2-small-imagenet1k-1-layer"
-    im: tp.Any = {"device": "cpu", "model_name": name, "infra": {"keep_in_ram": False}}
+    im: tp.Any = {
+        "device": "cpu",
+        "model": {"model_name": name},
+        "infra": {"keep_in_ram": False},
+    }
     infra: tp.Any = {"folder": cache}
     video = ns.extractors.HuggingFaceVideo(
         frequency=0.5,
@@ -172,7 +176,7 @@ def test_video_models(
     imparams: tp.Any = {
         "device": "cpu",
         "name": "HuggingFaceImage",
-        "model_name": name,
+        "model": {"model_name": name},
         "infra": {"keep_in_ram": False},
         # show the full dimension
         "token_aggregation": None,

@@ -518,11 +518,19 @@ class HuggingFaceMixin(base.BaseModel):
 
     @pydantic.model_validator(mode="before")
     @classmethod
-    def _migrate_model_name(cls, value: tp.Any) -> tp.Any:
+    def _validate_model_config(cls, value: tp.Any) -> tp.Any:
         if not isinstance(value, dict):
             return value
         value = dict(value)
-        model_name = value.pop("model_name", None)
+        if "model_name" in value:
+            cls_name = cls.__name__
+            msg = (
+                f"{cls_name}(model_name=...) is no longer supported. "
+                f"Use {cls_name}(model={{'model_name': ...}}) instead. "
+                "Model loading options such as torch_dtype and device_map also "
+                "belong under the model config."
+            )
+            raise ValueError(msg)
         model_config = value.get("model", None)
         default_config = cls.model_fields["model"].default
         default_name = (
@@ -536,18 +544,6 @@ class HuggingFaceMixin(base.BaseModel):
                 model_config["model_name"] = default_name
         elif isinstance(model_config, HuggingFaceModelConfig):
             model_config = model_config.model_dump()
-        elif model_config is None and model_name is not None:
-            model_config = {}
-        if model_name is not None:
-            if model_config is None:
-                model_config = {"model_name": model_name}
-            elif isinstance(model_config, dict):
-                previous = model_config.get("model_name")
-                if previous is not None and previous != model_name:
-                    raise ValueError(
-                        "Got conflicting HuggingFace model names in 'model' and 'model_name'"
-                    )
-                model_config["model_name"] = model_name
         if model_config is not None:
             value["model"] = model_config
         return value
