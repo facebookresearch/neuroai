@@ -110,7 +110,7 @@ class HuggingFaceVideo(BaseExtractor):
 
     Parameters
     ----------
-    image : HuggingFaceImage, default=HuggingFaceImage(model={"model_name": "MCG-NJU/videomae-base"})
+    image : HuggingFaceImage, default=HuggingFaceImage(hf_config={"model_name": "MCG-NJU/videomae-base"})
         Image or video feature extractor configuration. If `image.model_name` refers
         to an image model (e.g., ViT), frames are extracted and processed independently.
         If it's a video model, clips are processed using the native video architecture.
@@ -144,7 +144,7 @@ class HuggingFaceVideo(BaseExtractor):
         "julius>=0.2.7",
     )
     image: HuggingFaceImage = HuggingFaceImage(
-        model={"model_name": "MCG-NJU/videomae-base"},
+        hf_config={"model_name": "MCG-NJU/videomae-base"},
         infra=MapInfra(keep_in_ram=False),
         imsize=None,  # type: ignore[arg-type]
     )
@@ -186,7 +186,7 @@ class HuggingFaceVideo(BaseExtractor):
         self, events: list[evts.Video]
     ) -> tp.Iterator[nsbase.TimedArray]:
         # read all videos of the events
-        config = getattr(self.image.hf_model.model, "config", object())
+        config = getattr(self.image.model.model, "config", object())
         config = getattr(config, "vision_config", config)  # xclip
         if hasattr(config, "num_frames"):
             name = self.image.model_name
@@ -261,10 +261,10 @@ class HuggingFaceVideo(BaseExtractor):
             pretrained=self.image.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
-            torch_dtype=self.image.model.torch_dtype,
-            device_map=self.image.model.device_map,
+            torch_dtype=self.image.hf_config.torch_dtype,
+            device_map=self.image.hf_config.device_map,
         )
-        if self.image.model.device_map is None and model.model.device.type == "cpu":
+        if self.image.hf_config.device_map is None and model.model.device.type == "cpu":
             model.model.to(self.image.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)

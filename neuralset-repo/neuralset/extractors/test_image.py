@@ -64,7 +64,7 @@ def test_image(tmp_path: Path) -> None:
     expected = {
         "allow_missing",
         "name",
-        "model",
+        "hf_config",
         "event_types",
         "token_aggregation",
         "layer_aggregation",
@@ -103,19 +103,19 @@ def test_image_model_load_options_excluded_from_cache_uid(tmp_path: Path) -> Non
     dispatched = ns.extractors.HuggingFaceImage(
         infra=infra,
         device="cpu",
-        model={"torch_dtype": torch.float16, "device_map": "auto"},
+        hf_config={"torch_dtype": torch.float16, "device_map": "auto"},
     )
     assert base_extractor.infra.uid() == dispatched.infra.uid()
     assert base_extractor.infra.uid_folder() == dispatched.infra.uid_folder()
-    assert "model" not in dispatched.infra.config()
+    assert "hf_config" not in dispatched.infra.config()
 
     other_model = ns.extractors.HuggingFaceImage(
         infra=infra,
         device="cpu",
-        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
+        hf_config={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
     )
     assert other_model.infra.uid() != base_extractor.infra.uid()
-    assert other_model.infra.config()["model"] == {
+    assert other_model.infra.config()["hf_config"] == {
         "model_name": "facebook/dinov2-small-imagenet1k-1-layer"
     }
 
@@ -184,11 +184,11 @@ def test_openai_clip(
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model={"model_name": "openai/clip-vit-base-patch32"},
+        hf_config={"model_name": "openai/clip-vit-base-patch32"},
         token_aggregation=token_aggregation,
     )
     record = RecordedOutputs.as_mocked_method(
-        extractor.hf_model._full_predict, text=["a photo of a cat", "a photo of a dog"]
+        extractor.model._full_predict, text=["a photo of a cat", "a photo of a dog"]
     )
     latent = next(iter(extractor._get_data([cat_event])))
     if token_aggregation is None:
@@ -212,13 +212,13 @@ def test_openai_clip_layer(
 ) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model={"model_name": "openai/clip-vit-base-patch32"},
+        hf_config={"model_name": "openai/clip-vit-base-patch32"},
         pretrained=pretrained,
         token_aggregation=token_aggregation,
         cache_n_layers=cache_n_layers,
     )
     record = RecordedOutputs.as_mocked_method(
-        extractor.hf_model._full_predict, text=["a photo of a cat", "a photo of a dog"]
+        extractor.model._full_predict, text=["a photo of a cat", "a photo of a dog"]
     )
     latent = next(iter(extractor._get_data([cat_event])))
     expected_shape = {
@@ -248,7 +248,7 @@ def test_openai_clip_layer(
 def test_hf_dinov2(cat_event: etypes.Image) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",
-        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
+        hf_config={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
         token_aggregation=None,
     )
     latent = next(iter(extractor._get_data([cat_event])))
@@ -263,14 +263,14 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     # now check labels are correct with the appropriate classif model (hacky)
     extractor = ns.extractors.HuggingFaceImage(  # new cache
         device="cpu",
-        model={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
+        hf_config={"model_name": "facebook/dinov2-small-imagenet1k-1-layer"},
     )
     from transformers import AutoModelForImageClassification
 
-    extractor.hf_model.model = AutoModelForImageClassification.from_pretrained(
+    extractor.model.model = AutoModelForImageClassification.from_pretrained(
         extractor.model_name
     )
-    record = RecordedOutputs.as_mocked_method(extractor.hf_model._full_predict)
+    record = RecordedOutputs.as_mocked_method(extractor.model._full_predict)
     try:
         extractor._get_data([cat_event])
     except:  # not the right output layer as we overrode the model
@@ -278,7 +278,7 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     assert len(record.outputs) == 1
     pred = record.outputs[0]
     idx = pred.logits.argmax(-1).item()
-    assert extractor.hf_model.model.config.id2label[idx] == "tabby, tabby cat"  # type: ignore
+    assert extractor.model.model.config.id2label[idx] == "tabby, tabby cat"  # type: ignore
 
 
 @pytest.mark.parametrize("imsize", [None, 512])

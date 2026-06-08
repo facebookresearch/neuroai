@@ -272,7 +272,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     To get non-contextualized embeddings, set contextualized to False.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="openai-community/gpt2"
     )
 
@@ -320,7 +320,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         )
 
     @property
-    def hf_model(self) -> nn.Module:
+    def model(self) -> nn.Module:
         if not hasattr(self, "_model"):
             from transformers import AutoTokenizer
 
@@ -385,7 +385,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
 
     @property
     def tokenizer(self) -> tp.Any:
-        self.hf_model
+        self.model
         return self._tokenizer
 
     def _get_max_length(self) -> int | None:
@@ -398,7 +398,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             self._max_length = tok_max
             return self._max_length
         # learned-position table is sized capacity + offset, so the offset cancels
-        config = self.hf_model.config
+        config = self.model.config
         for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
             value = getattr(config, attr, None)
             if isinstance(value, int) and value > 0:
@@ -445,7 +445,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = self._hf_input_device(self.hf_model)
+        device = self._hf_input_device(self.model)
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -466,7 +466,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         truncation=True,  # beware to have set truncation_side="left" in init
                         max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
                     ).to(device)
-                outputs = self.hf_model(**inputs, output_hidden_states=True)
+                outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
                 else:  # bart (encoder/decoder)
@@ -513,7 +513,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.model.device_map is not None and torch.cuda.is_available():
+                if self.hf_config.device_map is not None and torch.cuda.is_available():
                     # in case of multi-GPU models, explicitly empty cache "just in case"
                     torch.cuda.empty_cache()
 

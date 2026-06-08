@@ -337,7 +337,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         - ``'convolution'`` returns convolutional feature maps.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="facebook/wav2vec2-large-xlsr-53"
     )
     requirements: tp.ClassVar[tuple[str, ...]] = ("transformers>=4.29.2",)
@@ -383,7 +383,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         return self._feature_extractor
 
     @property
-    def hf_model(self) -> nn.Module:
+    def model(self) -> nn.Module:
         if not hasattr(self, "_model"):
             self._model = self._get_sound_model(self.model_name)
         return self._model
@@ -431,7 +431,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
         features = self._get_features(wav)
         with torch.no_grad():
-            model = self.hf_model
+            model = self.model
             outputs = model(
                 features.to(self._hf_input_device(model)), output_hidden_states=True
             )
@@ -467,7 +467,7 @@ class Wav2Vec(HuggingFaceAudio):
         ``"facebook/wav2vec2-large-xlsr-53"``.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="facebook/wav2vec2-large-xlsr-53"
     )
 
@@ -487,7 +487,7 @@ class Wav2VecBert(HuggingFaceAudio):
         The Hugging Face model identifier to load. Defaults to ``"facebook/w2v-bert-2.0"``.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="facebook/w2v-bert-2.0"
     )
 
@@ -513,7 +513,7 @@ class SeamlessM4T(HuggingFaceAudio):
         ``"facebook/hf-seamless-m4t-medium"``.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="facebook/hf-seamless-m4t-medium"
     )
 
@@ -542,7 +542,7 @@ class Whisper(HuggingFaceAudio):
         ``"openai/whisper-large-v3-turbo"``.
     """
 
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="openai/whisper-large-v3-turbo"
     )
 

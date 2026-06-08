@@ -338,25 +338,27 @@ def test_hf_aggregate_tokens(
 
 
 def test_huggingface_model_exists():
-    base.HuggingFaceMixin(model={"model_name": "gpt2"})
+    base.HuggingFaceMixin(hf_config={"model_name": "gpt2"})
     with pytest.raises(ValueError):
-        base.HuggingFaceMixin(model={"model_name": "not_a_model"})
+        base.HuggingFaceMixin(hf_config={"model_name": "not_a_model"})
 
 
 def test_huggingface_model_config():
     cfg = base.HuggingFaceMixin(
-        model={"model_name": "gpt2", "torch_dtype": "float16", "device_map": "auto"}
+        hf_config={"model_name": "gpt2", "torch_dtype": "float16", "device_map": "auto"}
     )
-    assert cfg.model.model_name == "gpt2"
-    assert cfg.model.torch_dtype is torch.float16
+    assert cfg.hf_config.model_name == "gpt2"
+    assert cfg.hf_config.torch_dtype is torch.float16
     assert cfg._hf_model_kwargs() == {
         "torch_dtype": torch.float16,
         "device_map": "auto",
     }
-    with pytest.raises(pydantic.ValidationError, match=r"Use HuggingFaceMixin\(model="):
+    with pytest.raises(
+        pydantic.ValidationError, match=r"Use HuggingFaceMixin\(hf_config="
+    ):
         base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(pydantic.ValidationError):
-        base.HuggingFaceMixin(model={"model_name": "gpt2"}, device="accelerate")
+        base.HuggingFaceMixin(hf_config={"model_name": "gpt2"}, device="accelerate")
 
 
 @pytest.mark.parametrize(

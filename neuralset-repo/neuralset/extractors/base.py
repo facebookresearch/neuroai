@@ -438,7 +438,7 @@ def _skip_new_event_types(key, val, prev):
 DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
 
 
-class HuggingFaceModelConfig(base.BaseModel):
+class HuggingFaceConfig(base.BaseModel):
     """Configuration for loading a HuggingFace model."""
 
     model_config = pydantic.ConfigDict(
@@ -475,7 +475,7 @@ class HuggingFaceMixin(base.BaseModel):
 
     Parameters
     ----------
-    model: HuggingFaceModelConfig
+    hf_config: HuggingFaceConfig
         Name of the model to use.
     device: str
         Device to use for the model:
@@ -507,7 +507,7 @@ class HuggingFaceMixin(base.BaseModel):
         "transformers>=4.29.2",
         "huggingface_hub>=0.27.0",
     )
-    model: HuggingFaceModelConfig
+    hf_config: HuggingFaceConfig
     device: tp.Literal["auto", "cpu", "cuda"] = "auto"
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
@@ -518,7 +518,7 @@ class HuggingFaceMixin(base.BaseModel):
 
     @pydantic.model_validator(mode="before")
     @classmethod
-    def _validate_model_config(cls, value: tp.Any) -> tp.Any:
+    def _validate_hf_config(cls, value: tp.Any) -> tp.Any:
         if not isinstance(value, dict):
             return value
         value = dict(value)
@@ -526,35 +526,35 @@ class HuggingFaceMixin(base.BaseModel):
             cls_name = cls.__name__
             msg = (
                 f"{cls_name}(model_name=...) is no longer supported. "
-                f"Use {cls_name}(model={{'model_name': ...}}) instead. "
+                f"Use {cls_name}(hf_config={{'model_name': ...}}) instead. "
                 "Model loading options such as torch_dtype and device_map also "
-                "belong under the model config."
+                "belong under the HuggingFace config."
             )
             raise ValueError(msg)
-        model_config = value.get("model", None)
-        default_config = cls.model_fields["model"].default
+        hf_config = value.get("hf_config", None)
+        default_config = cls.model_fields["hf_config"].default
         default_name = (
             default_config.model_name
-            if isinstance(default_config, HuggingFaceModelConfig)
+            if isinstance(default_config, HuggingFaceConfig)
             else None
         )
-        if isinstance(model_config, dict):
-            model_config = dict(model_config)
-            if "model_name" not in model_config and default_name is not None:
-                model_config["model_name"] = default_name
-        elif isinstance(model_config, HuggingFaceModelConfig):
-            model_config = model_config.model_dump()
-        if model_config is not None:
-            value["model"] = model_config
+        if isinstance(hf_config, dict):
+            hf_config = dict(hf_config)
+            if "model_name" not in hf_config and default_name is not None:
+                hf_config["model_name"] = default_name
+        elif isinstance(hf_config, HuggingFaceConfig):
+            hf_config = hf_config.model_dump()
+        if hf_config is not None:
+            value["hf_config"] = hf_config
         return value
 
     @property
     def model_name(self) -> str:
-        return self.model.model_name
+        return self.hf_config.model_name
 
     @model_name.setter
     def model_name(self, value: str) -> None:
-        self.model.model_name = value
+        self.hf_config.model_name = value
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -573,17 +573,17 @@ class HuggingFaceMixin(base.BaseModel):
 
     def _hf_model_kwargs(self, **defaults: tp.Any) -> dict[str, tp.Any]:
         kwargs = dict(defaults)
-        if self.model.torch_dtype is not None:
-            kwargs["torch_dtype"] = self.model.torch_dtype
-        if self.model.device_map is not None:
-            kwargs["device_map"] = self.model.device_map
+        if self.hf_config.torch_dtype is not None:
+            kwargs["torch_dtype"] = self.hf_config.torch_dtype
+        if self.hf_config.device_map is not None:
+            kwargs["device_map"] = self.hf_config.device_map
         return kwargs
 
     def _should_move_hf_model(self) -> bool:
-        return self.model.device_map is None
+        return self.hf_config.device_map is None
 
     def _hf_input_device(self, model: tp.Any | None = None) -> str | torch.device:
-        if self.model.device_map is not None and model is not None:
+        if self.hf_config.device_map is not None and model is not None:
             device = getattr(model, "device", None)
             if device is not None:
                 return device
@@ -624,13 +624,13 @@ class HuggingFaceMixin(base.BaseModel):
         return ["device"]
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["device", "model.torch_dtype", "model.device_map"]
-        default_config = self.__class__.model_fields["model"].default
+        excluded = ["device", "hf_config.torch_dtype", "hf_config.device_map"]
+        default_config = self.__class__.model_fields["hf_config"].default
         if (
-            isinstance(default_config, HuggingFaceModelConfig)
-            and self.model.model_name == default_config.model_name
+            isinstance(default_config, HuggingFaceConfig)
+            and self.hf_config.model_name == default_config.model_name
         ):
-            excluded.append("model.model_name")
+            excluded.append("hf_config.model_name")
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded

@@ -258,7 +258,7 @@ class HuggingFaceImage(BaseImage):
     """
 
     # class attributes
-    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
         model_name="facebook/dinov2-base"
     )
     # extractor attributes
@@ -290,14 +290,14 @@ class HuggingFaceImage(BaseImage):
         super().model_post_init(log__)
 
     @property
-    def hf_model(self) -> nn.Module:
+    def model(self) -> nn.Module:
         if not hasattr(self, "_model") or self._model is None:
             self._model = _HuggingFace(
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
-                torch_dtype=self.model.torch_dtype,
-                device_map=self.model.device_map,
+                torch_dtype=self.hf_config.torch_dtype,
+                device_map=self.hf_config.device_map,
             )
             if self._should_move_hf_model():
                 self._model.to(self.device)
@@ -306,7 +306,7 @@ class HuggingFaceImage(BaseImage):
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
         """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
         # this method is overridden in experimental extractors for more hugging face models
-        out = self.hf_model._full_predict(images)  # type: ignore
+        out = self.model._full_predict(images)  # type: ignore
         out = getattr(out, "vision_model_output", out)  # for clip
         states = out.hidden_states
         if states is None:

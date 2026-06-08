@@ -126,7 +126,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     name = "facebook/dinov2-small-imagenet1k-1-layer"
     im: tp.Any = {
         "device": "cpu",
-        "model": {"model_name": name},
+        "hf_config": {"model_name": name},
         "infra": {"keep_in_ram": False},
     }
     infra: tp.Any = {"folder": cache}
@@ -176,7 +176,7 @@ def test_video_models(
     imparams: tp.Any = {
         "device": "cpu",
         "name": "HuggingFaceImage",
-        "model": {"model_name": name},
+        "hf_config": {"model_name": name},
         "infra": {"keep_in_ram": False},
         # show the full dimension
         "token_aggregation": None,
