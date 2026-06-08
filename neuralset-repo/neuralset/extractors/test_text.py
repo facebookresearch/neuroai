@@ -271,7 +271,7 @@ def test_max_length_sentinel_fallback() -> None:
         )
         tokenizer = extractor.tokenizer
         assert tokenizer.model_max_length >= int(1e29)  # sentinel, not a real limit
-        config: tp.Any = extractor.model.config  # type: ignore[union-attr]
+        config: tp.Any = extractor.hf_model.config  # type: ignore[union-attr]
         assert extractor._get_max_length() == config.max_position_embeddings
         _ = extractor(word, 0, 1)
     except (OSError, RuntimeError, pydantic.ValidationError):

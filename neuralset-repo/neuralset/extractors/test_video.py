@@ -6,6 +6,8 @@
 
 import logging
 import os
+import sys
+import types
 import typing as tp
 from pathlib import Path
 
@@ -195,6 +197,52 @@ def test_video_huggingface() -> None:
     data = np.random.rand(hf.model.config.num_frames, 3, 64, 64)
     out = hf.predict_hidden_states(data)
     assert out.shape == (1, 13, 1568, 768)
+
+
+def test_video_model_load_options_forwarded(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, tp.Any] = {}
+    transformers = types.ModuleType("transformers")
+
+    class FakeModel:
+        config = types.SimpleNamespace(num_frames=16)
+        device = torch.device("cpu")
+
+        @classmethod
+        def from_pretrained(
+            cls, model_name: str, output_hidden_states: bool, **kwargs: tp.Any
+        ) -> "FakeModel":
+            recorded["model_name"] = model_name
+            recorded["output_hidden_states"] = output_hidden_states
+            recorded["model_kwargs"] = kwargs
+            return cls()
+
+        def eval(self) -> None:
+            return None
+
+    class FakeProcessor:
+        @classmethod
+        def from_pretrained(cls, model_name: str, **kwargs: tp.Any) -> "FakeProcessor":
+            recorded["processor_name"] = model_name
+            recorded["processor_kwargs"] = kwargs
+            return cls()
+
+    transformers.AutoModel = FakeModel
+    transformers.AutoProcessor = FakeProcessor
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+
+    _HFVideoModel(
+        model_name="MCG-NJU/videomae-base",
+        torch_dtype=torch.float16,
+        device_map="auto",
+    )
+
+    assert recorded["model_name"] == "MCG-NJU/videomae-base"
+    assert recorded["output_hidden_states"] is True
+    assert recorded["model_kwargs"] == {
+        "torch_dtype": torch.float16,
+        "device_map": "auto",
+    }
+    assert recorded["processor_kwargs"] == {"do_rescale": True}
 
 
 # for future TEXT + VIDEO models?

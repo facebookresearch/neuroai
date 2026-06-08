@@ -18,6 +18,7 @@ from tqdm import tqdm
 from neuralset.events import etypes
 from neuralset.utils import warn_once
 
+from . import base as extractor_base
 from .base import BaseStatic, HuggingFaceMixin
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,8 @@ class _HuggingFace(nn.Module):
         model_name: str,
         output_hidden_states: bool = False,
         pretrained: bool = True,
+        torch_dtype: torch.dtype | None = None,
+        device_map: str | dict[str, tp.Any] | None = None,
     ) -> None:
         super().__init__()
         Model: tp.Any  # ignore typing as we'll override the imports
@@ -68,11 +71,16 @@ class _HuggingFace(nn.Module):
         from transformers import AutoModel as Model
         from transformers import AutoProcessor as Processor
 
+        model_kwargs: dict[str, tp.Any] = {}
+        if torch_dtype is not None:
+            model_kwargs["torch_dtype"] = torch_dtype
+        if device_map is not None:
+            model_kwargs["device_map"] = device_map
         if model_name == "facebook/dpt-dinov2-base-kitti":
             from transformers import DPTForDepthEstimation as Model
         try:
             self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
+                model_name, output_hidden_states=output_hidden_states, **model_kwargs
             )
         except ValueError as e:
             # handle specific cases
@@ -85,7 +93,7 @@ class _HuggingFace(nn.Module):
             elif "UperNetConfig" in str(e):
                 from transformers import UperNetForSemanticSegmentation as Model
             self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
+                model_name, output_hidden_states=output_hidden_states, **model_kwargs
             )
         if not pretrained:
             self.model = Model.from_config(self.model.config)
@@ -250,7 +258,9 @@ class HuggingFaceImage(BaseImage):
     """
 
     # class attributes
-    model_name: str = "facebook/dinov2-base"
+    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+        model_name="facebook/dinov2-base"
+    )
     # extractor attributes
     pretrained: bool = True
     # for precomputing/caching
@@ -280,20 +290,23 @@ class HuggingFaceImage(BaseImage):
         super().model_post_init(log__)
 
     @property
-    def model(self) -> nn.Module:
+    def hf_model(self) -> nn.Module:
         if not hasattr(self, "_model") or self._model is None:
             self._model = _HuggingFace(
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
+                torch_dtype=self.model.torch_dtype,
+                device_map=self.model.device_map,
             )
-            self._model.to(self.device)
+            if self._should_move_hf_model():
+                self._model.to(self.device)
         return self._model
 
     def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
         """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
         # this method is overridden in experimental extractors for more hugging face models
-        out = self.model._full_predict(images)  # type: ignore
+        out = self.hf_model._full_predict(images)  # type: ignore
         out = getattr(out, "vision_model_output", out)  # for clip
         states = out.hidden_states
         if states is None:

@@ -24,6 +24,8 @@ from neuralset import utils
 from neuralset.base import TimedArray
 from neuralset.extractors.base import BaseStatic, HuggingFaceMixin
 
+from . import base as extractor_base
+
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=unused-variable
 DataframeOrEventsOrSegments = (
@@ -270,7 +272,9 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     To get non-contextualized embeddings, set contextualized to False.
     """
 
-    model_name: str = "openai-community/gpt2"
+    model: extractor_base.HuggingFaceModelConfig = extractor_base.HuggingFaceModelConfig(
+        model_name="openai-community/gpt2"
+    )
 
     # class attributes
     event_types: tp.Literal["Word", "Sentence"] = "Word"
@@ -316,7 +320,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         )
 
     @property
-    def model(self) -> nn.Module:
+    def hf_model(self) -> nn.Module:
         if not hasattr(self, "_model"):
             from transformers import AutoTokenizer
 
@@ -361,8 +365,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         elif "Llama-3.2-11B-Vision" in self.model_name:
             from transformers import MllamaForConditionalGeneration as Model
         # instantiate
-        if self.device == "accelerate":
-            kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+        kwargs = self._hf_model_kwargs(**kwargs)
         model = Model.from_pretrained(self.model_name, **kwargs)
         if not self.pretrained:
             rawmodel = Model.from_config(model.config)
@@ -375,14 +378,14 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             with torch.no_grad():
                 for p in model.parameters():
                     part_reversal(p)
-        if self.device != "accelerate":
+        if self._should_move_hf_model():
             model.to(self.device)
         model.eval()
         return model
 
     @property
     def tokenizer(self) -> tp.Any:
-        self.model
+        self.hf_model
         return self._tokenizer
 
     def _get_max_length(self) -> int | None:
@@ -395,7 +398,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             self._max_length = tok_max
             return self._max_length
         # learned-position table is sized capacity + offset, so the offset cancels
-        config = self.model.config
+        config = self.hf_model.config
         for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
             value = getattr(config, attr, None)
             if isinstance(value, int) and value > 0:
@@ -442,9 +445,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = "auto" if self.device == "accelerate" else self.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self._hf_input_device(self.hf_model)
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -465,7 +466,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         truncation=True,  # beware to have set truncation_side="left" in init
                         max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
                     ).to(device)
-                outputs = self.model(**inputs, output_hidden_states=True)
+                outputs = self.hf_model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
                 else:  # bart (encoder/decoder)
@@ -512,7 +513,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.device == "accelerate" and torch.cuda.is_available():
+                if self.model.device_map is not None and torch.cuda.is_available():
                     # in case of multi-GPU models, explicitly empty cache "just in case"
                     torch.cuda.empty_cache()
 

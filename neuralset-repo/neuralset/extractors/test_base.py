@@ -10,6 +10,7 @@ from pathlib import Path
 import exca
 import numpy as np
 import pandas as pd
+import pydantic
 import pytest
 import torch
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
@@ -340,6 +341,20 @@ def test_huggingface_model_exists():
     base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(ValueError):
         base.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_model_config():
+    cfg = base.HuggingFaceMixin(
+        model={"model_name": "gpt2", "torch_dtype": "float16", "device_map": "auto"}
+    )
+    assert cfg.model.model_name == "gpt2"
+    assert cfg.model.torch_dtype is torch.float16
+    assert cfg._hf_model_kwargs() == {
+        "torch_dtype": torch.float16,
+        "device_map": "auto",
+    }
+    with pytest.raises(pydantic.ValidationError):
+        base.HuggingFaceMixin(model_name="gpt2", device="accelerate")
 
 
 @pytest.mark.parametrize(

@@ -186,7 +186,7 @@ class HuggingFaceVideo(BaseExtractor):
         self, events: list[evts.Video]
     ) -> tp.Iterator[nsbase.TimedArray]:
         # read all videos of the events
-        config = getattr(self.image.model.model, "config", object())
+        config = getattr(self.image.hf_model.model, "config", object())
         config = getattr(config, "vision_config", config)  # xclip
         if hasattr(config, "num_frames"):
             name = self.image.model_name
@@ -261,9 +261,10 @@ class HuggingFaceVideo(BaseExtractor):
             pretrained=self.image.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
+            torch_dtype=self.image.model.torch_dtype,
+            device_map=self.image.model.device_map,
         )
-        if model.model.device.type == "cpu":
-            # may already be dispatched (with "accelerate")
+        if self.image.model.device_map is None and model.model.device.type == "cpu":
             model.model.to(self.image.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)
@@ -366,6 +367,8 @@ class _HFVideoModel:
         pretrained: bool = True,
         layer_type: str = "",
         num_frames: int | None = None,
+        torch_dtype: torch.dtype | None = None,
+        device_map: str | dict[str, tp.Any] | None = None,
     ) -> None:
         super().__init__()
         if not any(z in model_name for z in self.MODELS):
@@ -386,7 +389,7 @@ class _HFVideoModel:
 
             extra = {"torch_dtype": torch.float16}
             if "34B" in model_name:
-                extra["device_map"] = "auto"  # uses accelerate
+                extra["device_map"] = "auto"
         if "Phi-4" in model_name:
             from transformers import AutoModelForCausalLM as Model
 
@@ -395,6 +398,10 @@ class _HFVideoModel:
         if "vjepa2" in model_name:
             from transformers import AutoVideoProcessor as Processor
 
+        if torch_dtype is not None:
+            extra["torch_dtype"] = torch_dtype
+        if device_map is not None:
+            extra["device_map"] = device_map
         self.model = Model.from_pretrained(model_name, output_hidden_states=True, **extra)
         if not pretrained:
             self.model = Model.from_config(self.model.config)
