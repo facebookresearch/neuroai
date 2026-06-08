@@ -6,6 +6,8 @@
 
 import logging
 import os
+import sys
+import types
 import typing as tp
 from pathlib import Path
 
@@ -86,6 +88,53 @@ def test_video_requirements() -> None:
     reqs = ",".join(ns.extractors.HuggingFaceVideo.requirements)
     assert "julius" in reqs, "Missing requirement coming from Extractor"
     assert "moviepy" in reqs, "Missing requirement coming from Event"
+
+
+def test_video_phi4_loader_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, dict[str, tp.Any]] = {}
+
+    class FakeModel:
+        config = object()
+
+        def eval(self) -> None:
+            return None
+
+    class FakeModelFactory:
+        @staticmethod
+        def from_pretrained(model_name: str, **kwargs: tp.Any) -> FakeModel:
+            calls["model"] = kwargs
+            return FakeModel()
+
+    class FakeProcessorFactory:
+        @staticmethod
+        def from_pretrained(model_name: str, **kwargs: tp.Any) -> object:
+            calls["processor"] = kwargs
+            return object()
+
+    fake_transformers = types.ModuleType("transformers")
+    fake_transformers.AutoModel = FakeModelFactory
+    fake_transformers.AutoModelForCausalLM = FakeModelFactory
+    fake_transformers.AutoProcessor = FakeProcessorFactory
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    _HFVideoModel(
+        model_name="microsoft/Phi-4-multimodal-instruct",
+        model_kwargs={"torch_dtype": "auto"},
+    )
+    assert calls["model"] == {
+        "output_hidden_states": True,
+        "torch_dtype": "auto",
+        "attn_implementation": "eager",
+        "trust_remote_code": True,
+    }
+    assert calls["processor"] == {"do_rescale": True, "trust_remote_code": True}
+
+    _HFVideoModel(
+        model_name="microsoft/Phi-4-multimodal-instruct",
+        model_kwargs={"torch_dtype": torch.float16, "attn_implementation": "sdpa"},
+    )
+    assert calls["model"]["attn_implementation"] == "sdpa"
+    assert calls["model"]["torch_dtype"] is torch.float16
 
 
 def test_video_image(video_event: etypes.Video) -> None:

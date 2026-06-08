@@ -343,6 +343,44 @@ def test_huggingface_model_exists():
 
 
 @pytest.mark.parametrize(
+    "dtype,expected",
+    [
+        ("auto", "auto"),
+        ("float32", torch.float32),
+        ("torch.float16", torch.float16),
+        ("fp16", torch.float16),
+        ("bf16", torch.bfloat16),
+        ("half", torch.float16),
+        ("float", torch.float32),
+    ],
+)
+def test_huggingface_loader_kwargs(dtype: str, expected: torch.dtype | str) -> None:
+    extractor = base.HuggingFaceMixin(
+        model_name="gpt2", dtype=dtype, attn_implementation="sdpa"
+    )
+    assert extractor._get_torch_dtype() == expected
+    assert extractor._get_model_kwargs() == {
+        "torch_dtype": expected,
+        "attn_implementation": "sdpa",
+    }
+
+
+def test_huggingface_default_loader_kwargs() -> None:
+    extractor = base.HuggingFaceMixin(model_name="gpt2")
+    assert extractor._get_model_kwargs() == {"torch_dtype": "auto"}
+
+
+def test_huggingface_invalid_dtype() -> None:
+    with pytest.raises(ValueError, match="Unknown dtype"):
+        base.HuggingFaceMixin(model_name="gpt2", dtype="not_a_dtype")
+
+
+def test_huggingface_rejects_accelerate_device() -> None:
+    with pytest.raises(ValueError):
+        base.HuggingFaceMixin(model_name="gpt2", device="accelerate")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
     "event_field", ["duration", "timeline", "int_field", "float_field", "bool_field"]
 )
 def test_event_field(event_field: str) -> None:

@@ -393,7 +393,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
         from transformers import AutoModel
 
-        _model = AutoModel.from_pretrained(model_name)
+        _model = AutoModel.from_pretrained(model_name, **self._get_model_kwargs())
         _model.to(self.device)
         _model.eval()
         return _model
@@ -480,7 +480,7 @@ class Wav2VecBert(HuggingFaceAudio):
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
         from transformers import Wav2Vec2BertModel
 
-        _model = Wav2Vec2BertModel.from_pretrained(model_name)
+        _model = Wav2Vec2BertModel.from_pretrained(model_name, **self._get_model_kwargs())
         _model.to(self.device)
         _model.eval()
         return _model
@@ -506,9 +506,9 @@ class SeamlessM4T(HuggingFaceAudio):
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
         from transformers import SeamlessM4TModel
 
-        _model = SeamlessM4TModel.from_pretrained(model_name).speech_encoder.to(
-            self.device
-        )
+        _model = SeamlessM4TModel.from_pretrained(
+            model_name, **self._get_model_kwargs()
+        ).speech_encoder
         _model.to(self.device)
         _model.eval()
         return _model
@@ -536,7 +536,7 @@ class Whisper(HuggingFaceAudio):
         from transformers import WhisperModel
 
         _model = WhisperModel.from_pretrained(
-            model_name, torch_dtype=torch.float32
+            model_name, **self._get_model_kwargs()
         ).encoder
         _model.to(self.device)
         _model.eval()

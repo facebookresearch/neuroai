@@ -452,7 +452,13 @@ class HuggingFaceMixin(base.BaseModel):
         - cpu: for cpu computation
         - cuda: for using gpu0
         - auto: to use gpu if available else cpu
-        - accelerate: to use huggingface accelerate (maps to multiple-gpus + use float16)
+    dtype: str
+        Torch dtype to request from HuggingFace. Use "auto" to let
+        transformers choose the checkpoint dtype, or values such as
+        "float32", "float16", or "bfloat16".
+    attn_implementation: str | None
+        Attention implementation to request from HuggingFace. If None,
+        transformers uses the model default.
     layers: float | list[float] | "all"
         Specifies the layers to keep.
         - "all": keep all layers
@@ -479,7 +485,9 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
+    device: tp.Literal["auto", "cpu", "cuda"] = "auto"
+    dtype: str = "auto"
+    attn_implementation: str | None = None
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
@@ -492,6 +500,7 @@ class HuggingFaceMixin(base.BaseModel):
         name = self.__class__.__name__
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._get_torch_dtype()
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -525,6 +534,34 @@ class HuggingFaceMixin(base.BaseModel):
                 return True
             except Exception:
                 return False
+
+    def _get_torch_dtype(self) -> torch.dtype | str:
+        if self.dtype == "auto":
+            return "auto"
+        aliases = {
+            "bf16": "bfloat16",
+            "fp16": "float16",
+            "half": "float16",
+            "fp32": "float32",
+            "float": "float32",
+        }
+        dtype_name = self.dtype.removeprefix("torch.")
+        dtype_name = aliases.get(dtype_name, dtype_name)
+        dtype = getattr(torch, dtype_name, None)
+        if not isinstance(dtype, torch.dtype):
+            msg = (
+                f"Unknown dtype {self.dtype!r}. Expected 'auto' or a torch dtype "
+                "name such as 'float32', 'float16', or 'bfloat16'."
+            )
+            raise ValueError(msg)
+        return dtype
+
+    def _get_model_kwargs(self, **kwargs: tp.Any) -> dict[str, tp.Any]:
+        model_kwargs = dict(kwargs)
+        model_kwargs.setdefault("torch_dtype", self._get_torch_dtype())
+        if self.attn_implementation is not None:
+            model_kwargs.setdefault("attn_implementation", self.attn_implementation)
+        return model_kwargs
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:

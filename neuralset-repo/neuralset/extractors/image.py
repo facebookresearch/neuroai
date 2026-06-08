@@ -61,6 +61,7 @@ class _HuggingFace(nn.Module):
         model_name: str,
         output_hidden_states: bool = False,
         pretrained: bool = True,
+        model_kwargs: dict[str, tp.Any] | None = None,
     ) -> None:
         super().__init__()
         Model: tp.Any  # ignore typing as we'll override the imports
@@ -70,10 +71,10 @@ class _HuggingFace(nn.Module):
 
         if model_name == "facebook/dpt-dinov2-base-kitti":
             from transformers import DPTForDepthEstimation as Model
+        kwargs = dict(model_kwargs or {})
+        kwargs["output_hidden_states"] = output_hidden_states
         try:
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
+            self.model = Model.from_pretrained(model_name, **kwargs)
         except ValueError as e:
             # handle specific cases
             if "VisionEncoderDecoderConfig" in str(e):
@@ -84,9 +85,7 @@ class _HuggingFace(nn.Module):
                 from transformers import ViTHybridImageProcessor as Processor
             elif "UperNetConfig" in str(e):
                 from transformers import UperNetForSemanticSegmentation as Model
-            self.model = Model.from_pretrained(
-                model_name, output_hidden_states=output_hidden_states
-            )
+            self.model = Model.from_pretrained(model_name, **kwargs)
         if not pretrained:
             self.model = Model.from_config(self.model.config)
         self.model.eval()
@@ -349,6 +348,7 @@ class HuggingFaceImage(BaseImage):
                 model_name=self.model_name,
                 output_hidden_states=True,
                 pretrained=self.pretrained,
+                model_kwargs=self._get_model_kwargs(),
             )
             self._model.to(self.device)
         return self._model

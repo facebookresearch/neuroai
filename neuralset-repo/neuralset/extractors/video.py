@@ -168,10 +168,9 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
             pretrained=self.pretrained,
             layer_type=self.layer_type,
             num_frames=self.num_frames,
+            model_kwargs=self._get_model_kwargs(),
         )
-        if model.model.device.type == "cpu":
-            # may already be dispatched (with "accelerate")
-            model.model.to(self.device)
+        model.model.to(self.device)
         # videomae = 16 frames
         # xclip = 8 or 16 frames (unclear)
         freq = events[0].frequency if self.frequency == "native" else self.frequency
@@ -273,6 +272,7 @@ class _HFVideoModel:
         pretrained: bool = True,
         layer_type: str = "",
         num_frames: int | None = None,
+        model_kwargs: dict[str, tp.Any] | None = None,
     ) -> None:
         super().__init__()
         if not any(z in model_name for z in self.MODELS):
@@ -282,7 +282,7 @@ class _HFVideoModel:
         from transformers import AutoModel as Model
         from transformers import AutoProcessor as Processor
 
-        extra: dict[str, tp.Any] = {}
+        extra: dict[str, tp.Any] = dict(model_kwargs or {})
         processor_extra: dict[str, tp.Any] = {"do_rescale": True}
         if "google/vivit" in model_name:
             from transformers import VivitImageProcessor as Processor
@@ -290,14 +290,11 @@ class _HFVideoModel:
         if "LLaVA" in model_name:
             from transformers import LlavaNextVideoForConditionalGeneration as Model
             from transformers import LlavaNextVideoProcessor as Processor
-
-            extra = {"torch_dtype": torch.float16}
-            if "34B" in model_name:
-                extra["device_map"] = "auto"  # uses accelerate
         if "Phi-4" in model_name:
             from transformers import AutoModelForCausalLM as Model
 
-            extra = {"_attn_implementation": "eager", "trust_remote_code": True}
+            extra.setdefault("attn_implementation", "eager")
+            extra["trust_remote_code"] = True
             processor_extra["trust_remote_code"] = True
         if "vjepa2" in model_name:
             from transformers import AutoVideoProcessor as Processor
