@@ -132,7 +132,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         super().model_post_init(log__)
         if (
             "vjepa2" in self.model_name.lower()
-            and self.hf_config.processor_cls_name != "AutoVideoProcessor"
+            and self._hf_config.processor_cls_name != "AutoVideoProcessor"
         ):
             msg = (
                 "V-JEPA2 models require "
@@ -275,8 +275,9 @@ class _HFVideoModel:
         model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        Processor = extractor.hf_config.processor_cls()
-        processor_extra = {"do_rescale": True} | extractor.hf_config.config_kwargs
+        hf_config = extractor._hf_config
+        Processor = hf_config.processor_cls()
+        processor_extra = {"do_rescale": True} | hf_config.config_kwargs
 
         self.model = extractor.load_model()
         # use do_rescale=True -> don't use totensor
@@ -290,9 +291,9 @@ class _HFVideoModel:
         elif "Phi-4" in model_name:
             max_frames = 4  # TODO: make this flexible?
         else:
-            config = self.model.config
+            config = tp.cast(tp.Any, self.model.config)
             config = getattr(config, "vision_config", config)  # xclip
-            max_frames = config.num_frames
+            max_frames = tp.cast(int, config.num_frames)
         if num_frames is None:
             self.num_frames = max_frames
         else:

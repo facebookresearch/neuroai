@@ -517,7 +517,7 @@ class HuggingFaceConfig(base.BaseModel):
 
     @property
     def torch_dtype_value(self) -> torch.dtype | tp.Literal["auto"] | None:
-        if self.torch_dtype in (None, "auto"):
+        if self.torch_dtype is None or self.torch_dtype == "auto":
             return self.torch_dtype
         return getattr(torch, self.torch_dtype)
 
@@ -546,6 +546,9 @@ class HuggingFaceConfig(base.BaseModel):
                 "transformers model class."
             )
             raise ValueError(msg) from e
+
+
+HuggingFaceConfigInput = HuggingFaceConfig | dict[str, tp.Any]
 
 
 class HuggingFaceMixin(base.BaseModel):
@@ -589,12 +592,13 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    hf_config: HuggingFaceConfig = HuggingFaceConfig()
+    hf_config: HuggingFaceConfigInput = HuggingFaceConfig()
     pretrained: bool = True
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
+    _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -606,7 +610,7 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.check_model_instantiates(self.model_name)
+        self._hf_config.check_model_instantiates(self.model_name)
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -620,10 +624,14 @@ class HuggingFaceMixin(base.BaseModel):
 
     @property
     def device(self) -> str:
-        device_map = self.hf_config.device_map
+        device_map = self._hf_config.device_map
         if device_map == "auto":
             return "cuda" if torch.cuda.is_available() else "cpu"
         return device_map
+
+    @property
+    def _hf_config(self) -> HuggingFaceConfig:
+        return tp.cast(HuggingFaceConfig, self.hf_config)
 
     @property
     def model(self) -> torch.nn.Module:
@@ -638,14 +646,15 @@ class HuggingFaceMixin(base.BaseModel):
         """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
 
-        Model = self.hf_config.model_cls()
-        torch_dtype = self.hf_config.torch_dtype_value
+        hf_config = self._hf_config
+        Model = hf_config.model_cls()
+        torch_dtype = hf_config.torch_dtype_value
         if self.pretrained:
-            model = Model.from_pretrained(self.model_name, **self.hf_config.model_kwargs)
+            model = Model.from_pretrained(self.model_name, **hf_config.model_kwargs)
         else:
             config = AutoConfig.from_pretrained(
                 self.model_name,
-                **self.hf_config.config_kwargs,
+                **hf_config.config_kwargs,
             )
             model = Model.from_config(config)
             if isinstance(torch_dtype, torch.dtype):

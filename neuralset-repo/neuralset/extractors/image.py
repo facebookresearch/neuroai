@@ -263,12 +263,13 @@ class HuggingFaceImage(BaseImage):
     @property
     def processor(self) -> tp.Any:
         if not hasattr(self, "_processor"):
-            Processor = self.hf_config.processor_cls()
+            hf_config = self._hf_config
+            Processor = hf_config.processor_cls()
             # do_rescale=False because ToTensor does the rescaling
             self._processor = Processor.from_pretrained(
                 self.model_name,
                 do_rescale=False,
-                **self.hf_config.config_kwargs,
+                **hf_config.config_kwargs,
             )
         return self._processor
 
@@ -300,7 +301,7 @@ class HuggingFaceImage(BaseImage):
         self, pixel_values: torch.Tensor
     ) -> tuple[torch.Tensor, ...] | None:
         """Collect CLIP vision states when Transformers does not return them."""
-        vision_model = getattr(self.model, "vision_model", None)
+        vision_model: tp.Any = getattr(self.model, "vision_model", None)
         if not all(
             hasattr(vision_model, attr)
             for attr in ("embeddings", "pre_layrnorm", "encoder")

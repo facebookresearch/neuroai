@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import scipy
+import torch
 
 from neuralset.events import etypes
 
@@ -127,7 +128,7 @@ def test_wav2vec_cache_n_layers(tmp_path: Path) -> None:
 
     assert out1.shape == (768, 200)
     assert not (out1 == out2).all()
-    assert (out2 == out3).all()
+    torch.testing.assert_close(out2, out3, rtol=0, atol=0, equal_nan=True)
 
     assert feat1.infra.uid_folder() == feat2.infra.uid_folder()
     assert feat1.infra.uid_folder() != feat3.infra.uid_folder()

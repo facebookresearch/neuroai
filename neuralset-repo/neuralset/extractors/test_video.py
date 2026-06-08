@@ -189,7 +189,8 @@ def test_video_huggingface() -> None:
         hf_config={"device_map": "cpu"},
     )
     hf = _HFVideoModel(extractor=extractor)
-    data = np.random.rand(hf.model.config.num_frames, 3, 64, 64)
+    config = tp.cast(tp.Any, hf.model.config)
+    data = np.random.rand(config.num_frames, 3, 64, 64)
     out = hf.predict_hidden_states(data)
     assert out.shape == (1, 13, 1568, 768)
 
@@ -202,7 +203,10 @@ def test_video_vjepa2_requires_auto_video_processor(
         "check_model_instantiates",
         lambda self, model_name: None,
     )
-    kwargs = {"frequency": 0.5, "model_name": "facebook/vjepa2-vith-fpc64-256"}
+    kwargs: dict[str, tp.Any] = {
+        "frequency": 0.5,
+        "model_name": "facebook/vjepa2-vith-fpc64-256",
+    }
     with pytest.raises(ValueError, match="AutoVideoProcessor"):
         vid.HuggingFaceVideo(**kwargs)
     vid.HuggingFaceVideo(
