@@ -266,8 +266,8 @@ class _HFVideoModel:
         model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        Processor = extractor._hf_processor_cls()
-        processor_extra = {"do_rescale": True} | extractor._hf_processor_kwargs()
+        Processor = extractor.hf_config.processor_cls()
+        processor_extra = {"do_rescale": True} | extractor.hf_config.config_kwargs
 
         self.model = extractor.load_model()
         # use do_rescale=True -> don't use totensor

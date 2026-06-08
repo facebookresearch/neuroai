@@ -342,7 +342,7 @@ def test_huggingface_model_instantiates():
     with pytest.raises(ValueError):
         base.HuggingFaceMixin(
             model_name="gpt2",
-            hf_config={"cls_name": "NotAModelClass"},
+            hf_config={"model_cls_name": "NotAModelClass"},
         )
 
 
@@ -397,7 +397,7 @@ def test_huggingface_load_model_pretrained_false_uses_config(
         model_name="gpt2",
         pretrained=False,
         hf_config={
-            "cls_name": "DummyModel",
+            "model_cls_name": "DummyModel",
             "device_map": "cpu",
             "revision": "abc",
             "trust_remote_code": True,
@@ -432,7 +432,7 @@ def test_huggingface_load_model_forwards_model_kwargs(
     extractor = base.HuggingFaceMixin(
         model_name="gpt2",
         hf_config={
-            "cls_name": "DummyModel",
+            "model_cls_name": "DummyModel",
             "device_map": "cpu",
             "torch_dtype": "float16",
             "attn_implementation": "eager",

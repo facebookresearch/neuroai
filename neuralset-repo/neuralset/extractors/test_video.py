@@ -137,13 +137,13 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     [
         # shape is layers x tokens x embeddings
         ("MCG-NJU/videomae-base", "", (13, 1568, 768), {}),
-        # ("microsoft/Phi-4-multimodal-instruct", "", (33, 7649, 3072), {"cls_name": "AutoModelForCausalLM", "attn_implementation": "eager", "trust_remote_code": True}),
+        # ("microsoft/Phi-4-multimodal-instruct", "", (33, 7649, 3072), {"model_cls_name": "AutoModelForCausalLM", "attn_implementation": "eager", "trust_remote_code": True}),
         # ("facebook/vjepa2-vith-fpc64-256", "", (33, 8192, 1280), {"processor_cls_name": "AutoVideoProcessor"}),
         # ("microsoft/xclip-base-patch16", "", (13, 197, 768), {}),
         # ("microsoft/xclip-base-patch16", "mit", (2, 8, 512), {}),
-        # ("google/vivit-b-16x2-kinetics400", "", (13, 3137, 768), {"cls_name": "VivitModel", "processor_cls_name": "VivitImageProcessor"}),
+        # ("google/vivit-b-16x2-kinetics400", "", (13, 3137, 768), {"model_cls_name": "VivitModel", "processor_cls_name": "VivitImageProcessor"}),
         # ("facebook/timesformer-base-finetuned-k600", "", (13, 1569, 768), {}),
-        # ("llava-hf/LLaVA-NeXT-Video-7B-hf", "Describe <video>", (33, 1156, 4096), {"cls_name": "LlavaNextVideoForConditionalGeneration", "processor_cls_name": "LlavaNextVideoProcessor", "torch_dtype": "float16"}),
+        # ("llava-hf/LLaVA-NeXT-Video-7B-hf", "Describe <video>", (33, 1156, 4096), {"model_cls_name": "LlavaNextVideoForConditionalGeneration", "processor_cls_name": "LlavaNextVideoProcessor", "torch_dtype": "float16"}),
         #
         # other versions of same families:
         # ("microsoft/xclip-base-patch32-16-frames", "", 768, {}),  # works

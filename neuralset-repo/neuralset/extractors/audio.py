@@ -389,7 +389,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         from transformers import AutoFeatureExtractor
 
         return AutoFeatureExtractor.from_pretrained(
-            model_name, **self._hf_processor_kwargs()
+            model_name, **self.hf_config.config_kwargs
         )
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
@@ -474,7 +474,7 @@ class Wav2VecBert(HuggingFaceAudio):
 
     model_name: str = "facebook/w2v-bert-2.0"
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
-        cls_name="Wav2Vec2BertModel",
+        model_cls_name="Wav2Vec2BertModel",
     )
 
 
@@ -495,7 +495,7 @@ class SeamlessM4T(HuggingFaceAudio):
 
     model_name: str = "facebook/hf-seamless-m4t-medium"
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
-        cls_name="SeamlessM4TModel",
+        model_cls_name="SeamlessM4TModel",
     )
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:
@@ -523,7 +523,7 @@ class Whisper(HuggingFaceAudio):
     model_name: str = "openai/whisper-large-v3-turbo"
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
         torch_dtype="float32",
-        cls_name="WhisperModel",
+        model_cls_name="WhisperModel",
     )
 
     def _get_sound_model(self, model_name: str) -> torch.nn.Module:

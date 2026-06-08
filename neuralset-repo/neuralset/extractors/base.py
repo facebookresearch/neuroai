@@ -454,7 +454,7 @@ class HuggingFaceConfig(base.BaseModel):
     attn_implementation: str | None = None
     revision: str | None = None
     trust_remote_code: bool = False
-    cls_name: str | None = None
+    model_cls_name: str | None = None
     processor_cls_name: str | None = None
 
     @classmethod
@@ -472,7 +472,7 @@ class HuggingFaceConfig(base.BaseModel):
             raise ValueError(msg) from e
 
     def model_cls(self) -> tp.Any:
-        return self._transformers_cls(self.cls_name, "AutoModel", "model")
+        return self._transformers_cls(self.model_cls_name, "AutoModel", "model")
 
     def processor_cls(self) -> tp.Any:
         return self._transformers_cls(
@@ -481,23 +481,45 @@ class HuggingFaceConfig(base.BaseModel):
             "processor",
         )
 
-    def check_model_instantiates(
-        self,
-        model_name: str,
-        config_kwargs: dict[str, tp.Any],
-    ) -> None:
+    @property
+    def config_kwargs(self) -> dict[str, tp.Any]:
+        return {
+            key: val
+            for key, val in {
+                "revision": self.revision,
+                "trust_remote_code": self.trust_remote_code or None,
+            }.items()
+            if val is not None
+        }
+
+    @property
+    def torch_dtype_value(self) -> torch.dtype | tp.Literal["auto"] | None:
+        if self.torch_dtype in (None, "auto"):
+            return self.torch_dtype
+        return getattr(torch, self.torch_dtype)
+
+    @property
+    def model_kwargs(self) -> dict[str, tp.Any]:
+        kwargs = self.config_kwargs | {"device_map": self.device_map}
+        if self.attn_implementation is not None:
+            kwargs["attn_implementation"] = self.attn_implementation
+        if self.torch_dtype_value is not None:
+            kwargs["torch_dtype"] = self.torch_dtype_value
+        return kwargs
+
+    def check_model_instantiates(self, model_name: str) -> None:
         from transformers import AutoConfig
 
         Model = self.model_cls()
-        config = AutoConfig.from_pretrained(model_name, **config_kwargs)
+        config = AutoConfig.from_pretrained(model_name, **self.config_kwargs)
         try:
             with torch.device("meta"):
                 Model.from_config(config)
         except Exception as e:
-            cls_name = self.cls_name or "AutoModel"
+            cls_name = self.model_cls_name or "AutoModel"
             msg = (
                 f"Could not instantiate {cls_name!r} from the config for "
-                f"{model_name!r}. Set hf_config.cls_name to a compatible "
+                f"{model_name!r}. Set hf_config.model_cls_name to a compatible "
                 "transformers model class."
             )
             raise ValueError(msg) from e
@@ -561,10 +583,7 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.check_model_instantiates(
-            self.model_name,
-            self._hf_config_kwargs(),
-        )
+        self.hf_config.check_model_instantiates(self.model_name)
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -583,57 +602,18 @@ class HuggingFaceMixin(base.BaseModel):
             return "cuda" if torch.cuda.is_available() else "cpu"
         return device_map
 
-    def _hf_torch_dtype(self) -> torch.dtype | tp.Literal["auto"] | None:
-        dtype = self.hf_config.torch_dtype
-        if dtype is None:
-            return None
-        if dtype == "auto":
-            return "auto"
-        value = getattr(torch, dtype)
-        if not isinstance(value, torch.dtype):
-            raise RuntimeError(f"Invalid torch dtype stored in hf_config: {dtype!r}")
-        return value
-
-    def _hf_config_kwargs(self) -> dict[str, tp.Any]:
-        kwargs: dict[str, tp.Any] = {}
-        if self.hf_config.revision is not None:
-            kwargs["revision"] = self.hf_config.revision
-        if self.hf_config.trust_remote_code:
-            kwargs["trust_remote_code"] = self.hf_config.trust_remote_code
-        return kwargs
-
-    def _hf_model_kwargs(self) -> dict[str, tp.Any]:
-        kwargs = self._hf_config_kwargs()
-        kwargs["device_map"] = self.hf_config.device_map
-        if self.hf_config.attn_implementation is not None:
-            kwargs["attn_implementation"] = self.hf_config.attn_implementation
-        torch_dtype = self._hf_torch_dtype()
-        if torch_dtype is not None:
-            kwargs["torch_dtype"] = torch_dtype
-        return kwargs
-
-    def _hf_processor_kwargs(self) -> dict[str, tp.Any]:
-        return self._hf_config_kwargs()
-
-    def _hf_model_cls(self) -> tp.Any:
-        return self.hf_config.model_cls()
-
-    def _hf_processor_cls(self) -> tp.Any:
-        return self.hf_config.processor_cls()
-
     def load_model(self) -> torch.nn.Module:
         """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
 
-        Model = self._hf_model_cls()
-        model_kwargs = self._hf_model_kwargs()
-        torch_dtype = self._hf_torch_dtype()
+        Model = self.hf_config.model_cls()
+        torch_dtype = self.hf_config.torch_dtype_value
         if self.pretrained:
-            model = Model.from_pretrained(self.model_name, **model_kwargs)
+            model = Model.from_pretrained(self.model_name, **self.hf_config.model_kwargs)
         else:
             config = AutoConfig.from_pretrained(
                 self.model_name,
-                **self._hf_config_kwargs(),
+                **self.hf_config.config_kwargs,
             )
             model = Model.from_config(config)
             if isinstance(torch_dtype, torch.dtype):

@@ -57,12 +57,12 @@ class _HuggingFace(nn.Module):
         super().__init__()
 
         self.model = extractor.load_model()
-        Processor = extractor._hf_processor_cls()
+        Processor = extractor.hf_config.processor_cls()
         # do_rescale=False because ToTensor does the rescaling
         self.processor = Processor.from_pretrained(
             extractor.model_name,
             do_rescale=False,
-            **extractor._hf_processor_kwargs(),
+            **extractor.hf_config.config_kwargs,
         )
         self.model_name = extractor.model_name
 
