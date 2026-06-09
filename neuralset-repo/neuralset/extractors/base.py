@@ -641,8 +641,9 @@ class HuggingFaceMixin(base.BaseModel):
                 **hf_config.config_build_kwargs,
             )
             model = Model.from_config(config)
-            if hf_config.torch_dtype not in (None, "auto"):
-                model.to(dtype=getattr(torch, hf_config.torch_dtype))
+            torch_dtype = hf_config.torch_dtype
+            if torch_dtype not in (None, "auto"):
+                model.to(dtype=getattr(torch, torch_dtype))
             model.to(self.device)
         model.eval()
         return model
