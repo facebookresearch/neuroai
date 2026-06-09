@@ -7,6 +7,7 @@
 import logging
 import typing as tp
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -524,22 +525,6 @@ class HuggingFaceConfig(base.BaseModel):
             kwargs["torch_dtype"] = dtype if dtype == "auto" else getattr(torch, dtype)
         return kwargs
 
-    def check_model_instantiates(self, model_name: str) -> None:
-        from transformers import AutoConfig
-
-        Model = self.model_cls()
-        config = AutoConfig.from_pretrained(model_name, **self.config_build_kwargs)
-        try:
-            with torch.device("meta"):
-                Model.from_config(config)
-        except Exception as e:
-            msg = (
-                f"Could not instantiate {self.model_cls_name!r} from the config for "
-                f"{model_name!r}. Set hf_config.model_cls_name to a compatible "
-                "transformers model class."
-            )
-            raise ValueError(msg) from e
-
 
 class HuggingFaceMixin(base.BaseModel):
     """Mixin for extractors that use a HuggingFace model.
@@ -589,6 +574,8 @@ class HuggingFaceMixin(base.BaseModel):
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
+    _REPOS: tp.ClassVar[list[str]] = []
+    _skip_repo_check: bool = False  # for custom/local HuggingFace checkpoints
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -600,7 +587,33 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.check_model_instantiates(self.model_name)
+        self.hf_config.model_cls()
+        self.hf_config.processor_cls()
+        if not self._skip_repo_check and not self.repo_exists():
+            raise ValueError(f"The model {self.model_name} does not exist")
+
+    def repo_exists(self) -> bool:
+        fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
+        name = self.model_name
+        if not self._REPOS:
+            if not fp.exists():
+                raise RuntimeError(f"Please reinstall neuralset: missing file {fp}")
+            self._REPOS.extend(fp.read_text("utf8").splitlines())
+        if name in self._REPOS:
+            return True
+        from huggingface_hub import repo_info
+
+        try:
+            repo_info(name, revision=self.hf_config.revision)
+        except Exception:
+            return False
+        self._REPOS.append(name)
+        self._REPOS.sort()
+        try:
+            fp.write_text("\n".join(self._REPOS))
+        except Exception:
+            pass
+        return True
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:

@@ -199,9 +199,9 @@ def test_video_vjepa2_requires_auto_video_processor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        vid.extractor_base.HuggingFaceConfig,
-        "check_model_instantiates",
-        lambda self, model_name: None,
+        vid.extractor_base.HuggingFaceMixin,
+        "repo_exists",
+        lambda self: True,
     )
     kwargs: dict[str, tp.Any] = {
         "frequency": 0.5,
