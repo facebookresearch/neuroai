@@ -268,7 +268,7 @@ class HuggingFaceImage(BaseImage):
             self._processor = Processor.from_pretrained(
                 self.model_name,
                 do_rescale=False,
-                **self.hf_config.config_kwargs,
+                **self.hf_config.config_build_kwargs,
             )
         return self._processor
 

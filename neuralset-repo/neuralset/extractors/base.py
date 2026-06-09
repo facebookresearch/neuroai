@@ -458,10 +458,10 @@ class HuggingFaceConfig(base.BaseModel):
         Optional HuggingFace Hub revision used for configs, models, and processors.
     trust_remote_code : bool, default=False
         Whether to allow custom modeling code from the HuggingFace repository.
-    model_cls_name : str | None, default=None
-        Name of a class in ``transformers`` to use instead of ``AutoModel``.
-    processor_cls_name : str | None, default=None
-        Name of a class in ``transformers`` to use instead of ``AutoProcessor``.
+    model_cls_name : str, default="AutoModel"
+        Name of the model class to load from ``transformers``.
+    processor_cls_name : str, default="AutoProcessor"
+        Name of the processor class to load from ``transformers``.
     """
 
     device_map: tp.Literal["auto", "cpu", "cuda"] = "auto"
@@ -478,17 +478,16 @@ class HuggingFaceConfig(base.BaseModel):
     attn_implementation: str | None = None
     revision: str | None = None
     trust_remote_code: bool = False
-    model_cls_name: str | None = None
-    processor_cls_name: str | None = None
+    model_cls_name: str = "AutoModel"
+    processor_cls_name: str = "AutoProcessor"
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
         return ["device_map", "attn_implementation", "trust_remote_code"]
 
-    def _transformers_cls(self, name: str | None, default: str, kind: str) -> tp.Any:
+    def _transformers_cls(self, cls_name: str, kind: str) -> tp.Any:
         import transformers
 
-        cls_name = name or default
         try:
             return getattr(transformers, cls_name)
         except AttributeError as e:
@@ -496,55 +495,46 @@ class HuggingFaceConfig(base.BaseModel):
             raise ValueError(msg) from e
 
     def model_cls(self) -> tp.Any:
-        return self._transformers_cls(self.model_cls_name, "AutoModel", "model")
+        return self._transformers_cls(self.model_cls_name, "model")
 
     def processor_cls(self) -> tp.Any:
         return self._transformers_cls(
             self.processor_cls_name,
-            "AutoProcessor",
             "processor",
         )
 
     @property
-    def config_kwargs(self) -> dict[str, tp.Any]:
-        return {
-            key: val
-            for key, val in {
-                "revision": self.revision,
-                "trust_remote_code": self.trust_remote_code or None,
-            }.items()
-            if val is not None
-        }
+    def config_build_kwargs(self) -> dict[str, tp.Any]:
+        kwargs: dict[str, tp.Any] = {}
+        if self.revision is not None:
+            kwargs["revision"] = self.revision
+        if self.trust_remote_code:
+            kwargs["trust_remote_code"] = self.trust_remote_code
+        return kwargs
 
     @property
-    def torch_dtype_value(self) -> torch.dtype | tp.Literal["auto"] | None:
-        if self.torch_dtype is None or self.torch_dtype == "auto":
-            return self.torch_dtype
-        return getattr(torch, self.torch_dtype)
-
-    @property
-    def model_kwargs(self) -> dict[str, tp.Any]:
-        kwargs = self.config_kwargs.copy()
+    def model_build_kwargs(self) -> dict[str, tp.Any]:
+        kwargs = self.config_build_kwargs.copy()
         if self.device_map == "auto":
             kwargs["device_map"] = self.device_map
         if self.attn_implementation is not None:
             kwargs["attn_implementation"] = self.attn_implementation
-        if self.torch_dtype_value is not None:
-            kwargs["torch_dtype"] = self.torch_dtype_value
+        if self.torch_dtype is not None:
+            dtype = self.torch_dtype
+            kwargs["torch_dtype"] = dtype if dtype == "auto" else getattr(torch, dtype)
         return kwargs
 
     def check_model_instantiates(self, model_name: str) -> None:
         from transformers import AutoConfig
 
         Model = self.model_cls()
-        config = AutoConfig.from_pretrained(model_name, **self.config_kwargs)
+        config = AutoConfig.from_pretrained(model_name, **self.config_build_kwargs)
         try:
             with torch.device("meta"):
                 Model.from_config(config)
         except Exception as e:
-            cls_name = self.model_cls_name or "AutoModel"
             msg = (
-                f"Could not instantiate {cls_name!r} from the config for "
+                f"Could not instantiate {self.model_cls_name!r} from the config for "
                 f"{model_name!r}. Set hf_config.model_cls_name to a compatible "
                 "transformers model class."
             )
@@ -632,11 +622,8 @@ class HuggingFaceMixin(base.BaseModel):
     @property
     def model(self) -> torch.nn.Module:
         if not hasattr(self, "_model") or self._model is None:
-            self._model = self._load_cached_model()
+            self._model = self.load_model()
         return self._model
-
-    def _load_cached_model(self) -> torch.nn.Module:
-        return self.load_model()
 
     def load_model(self) -> torch.nn.Module:
         """Load or instantiate a HuggingFace model with shared config."""
@@ -644,19 +631,18 @@ class HuggingFaceMixin(base.BaseModel):
 
         hf_config = self.hf_config
         Model = hf_config.model_cls()
-        torch_dtype = hf_config.torch_dtype_value
         if self.pretrained:
-            model = Model.from_pretrained(self.model_name, **hf_config.model_kwargs)
+            model = Model.from_pretrained(self.model_name, **hf_config.model_build_kwargs)
             if hf_config.device_map != "auto":
                 model.to(self.device)
         else:
             config = AutoConfig.from_pretrained(
                 self.model_name,
-                **hf_config.config_kwargs,
+                **hf_config.config_build_kwargs,
             )
             model = Model.from_config(config)
-            if isinstance(torch_dtype, torch.dtype):
-                model.to(dtype=torch_dtype)
+            if hf_config.torch_dtype not in (None, "auto"):
+                model.to(dtype=getattr(torch, hf_config.torch_dtype))
             model.to(self.device)
         model.eval()
         return model

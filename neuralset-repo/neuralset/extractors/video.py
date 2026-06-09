@@ -277,7 +277,7 @@ class _HFVideoModel:
             raise ValueError(f"Model {model_name!r} is not supported")
         hf_config = extractor.hf_config
         Processor = hf_config.processor_cls()
-        processor_extra = {"do_rescale": True} | hf_config.config_kwargs
+        processor_extra = {"do_rescale": True} | hf_config.config_build_kwargs
 
         self.model = extractor.load_model()
         # use do_rescale=True -> don't use totensor

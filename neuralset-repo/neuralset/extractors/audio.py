@@ -379,18 +379,12 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
             self._feature_extractor = self._get_feature_extractor(self.model_name)
         return self._feature_extractor
 
-    def _load_cached_model(self) -> torch.nn.Module:
-        return self._get_sound_model(self.model_name)
-
     def _get_feature_extractor(self, model_name: str) -> torch.nn.Module:
         from transformers import AutoFeatureExtractor
 
         return AutoFeatureExtractor.from_pretrained(
-            model_name, **self.hf_config.config_kwargs
+            model_name, **self.hf_config.config_build_kwargs
         )
-
-    def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        return self.load_model()
 
     def _get_features(self, wav):
         out = self._feature_extractor(
@@ -495,8 +489,8 @@ class SeamlessM4T(HuggingFaceAudio):
         model_cls_name="SeamlessM4TModel",
     )
 
-    def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        _model = tp.cast(torch.nn.Module, self.load_model().speech_encoder)
+    def load_model(self) -> torch.nn.Module:
+        _model = tp.cast(torch.nn.Module, super().load_model().speech_encoder)
         _model.eval()
         return _model
 
@@ -523,7 +517,7 @@ class Whisper(HuggingFaceAudio):
         model_cls_name="WhisperModel",
     )
 
-    def _get_sound_model(self, model_name: str) -> torch.nn.Module:
-        _model = tp.cast(torch.nn.Module, self.load_model().encoder)
+    def load_model(self) -> torch.nn.Module:
+        _model = tp.cast(torch.nn.Module, super().load_model().encoder)
         _model.eval()
         return _model
