@@ -64,6 +64,7 @@ class EnsureTexts(EventsTransform):
         if words.empty:
             return events
         text_rows: list[dict[str, tp.Any]] = []
+        eps = 1e-6
         for timeline, word_group in words.groupby("timeline"):
             raw = " ".join(word_group.text.values)
             text_str = self._punctuate(raw, word_group)
@@ -73,7 +74,7 @@ class EnsureTexts(EventsTransform):
                 dict(
                     type="Text",
                     start=start,
-                    duration=stop - start,
+                    duration=stop - start + 2 * eps,
                     timeline=timeline,
                     text=text_str,
                     language=(
