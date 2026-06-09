@@ -642,7 +642,7 @@ class HuggingFaceMixin(base.BaseModel):
             )
             model = Model.from_config(config)
             torch_dtype = hf_config.torch_dtype
-            if torch_dtype not in (None, "auto"):
+            if isinstance(torch_dtype, str) and torch_dtype != "auto":
                 model.to(dtype=getattr(torch, torch_dtype))
             model.to(self.device)
         model.eval()
