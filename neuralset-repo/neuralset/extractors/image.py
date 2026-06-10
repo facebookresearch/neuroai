@@ -147,10 +147,9 @@ class HuggingFaceImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixi
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        prev = extractor_base.BaseStatic._exclude_from_cache_uid(
+        return extractor_base.BaseStatic._exclude_from_cache_uid(
             self
         ) + extractor_base.HuggingFaceMixin._exclude_from_cache_uid(self)
-        return prev + ["duration"]
 
     def _iter_image_latents(
         self, events: tp.Sequence[etypes.Image], aggregate_layers: bool

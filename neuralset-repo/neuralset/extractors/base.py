@@ -702,13 +702,8 @@ class HuggingFaceMixin(base.BaseModel):
             config = AutoConfig.from_pretrained(
                 self.model_name, output_hidden_states=True
             )
-            if hasattr(Model, "from_config"):
-                model = Model.from_config(config, **(hf_config.model_kwargs or {}))
-            else:
-                model = Model._from_config(  # type: ignore[attr-defined]
-                    config,
-                    **(hf_config.model_kwargs or {}),
-                )
+            constructor = getattr(Model, "from_config", Model._from_config)  # type: ignore[attr-defined]
+            model = constructor(config, **(hf_config.model_kwargs or {}))
             if isinstance(self.dtype, str) and self.dtype != "auto":
                 model.to(dtype=getattr(torch, self.dtype))
             if self.device == "accelerate":
