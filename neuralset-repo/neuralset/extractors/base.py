@@ -510,32 +510,10 @@ class HuggingFaceConfig(base.BaseModel):
         ("m4t", {"model_cls_name": "SeamlessM4TModel"}),
         ("whisper", {"model_cls_name": "WhisperModel"}),
         (
-            "facebook/dpt-dinov2-base-kitti",
-            {
-                "model_cls_name": "DPTForDepthEstimation",
-                "processor_cls_name": "DPTImageProcessor",
-            },
-        ),
-        (
             "clip",
             {
                 "model_cls_name": "CLIPModel",
                 "processor_cls_name": "CLIPProcessor",
-            },
-        ),
-        (
-            "vit-hybrid",
-            {
-                "model_cls_name": "ViTHybridForImageClassification",
-                "processor_cls_name": "ViTHybridImageProcessor",
-            },
-        ),
-        ("upernet", {"model_cls_name": "UperNetForSemanticSegmentation"}),
-        (
-            "vit-gpt2",
-            {
-                "model_cls_name": "VisionEncoderDecoderModel",
-                "processor_cls_name": "ViTImageProcessor",
             },
         ),
         (
@@ -546,29 +524,6 @@ class HuggingFaceConfig(base.BaseModel):
             },
         ),
         ("gpt2", {"model_cls_name": "GPT2Model"}),
-        ("phi-4", {"model_cls_name": "AutoModelForCausalLM"}),
-        ("vjepa2", {"processor_cls_name": "AutoVideoProcessor"}),
-        (
-            "google/vivit",
-            {
-                "model_cls_name": "VivitModel",
-                "processor_cls_name": "VivitImageProcessor",
-            },
-        ),
-        (
-            "llava-next-video",
-            {
-                "model_cls_name": "LlavaNextVideoForConditionalGeneration",
-                "processor_cls_name": "LlavaNextVideoProcessor",
-            },
-        ),
-        (
-            "llava-video",
-            {
-                "model_cls_name": "LlavaVideoForConditionalGeneration",
-                "processor_cls_name": "LlavaVideoProcessor",
-            },
-        ),
     )
 
     @classmethod
@@ -585,7 +540,7 @@ class HuggingFaceConfig(base.BaseModel):
             raise ValueError(msg) from e
 
     def _resolved_cls_name(self, field: str, model_name: str | None) -> str:
-        cls_name = tp.cast(str, getattr(self, field))
+        cls_name: str = getattr(self, field)
         if model_name is None:
             return cls_name
         lower_model_name = model_name.lower()

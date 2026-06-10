@@ -364,9 +364,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     @property
     def _input_frequency(self) -> float:
-        processor = self.processor
-        feature_extractor = getattr(processor, "feature_extractor", processor)
-        return feature_extractor.sampling_rate  # type: ignore
+        return self.feature_extractor.sampling_rate  # type: ignore
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -487,7 +485,7 @@ class SeamlessM4T(HuggingFaceAudio):
     )
 
     def load_model(self) -> torch.nn.Module:
-        _model = tp.cast(torch.nn.Module, super().load_model().speech_encoder)
+        _model = super().load_model().speech_encoder  # type: ignore[attr-defined]
         _model.eval()
         return _model
 
@@ -516,6 +514,6 @@ class Whisper(HuggingFaceAudio):
     )
 
     def load_model(self) -> torch.nn.Module:
-        _model = tp.cast(torch.nn.Module, super().load_model().encoder)
+        _model = super().load_model().encoder  # type: ignore[attr-defined]
         _model.eval()
         return _model

@@ -89,9 +89,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         "julius>=0.2.7",
     )
     model_name: str = "MCG-NJU/videomae-base"
-    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
-        processor_kwargs={"do_rescale": True},
-    )
     use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
@@ -135,6 +132,15 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         super().model_post_init(log__)
         _HFVideoModel.check_layer_type(
             layer_type=self.layer_type, model_name=self.model_name
+        )
+
+    def load_processor(self) -> tp.Any:
+        Processor = self.hf_config.processor_cls(self.model_name)
+        processor_kwargs = {"do_rescale": True} | self.hf_config.processor_build_kwargs
+        # use do_rescale=True -> don't use totensor
+        return Processor.from_pretrained(
+            self.model_name,
+            **processor_kwargs,
         )
 
     @classmethod
@@ -281,9 +287,9 @@ class _HFVideoModel:
         elif "Phi-4" in model_name:
             max_frames = 4  # TODO: make this flexible?
         else:
-            config = tp.cast(tp.Any, self.model.config)
+            config = self.model.config  # type: ignore[attr-defined]
             config = getattr(config, "vision_config", config)  # xclip
-            max_frames = tp.cast(int, config.num_frames)
+            max_frames = config.num_frames  # type: ignore[attr-defined]
         if num_frames is None:
             self.num_frames = max_frames
         else:
