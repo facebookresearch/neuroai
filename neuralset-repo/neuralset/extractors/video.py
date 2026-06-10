@@ -202,7 +202,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                 duration=event.duration,
             )
 
-    def predict(self, images: np.ndarray) -> tp.Any:
+    def predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
         kwargs: dict[str, tp.Any] = {
             self._processor_input_field(): list(images),
             "return_tensors": "pt",
@@ -213,10 +213,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         inputs = inputs.to(self.model.device)
         with torch.inference_mode():
             pred = self.model(**inputs, output_hidden_states=True)
-        return pred
-
-    def predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
-        pred = self.predict(images)
         states = pred.hidden_states
         out = torch.cat([x.unsqueeze(1) for x in states], axis=1)  # type: ignore
         return out  # B x L x ...

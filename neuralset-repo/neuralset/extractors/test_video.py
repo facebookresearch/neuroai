@@ -101,7 +101,7 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
+        device="cpu",
         layers=0.7,
     )
     folder = image.infra.uid_folder()
@@ -122,7 +122,7 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
         event_types="Video",
         frequency=0.5,
         infra=infra,
-        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
+        device="cpu",
         model_name=name,
     )
     out = image(video_event, start=0.0, duration=4)
@@ -157,7 +157,8 @@ def test_video_models(
         max_imsize=120,
         infra=infra,
         num_frames=16,
-        hf_config={"device_map": "cpu"} | hf_config,  # type: ignore[arg-type]
+        device="cpu",
+        hf_config=hf_config,  # type: ignore[arg-type]
         model_name=name,
         # show the full dimension
         token_aggregation=None,
@@ -174,7 +175,7 @@ def test_video_huggingface() -> None:
         frequency=0.5,
         model_name="MCG-NJU/videomae-base",
         num_frames=16,
-        hf_config={"device_map": "cpu"},  # type: ignore[arg-type]
+        device="cpu",
     )
     config = tp.cast(tp.Any, extractor.model.config)
     data = np.random.rand(config.num_frames, 3, 64, 64)

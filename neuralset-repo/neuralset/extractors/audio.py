@@ -405,7 +405,9 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
         features = self._get_features(wav)
         with torch.no_grad():
-            outputs = self.model(features.to(self.device), output_hidden_states=True)
+            outputs = self.model(
+                features.to(self.input_device), output_hidden_states=True
+            )
         if self.layer_type == "transformer":
             out: tp.Any = outputs.get("hidden_states")
         elif self.layer_type == "convolution":
@@ -505,8 +507,8 @@ class Whisper(HuggingFaceAudio):
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
+    dtype: tp.Literal["float32"] = "float32"
     hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
-        torch_dtype="float32",
         model_cls_name="WhisperModel",
     )
 

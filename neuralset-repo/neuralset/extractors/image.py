@@ -161,9 +161,9 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
         with torch.no_grad():
             for batch_images in dloader:
                 if isinstance(batch_images, torch.Tensor):
-                    batch_images = batch_images.to(self.device)
+                    batch_images = batch_images.to(self.input_device)
                 else:  # should be list of different sizes
-                    batch_images = [i.to(self.device) for i in batch_images]
+                    batch_images = [i.to(self.input_device) for i in batch_images]
                 with torch.no_grad():
                     latents = self._extract_batched_latents(batch_images)
                 for latent in latents:

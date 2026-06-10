@@ -336,6 +336,12 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
+def test_huggingface_model_exists() -> None:
+    base.HuggingFaceMixin(model_name="gpt2")
+    with pytest.raises(ValueError):
+        base.HuggingFaceMixin(model_name="not_a_model")
+
+
 @pytest.mark.parametrize(
     "event_field", ["duration", "timeline", "int_field", "float_field", "bool_field"]
 )

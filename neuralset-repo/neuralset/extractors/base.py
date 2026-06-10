@@ -446,19 +446,6 @@ class HuggingFaceConfig(base.BaseModel):
 
     Parameters
     ----------
-    device_map : {"auto", "cpu", "cuda"}, default="auto"
-        Controls model placement. ``"auto"`` is passed to ``from_pretrained`` as
-        a Transformers device map. ``"cpu"`` and ``"cuda"`` load normally, then
-        move the model to that device.
-    torch_dtype : {"auto", "float16", "float32", "float64", "bfloat16"} | None, default=None
-        Optional dtype passed as ``torch_dtype`` when loading pretrained
-        weights. If ``None``, Transformers chooses its default dtype.
-    attn_implementation : str | None, default=None
-        Optional attention implementation forwarded to model construction.
-    revision : str | None, default=None
-        Optional HuggingFace Hub revision used for configs, models, and processors.
-    trust_remote_code : bool, default=False
-        Whether to allow custom modeling code from the HuggingFace repository.
     model_cls_name : str, default="AutoModel"
         Name of the model class to load from ``transformers``. Use this for a
         specific extractor instance when ``AutoModel`` is not the right class.
@@ -466,13 +453,12 @@ class HuggingFaceConfig(base.BaseModel):
         Name of the processor class to load from ``transformers``. Use this for
         a specific extractor instance when ``AutoProcessor`` is not the right class.
     model_kwargs : dict | None, default=None
-        Extra keyword arguments forwarded to model construction. These are
-        merged after the shared model build kwargs so they can override them
-        for non-standard HuggingFace models.
+        Extra keyword arguments forwarded to model construction for
+        non-standard HuggingFace models.
     processor_kwargs : dict | None, default=None
         Extra keyword arguments forwarded to processor construction. These are
-        merged after shared config kwargs so they can override them for
-        non-standard HuggingFace processors.
+        forwarded to processor construction for non-standard HuggingFace
+        processors.
 
     Notes
     -----
@@ -484,20 +470,6 @@ class HuggingFaceConfig(base.BaseModel):
     entries.
     """
 
-    device_map: tp.Literal["auto", "cpu", "cuda"] = "auto"
-    torch_dtype: (
-        tp.Literal[
-            "auto",
-            "float16",
-            "float32",
-            "float64",
-            "bfloat16",
-        ]
-        | None
-    ) = None
-    attn_implementation: str | None = None
-    revision: str | None = None
-    trust_remote_code: bool = False
     model_cls_name: str = "AutoModel"
     processor_cls_name: str = "AutoProcessor"
     model_kwargs: dict[str, tp.Any] | None = None
@@ -544,7 +516,18 @@ class HuggingFaceConfig(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device_map", "attn_implementation", "trust_remote_code"]
+        return []
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        forbidden = {"device_map", "torch_dtype"} & set(self.model_kwargs or {})
+        if forbidden:
+            bad_keys = ", ".join(sorted(forbidden))
+            msg = (
+                f"Do not define {bad_keys} in hf_config.model_kwargs. "
+                "Use HuggingFaceMixin.device and HuggingFaceMixin.dtype instead."
+            )
+            raise ValueError(msg)
 
     def _transformers_cls(self, cls_name: str, kind: str) -> tp.Any:
         import transformers
@@ -583,36 +566,6 @@ class HuggingFaceConfig(base.BaseModel):
             "processor",
         )
 
-    @property
-    def config_build_kwargs(self) -> dict[str, tp.Any]:
-        kwargs: dict[str, tp.Any] = {}
-        if self.revision is not None:
-            kwargs["revision"] = self.revision
-        if self.trust_remote_code:
-            kwargs["trust_remote_code"] = self.trust_remote_code
-        return kwargs
-
-    @property
-    def model_build_kwargs(self) -> dict[str, tp.Any]:
-        kwargs = self.config_build_kwargs.copy()
-        if self.device_map == "auto":
-            kwargs["device_map"] = self.device_map
-        if self.attn_implementation is not None:
-            kwargs["attn_implementation"] = self.attn_implementation
-        if self.torch_dtype is not None:
-            dtype = self.torch_dtype
-            kwargs["torch_dtype"] = dtype if dtype == "auto" else getattr(torch, dtype)
-        if self.model_kwargs is not None:
-            kwargs.update(self.model_kwargs)
-        return kwargs
-
-    @property
-    def processor_build_kwargs(self) -> dict[str, tp.Any]:
-        kwargs = self.config_build_kwargs.copy()
-        if self.processor_kwargs is not None:
-            kwargs.update(self.processor_kwargs)
-        return kwargs
-
 
 class HuggingFaceMixin(base.BaseModel):
     """Mixin for extractors that use a HuggingFace model.
@@ -624,8 +577,15 @@ class HuggingFaceMixin(base.BaseModel):
     model_name: str
         Name of the model to use.
     hf_config: HuggingFaceConfig
-        Shared HuggingFace loading options such as device_map, torch_dtype,
-        revision, attention implementation, and trust_remote_code.
+        Shared HuggingFace loading options such as model and processor classes,
+        plus extra model and processor kwargs.
+    device: {"auto", "cpu", "cuda", "accelerate"}, default="auto"
+        Device strategy for model placement. ``"auto"`` resolves to CUDA when
+        available, otherwise CPU. ``"accelerate"`` forwards
+        ``device_map="auto"`` to HuggingFace Accelerate.
+    dtype: {"auto", "float16", "float32", "float64", "bfloat16"} | None, default=None
+        Optional dtype forwarded to ``from_pretrained`` as ``torch_dtype``.
+        If ``None``, Transformers chooses its default dtype.
     pretrained: bool
         If True, load pretrained model weights. If False, instantiate from the
         pretrained config without loading pretrained weights.
@@ -656,6 +616,17 @@ class HuggingFaceMixin(base.BaseModel):
     )
     model_name: str
     hf_config: HuggingFaceConfig = HuggingFaceConfig()
+    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
+    dtype: (
+        tp.Literal[
+            "auto",
+            "float16",
+            "float32",
+            "float64",
+            "bfloat16",
+        ]
+        | None
+    ) = None
     pretrained: bool = True
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
@@ -669,6 +640,8 @@ class HuggingFaceMixin(base.BaseModel):
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
+        if self.device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -708,20 +681,19 @@ class HuggingFaceMixin(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return []
+        return ["device"]
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded: list[str] = []
+        excluded: list[str] = ["device"]
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
 
     @property
-    def device(self) -> str:
-        device_map = self.hf_config.device_map
-        if device_map == "auto":
+    def input_device(self) -> str:
+        if self.device == "accelerate":
             return "cuda" if torch.cuda.is_available() else "cpu"
-        return device_map
+        return self.device
 
     @property
     def model(self) -> torch.nn.Module:
@@ -742,27 +714,30 @@ class HuggingFaceMixin(base.BaseModel):
         hf_config = self.hf_config
         Model = hf_config.model_cls(self.model_name)
         if self.pretrained:
+            kwargs = (hf_config.model_kwargs or {}).copy()
+            if self.device == "accelerate":
+                kwargs["device_map"] = "auto"
+            if self.dtype is not None and "torch_dtype" not in kwargs:
+                kwargs["torch_dtype"] = (
+                    self.dtype if self.dtype == "auto" else getattr(torch, self.dtype)
+                )
             try:
                 model = Model.from_pretrained(
                     self.model_name,
-                    **hf_config.model_build_kwargs,
+                    **kwargs,
                 )
             except Exception as e:
                 msg = (
                     f"Failed to instantiate HuggingFace model {self.model_name!r} "
                     f"with {self.__class__.__name__}. Try adjusting hf_config, "
-                    "for example model_cls_name, trust_remote_code, revision, "
-                    "torch_dtype, attn_implementation, or model_kwargs. "
+                    "for example model_cls_name or model_kwargs, or adjusting dtype. "
                     f"Original error: {type(e).__name__}: {e}"
                 )
                 raise RuntimeError(msg) from e
-            if hf_config.device_map != "auto":
+            if self.device != "accelerate":
                 model.to(self.device)
         else:
-            config = AutoConfig.from_pretrained(
-                self.model_name,
-                **hf_config.config_build_kwargs,
-            )
+            config = AutoConfig.from_pretrained(self.model_name)
             if hasattr(Model, "from_config"):
                 model = Model.from_config(config, **(hf_config.model_kwargs or {}))
             else:
@@ -770,10 +745,9 @@ class HuggingFaceMixin(base.BaseModel):
                     config,
                     **(hf_config.model_kwargs or {}),
                 )
-            torch_dtype = hf_config.torch_dtype
-            if isinstance(torch_dtype, str) and torch_dtype != "auto":
-                model.to(dtype=getattr(torch, torch_dtype))
-            model.to(self.device)
+            if isinstance(self.dtype, str) and self.dtype != "auto":
+                model.to(dtype=getattr(torch, self.dtype))
+            model.to(self.input_device)
         model.eval()
         return model
 
@@ -782,7 +756,7 @@ class HuggingFaceMixin(base.BaseModel):
         Processor = self.hf_config.processor_cls(self.model_name)
         return Processor.from_pretrained(
             self.model_name,
-            **self.hf_config.processor_build_kwargs,
+            **(self.hf_config.processor_kwargs or {}),
         )
 
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
