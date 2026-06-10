@@ -657,12 +657,13 @@ class HuggingFaceMixin(base.BaseModel):
 
     @staticmethod
     def _module_device(model: torch.nn.Module) -> torch.device:
-        tensor = next(model.parameters(), None)
-        if tensor is None:
-            tensor = next(model.buffers(), None)
-        if tensor is None:
-            return torch.device("cpu")
-        return tensor.device
+        parameter = next(model.parameters(), None)
+        if parameter is not None:
+            return parameter.device
+        buffer = next(model.buffers(), None)
+        if buffer is not None:
+            return buffer.device
+        return torch.device("cpu")
 
     @property
     def processor(self) -> tp.Any:
