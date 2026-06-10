@@ -327,8 +327,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     def tokenizer(self) -> tp.Any:
         tokenizer = self.processor
         if tokenizer.pad_token is None:
-            # Previously added a new "[PAD]" token and resized embeddings; using
-            # the existing EOS token keeps the model weights unchanged.
+            # Use an existing token so model weights stay unchanged.
             tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
@@ -356,12 +355,13 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         start: float,
         duration: float,
     ) -> tp.Iterable[TimedArray]:
-        # Backward compatibility check for contextualized for people that used it as a default without context
-        # : raise if contextualized is True but no context is provided
         if self.contextualized and any(
             not getattr(event, "context", None) for event in events
         ):
-            msg = "Contextualized embeddings require a context. Please provide a context for all events or set contextualized to False. This might happen since contextualized is now True by default. "
+            msg = (
+                "Contextualized embeddings require non-empty context for all events. "
+                "Set contextualized=False for context-free text."
+            )
             raise ValueError(msg)
         # optimized fetch of multiple events compared to individual get_static calls:
         for event, latent in zip(events, self._get_data(events)):
@@ -389,7 +389,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = self.input_device
+        device = self.model_device
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -457,21 +457,5 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if device == "cuda":
+                if device.type == "cuda":
                     torch.cuda.empty_cache()
-
-
-def part_reversal(tensor: torch.Tensor) -> None:
-    """reverse coefficients by parts, to scramble the weights of a network
-    without changing its statistics and with low enough memory footprint
-    """
-    x = tensor.view(-1)
-    # use around 14 splits, and not an integer to avoid alignment with data
-    sq200 = 10 * np.sqrt(2)
-    num = max(len(x) / sq200, sq200)
-    first = 0
-    last = num
-    while first < len(x):
-        x[first : int(last)] = reversed(x[first : int(last)])  # type: ignore
-        last += num
-        first = int(last)

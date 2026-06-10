@@ -372,13 +372,3 @@ def test_batched_target_slice_excludes_pads() -> None:
     )
     np.testing.assert_allclose(short_batched, short_alone, rtol=1e-3, atol=1e-3)
     np.testing.assert_allclose(long_batched, long_alone, rtol=1e-3, atol=1e-3)
-
-
-def test_part_reversal() -> None:
-    ref = np.random.rand(2, 3, 4)
-    x = torch.from_numpy(np.array(ref, copy=True))
-    np.testing.assert_almost_equal(x.numpy(), ref)
-    text.part_reversal(x)
-    assert x.shape == ref.shape
-    with pytest.raises(AssertionError):
-        np.testing.assert_almost_equal(x.numpy(), ref)

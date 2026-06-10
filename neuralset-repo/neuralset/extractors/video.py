@@ -160,7 +160,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         self._warn_if_config_num_frames_mismatch()
         freq = events[0].frequency if self.frequency == "native" else self.frequency
         T = 1 / freq if self.clip_duration is None else self.clip_duration
-        subtimes = list(k / self.num_frames * T for k in reversed(range(self.num_frames)))  # type: ignore
+        subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
         for event in events:
             video = event.read()
 
@@ -217,7 +217,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         inputs = self.processor(**kwargs)
         # prevent nans (happening for uniform images)
         image_extractors._fix_pixel_values(inputs)
-        inputs = inputs.to(self.model.device)
+        inputs = inputs.to(self.model_device)
         with torch.inference_mode():
             pred = self.model(**inputs, output_hidden_states=True)
         states = pred.hidden_states

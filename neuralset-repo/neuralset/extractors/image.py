@@ -174,9 +174,9 @@ class HuggingFaceImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixi
         with torch.no_grad():
             for batch_images in dloader:
                 if isinstance(batch_images, torch.Tensor):
-                    batch_images = batch_images.to(self.input_device)
+                    batch_images = batch_images.to(self.model_device)
                 else:  # should be list of different sizes
-                    batch_images = [i.to(self.input_device) for i in batch_images]
+                    batch_images = [i.to(self.model_device) for i in batch_images]
                 with torch.no_grad():
                     latents = self._extract_batched_latents(batch_images)
                 for latent in latents:
@@ -245,7 +245,7 @@ class HuggingFaceImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixi
             kwargs["text"] = text
         inputs = self.processor(**kwargs)
         _fix_pixel_values(inputs)
-        inputs = inputs.to(self.model.device)
+        inputs = inputs.to(self.model_device)
         with torch.inference_mode():
             return self.model(**inputs, output_hidden_states=True)
 

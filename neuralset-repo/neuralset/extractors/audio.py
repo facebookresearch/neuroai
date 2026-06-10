@@ -411,7 +411,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         features = self._get_features(wav)
         with torch.no_grad():
             outputs = self.model(
-                features.to(self.input_device), output_hidden_states=True
+                features.to(self.model_device), output_hidden_states=True
             )
         if self.layer_type == "transformer":
             out: tp.Any = outputs.get("hidden_states")

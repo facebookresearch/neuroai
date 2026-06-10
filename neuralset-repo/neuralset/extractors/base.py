@@ -606,7 +606,6 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        # check classes exist
         self.hf_config.model_cls(self.model_name)
         self.hf_config.processor_cls(self.model_name)
         if not self._skip_repo_check and not self.repo_exists():
@@ -647,16 +646,23 @@ class HuggingFaceMixin(base.BaseModel):
         return excluded
 
     @property
-    def input_device(self) -> str:
-        if self.device == "accelerate":
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        return self.device
-
-    @property
     def model(self) -> torch.nn.Module:
         if not hasattr(self, "_model") or self._model is None:
             self._model = self.load_model()
         return self._model
+
+    @property
+    def model_device(self) -> torch.device:
+        return self._module_device(self.model)
+
+    @staticmethod
+    def _module_device(model: torch.nn.Module) -> torch.device:
+        tensor = next(model.parameters(), None)
+        if tensor is None:
+            tensor = next(model.buffers(), None)
+        if tensor is None:
+            return torch.device("cpu")
+        return tensor.device
 
     @property
     def processor(self) -> tp.Any:
@@ -665,7 +671,6 @@ class HuggingFaceMixin(base.BaseModel):
         return self._processor
 
     def load_model(self) -> torch.nn.Module:
-        """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
 
         hf_config = self.hf_config
@@ -694,7 +699,9 @@ class HuggingFaceMixin(base.BaseModel):
             if self.device != "accelerate":
                 model.to(self.device)
         else:
-            config = AutoConfig.from_pretrained(self.model_name)
+            config = AutoConfig.from_pretrained(
+                self.model_name, output_hidden_states=True
+            )
             if hasattr(Model, "from_config"):
                 model = Model.from_config(config, **(hf_config.model_kwargs or {}))
             else:
@@ -704,12 +711,15 @@ class HuggingFaceMixin(base.BaseModel):
                 )
             if isinstance(self.dtype, str) and self.dtype != "auto":
                 model.to(dtype=getattr(torch, self.dtype))
-            model.to(self.input_device)
+            if self.device == "accelerate":
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                model.to(device)
+            else:
+                model.to(self.device)
         model.eval()
         return model
 
     def load_processor(self) -> tp.Any:
-        """Load a HuggingFace processor with shared config."""
         Processor = self.hf_config.processor_cls(self.model_name)
         return Processor.from_pretrained(
             self.model_name,
