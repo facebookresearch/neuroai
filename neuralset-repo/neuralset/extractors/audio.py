@@ -346,8 +346,6 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     normalized: bool = True
     layer_type: tp.Literal["transformer", "convolution"] = "transformer"
-    # internal
-    _model: nn.Module
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)

@@ -524,6 +524,22 @@ class HuggingFaceConfig(base.BaseModel):
             },
         ),
         ("gpt2", {"model_cls_name": "GPT2Model"}),
+        ("phi-4", {"model_cls_name": "AutoModelForCausalLM"}),
+        ("vjepa2", {"processor_cls_name": "AutoVideoProcessor"}),
+        (
+            "google/vivit",
+            {
+                "model_cls_name": "VivitModel",
+                "processor_cls_name": "VivitImageProcessor",
+            },
+        ),
+        (
+            "llava-next-video",
+            {
+                "model_cls_name": "LlavaNextVideoForConditionalGeneration",
+                "processor_cls_name": "LlavaNextVideoProcessor",
+            },
+        ),
     )
 
     @classmethod

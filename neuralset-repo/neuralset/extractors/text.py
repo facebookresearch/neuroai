@@ -291,8 +291,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     batch_size: int = 32
     contextualized: bool = True
 
-    # initialized later
-    _model: nn.Module = pydantic.PrivateAttr()
     _max_length: int | None = pydantic.PrivateAttr(None)
     hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
 

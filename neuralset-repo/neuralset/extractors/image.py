@@ -8,10 +8,8 @@ import logging
 import typing as tp
 
 import numpy as np
-import pydantic
 import torch
 from exca import MapInfra
-from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -126,8 +124,6 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
     batch_size: int = 32
     imsize: int | None = None
     frequency: float | tp.Literal["native"] = 0.0  # type: ignore[assignment]
-    _model: nn.Module = pydantic.PrivateAttr()  # initialized later
-    _processor: tp.Any = pydantic.PrivateAttr()
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
