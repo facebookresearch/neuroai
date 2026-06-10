@@ -47,9 +47,16 @@ def dataframe_query(df: pd.DataFrame, query: str) -> list[ns.events.Event]:
     return extract_events(query_with_index(df, query), types="Fmri")
 
 
-def event_list_query(events: list[ns.events.Event], query: str) -> list[ns.events.Event]:
+def events_to_dataframe(events: list[ns.events.Event]) -> pd.DataFrame:
     events_df = pd.DataFrame([event.to_dict() for event in events])
     events_df.index = pd.RangeIndex(len(events))
+    return events_df
+
+
+def event_list_dataframe_query(
+    events: list[ns.events.Event], query: str
+) -> list[ns.events.Event]:
+    events_df = events_to_dataframe(events)
     selected = query_with_index(events_df, query)
     return [events[int(index)] for index in selected.index]
 
@@ -76,9 +83,7 @@ def iter_multi(events: list[ns.events.Event]) -> list[ns.events.Event]:
     return selected
 
 
-def time_call(
-    fn: tp.Callable[[], list[ns.events.Event]], repeats: int
-) -> tuple[float, int]:
+def time_call(fn: tp.Callable[[], tp.Sized], repeats: int) -> tuple[float, int]:
     elapsed = []
     n_selected = 0
     for _ in range(repeats):
@@ -98,14 +103,17 @@ def run_benchmark(sizes: list[int], repeats: int) -> pd.DataFrame:
     for n_events in sizes:
         df = make_fmri_events(n_events)
         events = extract_events(df, types="Fmri")
-        methods: dict[str, dict[str, tp.Callable[[], list[ns.events.Event]]]] = {
+        methods: dict[str, dict[str, tp.Callable[[], tp.Sized]]] = {
             "dataframe_query": {
                 name: lambda q=query: dataframe_query(df, q)
                 for name, query in queries.items()
             },
-            "event_list_query": {
-                name: lambda q=query: event_list_query(events, q)
+            "event_list_dataframe_query": {
+                name: lambda q=query: event_list_dataframe_query(events, q)
                 for name, query in queries.items()
+            },
+            "event_to_dataframe": {
+                name: lambda: events_to_dataframe(events) for name in queries
             },
             "python_iteration": {
                 "single_column": lambda: iter_single(events),
