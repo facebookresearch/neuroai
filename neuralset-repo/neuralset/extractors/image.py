@@ -190,6 +190,10 @@ def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
     return str(event.study_relative_path())
 
 
+class HuggingFaceImageConfig(extractor_base.HuggingFaceConfig):
+    processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": False}
+
+
 class HuggingFaceImage(BaseImage):
     """Compute image embeddings using transformer-based models obtained through HuggingFace API.
 
@@ -202,6 +206,7 @@ class HuggingFaceImage(BaseImage):
 
     # class attributes
     model_name: str = "facebook/dinov2-base"
+    hf_config: HuggingFaceImageConfig = HuggingFaceImageConfig()
     # for precomputing/caching
     infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
 
@@ -258,9 +263,6 @@ class HuggingFaceImage(BaseImage):
                 f'The effect of "imsize"={self.imsize} might be cancelled by '
                 "the HuggingFace processor."
             )
-        self.hf_config.processor_kwargs = {"do_rescale": False} | (
-            self.hf_config.processor_kwargs or {}
-        )
         super().model_post_init(log__)
 
     def _full_predict(  # return the raw output, used in tests

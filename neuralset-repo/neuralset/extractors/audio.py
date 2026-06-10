@@ -312,6 +312,10 @@ class SonarAudio(BaseAudio):
         return out.squeeze(1).detach().cpu().clone().transpose(-1, -2)  # type: ignore
 
 
+class HuggingFaceAudioConfig(HuggingFaceConfig):
+    processor_cls_name: str = "AutoFeatureExtractor"
+
+
 class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
     """
     Base class for extracting audio features from Hugging Face models.
@@ -338,9 +342,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     model_name: str = "facebook/wav2vec2-large-xlsr-53"
     requirements: tp.ClassVar[tuple[str, ...]] = ("transformers>=4.29.2",)
-    hf_config: HuggingFaceConfig = HuggingFaceConfig(
-        processor_cls_name="AutoFeatureExtractor",
-    )
+    hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig()
 
     normalized: bool = True
     layer_type: tp.Literal["transformer", "convolution"] = "transformer"
@@ -457,9 +459,8 @@ class Wav2VecBert(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/w2v-bert-2.0"
-    hf_config: HuggingFaceConfig = HuggingFaceConfig(
+    hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
         model_cls_name="Wav2Vec2BertModel",
-        processor_cls_name="AutoFeatureExtractor",
     )
 
 
@@ -479,9 +480,8 @@ class SeamlessM4T(HuggingFaceAudio):
     """
 
     model_name: str = "facebook/hf-seamless-m4t-medium"
-    hf_config: HuggingFaceConfig = HuggingFaceConfig(
+    hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
         model_cls_name="SeamlessM4TModel",
-        processor_cls_name="AutoFeatureExtractor",
     )
 
     def load_model(self) -> torch.nn.Module:
@@ -507,10 +507,9 @@ class Whisper(HuggingFaceAudio):
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
-    hf_config: HuggingFaceConfig = HuggingFaceConfig(
+    hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
         torch_dtype="float32",
         model_cls_name="WhisperModel",
-        processor_cls_name="AutoFeatureExtractor",
     )
 
     def load_model(self) -> torch.nn.Module:

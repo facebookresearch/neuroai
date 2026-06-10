@@ -46,6 +46,10 @@ def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
     return output
 
 
+class HuggingFaceVideoConfig(extractor_base.HuggingFaceConfig):
+    processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": True}
+
+
 class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceMixin):
     """Extract video embeddings using a native HuggingFace video model.
 
@@ -89,6 +93,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         "julius>=0.2.7",
     )
     model_name: str = "MCG-NJU/videomae-base"
+    hf_config: HuggingFaceVideoConfig = HuggingFaceVideoConfig()
     use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
@@ -129,9 +134,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         raise ValueError(msg)
 
     def model_post_init(self, log__: tp.Any) -> None:
-        self.hf_config.processor_kwargs = {"do_rescale": True} | (
-            self.hf_config.processor_kwargs or {}
-        )
         super().model_post_init(log__)
         _HFVideoModel.check_layer_type(
             layer_type=self.layer_type, model_name=self.model_name
