@@ -40,8 +40,7 @@ class _ImageDataset(Dataset):
     """PyTorch Dataset for loading and transforming image events.
 
     This dataset wraps a sequence of image events and applies optional transformations
-    to each image when accessed. It is primarily used by the BaseImage class
-    to efficiently compute image features in batches.
+    to each image when accessed.
     """
 
     def __init__(self, events: tp.Sequence[etypes.Image], transform=None):
@@ -94,21 +93,23 @@ class _VideoImage(etypes.Image):
         return PIL.Image.fromarray(img.astype("uint8"))
 
 
-class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
-    """Base class for computing features from image events using batch processing.
+def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
+    if isinstance(event, etypes.Video):
+        return event._splittable_event_uid()
+    return str(event.study_relative_path())
 
-    This class provides the infrastructure for extracting features from sequences of images
-    using neural network models. It handles batching, device management and optional image
-    resizing. Subclasses must implement `_extract_batched_latents` to define
-    the specific feature extraction logic.
+
+class HuggingFaceImageConfig(extractor_base.HuggingFaceConfig):
+    processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": False}
+
+
+class HuggingFaceImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
+    """Compute image embeddings using transformer-based models obtained through HuggingFace API.
 
     Parameters
     ----------
-    batch_size : int, default=32
-        Number of images to process in a batch.
-    imsize : int | None, default to None
-        Target size for resizing images before processing. If specified, images are
-        resized to (imsize, imsize). If None, original image dimensions are preserved.
+    model_name : str, default="facebook/dinov2-base"
+        HuggingFace model identifier.
 
     """
 
@@ -119,8 +120,10 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
         "transformers>=4.29.2",
         "pillow>=9.2.0",
     )
-
-    # extractor attributes
+    model_name: str = "facebook/dinov2-base"
+    hf_config: HuggingFaceImageConfig = HuggingFaceImageConfig()
+    # for precomputing/caching
+    infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
     batch_size: int = 32
     imsize: int | None = None
     frequency: float | tp.Literal["native"] = 0.0  # type: ignore[assignment]
@@ -134,21 +137,21 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        return extractor_base.BaseStatic._exclude_from_cache_uid(
+        prev = extractor_base.BaseStatic._exclude_from_cache_uid(
             self
         ) + extractor_base.HuggingFaceMixin._exclude_from_cache_uid(self)
+        return prev + ["duration"]
 
-    def _make_transform(self) -> tp.Any:
+    def _iter_image_latents(
+        self, events: tp.Sequence[etypes.Image], aggregate_layers: bool
+    ) -> tp.Iterator[np.ndarray]:
         from torchvision import transforms
 
+        logger.info(f"Computing {len(events)} image latents")
         transfs = [transforms.ToTensor()]
         if self.imsize is not None:
             transfs = [transforms.Resize(self.imsize)] + transfs
-        return transforms.Compose(transfs)
-
-    def _get_data(self, events: tp.Sequence[etypes.Image]) -> tp.Iterator[np.ndarray]:
-        logger.info(f"Computing {len(events)} image latents")
-        dset = _ImageDataset(events, transform=self._make_transform())
+        dset = _ImageDataset(events, transform=transforms.Compose(transfs))
         dloader = DataLoader(
             dset,
             batch_size=self.batch_size,
@@ -171,44 +174,9 @@ class BaseImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):
                     # but code would be messier
                     # - aggregating in cuda avoids transferring too much data to cpu
                     latent = self._aggregate_tokens(latent)
+                    if aggregate_layers:
+                        latent = self._aggregate_layers(latent)
                     yield latent.cpu().numpy()
-
-    def get_static(self, event: etypes.Event) -> torch.Tensor:
-        raise NotImplementedError
-
-    def _extract_batched_latents(self, images: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
-
-
-def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
-    if isinstance(event, etypes.Video):
-        return event._splittable_event_uid()
-    return str(event.study_relative_path())
-
-
-class HuggingFaceImageConfig(extractor_base.HuggingFaceConfig):
-    processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": False}
-
-
-class HuggingFaceImage(BaseImage):
-    """Compute image embeddings using transformer-based models obtained through HuggingFace API.
-
-    Parameters
-    ----------
-    model_name : str, default="facebook/dinov2-base"
-        HuggingFace model identifier.
-
-    """
-
-    # class attributes
-    model_name: str = "facebook/dinov2-base"
-    hf_config: HuggingFaceImageConfig = HuggingFaceImageConfig()
-    # for precomputing/caching
-    infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
-
-    def _exclude_from_cache_uid(self) -> list[str]:
-        prev = super()._exclude_from_cache_uid()
-        return prev + ["duration"]
 
     @infra.apply(
         item_uid=_huggingface_image_event_uid,
@@ -222,15 +190,10 @@ class HuggingFaceImage(BaseImage):
             for event in tp.cast(tp.Sequence[etypes.Video], events):
                 yield self._get_video_data(event)
             return
-        yield from self._get_image_data(tp.cast(tp.Sequence[etypes.Image], events))
-
-    def _get_image_data(
-        self, events: tp.Sequence[etypes.Image]
-    ) -> tp.Iterator[np.ndarray]:
-        for latents in super()._get_data(events):
-            if self.cache_n_layers is None:
-                latents = self._aggregate_layers(latents)
-            yield latents
+        yield from self._iter_image_latents(
+            tp.cast(tp.Sequence[etypes.Image], events),
+            aggregate_layers=self.cache_n_layers is None,
+        )
 
     def _get_video_data(self, event: etypes.Video) -> np.ndarray:
         if self.frequency == 0:
@@ -243,9 +206,10 @@ class HuggingFaceImage(BaseImage):
             times = np.linspace(0, video.duration, expect_frames + 1)[1:]
             frames = [_VideoImage(video=video, time=float(t)) for t in times]
             embeddings = []
-            for embd in BaseImage._get_data(self, frames):
-                if self.cache_n_layers is None:
-                    embd = self._aggregate_layers(embd)
+            for embd in self._iter_image_latents(
+                frames,
+                aggregate_layers=self.cache_n_layers is None,
+            ):
                 embeddings.append(np.asarray(embd))
             output = np.stack(embeddings, axis=0)
             output = output.transpose(list(range(1, output.ndim)) + [0])
@@ -275,9 +239,7 @@ class HuggingFaceImage(BaseImage):
         with torch.inference_mode():
             return self.model(**inputs, output_hidden_states=True)
 
-    def _get_hidden_states(self, images: torch.Tensor) -> list[torch.Tensor]:
-        """Extract hidden_states as n_layers n_layers x (batch, tokens,  features)"""
-        # this method is overridden in experimental extractors for more hugging face models
+    def _extract_batched_latents(self, images: torch.Tensor) -> torch.Tensor:
         out = self._full_predict(images)
         out = getattr(out, "vision_model_output", out)  # for clip
         states = out.hidden_states
@@ -288,10 +250,6 @@ class HuggingFaceImage(BaseImage):
                 "encoders (CLIP, SAM, ViT) no longer collect intermediate "
                 "hidden states."
             )
-        return states  # type: ignore
-
-    def _extract_batched_latents(self, images: torch.Tensor) -> torch.Tensor:
-        states = self._get_hidden_states(images)
         out = torch.cat([x.unsqueeze(1) for x in states], axis=1)  # type: ignore
         # (batch, n_layers, tokens, n_features)
         return out  # type: ignore

@@ -179,7 +179,7 @@ def test_video_huggingface() -> None:
     )
     config = tp.cast(tp.Any, extractor.model.config)
     data = np.random.rand(config.num_frames, 3, 64, 64)
-    out = extractor.predict_hidden_states(data)
+    out = extractor._predict_hidden_states(data)
     assert out.shape == (1, 13, 1568, 768)
 
 

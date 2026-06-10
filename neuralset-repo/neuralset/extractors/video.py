@@ -181,7 +181,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                         size = tuple(int(s / factor) for s in pil_imgs[0].size)
                         pil_imgs = [pi.resize(size) for pi in pil_imgs]
                 data = np.array([np.array(pi) for pi in pil_imgs])
-                t_embd = self.predict_hidden_states(data)
+                t_embd = self._predict_hidden_states(data)
                 if t_embd.shape[0] != 1:
                     raise RuntimeError(f"Found several batches: {t_embd.shape}")
                 t_embd = t_embd[0]  # aggregate_tokens works on non-batched-data
@@ -202,7 +202,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                 duration=event.duration,
             )
 
-    def predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
+    def _predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
         kwargs: dict[str, tp.Any] = {
             self._processor_input_field(): list(images),
             "return_tensors": "pt",
