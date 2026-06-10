@@ -49,10 +49,7 @@ def test_image(tmp_path: Path) -> None:
     assert data.max() > 0
     infra: tp.Any = dict(folder=tmp_path)
     for _ in range(2):
-        extractor = ns.extractors.HuggingFaceImage(
-            infra=infra,
-            device="cpu",
-        )
+        extractor = ns.extractors.HuggingFaceImage(infra=infra, device="cpu")
         data = extractor(events, start=10.0, duration=0.5)
         (n_dims,) = data.shape
         assert data.max() > 0
@@ -157,8 +154,7 @@ def test_image_token_aggregation(
     if device == "cuda" and not torch.cuda.is_available():
         pytest.skip("Cuda not available")
     extractor = ns.extractors.HuggingFaceImage(
-        device=device,
-        token_aggregation=token_aggregation,
+        device=device, token_aggregation=token_aggregation
     )
     out = extractor.get_static(cat_event)
     assert out.ndim == 2 if token_aggregation is None else 1

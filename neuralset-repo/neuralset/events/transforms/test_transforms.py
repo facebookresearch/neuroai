@@ -1065,10 +1065,7 @@ def test_similarity_splitter(image_fpaths: list[Path]) -> None:
         }
     )
 
-    feat = ns.extractors.image.HuggingFaceImage(
-        device="cpu",
-        layers=1.0,
-    )
+    feat = ns.extractors.image.HuggingFaceImage(device="cpu", layers=1.0)
     splitter = _transf.SimilaritySplitter(extractor=feat)
     events = splitter(mock_events)
 

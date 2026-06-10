@@ -251,10 +251,7 @@ def test_llm_long_context() -> None:
 
 
 def test_max_length_real_limit() -> None:
-    extractor = text.HuggingFaceText(
-        model_name="openai-community/gpt2",
-        device="cpu",
-    )
+    extractor = text.HuggingFaceText(model_name="openai-community/gpt2", device="cpu")
     assert extractor.tokenizer.model_max_length == 1024
     assert extractor._get_max_length() == 1024
 
