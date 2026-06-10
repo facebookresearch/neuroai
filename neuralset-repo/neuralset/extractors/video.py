@@ -4,8 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import inspect
 import logging
 import typing as tp
+import warnings
 
 import numpy as np
 import pydantic
@@ -63,30 +65,22 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         HuggingFace video model identifier.
         Image models are not accepted here; use `HuggingFaceImage` for
         frame-by-frame video embeddings.
-    use_audio : bool, default=True
-        Whether to include audio alongside video frames during feature extraction.
-        Only applicable for models that support multimodal inputs (e.g., LLaVA-Video).
     clip_duration : float | None, default=None
         Duration (in seconds) of video sub-clips to process. If None, defaults to
         one timestep (1 / frequency).
     max_imsize : int | None, default=None
-        Maximum image dimension for downsampling before processing. Useful for
-        memory-constrained scenarios. For example, Phi-4 downsizes to 448×448
-        before tokenization.
-    layer_type : str, default=""
-        Specific layer extraction mode for certain models.
-        For XClip: Use "mit" to extract from Multi-frame Integration Transformer
-        layers instead of vision backbone layers.
-        For LLaVA models: Must be a prompt string containing the ``<video>`` token
-        (e.g., ``"<|user|><video><|end|><|assistant|>"``).
-
-        .. note:: The pipe characters in the example are literal LLaVA tokens.
-    num_frames : int | None, default=None
-        Number of frames to pass to the video model per clip. If None, uses the
-        model's default frame count (e.g., 16 for VideoMAE, 8 for XClip, 64 for VJepa2).
+        Maximum image dimension for downsampling before processing.
+    num_frames : int
+        Number of frames to pass to the video model per clip.
     """
 
     event_types: tp.Literal["Video"] = "Video"
+    SUPPORTED_MODELS: tp.ClassVar[tuple[str, ...]] = (
+        "vjepa2",
+        "videomae",
+        "google/vivit",
+        "facebook/timesformer",
+    )
     # class attributes
     requirements: tp.ClassVar[tuple[str, ...]] = (
         "torchvision>=0.15.2",
@@ -94,11 +88,9 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
     )
     model_name: str = "MCG-NJU/videomae-base"
     hf_config: HuggingFaceVideoConfig = HuggingFaceVideoConfig()
-    use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
-    layer_type: str = ""
-    num_frames: int | None = None
+    num_frames: int
     infra: MapInfra = MapInfra(
         timeout_min=120,
         gpus_per_node=1,
@@ -116,7 +108,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                 "`image=HuggingFaceImage(...)`. For frame-by-frame video "
                 "embeddings, instantiate HuggingFaceImage with event_types='Video'. "
                 "For native video models, pass the model name directly as "
-                "HuggingFaceVideo(model_name=...)."
+                "HuggingFaceVideo(model_name=..., num_frames=...)."
             )
             raise ValueError(msg)
         return data
@@ -124,7 +116,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
     @pydantic.field_validator("model_name")
     @classmethod
     def _validate_model_name(cls, model_name: str) -> str:
-        if any(z in model_name for z in _HFVideoModel.MODELS):
+        if any(z in model_name for z in cls.SUPPORTED_MODELS):
             return model_name
         msg = (
             "The HuggingFaceVideo API now only supports native video models. "
@@ -132,12 +124,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
             f"with event_types='Video' instead of using model_name={model_name!r}."
         )
         raise ValueError(msg)
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        _HFVideoModel.check_layer_type(
-            layer_type=self.layer_type, model_name=self.model_name
-        )
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -164,21 +150,12 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
     def _get_data(self, events: list[evts.Video]) -> tp.Iterator[nsbase.TimedArray]:
         # read all videos of the events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
-        model = _HFVideoModel(
-            extractor=self,
-            layer_type=self.layer_type,
-            num_frames=self.num_frames,
-        )
-        # videomae = 16 frames
-        # xclip = 8 or 16 frames (unclear)
+        self._warn_if_config_num_frames_mismatch()
         freq = events[0].frequency if self.frequency == "native" else self.frequency
         T = 1 / freq if self.clip_duration is None else self.clip_duration
-        subtimes = list(
-            k / model.num_frames * T for k in reversed(range(model.num_frames))
-        )  # type: ignore
+        subtimes = list(k / self.num_frames * T for k in reversed(range(self.num_frames)))  # type: ignore
         for event in events:
             video = event.read()
-            audio = video.audio if self.use_audio else None
 
             freq = self.frequency if self.frequency != "native" else event.frequency
             expect_frames = nsbase.Frequency(freq).to_ind(event.duration)
@@ -196,9 +173,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
             # pylint: disable=protected-access
             for k, t in tqdm(enumerate(times), total=len(times), desc="Encoding video"):
                 ims = [_VideoImage(video=video, time=max(0, t - t2)) for t2 in subtimes]
-                audio_clip = (
-                    audio.subclipped(max(0, t - T), t) if audio is not None else None
-                )
                 pil_imgs = [i.read() for i in ims]
                 # resize if images are too big
                 if pil_imgs and self.max_imsize is not None:
@@ -207,7 +181,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                         size = tuple(int(s / factor) for s in pil_imgs[0].size)
                         pil_imgs = [pi.resize(size) for pi in pil_imgs]
                 data = np.array([np.array(pi) for pi in pil_imgs])
-                t_embd = model.predict_hidden_states(data, audio_clip)
+                t_embd = self.predict_hidden_states(data)
                 if t_embd.shape[0] != 1:
                     raise RuntimeError(f"Found several batches: {t_embd.shape}")
                 t_embd = t_embd[0]  # aggregate_tokens works on non-batched-data
@@ -228,112 +202,11 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
                 duration=event.duration,
             )
 
-
-class _HFVideoModel:
-    """Wrapper that provides a unified interface for loading and using various HuggingFace
-    video models
-
-    Parameters
-    ----------
-    model_name : str
-        HuggingFace model identifier.
-        The model will be loaded from the HuggingFace Hub. Please note that you may have to install additional dependencies to load it correctly.
-    layer_type: str, default=""
-        Specific layer extraction mode for certain models:
-        - For XClip: Use "mit" to extract from Multi-frame Integration Transformer
-          layers instead of vision backbone layers.
-        - For LLaVA models: Must be a prompt string containing the "<video>" token
-          (e.g., "<|user|><video><|end|><|assistant|>").
-    num_frames : int | None, default=None
-        Number of frames to pass to the video model per clip. If None, uses the
-        model's default frame count (e.g., 16 for VideoMAE, 8 for XClip, 64 for VJepa2).
-    """
-
-    MODELS = (
-        "vjepa2",
-        "videomae",
-        "microsoft/xclip",
-        "google/vivit",
-        "facebook/timesformer",
-        "LLaVA-NeXT-Video",
-        "LLaVA-Video",
-        "Phi-4",
-    )
-    # language + video models https://arxiv.org/pdf/2405.21075
-
-    def __init__(
-        self,
-        extractor: extractor_base.HuggingFaceMixin,
-        layer_type: str = "",
-        num_frames: int | None = None,
-    ) -> None:
-        super().__init__()
-        model_name = extractor.model_name
-        if not any(z in model_name for z in self.MODELS):
-            raise ValueError(f"Model {model_name!r} is not supported")
-
-        self.model = extractor.load_model()
-        self.processor = extractor.processor
-        self.model_name = model_name
-        self.layer_type = layer_type
-        if "llava" in model_name.lower():
-            max_frames = 16  # any number works
-        elif "vjepa2" in model_name.lower():
-            max_frames = 64
-        elif "Phi-4" in model_name:
-            max_frames = 4  # TODO: make this flexible?
-        else:
-            config: tp.Any = self.model.config  # type: ignore[attr-defined]
-            config = getattr(config, "vision_config", config)  # xclip
-            max_frames = config.num_frames
-        if num_frames is None:
-            self.num_frames = max_frames
-        else:
-            self.num_frames = num_frames
-        if self.num_frames > max_frames:
-            raise ValueError(
-                f"{model_name} only seems to supports {max_frames} frames, got {self.num_frames}"
-            )
-        self.check_layer_type(layer_type, model_name)
-
-    @staticmethod
-    def check_layer_type(layer_type: str, model_name: str) -> None:
-        if "xclip" in model_name and layer_type == "mit":
-            return  # is ok
-        if "llava" in model_name.lower():
-            if "<video>" not in layer_type:
-                msg = f"For {model_name!r}, layer_type must be a prompt with the <video> token\n"
-                # note: best aggregation was: mean
-                raise ValueError(msg)
-            return  # all good
-        if layer_type:
-            raise ValueError(f"No layer type available for {model_name!r}")
-
-    def predict(self, images: np.ndarray, audio: tp.Any | None = None) -> tp.Any:
-        kwargs: dict[str, tp.Any] = {"text": "", "return_tensors": "pt"}
-        field = "images"
-        if "xclip" in self.model_name:
-            field = "videos"
-        elif "llava" in self.model_name.lower():
-            field = "videos"
-            kwargs["text"] = self.layer_type
-        elif "vjepa2" in self.model_name:
-            field = "videos"
-            del kwargs["text"]
-        elif "Phi-4" in self.model_name:
-            import PIL
-
-            images = [PIL.Image.fromarray(img) for img in images]  # type: ignore
-            field = "images"
-            prompt = "<|user|>"
-            for i in range(1, len(images) + 1):
-                prompt += f"<|image_{i}|>"
-            if audio is not None:
-                kwargs["audios"] = [(audio.to_soundarray(), audio.fps)]  # type: ignore
-                prompt += "<|audio_1|>"
-            prompt += "<|end|><|assistant|>"
-            kwargs["text"] = prompt
-        kwargs[field] = list(images)
+    def predict(self, images: np.ndarray) -> tp.Any:
+        kwargs: dict[str, tp.Any] = {
+            self._processor_input_field(): list(images),
+            "return_tensors": "pt",
+        }
         inputs = self.processor(**kwargs)
         # prevent nans (happening for uniform images)
         image_extractors._fix_pixel_values(inputs)
@@ -342,17 +215,30 @@ class _HFVideoModel:
             pred = self.model(**inputs, output_hidden_states=True)
         return pred
 
-    def predict_hidden_states(
-        self, images: np.ndarray, audio: np.ndarray | None = None
-    ) -> torch.Tensor:
-        pred = self.predict(images, audio)
-        if "xclip" in self.model_name:
-            # MIT: Multi-frame Integration Transformer
-            is_mit = self.layer_type == "mit"
-            pred = pred.mit_output if is_mit else pred.vision_model_output
-            # [8, 13, 197, 768] for vision model, [1, 2, 8, 512] for mit model
+    def predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
+        pred = self.predict(images)
         states = pred.hidden_states
         out = torch.cat([x.unsqueeze(1) for x in states], axis=1)  # type: ignore
-        if "xclip" in self.model_name and not self.layer_type:
-            out = out[[-1], ...]  # last batch/timepoint only
         return out  # B x L x ...
+
+    def _processor_input_field(self) -> tp.Literal["images", "videos"]:
+        parameters = inspect.signature(self.processor.__call__).parameters
+        return "videos" if "videos" in parameters else "images"
+
+    def _config_num_frames(self) -> int | None:
+        config = getattr(self.model, "config", None)
+        if config is None:
+            return None
+        config = getattr(config, "vision_config", config)
+        num_frames = getattr(config, "num_frames", None)
+        return num_frames if isinstance(num_frames, int) else None
+
+    def _warn_if_config_num_frames_mismatch(self) -> None:
+        config_num_frames = self._config_num_frames()
+        if config_num_frames is None or config_num_frames == self.num_frames:
+            return
+        warnings.warn(
+            f"Model {self.model_name!r} config expects {config_num_frames} frames, "
+            f"but HuggingFaceVideo.num_frames={self.num_frames}.",
+            stacklevel=2,
+        )
