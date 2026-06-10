@@ -494,6 +494,25 @@ def test_ensure_texts() -> None:
     assert set(multi[multi.type == "Text"].timeline) == {"foo", "bar"}
 
 
+def test_ensure_texts_encloses_words() -> None:
+    df = pd.DataFrame(
+        dict(
+            type="Word",
+            text=["it", "is"],
+            start=[39.298, 3463.038],
+            duration=0.49,
+            timeline="test",
+        )
+    )
+    result = _transf.EnsureTexts(punctuation=None)(df)
+    text = result.loc[result.type == "Text"].iloc[0]
+    encl = ns.segments.find_enclosed(
+        result, start=float(text.start), duration=float(text.duration)
+    )
+    words = result.index[result.type == "Word"]
+    assert words.isin(encl).all()
+
+
 @pytest.mark.skipif("CI" in os.environ, reason="DL punctuation model not in CI")
 def test_ensure_texts_fullstop() -> None:
     _, df = _make_test_events()
