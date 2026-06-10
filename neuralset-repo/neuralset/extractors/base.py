@@ -539,10 +539,8 @@ class HuggingFaceConfig(base.BaseModel):
             msg = f"transformers has no {kind} class {cls_name!r}"
             raise ValueError(msg) from e
 
-    def _resolved_cls_name(self, field: str, model_name: str | None) -> str:
+    def _resolved_cls_name(self, field: str, model_name: str) -> str:
         cls_name: str = getattr(self, field)
-        if model_name is None:
-            return cls_name
         lower_model_name = model_name.lower()
         for pattern, defaults in self.HF_CLASS_DEFAULTS:
             if pattern not in lower_model_name or field not in defaults:
@@ -558,11 +556,11 @@ class HuggingFaceConfig(base.BaseModel):
                 return expected
         return cls_name
 
-    def model_cls(self, model_name: str | None = None) -> tp.Any:
+    def model_cls(self, model_name: str) -> tp.Any:
         cls_name = self._resolved_cls_name("model_cls_name", model_name)
         return self._transformers_cls(cls_name, "model")
 
-    def processor_cls(self, model_name: str | None = None) -> tp.Any:
+    def processor_cls(self, model_name: str) -> tp.Any:
         cls_name = self._resolved_cls_name("processor_cls_name", model_name)
         return self._transformers_cls(
             cls_name,
@@ -736,7 +734,13 @@ class HuggingFaceMixin(base.BaseModel):
                 self.model_name,
                 **hf_config.config_build_kwargs,
             )
-            model = Model.from_config(config, **(hf_config.model_kwargs or {}))
+            if hasattr(Model, "from_config"):
+                model = Model.from_config(config, **(hf_config.model_kwargs or {}))
+            else:
+                model = Model._from_config(  # type: ignore[attr-defined]
+                    config,
+                    **(hf_config.model_kwargs or {}),
+                )
             torch_dtype = hf_config.torch_dtype
             if isinstance(torch_dtype, str) and torch_dtype != "auto":
                 model.to(dtype=getattr(torch, torch_dtype))

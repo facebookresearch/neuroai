@@ -485,7 +485,7 @@ class SeamlessM4T(HuggingFaceAudio):
     )
 
     def load_model(self) -> torch.nn.Module:
-        _model = super().load_model().speech_encoder  # type: ignore[attr-defined]
+        _model: torch.nn.Module = super().load_model().speech_encoder  # type: ignore[assignment]
         _model.eval()
         return _model
 
@@ -513,6 +513,6 @@ class Whisper(HuggingFaceAudio):
     )
 
     def load_model(self) -> torch.nn.Module:
-        _model = super().load_model().encoder  # type: ignore[attr-defined]
+        _model: torch.nn.Module = super().load_model().encoder  # type: ignore[assignment]
         _model.eval()
         return _model

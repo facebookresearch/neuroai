@@ -283,9 +283,9 @@ class _HFVideoModel:
         elif "Phi-4" in model_name:
             max_frames = 4  # TODO: make this flexible?
         else:
-            config = self.model.config  # type: ignore[attr-defined]
+            config: tp.Any = self.model.config  # type: ignore[attr-defined]
             config = getattr(config, "vision_config", config)  # xclip
-            max_frames = config.num_frames  # type: ignore[attr-defined]
+            max_frames = config.num_frames
         if num_frames is None:
             self.num_frames = max_frames
         else:
