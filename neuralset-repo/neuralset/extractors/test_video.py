@@ -133,13 +133,13 @@ def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "name,embds,hf_config",
+    "name,embds",
     [
         # shape is layers x tokens x embeddings
-        ("MCG-NJU/videomae-base", (13, 1568, 768), {}),
-        # ("facebook/vjepa2-vith-fpc64-256", (33, 8192, 1280), {}),
-        # ("google/vivit-b-16x2-kinetics400", (13, 3137, 768), {}),
-        # ("facebook/timesformer-base-finetuned-k600", (13, 1569, 768), {}),
+        ("MCG-NJU/videomae-base", (13, 1568, 768)),
+        # ("facebook/vjepa2-vith-fpc64-256", (33, 8192, 1280)),
+        # ("google/vivit-b-16x2-kinetics400", (13, 3137, 768)),
+        # ("facebook/timesformer-base-finetuned-k600", (13, 1569, 768)),
     ],
 )
 def test_video_models(
@@ -147,7 +147,6 @@ def test_video_models(
     tmp_path: Path,
     name: str,
     embds: tuple[int, ...],
-    hf_config: dict[str, tp.Any],
 ) -> None:
     if "IN_GITHUB_ACTION" in os.environ and "videomae" not in name:
         pytest.skip("Only download video mae for CI tests")
@@ -158,7 +157,6 @@ def test_video_models(
         infra=infra,
         num_frames=16,
         device="cpu",
-        hf_config=hf_config,  # type: ignore[arg-type]
         model_name=name,
         # show the full dimension
         token_aggregation=None,

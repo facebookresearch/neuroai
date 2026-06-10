@@ -101,6 +101,16 @@ def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
 
 class HuggingFaceImageConfig(extractor_base.HuggingFaceConfig):
     processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": False}
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+        "clip": {
+            "model_cls_name": "CLIPModel",
+            "processor_cls_name": "CLIPProcessor",
+        },
+        "dinov2": {
+            "model_cls_name": "Dinov2Model",
+            "processor_cls_name": "AutoImageProcessor",
+        },
+    }
 
 
 class HuggingFaceImage(extractor_base.BaseStatic, extractor_base.HuggingFaceMixin):

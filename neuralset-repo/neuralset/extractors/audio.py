@@ -314,6 +314,11 @@ class SonarAudio(BaseAudio):
 
 class HuggingFaceAudioConfig(HuggingFaceConfig):
     processor_cls_name: str = "AutoFeatureExtractor"
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+        "w2v-bert": {"model_cls_name": "Wav2Vec2BertModel"},
+        "m4t": {"model_cls_name": "SeamlessM4TModel"},
+        "whisper": {"model_cls_name": "WhisperModel"},
+    }
 
 
 class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):

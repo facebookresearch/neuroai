@@ -50,6 +50,13 @@ def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
 
 class HuggingFaceVideoConfig(extractor_base.HuggingFaceConfig):
     processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": True}
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+        "vjepa2": {"processor_cls_name": "AutoVideoProcessor"},
+        "google/vivit": {
+            "model_cls_name": "VivitModel",
+            "processor_cls_name": "VivitImageProcessor",
+        },
+    }
 
 
 class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceMixin):

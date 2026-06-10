@@ -462,57 +462,17 @@ class HuggingFaceConfig(base.BaseModel):
 
     Notes
     -----
-    Non-standard HuggingFace model or processor classes can be specified in two
-    ways. For a single extractor, pass ``hf_config=HuggingFaceConfig(
-    model_cls_name="...", processor_cls_name="...")``. For reusable defaults
-    based on model-name patterns, extend ``HuggingFaceConfig.HF_CLASS_DEFAULTS``
-    with ``(pattern, {"model_cls_name": "...", "processor_cls_name": "..."})``
-    entries.
+    Non-standard HuggingFace model or processor classes can be specified with
+    ``hf_config=HuggingFaceConfig(model_cls_name="...",
+    processor_cls_name="...")``. Modality-specific configs may define
+    ``HF_CLASS_DEFAULTS`` as a mapping from model-name patterns to class defaults.
     """
 
     model_cls_name: str = "AutoModel"
     processor_cls_name: str = "AutoProcessor"
     model_kwargs: dict[str, tp.Any] | None = None
     processor_kwargs: dict[str, tp.Any] | None = None
-    HF_CLASS_DEFAULTS: tp.ClassVar[tuple[tuple[str, dict[str, str]], ...]] = (
-        ("t5", {"model_cls_name": "AutoModelForTextEncoding"}),
-        ("facebook/opt", {"model_cls_name": "OPTModel"}),
-        ("facebook/bart", {"model_cls_name": "BartModel"}),
-        ("w2v-bert", {"model_cls_name": "Wav2Vec2BertModel"}),
-        ("m4t", {"model_cls_name": "SeamlessM4TModel"}),
-        ("whisper", {"model_cls_name": "WhisperModel"}),
-        (
-            "clip",
-            {
-                "model_cls_name": "CLIPModel",
-                "processor_cls_name": "CLIPProcessor",
-            },
-        ),
-        (
-            "dinov2",
-            {
-                "model_cls_name": "Dinov2Model",
-                "processor_cls_name": "AutoImageProcessor",
-            },
-        ),
-        ("gpt2", {"model_cls_name": "GPT2Model"}),
-        ("phi-4", {"model_cls_name": "AutoModelForCausalLM"}),
-        ("vjepa2", {"processor_cls_name": "AutoVideoProcessor"}),
-        (
-            "google/vivit",
-            {
-                "model_cls_name": "VivitModel",
-                "processor_cls_name": "VivitImageProcessor",
-            },
-        ),
-        (
-            "llava-next-video",
-            {
-                "model_cls_name": "LlavaNextVideoForConditionalGeneration",
-                "processor_cls_name": "LlavaNextVideoProcessor",
-            },
-        ),
-    )
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {}
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -539,21 +499,18 @@ class HuggingFaceConfig(base.BaseModel):
             raise ValueError(msg) from e
 
     def _resolved_cls_name(self, field: str, model_name: str) -> str:
-        cls_name: str = getattr(self, field)
+        configured_cls_name: str = getattr(self, field)
+        if field in self.model_fields_set:
+            return configured_cls_name
         lower_model_name = model_name.lower()
-        for pattern, defaults in self.HF_CLASS_DEFAULTS:
-            if pattern not in lower_model_name or field not in defaults:
+        for pattern, defaults_for_pattern in self.HF_CLASS_DEFAULTS.items():
+            if pattern not in lower_model_name:
                 continue
-            expected = defaults[field]
-            if field in self.model_fields_set and cls_name != expected:
-                msg = (
-                    f"Model {model_name!r} requires hf_config.{field}={expected!r}, "
-                    f"got {cls_name!r}."
-                )
-                raise ValueError(msg)
-            if field not in self.model_fields_set:
-                return expected
-        return cls_name
+            default_cls_name = defaults_for_pattern.get(field)
+            if default_cls_name is None:
+                continue
+            return default_cls_name
+        return configured_cls_name
 
     def model_cls(self, model_name: str) -> tp.Any:
         cls_name = self._resolved_cls_name("model_cls_name", model_name)

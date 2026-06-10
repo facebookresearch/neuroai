@@ -252,6 +252,13 @@ class HuggingFaceTextConfig(HuggingFaceConfig):
         "truncation_side": "left",
         "padding_side": "right",
     }
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+        "t5": {"model_cls_name": "AutoModelForTextEncoding"},
+        "facebook/opt": {"model_cls_name": "OPTModel"},
+        "facebook/bart": {"model_cls_name": "BartModel"},
+        "gpt2": {"model_cls_name": "GPT2Model"},
+        "phi-4": {"model_cls_name": "AutoModelForCausalLM"},
+    }
 
 
 class HuggingFaceText(BaseStatic, HuggingFaceMixin):
