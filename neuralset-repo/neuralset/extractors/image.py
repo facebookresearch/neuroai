@@ -258,16 +258,10 @@ class HuggingFaceImage(BaseImage):
                 f'The effect of "imsize"={self.imsize} might be cancelled by '
                 "the HuggingFace processor."
             )
-        super().model_post_init(log__)
-
-    def load_processor(self) -> tp.Any:
-        Processor = self.hf_config.processor_cls(self.model_name)
-        processor_kwargs = {"do_rescale": False} | self.hf_config.processor_build_kwargs
-        # do_rescale=False because ToTensor does the rescaling
-        return Processor.from_pretrained(
-            self.model_name,
-            **processor_kwargs,
+        self.hf_config.processor_kwargs = {"do_rescale": False} | (
+            self.hf_config.processor_kwargs or {}
         )
+        super().model_post_init(log__)
 
     def _full_predict(  # return the raw output, used in tests
         self, images: torch.Tensor, text: str | list[str] = ""

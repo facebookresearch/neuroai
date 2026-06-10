@@ -129,18 +129,12 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         raise ValueError(msg)
 
     def model_post_init(self, log__: tp.Any) -> None:
+        self.hf_config.processor_kwargs = {"do_rescale": True} | (
+            self.hf_config.processor_kwargs or {}
+        )
         super().model_post_init(log__)
         _HFVideoModel.check_layer_type(
             layer_type=self.layer_type, model_name=self.model_name
-        )
-
-    def load_processor(self) -> tp.Any:
-        Processor = self.hf_config.processor_cls(self.model_name)
-        processor_kwargs = {"do_rescale": True} | self.hf_config.processor_build_kwargs
-        # use do_rescale=True -> don't use totensor
-        return Processor.from_pretrained(
-            self.model_name,
-            **processor_kwargs,
         )
 
     @classmethod
