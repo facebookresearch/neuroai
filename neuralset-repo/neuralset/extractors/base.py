@@ -726,7 +726,20 @@ class HuggingFaceMixin(base.BaseModel):
         hf_config = self.hf_config
         Model = hf_config.model_cls(self.model_name)
         if self.pretrained:
-            model = Model.from_pretrained(self.model_name, **hf_config.model_build_kwargs)
+            try:
+                model = Model.from_pretrained(
+                    self.model_name,
+                    **hf_config.model_build_kwargs,
+                )
+            except Exception as e:
+                msg = (
+                    f"Failed to instantiate HuggingFace model {self.model_name!r} "
+                    f"with {self.__class__.__name__}. Try adjusting hf_config, "
+                    "for example model_cls_name, trust_remote_code, revision, "
+                    "torch_dtype, attn_implementation, or model_kwargs. "
+                    f"Original error: {type(e).__name__}: {e}"
+                )
+                raise RuntimeError(msg) from e
             if hf_config.device_map != "auto":
                 model.to(self.device)
         else:

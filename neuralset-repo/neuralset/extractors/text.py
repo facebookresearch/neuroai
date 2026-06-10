@@ -21,7 +21,7 @@ import neuralset as ns
 from neuralset import events as _ev  # avoid circular import
 from neuralset import utils
 from neuralset.base import TimedArray
-from neuralset.extractors.base import BaseStatic, HuggingFaceMixin
+from neuralset.extractors.base import BaseStatic, HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=unused-variable
@@ -246,6 +246,14 @@ class TextDataset(Dataset):
         return sel.text, getattr(sel, "context", "")
 
 
+class HuggingFaceTextConfig(HuggingFaceConfig):
+    processor_cls_name: str = "AutoTokenizer"
+    processor_kwargs: dict[str, tp.Any] | None = {
+        "truncation_side": "left",
+        "padding_side": "right",
+    }
+
+
 class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     """
     Get embeddings from HuggingFace language models.
@@ -285,8 +293,8 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
 
     # initialized later
     _model: nn.Module = pydantic.PrivateAttr()
-    _tokenizer: tp.Any = pydantic.PrivateAttr()
     _max_length: int | None = pydantic.PrivateAttr(None)
+    hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -311,37 +319,13 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         )
 
     @property
-    def model(self) -> nn.Module:
-        if not hasattr(self, "_model"):
-            from transformers import AutoTokenizer
-
-            kwargs = self.hf_config.config_build_kwargs
-            # pinned for `_get_data`'s slicing: target at tail, pads trailing
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                truncation_side="left",
-                padding_side="right",
-                **kwargs,
-            )
-            # tokens
-            if self._tokenizer.pad_token is None:
-                # previously:
-                # self._tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-                # self._model.resize_token_embeddings(len(self._tokenizer))
-                # simpler to use existing EOS token:
-                self._tokenizer.pad_token = self._tokenizer.eos_token
-            try:
-                self._model = self.load_model()
-            except Exception as e:
-                # some exceptions (AttributeError in particular)
-                # are hidden by pydantic
-                raise RuntimeError("Model loading went wrong") from e
-        return self._model
-
-    @property
     def tokenizer(self) -> tp.Any:
-        self.model
-        return self._tokenizer
+        tokenizer = self.processor
+        if tokenizer.pad_token is None:
+            # Previously added a new "[PAD]" token and resized embeddings; using
+            # the existing EOS token keeps the model weights unchanged.
+            tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
 
     def _get_max_length(self) -> int | None:
         """Token truncation limit, falling back to the model's positional capacity."""
