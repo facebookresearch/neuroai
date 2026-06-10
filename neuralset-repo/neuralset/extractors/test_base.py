@@ -131,33 +131,15 @@ def test_dynamic_feature() -> None:
     # TODO wordpulse + phonemepulse?
 
 
-def test_extractor_query_dataframe_input() -> None:
-    events = pd.DataFrame(
-        [
-            {
-                "type": "Word",
-                "text": "cat",
-                "start": 0.0,
-                "duration": 1.0,
-                "timeline": "t1",
-                "split": "train",
-            },
-            {
-                "type": "Word",
-                "text": "dog",
-                "start": 1.0,
-                "duration": 1.0,
-                "timeline": "t1",
-                "split": "test",
-            },
-            {
-                "type": "Word",
-                "text": "bird",
-                "start": 2.0,
-                "duration": 1.0,
-                "timeline": "t1",
-                "split": "train",
-            },
+def _query_test_events(include_image: bool = False) -> pd.DataFrame:
+    rows: list[dict[str, tp.Any]] = [
+        dict(text="cat", start=0.0, split="train", run="0"),
+        dict(text="dog", start=1.0, split="test", run="1"),
+        dict(text="bird", start=2.0, split="train", run="1"),
+    ]
+    records = [dict(type="Word", duration=1.0, timeline="t1", **row) for row in rows]
+    if include_image:
+        records.append(
             {
                 "type": "Image",
                 "filepath": __file__,
@@ -165,9 +147,14 @@ def test_extractor_query_dataframe_input() -> None:
                 "duration": 1.0,
                 "timeline": "t1",
                 "split": "train",
-            },
-        ]
-    )
+                "run": "0",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def test_extractor_query_dataframe_input() -> None:
+    events = _query_test_events(include_image=True)
     extractor = base.Pulse(
         frequency=1.0,
         aggregation="sum",
@@ -181,28 +168,7 @@ def test_extractor_query_dataframe_input() -> None:
 
 
 def test_extractor_query_event_list_input() -> None:
-    events = pd.DataFrame(
-        [
-            {
-                "type": "Word",
-                "text": "cat",
-                "start": 0.0,
-                "duration": 1.0,
-                "timeline": "t1",
-                "split": "train",
-                "run": "0",
-            },
-            {
-                "type": "Word",
-                "text": "dog",
-                "start": 1.0,
-                "duration": 1.0,
-                "timeline": "t1",
-                "split": "train",
-                "run": "1",
-            },
-        ]
-    )
+    events = _query_test_events()
     ns_events = [ns.events.Event.from_dict(row) for row in events.to_dict("records")]
     extractor = base.Pulse(
         frequency=1.0,
@@ -211,9 +177,9 @@ def test_extractor_query_event_list_input() -> None:
         query="split == 'train' and run == '1'",
     )
 
-    out = extractor(ns_events, start=0.0, duration=2.0)
+    out = extractor(ns_events, start=0.0, duration=3.0)
 
-    assert np.array_equal(out, [[0, 1]])
+    assert np.array_equal(out, [[0, 0, 1]])
 
 
 class Time(base.BaseExtractor):
@@ -586,36 +552,7 @@ def test_label_encoder_reprepare() -> None:
 
 
 def test_label_encoder_query_prepare_segments() -> None:
-    events = ns.events.standardize_events(
-        pd.DataFrame(
-            [
-                {
-                    "type": "Word",
-                    "text": "cat",
-                    "start": 0.0,
-                    "duration": 1.0,
-                    "timeline": "t1",
-                    "split": "train",
-                },
-                {
-                    "type": "Word",
-                    "text": "dog",
-                    "start": 1.0,
-                    "duration": 1.0,
-                    "timeline": "t1",
-                    "split": "test",
-                },
-                {
-                    "type": "Word",
-                    "text": "bird",
-                    "start": 2.0,
-                    "duration": 1.0,
-                    "timeline": "t1",
-                    "split": "train",
-                },
-            ]
-        )
-    )
+    events = ns.events.standardize_events(_query_test_events())
     segments = ns.segments.list_segments(
         events,
         triggers=events.type == "Word",
