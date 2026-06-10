@@ -89,6 +89,9 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
         "julius>=0.2.7",
     )
     model_name: str = "MCG-NJU/videomae-base"
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
+        processor_kwargs={"do_rescale": True},
+    )
     use_audio: bool = True
     clip_duration: float | None = None
     max_imsize: int | None = None
@@ -266,13 +269,9 @@ class _HFVideoModel:
         model_name = extractor.model_name
         if not any(z in model_name for z in self.MODELS):
             raise ValueError(f"Model {model_name!r} is not supported")
-        hf_config = extractor.hf_config
-        Processor = hf_config.processor_cls(model_name)
-        processor_extra = {"do_rescale": True} | hf_config.config_build_kwargs
 
         self.model = extractor.load_model()
-        # use do_rescale=True -> don't use totensor
-        self.processor = Processor.from_pretrained(model_name, **processor_extra)
+        self.processor = extractor.processor
         self.model_name = model_name
         self.layer_type = layer_type
         if "llava" in model_name.lower():

@@ -202,6 +202,9 @@ class HuggingFaceImage(BaseImage):
 
     # class attributes
     model_name: str = "facebook/dinov2-base"
+    hf_config: extractor_base.HuggingFaceConfig = extractor_base.HuggingFaceConfig(
+        processor_kwargs={"do_rescale": False},
+    )
     # for precomputing/caching
     infra: MapInfra = MapInfra(version="v6", **CLUSTER_DEFAULTS)
 
@@ -259,18 +262,6 @@ class HuggingFaceImage(BaseImage):
                 "the HuggingFace processor."
             )
         super().model_post_init(log__)
-
-    @property
-    def processor(self) -> tp.Any:
-        if not hasattr(self, "_processor"):
-            Processor = self.hf_config.processor_cls(self.model_name)
-            # do_rescale=False because ToTensor does the rescaling
-            self._processor = Processor.from_pretrained(
-                self.model_name,
-                do_rescale=False,
-                **self.hf_config.config_build_kwargs,
-            )
-        return self._processor
 
     def _full_predict(  # return the raw output, used in tests
         self, images: torch.Tensor, text: str | list[str] = ""

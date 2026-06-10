@@ -465,6 +465,14 @@ class HuggingFaceConfig(base.BaseModel):
     processor_cls_name : str, default="AutoProcessor"
         Name of the processor class to load from ``transformers``. Use this for
         a specific extractor instance when ``AutoProcessor`` is not the right class.
+    model_kwargs : dict | None, default=None
+        Extra keyword arguments forwarded to model construction. These are
+        merged after the shared model build kwargs so they can override them
+        for non-standard HuggingFace models.
+    processor_kwargs : dict | None, default=None
+        Extra keyword arguments forwarded to processor construction. These are
+        merged after shared config kwargs so they can override them for
+        non-standard HuggingFace processors.
 
     Notes
     -----
@@ -492,6 +500,8 @@ class HuggingFaceConfig(base.BaseModel):
     trust_remote_code: bool = False
     model_cls_name: str = "AutoModel"
     processor_cls_name: str = "AutoProcessor"
+    model_kwargs: dict[str, tp.Any] | None = None
+    processor_kwargs: dict[str, tp.Any] | None = None
     HF_CLASS_DEFAULTS: tp.ClassVar[tuple[tuple[str, dict[str, str]], ...]] = (
         ("t5", {"model_cls_name": "AutoModelForTextEncoding"}),
         ("facebook/opt", {"model_cls_name": "OPTModel"}),
@@ -623,6 +633,15 @@ class HuggingFaceConfig(base.BaseModel):
         if self.torch_dtype is not None:
             dtype = self.torch_dtype
             kwargs["torch_dtype"] = dtype if dtype == "auto" else getattr(torch, dtype)
+        if self.model_kwargs is not None:
+            kwargs.update(self.model_kwargs)
+        return kwargs
+
+    @property
+    def processor_build_kwargs(self) -> dict[str, tp.Any]:
+        kwargs = self.config_build_kwargs.copy()
+        if self.processor_kwargs is not None:
+            kwargs.update(self.processor_kwargs)
         return kwargs
 
 
@@ -674,6 +693,7 @@ class HuggingFaceMixin(base.BaseModel):
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
+    _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
     _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
@@ -740,6 +760,12 @@ class HuggingFaceMixin(base.BaseModel):
             self._model = self.load_model()
         return self._model
 
+    @property
+    def processor(self) -> tp.Any:
+        if not hasattr(self, "_processor") or self._processor is None:
+            self._processor = self.load_processor()
+        return self._processor
+
     def load_model(self) -> torch.nn.Module:
         """Load or instantiate a HuggingFace model with shared config."""
         from transformers import AutoConfig
@@ -755,13 +781,21 @@ class HuggingFaceMixin(base.BaseModel):
                 self.model_name,
                 **hf_config.config_build_kwargs,
             )
-            model = Model.from_config(config)
+            model = Model.from_config(config, **(hf_config.model_kwargs or {}))
             torch_dtype = hf_config.torch_dtype
             if isinstance(torch_dtype, str) and torch_dtype != "auto":
                 model.to(dtype=getattr(torch, torch_dtype))
             model.to(self.device)
         model.eval()
         return model
+
+    def load_processor(self) -> tp.Any:
+        """Load a HuggingFace processor with shared config."""
+        Processor = self.hf_config.processor_cls(self.model_name)
+        return Processor.from_pretrained(
+            self.model_name,
+            **self.hf_config.processor_build_kwargs,
+        )
 
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
         """

@@ -338,12 +338,14 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     model_name: str = "facebook/wav2vec2-large-xlsr-53"
     requirements: tp.ClassVar[tuple[str, ...]] = ("transformers>=4.29.2",)
+    hf_config: HuggingFaceConfig = HuggingFaceConfig(
+        processor_cls_name="AutoFeatureExtractor",
+    )
 
     normalized: bool = True
     layer_type: tp.Literal["transformer", "convolution"] = "transformer"
     # internal
     _model: nn.Module
-    _feature_extractor: nn.Module
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -362,7 +364,9 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     @property
     def _input_frequency(self) -> float:
-        return self.feature_extractor.sampling_rate  # type: ignore
+        processor = self.processor
+        feature_extractor = getattr(processor, "feature_extractor", processor)
+        return feature_extractor.sampling_rate  # type: ignore
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -374,23 +378,14 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         return base + HuggingFaceMixin._exclude_from_cache_uid(self)
 
     @property
-    def feature_extractor(self) -> nn.Module:
-        if not hasattr(self, "_feature_extractor"):
-            self._feature_extractor = self._get_feature_extractor(self.model_name)
-        return self._feature_extractor
+    def feature_extractor(self) -> tp.Any:
+        return self.processor
 
-    def _get_feature_extractor(self, model_name: str) -> torch.nn.Module:
-        from transformers import AutoFeatureExtractor
-
-        return AutoFeatureExtractor.from_pretrained(
-            model_name, **self.hf_config.config_build_kwargs
-        )
-
-    def _get_features(self, wav):
-        out = self._feature_extractor(
+    def _get_features(self, wav: torch.Tensor) -> tp.Any:
+        out = self.processor(
             wav,
             return_tensors="pt",
-            sampling_rate=self.feature_extractor.sampling_rate,
+            sampling_rate=self._input_frequency,
             do_normalize=self.normalized,
         )
         try:
@@ -466,6 +461,7 @@ class Wav2VecBert(HuggingFaceAudio):
     model_name: str = "facebook/w2v-bert-2.0"
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
         model_cls_name="Wav2Vec2BertModel",
+        processor_cls_name="AutoFeatureExtractor",
     )
 
 
@@ -487,6 +483,7 @@ class SeamlessM4T(HuggingFaceAudio):
     model_name: str = "facebook/hf-seamless-m4t-medium"
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
         model_cls_name="SeamlessM4TModel",
+        processor_cls_name="AutoFeatureExtractor",
     )
 
     def load_model(self) -> torch.nn.Module:
@@ -515,6 +512,7 @@ class Whisper(HuggingFaceAudio):
     hf_config: HuggingFaceConfig = HuggingFaceConfig(
         torch_dtype="float32",
         model_cls_name="WhisperModel",
+        processor_cls_name="AutoFeatureExtractor",
     )
 
     def load_model(self) -> torch.nn.Module:
