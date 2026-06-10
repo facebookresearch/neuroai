@@ -460,9 +460,20 @@ class HuggingFaceConfig(base.BaseModel):
     trust_remote_code : bool, default=False
         Whether to allow custom modeling code from the HuggingFace repository.
     model_cls_name : str, default="AutoModel"
-        Name of the model class to load from ``transformers``.
+        Name of the model class to load from ``transformers``. Use this for a
+        specific extractor instance when ``AutoModel`` is not the right class.
     processor_cls_name : str, default="AutoProcessor"
-        Name of the processor class to load from ``transformers``.
+        Name of the processor class to load from ``transformers``. Use this for
+        a specific extractor instance when ``AutoProcessor`` is not the right class.
+
+    Notes
+    -----
+    Non-standard HuggingFace model or processor classes can be specified in two
+    ways. For a single extractor, pass ``hf_config=HuggingFaceConfig(
+    model_cls_name="...", processor_cls_name="...")``. For reusable defaults
+    based on model-name patterns, extend ``HuggingFaceConfig.HF_CLASS_DEFAULTS``
+    with ``(pattern, {"model_cls_name": "...", "processor_cls_name": "..."})``
+    entries.
     """
 
     device_map: tp.Literal["auto", "cpu", "cuda"] = "auto"
@@ -481,6 +492,74 @@ class HuggingFaceConfig(base.BaseModel):
     trust_remote_code: bool = False
     model_cls_name: str = "AutoModel"
     processor_cls_name: str = "AutoProcessor"
+    HF_CLASS_DEFAULTS: tp.ClassVar[tuple[tuple[str, dict[str, str]], ...]] = (
+        ("t5", {"model_cls_name": "AutoModelForTextEncoding"}),
+        ("facebook/opt", {"model_cls_name": "OPTModel"}),
+        ("facebook/bart", {"model_cls_name": "BartModel"}),
+        ("w2v-bert", {"model_cls_name": "Wav2Vec2BertModel"}),
+        ("m4t", {"model_cls_name": "SeamlessM4TModel"}),
+        ("whisper", {"model_cls_name": "WhisperModel"}),
+        (
+            "facebook/dpt-dinov2-base-kitti",
+            {
+                "model_cls_name": "DPTForDepthEstimation",
+                "processor_cls_name": "DPTImageProcessor",
+            },
+        ),
+        (
+            "clip",
+            {
+                "model_cls_name": "CLIPModel",
+                "processor_cls_name": "CLIPProcessor",
+            },
+        ),
+        (
+            "vit-hybrid",
+            {
+                "model_cls_name": "ViTHybridForImageClassification",
+                "processor_cls_name": "ViTHybridImageProcessor",
+            },
+        ),
+        ("upernet", {"model_cls_name": "UperNetForSemanticSegmentation"}),
+        (
+            "vit-gpt2",
+            {
+                "model_cls_name": "VisionEncoderDecoderModel",
+                "processor_cls_name": "ViTImageProcessor",
+            },
+        ),
+        (
+            "dinov2",
+            {
+                "model_cls_name": "Dinov2Model",
+                "processor_cls_name": "AutoImageProcessor",
+            },
+        ),
+        ("gpt2", {"model_cls_name": "GPT2Model"}),
+        ("phi-4", {"model_cls_name": "AutoModelForCausalLM"}),
+        ("vjepa2", {"processor_cls_name": "AutoVideoProcessor"}),
+        (
+            "google/vivit",
+            {
+                "model_cls_name": "VivitModel",
+                "processor_cls_name": "VivitImageProcessor",
+            },
+        ),
+        (
+            "llava-next-video",
+            {
+                "model_cls_name": "LlavaNextVideoForConditionalGeneration",
+                "processor_cls_name": "LlavaNextVideoProcessor",
+            },
+        ),
+        (
+            "llava-video",
+            {
+                "model_cls_name": "LlavaVideoForConditionalGeneration",
+                "processor_cls_name": "LlavaVideoProcessor",
+            },
+        ),
+    )
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -495,12 +574,33 @@ class HuggingFaceConfig(base.BaseModel):
             msg = f"transformers has no {kind} class {cls_name!r}"
             raise ValueError(msg) from e
 
-    def model_cls(self) -> tp.Any:
-        return self._transformers_cls(self.model_cls_name, "model")
+    def _resolved_cls_name(self, field: str, model_name: str | None) -> str:
+        cls_name = tp.cast(str, getattr(self, field))
+        if model_name is None:
+            return cls_name
+        lower_model_name = model_name.lower()
+        for pattern, defaults in self.HF_CLASS_DEFAULTS:
+            if pattern not in lower_model_name or field not in defaults:
+                continue
+            expected = defaults[field]
+            if field in self.model_fields_set and cls_name != expected:
+                msg = (
+                    f"Model {model_name!r} requires hf_config.{field}={expected!r}, "
+                    f"got {cls_name!r}."
+                )
+                raise ValueError(msg)
+            if field not in self.model_fields_set:
+                return expected
+        return cls_name
 
-    def processor_cls(self) -> tp.Any:
+    def model_cls(self, model_name: str | None = None) -> tp.Any:
+        cls_name = self._resolved_cls_name("model_cls_name", model_name)
+        return self._transformers_cls(cls_name, "model")
+
+    def processor_cls(self, model_name: str | None = None) -> tp.Any:
+        cls_name = self._resolved_cls_name("processor_cls_name", model_name)
         return self._transformers_cls(
-            self.processor_cls_name,
+            cls_name,
             "processor",
         )
 
@@ -575,7 +675,7 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
     _REPOS: tp.ClassVar[list[str]] = []
-    _skip_repo_check: bool = False  # for custom/local HuggingFace checkpoints
+    _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -587,33 +687,35 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.model_cls()
-        self.hf_config.processor_cls()
+        # check classes exist
+        self.hf_config.model_cls(self.model_name)
+        self.hf_config.processor_cls(self.model_name)
         if not self._skip_repo_check and not self.repo_exists():
             raise ValueError(f"The model {self.model_name} does not exist")
 
     def repo_exists(self) -> bool:
         fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
         name = self.model_name
-        if not self._REPOS:
+        if not self._REPOS:  # load offline huggingface white list
             if not fp.exists():
                 raise RuntimeError(f"Please reinstall neuralset: missing file {fp}")
             self._REPOS.extend(fp.read_text("utf8").splitlines())
         if name in self._REPOS:
             return True
-        from huggingface_hub import repo_info
+        else:
+            from huggingface_hub import repo_info
 
-        try:
-            repo_info(name, revision=self.hf_config.revision)
-        except Exception:
-            return False
-        self._REPOS.append(name)
-        self._REPOS.sort()
-        try:
-            fp.write_text("\n".join(self._REPOS))
-        except Exception:
-            pass
-        return True
+            try:  # if not in whitelist, check through API and save it if it exists
+                repo_info(name)
+                self._REPOS.append(name)
+                self._REPOS.sort()
+                try:
+                    fp.write_text("\n".join(self._REPOS))
+                except Exception:
+                    pass  # nevermind if there is no write permission
+                return True
+            except Exception:
+                return False
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -643,7 +745,7 @@ class HuggingFaceMixin(base.BaseModel):
         from transformers import AutoConfig
 
         hf_config = self.hf_config
-        Model = hf_config.model_cls()
+        Model = hf_config.model_cls(self.model_name)
         if self.pretrained:
             model = Model.from_pretrained(self.model_name, **hf_config.model_build_kwargs)
             if hf_config.device_map != "auto":

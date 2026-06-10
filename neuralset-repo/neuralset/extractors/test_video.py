@@ -195,26 +195,6 @@ def test_video_huggingface() -> None:
     assert out.shape == (1, 13, 1568, 768)
 
 
-def test_video_vjepa2_requires_auto_video_processor(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        vid.extractor_base.HuggingFaceMixin,
-        "repo_exists",
-        lambda self: True,
-    )
-    kwargs: dict[str, tp.Any] = {
-        "frequency": 0.5,
-        "model_name": "facebook/vjepa2-vith-fpc64-256",
-    }
-    with pytest.raises(ValueError, match="AutoVideoProcessor"):
-        vid.HuggingFaceVideo(**kwargs)
-    vid.HuggingFaceVideo(
-        **kwargs,
-        hf_config={"processor_cls_name": "AutoVideoProcessor"},  # type: ignore[arg-type]
-    )
-
-
 # for future TEXT + VIDEO models?
 # def test_multimodal(tmp_path: Path) -> None:
 #     text_events = test_text._make_test_events()
