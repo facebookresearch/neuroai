@@ -361,8 +361,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         elif "Llama-3.2-11B-Vision" in self.model_name:
             from transformers import MllamaForConditionalGeneration as Model
         # instantiate
-        if self.device == "accelerate":
-            kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+        kwargs = {**self.model_build_kwargs, **kwargs}
         model = Model.from_pretrained(self.model_name, **kwargs)
         if not self.pretrained:
             rawmodel = Model.from_config(model.config)
@@ -375,7 +374,8 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             with torch.no_grad():
                 for p in model.parameters():
                     part_reversal(p)
-        if self.device != "accelerate":
+        if not self.use_accelerate:
+            # accelerate dispatches the model internally; otherwise place it ourselves
             model.to(self.device)
         model.eval()
         return model
@@ -442,9 +442,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = "auto" if self.device == "accelerate" else self.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -464,7 +461,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
                         max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
-                    ).to(device)
+                    ).to(self.device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
@@ -512,8 +509,8 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.device == "accelerate" and torch.cuda.is_available():
-                    # in case of multi-GPU models, explicitly empty cache "just in case"
+                if self.use_accelerate:
+                    # accelerate may dispatch across multiple GPUs; free cache "just in case"
                     torch.cuda.empty_cache()
 
 

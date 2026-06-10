@@ -156,6 +156,34 @@ def test_image_token_aggregation(
     assert out.ndim == 2 if token_aggregation is None else 1
 
 
+def test_image_accelerate_device_resolution() -> None:
+    # use_accelerate must not interfere with device resolution: device stays a
+    # real torch device (tensors go there) while the model is dispatched by HF.
+    extractor = ns.extractors.HuggingFaceImage(use_accelerate=True)
+    assert extractor.use_accelerate
+    assert extractor.model_build_kwargs == {
+        "device_map": "auto",
+        "torch_dtype": torch.float16,
+    }
+    assert extractor.device in ("cpu", "cuda")
+    if torch.cuda.is_available():
+        torch.empty(0).to(extractor.device)
+
+
+@pytest.mark.skipif(
+    torch.cuda.device_count() < 2, reason="accelerate dispatch requires >=2 GPUs"
+)
+def test_image_accelerate_end_to_end(cat_event: etypes.Image, tmp_path: Path) -> None:
+    infra: tp.Any = dict(folder=tmp_path)
+    extractor = ns.extractors.HuggingFaceImage(
+        use_accelerate=True,
+        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        infra=infra,
+    )
+    out = extractor.get_static(cat_event)
+    assert out.ndim == 1 and out.numel() > 0
+
+
 @pytest.mark.parametrize("token_aggregation", ["mean", "first", None])
 def test_openai_clip(
     cat_event: etypes.Image,

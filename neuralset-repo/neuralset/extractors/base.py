@@ -452,7 +452,9 @@ class HuggingFaceMixin(base.BaseModel):
         - cpu: for cpu computation
         - cuda: for using gpu0
         - auto: to use gpu if available else cpu
-        - accelerate: to use huggingface accelerate (maps to multiple-gpus + use float16)
+    use_accelerate: bool
+        If True, dispatch the model with HuggingFace accelerate
+        (device_map="auto" + float16), distributing it across available GPUs.
     layers: float | list[float] | "all"
         Specifies the layers to keep.
         - "all": keep all layers
@@ -479,13 +481,24 @@ class HuggingFaceMixin(base.BaseModel):
         "huggingface_hub>=0.27.0",
     )
     model_name: str
-    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
+    device: tp.Literal["auto", "cpu", "cuda"] = "auto"
+    use_accelerate: bool = False
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
+
+    @property
+    def model_build_kwargs(self) -> dict[str, tp.Any]:
+        """Extra kwargs forwarded to ``from_pretrained``. Populated only when
+        ``use_accelerate`` is set, in which case HF dispatches the model across
+        GPUs with fp16 (callers should then skip the usual ``.to(device)``).
+        """
+        if self.use_accelerate:
+            return {"device_map": "auto", "torch_dtype": torch.float16}
+        return {}
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -528,10 +541,10 @@ class HuggingFaceMixin(base.BaseModel):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device"]
+        return ["device", "use_accelerate"]
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["device"]
+        excluded = ["device", "use_accelerate"]
         if self.cache_n_layers is not None:
             excluded.extend(["layers", "layer_aggregation"])
         return excluded
