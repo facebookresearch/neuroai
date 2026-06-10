@@ -150,7 +150,9 @@ def _resolve_study(name: str = "") -> tp.Type["Study"] | None:
         hint = "import the module that defines it before use"
         if importlib.util.find_spec("neuralfetch") is None:
             hint = f"run `pip install neuralfetch` for public-data studies, or {hint}"
-        raise ImportError(f"Study {name!r} not found (scanned: {scanned}), {hint}.")
+        raise ImportError(
+            f"Study or EventsTransform {name!r} not found (scanned: {scanned}), {hint}."
+        )
     return cls
 
 
