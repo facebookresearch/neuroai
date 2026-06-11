@@ -591,7 +591,28 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
     _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
+    _local_files_only: bool = pydantic.PrivateAttr(default=False)
     _REPOS: tp.ClassVar[list[str]] = []
+    _SNAPSHOT_DOWNLOAD_KWARGS: tp.ClassVar[frozenset[str]] = frozenset(
+        {
+            "allow_patterns",
+            "cache_dir",
+            "endpoint",
+            "etag_timeout",
+            "force_download",
+            "ignore_patterns",
+            "library_name",
+            "library_version",
+            "local_dir",
+            "local_dir_use_symlinks",
+            "max_workers",
+            "proxies",
+            "resume_download",
+            "revision",
+            "token",
+            "user_agent",
+        }
+    )
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
@@ -610,6 +631,36 @@ class HuggingFaceMixin(base.BaseModel):
         self.hf_config.processor_cls(self.model_name)  # check processor class exists
         if not self._skip_repo_check and not self.repo_exists():
             raise ValueError(f"The model {self.model_name} does not exist")
+        self._download_huggingface_snapshot()
+
+    def _download_huggingface_snapshot(self) -> None:
+        if self._skip_repo_check:
+            return
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(
+            repo_id=self.model_name,
+            **self._snapshot_download_kwargs(),
+        )
+        self._local_files_only = True
+
+    def _snapshot_download_kwargs(self) -> dict[str, tp.Any]:
+        kwargs: dict[str, tp.Any] = {}
+        load_kwargs = (
+            self.hf_config.model_kwargs or {},
+            self.hf_config.processor_kwargs or {},
+        )
+        for source in load_kwargs:
+            for key, value in source.items():
+                if key in self._SNAPSHOT_DOWNLOAD_KWARGS:
+                    kwargs.setdefault(key, value)
+        return kwargs
+
+    def _with_local_files_only(self, kwargs: dict[str, tp.Any]) -> dict[str, tp.Any]:
+        kwargs = kwargs.copy()
+        if self._local_files_only:
+            kwargs["local_files_only"] = True
+        return kwargs
 
     def repo_exists(self) -> bool:
         fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
@@ -673,7 +724,7 @@ class HuggingFaceMixin(base.BaseModel):
         hf_config = self.hf_config
         Model = hf_config.model_cls(self.model_name)
         if self.pretrained:
-            kwargs = (hf_config.model_kwargs or {}).copy()
+            kwargs = self._with_local_files_only(hf_config.model_kwargs or {})
             if self.device == "accelerate":
                 kwargs["device_map"] = "auto"
             if self.dtype is not None and "torch_dtype" not in kwargs:
@@ -696,9 +747,8 @@ class HuggingFaceMixin(base.BaseModel):
             if self.device != "accelerate":
                 model.to(self.device)
         else:
-            config = AutoConfig.from_pretrained(
-                self.model_name, output_hidden_states=True
-            )
+            config_kwargs = self._with_local_files_only({"output_hidden_states": True})
+            config = AutoConfig.from_pretrained(self.model_name, **config_kwargs)
             constructor = getattr(Model, "from_config", Model._from_config)  # type: ignore[attr-defined]
             model = constructor(config, **(hf_config.model_kwargs or {}))
             if isinstance(self.dtype, str) and self.dtype != "auto":
@@ -713,9 +763,10 @@ class HuggingFaceMixin(base.BaseModel):
 
     def load_processor(self) -> tp.Any:
         Processor = self.hf_config.processor_cls(self.model_name)
+        kwargs = self._with_local_files_only(self.hf_config.processor_kwargs or {})
         return Processor.from_pretrained(
             self.model_name,
-            **(self.hf_config.processor_kwargs or {}),
+            **kwargs,
         )
 
     def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:

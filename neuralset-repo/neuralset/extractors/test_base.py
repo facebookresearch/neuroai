@@ -29,6 +29,41 @@ class ExternExtractor(ns.extractors.Pulse):
     pass
 
 
+class _FakeHFModel(torch.nn.Module):
+    from_config_calls: tp.ClassVar[list[dict[str, tp.Any]]] = []
+    from_pretrained_calls: tp.ClassVar[list[dict[str, tp.Any]]] = []
+
+    @classmethod
+    def from_pretrained(cls, model_name: str, **kwargs: tp.Any) -> "_FakeHFModel":
+        cls.from_pretrained_calls.append({"model_name": model_name, **kwargs})
+        return cls()
+
+    @classmethod
+    def from_config(cls, config: tp.Any, **kwargs: tp.Any) -> "_FakeHFModel":
+        cls.from_config_calls.append({"config": config, **kwargs})
+        return cls()
+
+    _from_config = from_config
+
+
+class _FakeHFProcessor:
+    from_pretrained_calls: tp.ClassVar[list[dict[str, tp.Any]]] = []
+
+    @classmethod
+    def from_pretrained(cls, model_name: str, **kwargs: tp.Any) -> "_FakeHFProcessor":
+        cls.from_pretrained_calls.append({"model_name": model_name, **kwargs})
+        return cls()
+
+
+class _FakeHFConfig:
+    from_pretrained_calls: tp.ClassVar[list[dict[str, tp.Any]]] = []
+
+    @classmethod
+    def from_pretrained(cls, model_name: str, **kwargs: tp.Any) -> "_FakeHFConfig":
+        cls.from_pretrained_calls.append({"model_name": model_name, **kwargs})
+        return cls()
+
+
 def test_features_model() -> None:
     extractors: tp.Any = [
         {"name": "Pulse"},
@@ -316,11 +351,13 @@ def test_cfg_feature_uid(tmp_path: Path) -> None:
 )
 def test_hf_aggregate_tokens(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     shape: tuple[int, ...],
     agg: str | None,
     max_layers: int | None,
     out: tuple[int, ...],
 ) -> None:
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_: None)
     extractor: tp.Any = {
         "name": "HuggingFaceImage",
         "cache_n_layers": max_layers,
@@ -336,10 +373,97 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
-def test_huggingface_model_exists() -> None:
+def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_: None)
     base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(ValueError):
         base.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_prefetches_snapshot(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = []
+
+    def snapshot_download(**kwargs: tp.Any) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    extractor = base.HuggingFaceMixin(
+        model_name="gpt2",
+        hf_config=base.HuggingFaceConfig(
+            model_kwargs={
+                "cache_dir": str(tmp_path / "cache"),
+                "revision": "main",
+                "trust_remote_code": True,
+            },
+            processor_kwargs={"padding_side": "right", "token": "test-token"},
+        ),
+    )
+
+    assert calls == [
+        {
+            "repo_id": "gpt2",
+            "cache_dir": str(tmp_path / "cache"),
+            "revision": "main",
+            "token": "test-token",
+        }
+    ]
+    assert extractor._local_files_only
+
+
+def test_huggingface_loads_from_local_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _FakeHFModel.from_config_calls = []
+    _FakeHFModel.from_pretrained_calls = []
+    _FakeHFProcessor.from_pretrained_calls = []
+    _FakeHFConfig.from_pretrained_calls = []
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_: None)
+    monkeypatch.setattr("transformers.AutoConfig", _FakeHFConfig)
+    monkeypatch.setattr("transformers.AutoModel", _FakeHFModel)
+    monkeypatch.setattr("transformers.AutoProcessor", _FakeHFProcessor)
+
+    extractor = base.HuggingFaceMixin(
+        model_name="gpt2",
+        device="accelerate",
+        dtype="float16",
+        hf_config=base.HuggingFaceConfig(
+            model_kwargs={"trust_remote_code": True},
+            processor_kwargs={"padding_side": "right"},
+        ),
+    )
+
+    extractor.load_model()
+    extractor.load_processor()
+
+    assert _FakeHFModel.from_pretrained_calls == [
+        {
+            "model_name": "gpt2",
+            "trust_remote_code": True,
+            "local_files_only": True,
+            "device_map": "auto",
+            "torch_dtype": torch.float16,
+        }
+    ]
+    assert _FakeHFProcessor.from_pretrained_calls == [
+        {
+            "model_name": "gpt2",
+            "padding_side": "right",
+            "local_files_only": True,
+        }
+    ]
+
+    untrained = base.HuggingFaceMixin(model_name="gpt2", pretrained=False)
+    untrained.load_model()
+
+    assert _FakeHFConfig.from_pretrained_calls == [
+        {
+            "model_name": "gpt2",
+            "output_hidden_states": True,
+            "local_files_only": True,
+        }
+    ]
 
 
 def test_huggingface_config_resolves_class_defaults() -> None:
