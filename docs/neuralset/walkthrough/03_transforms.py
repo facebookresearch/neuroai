@@ -188,7 +188,7 @@ demo_events = ns.events.standardize_events(
     )
 )
 
-filtered = DropShortEvents(min_duration=0.1).run(demo_events)
+filtered = DropShortEvents(min_duration=0.1)._run(demo_events)
 print(f"{len(demo_events)} -> {len(filtered)} events")
 
 # %%
