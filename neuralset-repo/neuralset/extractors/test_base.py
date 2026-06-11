@@ -338,6 +338,17 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
+def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    def snapshot_download(repo_id: str, **kwargs: tp.Any) -> None:
+        if repo_id == "not_a_model":
+            raise ValueError(f"The model {repo_id} does not exist")
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    base.HuggingFaceMixin(model_name="gpt2")
+    with pytest.raises(ValueError):
+        base.HuggingFaceMixin(model_name="not_a_model")
+
+
 def test_huggingface_config_resolves_class_defaults() -> None:
     class DummyConfig(base.HuggingFaceConfig):
         HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
