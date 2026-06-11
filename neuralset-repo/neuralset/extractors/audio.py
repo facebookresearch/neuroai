@@ -20,7 +20,8 @@ from torch.nn import functional as F
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from .base import BaseExtractor, HuggingFaceConfig, HuggingFaceMixin
+from .base import BaseExtractor
+from .huggingface import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
 

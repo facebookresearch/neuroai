@@ -20,6 +20,7 @@ from neuralset import events as _ev
 from ..events import Event
 from ..events.utils import extract_events
 from . import base
+from .huggingface import HuggingFaceMixin
 from .image import HuggingFaceImage
 from .text import HuggingFaceText
 
@@ -315,7 +316,7 @@ class HuggingFacePCA(ExtractorPCA):
 
         # Note: all the PCA has to be done on prepare (in the main thread)
         # because it cannot be split and distributed onto many machines
-        if not isinstance(self.extractor, base.HuggingFaceMixin):  # for typing
+        if not isinstance(self.extractor, HuggingFaceMixin):  # for typing
             raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
         events = list(pca_events.values())
         basefolder = self.extractor.infra.folder
@@ -356,7 +357,7 @@ class HuggingFacePCA(ExtractorPCA):
     ) -> tp.Iterable[base.TimedArray]:
         uids = [self._to_uid(e) for e in events]
         feat = self.extractor
-        if not isinstance(feat, base.HuggingFaceMixin):  # for typing
+        if not isinstance(feat, HuggingFaceMixin):  # for typing
             raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
         for event, d in zip(events, self._get_data(uids)):
             if feat.cache_n_layers is not None:

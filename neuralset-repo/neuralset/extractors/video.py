@@ -19,6 +19,7 @@ from neuralset import base as nsbase
 from neuralset.events import etypes as evts
 
 from . import base as extractor_base
+from . import huggingface
 from . import image as image_extractors
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
     return output
 
 
-class HuggingFaceVideoConfig(extractor_base.HuggingFaceConfig):
+class HuggingFaceVideoConfig(huggingface.HuggingFaceConfig):
     processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": True}
     HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
         "vjepa2": {"processor_cls_name": "AutoVideoProcessor"},
@@ -59,7 +60,7 @@ class HuggingFaceVideoConfig(extractor_base.HuggingFaceConfig):
     }
 
 
-class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceMixin):
+class HuggingFaceVideo(extractor_base.BaseExtractor, huggingface.HuggingFaceMixin):
     """Extract video embeddings using a native HuggingFace video model.
 
     Videos are divided into clips of `clip_duration` seconds at the specified
@@ -134,12 +135,12 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, extractor_base.HuggingFaceM
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return extractor_base.HuggingFaceMixin._exclude_from_cls_uid()
+        return huggingface.HuggingFaceMixin._exclude_from_cls_uid()
 
     def _exclude_from_cache_uid(self) -> list[str]:
         return extractor_base.BaseExtractor._exclude_from_cache_uid(
             self
-        ) + extractor_base.HuggingFaceMixin._exclude_from_cache_uid(self)
+        ) + huggingface.HuggingFaceMixin._exclude_from_cache_uid(self)
 
     def _get_timed_arrays(
         self, events: list[evts.Video], start: float, duration: float
