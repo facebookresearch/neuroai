@@ -593,26 +593,6 @@ class HuggingFaceMixin(base.BaseModel):
     _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
     _local_files_only: bool = pydantic.PrivateAttr(default=False)
     _REPOS: tp.ClassVar[list[str]] = []
-    _SNAPSHOT_DOWNLOAD_KWARGS: tp.ClassVar[frozenset[str]] = frozenset(
-        {
-            "allow_patterns",
-            "cache_dir",
-            "endpoint",
-            "etag_timeout",
-            "force_download",
-            "ignore_patterns",
-            "library_name",
-            "library_version",
-            "local_dir",
-            "local_dir_use_symlinks",
-            "max_workers",
-            "proxies",
-            "resume_download",
-            "revision",
-            "token",
-            "user_agent",
-        }
-    )
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
@@ -638,23 +618,16 @@ class HuggingFaceMixin(base.BaseModel):
             return
         from huggingface_hub import snapshot_download
 
+        kwargs: dict[str, tp.Any] = {}
+        for load_kwargs in (self.hf_config.model_kwargs, self.hf_config.processor_kwargs):
+            if load_kwargs is not None and "revision" in load_kwargs:
+                kwargs["revision"] = load_kwargs["revision"]
+                break
         snapshot_download(
             repo_id=self.model_name,
-            **self._snapshot_download_kwargs(),
+            **kwargs,
         )
         self._local_files_only = True
-
-    def _snapshot_download_kwargs(self) -> dict[str, tp.Any]:
-        kwargs: dict[str, tp.Any] = {}
-        load_kwargs = (
-            self.hf_config.model_kwargs or {},
-            self.hf_config.processor_kwargs or {},
-        )
-        for source in load_kwargs:
-            for key, value in source.items():
-                if key in self._SNAPSHOT_DOWNLOAD_KWARGS:
-                    kwargs.setdefault(key, value)
-        return kwargs
 
     def _with_local_files_only(self, kwargs: dict[str, tp.Any]) -> dict[str, tp.Any]:
         kwargs = kwargs.copy()

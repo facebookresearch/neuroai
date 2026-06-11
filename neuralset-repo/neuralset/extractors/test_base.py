@@ -404,9 +404,7 @@ def test_huggingface_prefetches_snapshot(
     assert calls == [
         {
             "repo_id": "gpt2",
-            "cache_dir": str(tmp_path / "cache"),
             "revision": "main",
-            "token": "test-token",
         }
     ]
     assert extractor._local_files_only
