@@ -609,22 +609,24 @@ class HuggingFaceMixin(base.BaseModel):
         from huggingface_hub import snapshot_download
         from huggingface_hub.errors import LocalEntryNotFoundError
 
-        kwargs: dict[str, tp.Any] = {}
+        revisions: list[tp.Any] = []
         for load_kwargs in (self.hf_config.model_kwargs, self.hf_config.processor_kwargs):
-            if load_kwargs is not None and "revision" in load_kwargs:
-                kwargs["revision"] = load_kwargs["revision"]
-                break
-        try:  # fast path once the snapshot is already cached
-            snapshot_download(
-                repo_id=self.model_name,
-                local_files_only=True,
-                **kwargs,
-            )
-        except LocalEntryNotFoundError:  # first instantiation populates the cache
-            snapshot_download(
-                repo_id=self.model_name,
-                **kwargs,
-            )
+            revision = None if load_kwargs is None else load_kwargs.get("revision")
+            if revision not in revisions:
+                revisions.append(revision)
+        for revision in revisions:
+            kwargs = {} if revision is None else {"revision": revision}
+            try:  # fast path once the snapshot is already cached
+                snapshot_download(
+                    repo_id=self.model_name,
+                    local_files_only=True,
+                    **kwargs,
+                )
+            except LocalEntryNotFoundError:  # first instantiation populates the cache
+                snapshot_download(
+                    repo_id=self.model_name,
+                    **kwargs,
+                )
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -688,8 +690,18 @@ class HuggingFaceMixin(base.BaseModel):
             if self.device != "accelerate":
                 model.to(self.device)
         else:
+            config_kwargs: dict[str, tp.Any] = {
+                "output_hidden_states": True,
+                "local_files_only": True,
+            }
+            if (
+                hf_config.model_kwargs is not None
+                and "revision" in hf_config.model_kwargs
+            ):
+                config_kwargs["revision"] = hf_config.model_kwargs["revision"]
             config = AutoConfig.from_pretrained(
-                self.model_name, output_hidden_states=True, local_files_only=True
+                self.model_name,
+                **config_kwargs,
             )
             constructor = getattr(Model, "from_config", Model._from_config)  # type: ignore[attr-defined]
             model = constructor(config, **(hf_config.model_kwargs or {}))

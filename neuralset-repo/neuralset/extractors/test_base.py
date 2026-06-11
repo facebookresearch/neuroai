@@ -8,11 +8,12 @@ import typing as tp
 from pathlib import Path
 
 import exca
+import httpx
 import numpy as np
 import pandas as pd
 import pytest
 import torch
-from huggingface_hub.errors import RepositoryNotFoundError
+from huggingface_hub.errors import LocalEntryNotFoundError, RepositoryNotFoundError
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 import neuralset as ns
@@ -339,7 +340,17 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
-def test_huggingface_model_exists() -> None:
+def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    def snapshot_download(repo_id: str, **kwargs: tp.Any) -> None:
+        if repo_id == "not_a_model" and kwargs.get("local_files_only"):
+            raise LocalEntryNotFoundError("missing")
+        if repo_id == "not_a_model":
+            request = httpx.Request("GET", "https://huggingface.co/not_a_model")
+            response = httpx.Response(404, request=request)
+            raise RepositoryNotFoundError("missing", response=response)
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    base.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(RepositoryNotFoundError):
         base.HuggingFaceMixin(model_name="not_a_model")
 
