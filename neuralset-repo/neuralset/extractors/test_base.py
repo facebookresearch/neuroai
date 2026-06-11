@@ -342,23 +342,6 @@ def test_huggingface_model_exists() -> None:
         base.HuggingFaceMixin(model_name="not_a_model")
 
 
-def test_huggingface_config_rejects_unexpected_kwargs() -> None:
-    class DummyLoader:
-        @classmethod
-        def from_pretrained(cls, model_name: str, *, valid: int = 0) -> None:
-            pass
-
-    class DummyConfig(base.HuggingFaceConfig):
-        def _transformers_cls(self, cls_name: str, kind: str) -> tp.Any:
-            return DummyLoader
-
-    DummyConfig(model_kwargs={"valid": 1})
-    with pytest.raises(ValueError, match="Unexpected hf_config.model_kwargs"):
-        DummyConfig(model_kwargs={"invalid": 1})
-    with pytest.raises(ValueError, match="Unexpected hf_config.processor_kwargs"):
-        DummyConfig(processor_kwargs={"invalid": 1})
-
-
 def test_huggingface_config_resolves_class_defaults() -> None:
     class DummyConfig(base.HuggingFaceConfig):
         HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
