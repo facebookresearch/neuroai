@@ -373,13 +373,6 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
-def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_: None)
-    base.HuggingFaceMixin(model_name="gpt2")
-    with pytest.raises(ValueError):
-        base.HuggingFaceMixin(model_name="not_a_model")
-
-
 def test_huggingface_prefetches_snapshot(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

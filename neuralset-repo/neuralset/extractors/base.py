@@ -7,7 +7,6 @@
 import logging
 import typing as tp
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -592,7 +591,6 @@ class HuggingFaceMixin(base.BaseModel):
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
     _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
     _local_files_only: bool = pydantic.PrivateAttr(default=False)
-    _REPOS: tp.ClassVar[list[str]] = []
     _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
@@ -609,8 +607,6 @@ class HuggingFaceMixin(base.BaseModel):
             raise ValueError(msg)
         self.hf_config.model_cls(self.model_name)  # check model class exists
         self.hf_config.processor_cls(self.model_name)  # check processor class exists
-        if not self._skip_repo_check and not self.repo_exists():
-            raise ValueError(f"The model {self.model_name} does not exist")
         self._download_huggingface_snapshot()
 
     def _download_huggingface_snapshot(self) -> None:
@@ -634,30 +630,6 @@ class HuggingFaceMixin(base.BaseModel):
         if self._local_files_only:
             kwargs["local_files_only"] = True
         return kwargs
-
-    def repo_exists(self) -> bool:
-        fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
-        name = self.model_name
-        if not self._REPOS:  # load offline huggingface white list
-            if not fp.exists():
-                raise RuntimeError(f"Please reinstall neuralset: missing file {fp}")
-            self._REPOS.extend(fp.read_text("utf8").splitlines())
-        if name in self._REPOS:
-            return True
-        else:
-            from huggingface_hub import repo_info
-
-            try:  # if not in whitelist, check through API and save it if it exists
-                repo_info(name)
-                self._REPOS.append(name)
-                self._REPOS.sort()
-                try:
-                    fp.write_text("\n".join(self._REPOS))
-                except Exception:
-                    pass  # nevermind if there is no write permission
-                return True
-            except Exception:
-                return False
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
