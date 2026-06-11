@@ -609,16 +609,24 @@ class HuggingFaceMixin(base.BaseModel):
 
     def _download_huggingface_snapshot(self) -> None:
         from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
 
         kwargs: dict[str, tp.Any] = {}
         for load_kwargs in (self.hf_config.model_kwargs, self.hf_config.processor_kwargs):
             if load_kwargs is not None and "revision" in load_kwargs:
                 kwargs["revision"] = load_kwargs["revision"]
                 break
-        snapshot_download(
-            repo_id=self.model_name,
-            **kwargs,
-        )
+        try:
+            snapshot_download(
+                repo_id=self.model_name,
+                local_files_only=True,
+                **kwargs,
+            )
+        except LocalEntryNotFoundError:
+            snapshot_download(
+                repo_id=self.model_name,
+                **kwargs,
+            )
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+from huggingface_hub.errors import LocalEntryNotFoundError
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 import neuralset as ns
@@ -397,8 +398,33 @@ def test_huggingface_prefetches_snapshot(
     assert calls == [
         {
             "repo_id": "gpt2",
+            "local_files_only": True,
             "revision": "main",
         }
+    ]
+
+
+def test_huggingface_prefetches_uncached_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def snapshot_download(**kwargs: tp.Any) -> None:
+        calls.append(kwargs)
+        if kwargs.get("local_files_only"):
+            raise LocalEntryNotFoundError("missing")
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    base.HuggingFaceMixin(model_name="gpt2")
+
+    assert calls == [
+        {
+            "repo_id": "gpt2",
+            "local_files_only": True,
+        },
+        {
+            "repo_id": "gpt2",
+        },
     ]
 
 
