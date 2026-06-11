@@ -347,7 +347,7 @@ def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
         if repo_id == "not_a_model":
             request = httpx.Request("GET", "https://huggingface.co/not_a_model")
             response = httpx.Response(404, request=request)
-            raise RepositoryNotFoundError("missing", response=response)
+            raise RepositoryNotFoundError("missing", response=response)  # type: ignore
 
     monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
     base.HuggingFaceMixin(model_name="gpt2")
