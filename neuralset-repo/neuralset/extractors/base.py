@@ -590,8 +590,6 @@ class HuggingFaceMixin(base.BaseModel):
     token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
     _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
-    _local_files_only: bool = pydantic.PrivateAttr(default=False)
-    _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -610,8 +608,6 @@ class HuggingFaceMixin(base.BaseModel):
         self._download_huggingface_snapshot()
 
     def _download_huggingface_snapshot(self) -> None:
-        if self._skip_repo_check:
-            return
         from huggingface_hub import snapshot_download
 
         kwargs: dict[str, tp.Any] = {}
@@ -623,13 +619,6 @@ class HuggingFaceMixin(base.BaseModel):
             repo_id=self.model_name,
             **kwargs,
         )
-        self._local_files_only = True
-
-    def _with_local_files_only(self, kwargs: dict[str, tp.Any]) -> dict[str, tp.Any]:
-        kwargs = kwargs.copy()
-        if self._local_files_only:
-            kwargs["local_files_only"] = True
-        return kwargs
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -669,7 +658,8 @@ class HuggingFaceMixin(base.BaseModel):
         hf_config = self.hf_config
         Model = hf_config.model_cls(self.model_name)
         if self.pretrained:
-            kwargs = self._with_local_files_only(hf_config.model_kwargs or {})
+            kwargs = (hf_config.model_kwargs or {}).copy()
+            kwargs["local_files_only"] = True
             if self.device == "accelerate":
                 kwargs["device_map"] = "auto"
             if self.dtype is not None and "torch_dtype" not in kwargs:
@@ -692,8 +682,9 @@ class HuggingFaceMixin(base.BaseModel):
             if self.device != "accelerate":
                 model.to(self.device)
         else:
-            config_kwargs = self._with_local_files_only({"output_hidden_states": True})
-            config = AutoConfig.from_pretrained(self.model_name, **config_kwargs)
+            config = AutoConfig.from_pretrained(
+                self.model_name, output_hidden_states=True, local_files_only=True
+            )
             constructor = getattr(Model, "from_config", Model._from_config)  # type: ignore[attr-defined]
             model = constructor(config, **(hf_config.model_kwargs or {}))
             if isinstance(self.dtype, str) and self.dtype != "auto":
@@ -708,7 +699,8 @@ class HuggingFaceMixin(base.BaseModel):
 
     def load_processor(self) -> tp.Any:
         Processor = self.hf_config.processor_cls(self.model_name)
-        kwargs = self._with_local_files_only(self.hf_config.processor_kwargs or {})
+        kwargs = (self.hf_config.processor_kwargs or {}).copy()
+        kwargs["local_files_only"] = True
         return Processor.from_pretrained(
             self.model_name,
             **kwargs,

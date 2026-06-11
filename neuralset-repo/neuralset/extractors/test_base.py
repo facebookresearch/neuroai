@@ -382,7 +382,7 @@ def test_huggingface_prefetches_snapshot(
         calls.append(kwargs)
 
     monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
-    extractor = base.HuggingFaceMixin(
+    base.HuggingFaceMixin(
         model_name="gpt2",
         hf_config=base.HuggingFaceConfig(
             model_kwargs={
@@ -400,7 +400,6 @@ def test_huggingface_prefetches_snapshot(
             "revision": "main",
         }
     ]
-    assert extractor._local_files_only
 
 
 def test_huggingface_loads_from_local_files(
