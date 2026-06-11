@@ -549,9 +549,9 @@ class Step(exca.steps.Step, _Module, discriminator_key="name"):
         if (
             self.CACHE_TYPE is not None
             and self.infra is not None
-            and self.infra.cache_type is None
+            and self.infra.cache_type is None  # type: ignore[attr-defined]
         ):
-            self.infra.cache_type = self.CACHE_TYPE
+            self.infra.cache_type = self.CACHE_TYPE  # type: ignore[attr-defined]
 
     @pydantic.model_validator(mode="wrap")
     @classmethod
@@ -608,13 +608,13 @@ class Chain(exca.steps.Chain, Step):
         if hasattr(exca.steps.Step, "CACHE_TYPE"):
             return  # cache propagation handled by exca itself (>=0.5.23)
         # Chain output matches last step: use its cache format (instance > class default).
-        if self.infra is not None and self.infra.cache_type is None:
+        if self.infra is not None and self.infra.cache_type is None:  # type: ignore[attr-defined]
             seq = (
                 list(self.steps.values()) if isinstance(self.steps, dict) else self.steps
             )
             if seq:
                 last = seq[-1]
-                if last.infra is not None and last.infra.cache_type is not None:
-                    self.infra.cache_type = last.infra.cache_type
+                if last.infra is not None and last.infra.cache_type is not None:  # type: ignore[attr-defined]
+                    self.infra.cache_type = last.infra.cache_type  # type: ignore[attr-defined]
                 else:
-                    self.infra.cache_type = last.CACHE_TYPE
+                    self.infra.cache_type = last.CACHE_TYPE  # type: ignore[attr-defined]
