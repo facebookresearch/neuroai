@@ -606,8 +606,8 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.model_cls(self.model_name)
-        self.hf_config.processor_cls(self.model_name)
+        self.hf_config.model_cls(self.model_name)  # check model class exists
+        self.hf_config.processor_cls(self.model_name)  # check processor class exists
         if not self._skip_repo_check and not self.repo_exists():
             raise ValueError(f"The model {self.model_name} does not exist")
 
