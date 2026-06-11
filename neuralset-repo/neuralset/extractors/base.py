@@ -603,8 +603,6 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self.hf_config.model_cls(self.model_name)  # check model class exists
-        self.hf_config.processor_cls(self.model_name)  # check processor class exists
         self._download_huggingface_snapshot()
 
     def _download_huggingface_snapshot(self) -> None:
@@ -616,13 +614,13 @@ class HuggingFaceMixin(base.BaseModel):
             if load_kwargs is not None and "revision" in load_kwargs:
                 kwargs["revision"] = load_kwargs["revision"]
                 break
-        try:
+        try:  # fast path once the snapshot is already cached
             snapshot_download(
                 repo_id=self.model_name,
                 local_files_only=True,
                 **kwargs,
             )
-        except LocalEntryNotFoundError:
+        except LocalEntryNotFoundError:  # first instantiation populates the cache
             snapshot_download(
                 repo_id=self.model_name,
                 **kwargs,
