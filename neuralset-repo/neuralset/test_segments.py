@@ -55,9 +55,9 @@ def test_segment() -> None:
     assert set(s._to_extractor()) == {"events", "start", "duration", "trigger"}
 
 
-def test_on_trigger_overlap(caplog: pytest.LogCaptureFixture) -> None:
+def test_trigger_overlap() -> None:
     # Two same-type triggers starting at the same time on the same timeline
-    # (e.g. two Fmri events differing only by metadata).
+    # (e.g. two Fmri events differing only by metadata) are ambiguous and raise.
     events = standardize_events(
         pd.DataFrame(
             [
@@ -68,25 +68,8 @@ def test_on_trigger_overlap(caplog: pytest.LogCaptureFixture) -> None:
     )
     triggers = events.type == "Word"
 
-    # default is "raise"
     with pytest.raises(ValueError, match="same time"):
         list_segments(events, triggers=triggers, duration=1.0)
-    with pytest.raises(ValueError, match="same time"):
-        list_segments(events, triggers=triggers, duration=1.0, on_trigger_overlap="raise")
-
-    # "warn" logs but still builds the (duplicate) segments
-    with caplog.at_level("WARNING"):
-        segments = list_segments(
-            events, triggers=triggers, duration=1.0, on_trigger_overlap="warn"
-        )
-    assert len(segments) == 2
-    assert "same time" in caplog.text
-
-    # "allow" silently builds the segments
-    segments = list_segments(
-        events, triggers=triggers, duration=1.0, on_trigger_overlap="allow"
-    )
-    assert len(segments) == 2
 
 
 @pytest.mark.parametrize("reloaded", (True, False))
@@ -162,13 +145,13 @@ def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) 
         actual = seg.find_overlap(events, events.text == "f")
         assert "".join(events.loc[actual].text) == "f"
 
-        expected_list = "d", "da", "dacb", "dacb", "e", "f"
-        # triggering on every event includes two Words at the same start/timeline
+        expected_list = "d", "da", "dacb", "e", "f"
+        # exclude "c": it shares start/timeline with "b" and would be an
+        # ambiguous trigger overlap (same type, time and timeline).
         actual_segments = seg.list_segments(
             events,
-            pd.Series(True, index=events.index),
+            events.text != "c",
             duration=0.1,
-            on_trigger_overlap="allow",
         )
         for act, exp in zip(actual_segments, expected_list):
             sub = events.loc[[e._index for e in act.ns_events]]

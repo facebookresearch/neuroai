@@ -332,7 +332,6 @@ def list_segments(
     duration: float | None = None,
     stride: float | None = None,
     stride_drop_incomplete: bool = True,
-    on_trigger_overlap: tp.Literal["raise", "warn", "allow"] = "raise",
 ) -> list[Segment]:
     """Create a list of segments based on events, sliding windows, or both.
 
@@ -353,9 +352,6 @@ def list_segments(
     stride_drop_incomplete : bool, optional
         If True and stride is not None, drop segments not fully contained within
         the valid time range. Default is True.
-    on_trigger_overlap : {"raise", "warn", "allow"}, optional
-        Behavior when several triggers of the same ``type`` start at the same
-        time on the same ``timeline`` (ambiguous segments). Default is "raise".
 
     Returns
     -------
@@ -404,20 +400,14 @@ def list_segments(
 
     # Two triggers of the same type starting at the same time on the same
     # timeline (e.g. two Fmri events differing only by metadata) define
-    # ambiguous/duplicate segments and can corrupt train/test splits. See
-    # https://github.com/fairinternal/brainai/pull/2531#issuecomment-4073936157
-    if on_trigger_overlap != "allow":
-        keys = ["type", "timeline", "start"]
-        collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
-        if len(collisions):
-            msg = (
-                f"{len(collisions)} triggers of the same type start at the same time "
-                f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` "
-                "mask, or pass on_trigger_overlap='allow' to bypass."
-            )
-            if on_trigger_overlap == "raise":
-                raise ValueError(msg)
-            logger.warning(msg)
+    # ambiguous/duplicate segments and can corrupt train/test splits.
+    keys = ["type", "timeline", "start"]
+    collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
+    if len(collisions):
+        raise ValueError(
+            f"{len(collisions)} triggers of the same type start at the same time "
+            f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` mask."
+        )
 
     df_to_pos = events.index.get_indexer(trigger_df.index)
 
