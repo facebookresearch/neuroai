@@ -207,10 +207,8 @@ def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
         physionet._download()
 
     out_root = tmp_path / "study" / "download" / "eegmat" / "1.0.0"
-    assert (out_root / "file1.txt").exists()
-    assert (out_root / "file2.txt").exists()
-    assert (out_root / "file1.txt").read_text() == "data1"
-    assert (out_root / "file2.txt").read_text() == "data2"
+    for name, expected in [("file1.txt", "data1"), ("file2.txt", "data2")]:
+        assert (out_root / name).read_text("utf8") == expected
 
 
 @pytest.mark.parametrize("study_name", ["Allen2022Massive", "Allen2022MassiveRaw"])

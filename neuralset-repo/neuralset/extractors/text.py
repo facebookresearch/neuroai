@@ -84,14 +84,29 @@ class WordFrequency(BaseText):
     event_types: tp.Literal["Word"] = "Word"
     requirements: tp.ClassVar[tuple[str, ...]] = ("wordfreq",)
     LANGUAGES: tp.ClassVar[dict[str, str]] = dict(
-        english="en", french="fr", spanish="es", dutch="nl", chinese="zh"
+        english="en",
+        french="fr",
+        spanish="es",
+        dutch="nl",
+        chinese="zh",
+        japanese="ja",
     )
 
     # pylint: disable=unused-argument
     def get_embedding(self, text: str, language: str = "") -> np.ndarray:
         from wordfreq import zipf_frequency  # noqa
 
-        value = zipf_frequency(text, self.LANGUAGES.get(self.language, self.language))
+        # The per-event language wins (it is the ground truth for the data),
+        # falling back to the extractor's `language` only when the event carries
+        # none -- same precedence as SpacyEmbedding. Lowercase so both names and
+        # 2-letter codes resolve (wordfreq needs lowercase).
+        lang = (language or self.language or "").lower()
+        if not lang:
+            raise ValueError(
+                "No language specified: set language on the extractor or "
+                "populate language on events."
+            )
+        value = zipf_frequency(text, self.LANGUAGES.get(lang, lang))
         return np.array([value])
 
 
@@ -330,6 +345,24 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
             # Use an existing token so model weights stay unchanged.
             tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
+
+    def _get_max_length(self) -> int | None:
+        """Token truncation limit, falling back to the model's positional capacity."""
+        if self._max_length is not None:
+            return self._max_length
+        tok_max = self.tokenizer.model_max_length
+        # HF "infinite" sentinel (~1e30) would disable truncation (overflows OPT)
+        if isinstance(tok_max, int) and tok_max < int(1e29):
+            self._max_length = tok_max
+            return self._max_length
+        # learned-position table is sized capacity + offset, so the offset cancels
+        config = self.model.config
+        for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
+            value = getattr(config, attr, None)
+            if isinstance(value, int) and value > 0:
+                self._max_length = value
+                return self._max_length
+        return None
 
     def _get_max_length(self) -> int | None:
         """Token truncation limit, falling back to the model's positional capacity."""

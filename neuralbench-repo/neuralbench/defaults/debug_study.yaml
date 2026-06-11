@@ -56,7 +56,6 @@ Singh2021Timing: "subject in ['Singh2021Timing/PD1025', 'Singh2021Timing/PD1795'
 Levy2025BrainMeg: "subject_index == 0"
 Levy2025BrainEeg: "subject_index == 0"
 Sivakumar2024Emg2qwerty: "subject_index < 5"
-Sivakumar2024Emg2qwerty: "subject_index < 5"
 Xu2024Alljoined: "subject_index < 5"
 Xu2025Alljoined: "subject_index < 5"
 Zhang2024Chisco: "timeline_index < 8"

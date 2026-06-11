@@ -54,7 +54,6 @@ class DoNothing(transforms.EventsTransform):
         return events
 
 
-@pytest.mark.sandbox_skip
 def test_chain_with_transform(tmp_path: Path) -> None:
     steps: tp.Any = [
         {"name": "Mne2013Sample", "path": ns.CACHE_FOLDER},
@@ -137,7 +136,6 @@ def test_study_export() -> None:
     ns.Study(**dumped)
 
 
-@pytest.mark.sandbox_skip
 def test_fake_fmri_study_load(tmp_path: Path) -> None:
     # Processpool ``infra_timelines`` pickles the cycle-prone graph
     # that drives ``__setstate__`` mid-cycle — not reached by simply
