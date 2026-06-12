@@ -88,6 +88,7 @@ class Grootswagers2022Human(study.Study):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=50,
         num_subjects=50,
+        size_bytes=44_258_973_478,  # OpenNeuro ds003825, on-disk
         num_events_in_query=22249,
         event_types_in_query={"Eeg", "Image"},
         data_shape=(63, 3035740),

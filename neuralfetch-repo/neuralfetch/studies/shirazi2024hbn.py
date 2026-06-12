@@ -98,6 +98,7 @@ class Shirazi2024Hbn(study.Study):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=26615,
         num_subjects=3146,
+        size_bytes=235_310_606_952,  # OpenNeuro ds005516, on-disk
         num_events_in_query=1,
         event_types_in_query={"Eeg"},
         data_shape=(129, 86151),

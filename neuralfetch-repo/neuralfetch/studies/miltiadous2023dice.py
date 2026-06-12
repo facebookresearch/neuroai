@@ -79,6 +79,7 @@ class Miltiadous2023Dice(study.Study):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=88,
         num_subjects=88,
+        size_bytes=2_829_897_704,  # OpenNeuro ds004504, on-disk
         num_events_in_query=1,
         event_types_in_query={"Eeg"},
         data_shape=(19, 299900),

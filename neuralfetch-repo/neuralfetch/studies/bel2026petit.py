@@ -237,6 +237,7 @@ class Bel2026PetitListen(_Bel2026PetitBase):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=516,
         num_subjects=58,
+        size_bytes=477_619_624_443,  # OpenNeuro ds007523, on-disk
         num_events_in_query=1775,
         event_types_in_query={"Meg", "Audio", "Word", "Text", "Sentence"},
         data_shape=(306, 623000),
@@ -410,6 +411,7 @@ class Bel2026PetitRead(_Bel2026PetitBase):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=450,
         num_subjects=50,
+        size_bytes=320_573_795_975,  # OpenNeuro ds007524, on-disk
         num_events_in_query=1589,
         event_types_in_query={"Meg", "Word", "MissedWord", "Text", "Sentence"},
         data_shape=(306, 512_000),

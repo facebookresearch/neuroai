@@ -95,6 +95,7 @@ class Li2022Petit(study.Study):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=1008,
         num_subjects=112,
+        size_bytes=154_553_907_605,  # OpenNeuro ds003643, on-disk
         num_events_in_query=1757,
         event_types_in_query={"Fmri", "Audio", "Word", "Text"},
         data_shape=(73, 90, 74, 283),

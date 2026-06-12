@@ -180,6 +180,11 @@ class StudyInfo(base.BaseModel):
         The expected sampling frequency of the data, in Hz.
     fmri_spaces : tuple of str
         (fMRI only) The expected spatial reference spaces for the data.
+    size_bytes : int or None
+        Approximate on-disk size of the dataset after extraction, in bytes.
+        ``None`` (the default) means the size has not been measured yet, so
+        studies can be populated incrementally. Stored as raw bytes; formatted
+        to human-readable units (e.g. GB) only at render time.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -193,6 +198,8 @@ class StudyInfo(base.BaseModel):
     frequency: float = 0.0
     # for FMRI only
     fmri_spaces: tuple[str, ...] | set[str] = ()
+    # on-disk size after extraction, in bytes; None = not yet measured
+    size_bytes: int | None = None
 
 
 # Lives here (not in transforms/) to avoid circular import: events → transforms → extractors

@@ -174,6 +174,7 @@ class Hebart2023ThingsMeg(_Hebart2023Things):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=480,
         num_subjects=4,
+        size_bytes=255_218_599_475,  # OpenNeuro ds004212 (THINGS-MEG), on-disk
         num_events_in_query=207,
         event_types_in_query={"Meg", "Image"},
         data_shape=(300, 417600),
@@ -361,6 +362,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=359,
         num_subjects=3,
+        size_bytes=105_794_162_895,  # OpenNeuro ds004192 (THINGS-fMRI), on-disk
         num_events_in_query=83,
         event_types_in_query={"Fmri", "Image"},
         data_shape=(77, 94, 80, 284),

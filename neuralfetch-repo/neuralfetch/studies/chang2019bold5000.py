@@ -83,6 +83,7 @@ class Chang2019Bold5000(study.Study):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=510,
         num_subjects=4,
+        size_bytes=82_971_498_972,  # OpenNeuro ds001499, on-disk
         num_events_in_query=38,
         event_types_in_query={"Fmri", "Image"},
         data_shape=(77, 94, 80, 194),

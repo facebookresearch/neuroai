@@ -29,6 +29,7 @@ _SUMMARY_COLUMNS = [
     "n_timelines",
     "n_query_events",
     "n_hours",
+    "size_bytes",
     "data_shape",
     "frequency",
     "query",
@@ -47,6 +48,31 @@ def _estimate_hours(info: study.StudyInfo) -> float:
     if not info.data_shape or info.frequency <= 0 or info.num_timelines <= 0:
         return math.nan
     return info.num_timelines * info.data_shape[-1] / info.frequency / 3600
+
+
+def _format_size(value: float | None) -> str:
+    """Format a byte count as a human-readable size (e.g. ``1.5 GB``).
+
+    Returns an em dash for unmeasured (``None``/NaN) sizes so the column
+    reads cleanly while studies are populated incrementally.
+    """
+    if value is None or pd.isna(value) or value <= 0:
+        return "—"  # em dash
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    size = float(value)
+    index = 0
+    while size >= 1024 and index < len(units) - 1:
+        size /= 1024
+        index += 1
+    precision = 0 if size >= 100 or index == 0 else 1
+    return f"{size:.{precision}f} {units[index]}"
+
+
+def _size_attr(value: tp.Any) -> str:
+    """Render ``size_bytes`` as a numeric data attribute (empty when unmeasured)."""
+    if value is None or pd.isna(value) or value <= 0:
+        return ""
+    return str(int(value))
 
 
 def _format_number(value: float) -> str:
@@ -126,6 +152,7 @@ class StudyInfoSummaries(ns.BaseModel):
                     "n_timelines": info.num_timelines,
                     "n_query_events": info.num_events_in_query,
                     "n_hours": n_hours,
+                    "size_bytes": getattr(info, "size_bytes", None),
                     "data_shape": info.data_shape,
                     "frequency": info.frequency,
                     "query": info.query,
@@ -343,12 +370,14 @@ class StudyInfoSummaries(ns.BaseModel):
         n_subjects = int(summaries["n_subjects"].sum())
         n_timelines = int(summaries["n_timelines"].sum())
         n_hours = summaries["n_hours"].dropna().sum()
+        size_bytes = float(summaries["size_bytes"].dropna().sum())
         return (
             '<section class="summary">'
             f'<div><strong id="summary-studies">{len(summaries)}</strong><span>studies</span></div>'
             f'<div><strong id="summary-subjects">{n_subjects:,}</strong><span>subjects</span></div>'
             f'<div><strong id="summary-timelines">{n_timelines:,}</strong><span>timelines</span></div>'
             f'<div><strong id="summary-hours">{_format_number(n_hours)}</strong><span>estimated hours</span></div>'
+            f'<div><strong id="summary-size">{escape(_format_size(size_bytes))}</strong><span>total size</span></div>'
             "</section>"
         )
 
@@ -461,6 +490,7 @@ class StudyInfoSummaries(ns.BaseModel):
                 f'data-subjects="{int(row.n_subjects)}" '
                 f'data-timelines="{int(row.n_timelines)}" '
                 f'data-hours="{float(row.n_hours)}" '
+                f'data-size="{_size_attr(row.size_bytes)}" '
                 f'data-frequency="{float(row.frequency) if pd.notna(row.frequency) else 0}" '
                 f'data-channels="{_channel_count(row.data_shape)}" '
                 f'data-requirements="{escape(_data_list(row.requirements))}">'
@@ -511,7 +541,7 @@ class StudyInfoSummaries(ns.BaseModel):
         header = (
             "<thead>"
             '<tr class="event-super-header">'
-            '<th class="study-col" colspan="6"></th>'
+            '<th class="study-col" colspan="7"></th>'
             f'<th colspan="{len(neuro_event_types)}">Neuro events</th>'
             + (
                 f'<th colspan="{len(other_event_types)}">Other events</th>'
@@ -525,6 +555,7 @@ class StudyInfoSummaries(ns.BaseModel):
             "<th>Subjects</th>"
             "<th>Timelines</th>"
             "<th>Hours</th>"
+            "<th>Size</th>"
             + "".join(
                 _event_header(event_type, "neuro-event-col", "device")
                 for event_type in neuro_event_types
@@ -554,6 +585,7 @@ class StudyInfoSummaries(ns.BaseModel):
                 f'data-subjects="{int(row.n_subjects)}" '
                 f'data-timelines="{int(row.n_timelines)}" '
                 f'data-hours="{float(row.n_hours)}" '
+                f'data-size="{_size_attr(row.size_bytes)}" '
                 f'data-frequency="{float(row.frequency) if pd.notna(row.frequency) else 0}" '
                 f'data-channels="{_channel_count(row.data_shape)}" '
                 f'data-requirements="{escape(_data_list(row.requirements))}">'
@@ -564,6 +596,7 @@ class StudyInfoSummaries(ns.BaseModel):
                 f'<td class="num">{int(row.n_subjects):,}</td>',
                 f'<td class="num">{int(row.n_timelines):,}</td>',
                 f'<td class="num">{escape(_format_number(float(row.n_hours)))}</td>',
+                f'<td class="num">{escape(_format_size(row.size_bytes))}</td>',
             ]
             cells.extend(
                 '<td class="tick">&#10003;</td>'
@@ -582,7 +615,8 @@ class StudyInfoSummaries(ns.BaseModel):
                 f'data-device="{escape(device)}" data-events="{escape(event_data)}" '
                 f'data-subjects="{int(row.n_subjects)}" '
                 f'data-timelines="{int(row.n_timelines)}" '
-                f'data-hours="{float(row.n_hours)}">' + "".join(cells) + "</tr>"
+                f'data-hours="{float(row.n_hours)}" '
+                f'data-size="{_size_attr(row.size_bytes)}">' + "".join(cells) + "</tr>"
             )
         return (
             '<div class="table-wrap"><table>'
@@ -1377,11 +1411,27 @@ _JS = """
     return value.toFixed(2);
   }
 
+  function formatBytes(value) {
+    if (!Number.isFinite(value) || value <= 0) {
+      return "—"; // em dash
+    }
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let size = value;
+    let index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    const precision = size >= 100 || index === 0 ? 0 : 1;
+    return `${size.toFixed(precision)} ${units[index]}`;
+  }
+
   function updateSummary() {
     let studies = 0;
     let subjects = 0;
     let timelines = 0;
     let hours = 0;
+    let size = 0;
     root.querySelectorAll(".study-row").forEach((row) => {
       if (row.hasAttribute("hidden")) {
         return;
@@ -1393,11 +1443,16 @@ _JS = """
       if (Number.isFinite(rowHours)) {
         hours += rowHours;
       }
+      const rowSize = Number(row.dataset.size || 0);
+      if (Number.isFinite(rowSize)) {
+        size += rowSize;
+      }
     });
     root.querySelector("#summary-studies").textContent = studies.toLocaleString();
     root.querySelector("#summary-subjects").textContent = subjects.toLocaleString();
     root.querySelector("#summary-timelines").textContent = timelines.toLocaleString();
     root.querySelector("#summary-hours").textContent = formatNumber(hours);
+    root.querySelector("#summary-size").textContent = formatBytes(size);
   }
 
   function setForName(name) {
@@ -1488,6 +1543,7 @@ _JS = """
     const subjects = Number(target.dataset.subjects || 0);
     const timelines = Number(target.dataset.timelines || 0);
     const hours = Number(target.dataset.hours || 0);
+    const size = Number(target.dataset.size || 0);
     const frequency = Number(target.dataset.frequency || 0);
     const channels = Number(target.dataset.channels || 0);
     const neuro = target.dataset.neuro || target.dataset.device || "";
@@ -1503,6 +1559,9 @@ _JS = """
     }
     if (Number.isFinite(hours) && hours > 0) {
       stats.push(["Est. hours", formatNumber(hours)]);
+    }
+    if (Number.isFinite(size) && size > 0) {
+      stats.push(["Size", formatBytes(size)]);
     }
     if (channels > 0) {
       stats.push(["Channels", channels.toLocaleString()]);
