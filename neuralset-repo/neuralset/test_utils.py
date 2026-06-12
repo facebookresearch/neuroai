@@ -4,13 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import io
 import typing as tp
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.ipc as pa_ipc
 import pytest
-
-from . import events, utils
 
 
 @pytest.mark.parametrize(
@@ -138,3 +139,39 @@ def test_train_test_split_by_group():
     assert X_train.shape[0] == y_train.shape[0]
     assert X_test.shape[0] == y_test.shape[0]
     assert X_train.shape[0] + X_test.shape[0] == n_examples
+
+
+def _write_arrow_shard(tmp_path: "Path", split: str, rows: list[dict]) -> None:
+    """Write a minimal HuggingFace-style Arrow shard for testing."""
+    split_dir = tmp_path / split
+    split_dir.mkdir(parents=True, exist_ok=True)
+    table = pa.table({k: [r[k] for r in rows] for k in rows[0]})
+    shard = split_dir / "data-00000-of-00001.arrow"
+    sink = pa.BufferOutputStream()
+    with pa_ipc.new_stream(sink, table.schema) as writer:
+        writer.write_table(table)
+    shard.write_bytes(sink.getvalue().to_pybytes())
+
+
+def test_load_brainmarks_split(tmp_path, monkeypatch):
+    dataset = "myfake.flat"
+    dataset_dir = tmp_path / "Brainmarks" / "fmri-datasets" / "eval" / f"{dataset}.arrow"
+    dataset_dir.mkdir(parents=True)
+    _write_arrow_shard(dataset_dir, "train", [{"sub": "001"}, {"sub": "002"}])
+    _write_arrow_shard(dataset_dir, "test", [{"sub": "003"}])
+    _write_arrow_shard(dataset_dir, "validation", [{"sub": "004"}])
+
+    monkeypatch.setenv("NEURALSET_STUDY_FOLDER", str(tmp_path))
+    result = utils.load_brainmarks_split(dataset)
+
+    assert result == {"001": "train", "002": "train", "003": "test", "004": "validation"}
+
+
+def test_load_brainmarks_split_missing_env(monkeypatch):
+    monkeypatch.delenv("NEURALSET_STUDY_FOLDER", raising=False)
+    assert utils.load_brainmarks_split("anything") == {}
+
+
+def test_load_brainmarks_split_missing_dataset(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEURALSET_STUDY_FOLDER", str(tmp_path))
+    assert utils.load_brainmarks_split("nonexistent.flat") == {}

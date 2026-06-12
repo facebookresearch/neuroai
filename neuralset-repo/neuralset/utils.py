@@ -417,3 +417,51 @@ def train_test_split_by_group(
         splitting.extend([arr[train_inds], arr[test_inds]])  # type: ignore
 
     return splitting
+
+
+_BRAINMARKS_EVAL_SUBPATH = Path("Brainmarks/fmri-datasets/eval")
+
+def load_brainmarks_split(
+    dataset: str,
+    subject_col: str = "sub",
+) -> dict[str, str]:
+    """Return a subject-ID -> split mapping from a Brainmarks HuggingFace dataset.
+
+    Reads train/test/validation Arrow shards from:
+        $NEURALSET_STUDY_FOLDER/Brainmarks/fmri-datasets/eval/<dataset>.arrow/
+
+    Args:
+        dataset: Dataset name without the ".arrow" suffix, e.g. "adhd200.flat".
+        subject_col: Column in each Arrow shard holding the subject ID. Defaults to "sub".
+
+    Returns an empty dict (with a warning) if NEURALSET_STUDY_FOLDER is unset
+    or the dataset directory does not exist.
+    """
+    import logging
+
+    import pyarrow as pa
+
+    _logger = logging.getLogger(__name__)
+    study_folder = os.environ.get("NEURALSET_STUDY_FOLDER")
+    if study_folder is None:
+        _logger.warning(
+            "NEURALSET_STUDY_FOLDER is not set; cannot load Brainmarks split for %r",
+            dataset,
+        )
+        return {}
+    eval_dir = Path(study_folder) / _BRAINMARKS_EVAL_SUBPATH
+    dataset_dir = eval_dir / f"{dataset}.arrow"
+    if not dataset_dir.exists():
+        _logger.warning("Brainmarks dataset not found: %s", dataset_dir)
+        return {}
+    result: dict[str, str] = {}
+    for split in ("train", "test", "validation"):
+        split_dir = dataset_dir / split
+        if not split_dir.exists():
+            continue
+        for f in sorted(split_dir.glob("data-*.arrow")):
+            with pa.memory_map(str(f), "r") as src:
+                for batch in pa.ipc.open_stream(src):
+                    for sub in batch.column(subject_col).to_pylist():
+                        result[str(sub)] = split
+    return result
