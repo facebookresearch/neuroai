@@ -421,6 +421,7 @@ def train_test_split_by_group(
 
 _BRAINMARKS_EVAL_SUBPATH = Path("Brainmarks/fmri-datasets/eval")
 
+
 def load_brainmarks_split(
     dataset: str,
     subject_col: str = "sub",
@@ -428,13 +429,14 @@ def load_brainmarks_split(
     """Return a subject-ID -> split mapping from a Brainmarks HuggingFace dataset.
 
     Reads train/test/validation Arrow shards from:
+        $NEURALSET_BRAINMARKS_FOLDER/<dataset>.arrow/  (if set), or
         $NEURALSET_STUDY_FOLDER/Brainmarks/fmri-datasets/eval/<dataset>.arrow/
 
     Args:
         dataset: Dataset name without the ".arrow" suffix, e.g. "adhd200.flat".
         subject_col: Column in each Arrow shard holding the subject ID. Defaults to "sub".
 
-    Returns an empty dict (with a warning) if NEURALSET_STUDY_FOLDER is unset
+    Returns an empty dict (with a warning) if neither env var is set
     or the dataset directory does not exist.
     """
     import logging
@@ -442,14 +444,15 @@ def load_brainmarks_split(
     import pyarrow as pa
 
     _logger = logging.getLogger(__name__)
-    study_folder = os.environ.get("NEURALSET_STUDY_FOLDER")
-    if study_folder is None:
+    _brainmarks = os.environ.get("NEURALSET_BRAINMARKS_FOLDER")
+    _study = os.environ.get("NEURALSET_STUDY_FOLDER")
+    eval_dir = Path(_brainmarks) if _brainmarks else (Path(_study) / _BRAINMARKS_EVAL_SUBPATH if _study else None)
+    if eval_dir is None:
         _logger.warning(
             "NEURALSET_STUDY_FOLDER is not set; cannot load Brainmarks split for %r",
             dataset,
         )
         return {}
-    eval_dir = Path(study_folder) / _BRAINMARKS_EVAL_SUBPATH
     dataset_dir = eval_dir / f"{dataset}.arrow"
     if not dataset_dir.exists():
         _logger.warning("Brainmarks dataset not found: %s", dataset_dir)

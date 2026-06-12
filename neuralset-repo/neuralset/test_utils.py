@@ -169,6 +169,7 @@ def test_load_brainmarks_split(tmp_path, monkeypatch):
 
 def test_load_brainmarks_split_missing_env(monkeypatch):
     monkeypatch.delenv("NEURALSET_STUDY_FOLDER", raising=False)
+    monkeypatch.delenv("NEURALSET_BRAINMARKS_FOLDER", raising=False)
     assert utils.load_brainmarks_split("anything") == {}
 
 
