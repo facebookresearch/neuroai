@@ -20,7 +20,7 @@ from neuralset import events as _ev
 from ..events import Event
 from ..events.utils import extract_events
 from . import base
-from .huggingface import HuggingFaceMixin
+from .hf import HuggingFaceMixin
 from .image import HuggingFaceImage
 from .text import HuggingFaceText
 

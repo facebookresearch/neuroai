@@ -20,7 +20,7 @@ import neuralset as ns
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from . import base, huggingface
+from . import base, hf
 
 
 class Model(ns.BaseModel):
@@ -350,13 +350,13 @@ def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
             raise RepositoryNotFoundError("missing", response=response)  # type: ignore
 
     monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
-    huggingface.HuggingFaceMixin(model_name="gpt2")
+    hf.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(RepositoryNotFoundError):
-        huggingface.HuggingFaceMixin(model_name="not_a_model")
+        hf.HuggingFaceMixin(model_name="not_a_model")
 
 
 def test_huggingface_config_resolves_class_defaults() -> None:
-    class DummyConfig(huggingface.HuggingFaceConfig):
+    class DummyConfig(hf.HuggingFaceConfig):
         HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
             "custom-model": {
                 "model_cls_name": "PatternModel",

@@ -22,7 +22,7 @@ from neuralset import events as _ev  # avoid circular import
 from neuralset import utils
 from neuralset.base import TimedArray
 from neuralset.extractors.base import BaseStatic
-from neuralset.extractors.huggingface import HuggingFaceConfig, HuggingFaceMixin
+from neuralset.extractors.hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=unused-variable

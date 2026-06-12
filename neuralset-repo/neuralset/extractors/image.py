@@ -17,7 +17,7 @@ from neuralset import base, utils
 from neuralset.events import etypes
 
 from . import base as extractor_base
-from . import huggingface
+from . import hf
 
 logger = logging.getLogger(__name__)
 CLUSTER_DEFAULTS: dict[str, tp.Any] = dict(
@@ -100,7 +100,7 @@ def _huggingface_image_event_uid(event: etypes.Image | etypes.Video) -> str:
     return str(event.study_relative_path())
 
 
-class HuggingFaceImageConfig(huggingface.HuggingFaceConfig):
+class HuggingFaceImageConfig(hf.HuggingFaceConfig):
     processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": False}
     HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
         "clip": {
@@ -114,7 +114,7 @@ class HuggingFaceImageConfig(huggingface.HuggingFaceConfig):
     }
 
 
-class HuggingFaceImage(extractor_base.BaseStatic, huggingface.HuggingFaceMixin):
+class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
     """Compute image embeddings using transformer-based models obtained through HuggingFace API.
 
     Parameters
@@ -144,13 +144,13 @@ class HuggingFaceImage(extractor_base.BaseStatic, huggingface.HuggingFaceMixin):
         return (
             ["batch_size"]
             + extractor_base.BaseStatic._exclude_from_cls_uid()
-            + huggingface.HuggingFaceMixin._exclude_from_cls_uid()
+            + hf.HuggingFaceMixin._exclude_from_cls_uid()
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
         return extractor_base.BaseStatic._exclude_from_cache_uid(
             self
-        ) + huggingface.HuggingFaceMixin._exclude_from_cache_uid(self)
+        ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
 
     def _iter_image_latents(
         self, events: tp.Sequence[etypes.Image], aggregate_layers: bool
