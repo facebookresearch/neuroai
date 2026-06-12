@@ -4,14 +4,17 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import io
 import typing as tp
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.ipc as pa_ipc
 import pytest
+
+import neuralset.events as events
+import neuralset.utils as utils
 
 
 @pytest.mark.parametrize(
@@ -162,6 +165,7 @@ def test_load_brainmarks_split(tmp_path, monkeypatch):
     _write_arrow_shard(dataset_dir, "validation", [{"sub": "004"}])
 
     monkeypatch.setenv("NEURALSET_STUDY_FOLDER", str(tmp_path))
+    monkeypatch.delenv("NEURALSET_BRAINMARKS_FOLDER", raising=False)
     result = utils.load_brainmarks_split(dataset)
 
     assert result == {"001": "train", "002": "train", "003": "test", "004": "validation"}
