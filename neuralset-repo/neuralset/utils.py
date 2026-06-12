@@ -446,7 +446,11 @@ def load_brainmarks_split(
     _logger = logging.getLogger(__name__)
     _brainmarks = os.environ.get("NEURALSET_BRAINMARKS_FOLDER")
     _study = os.environ.get("NEURALSET_STUDY_FOLDER")
-    eval_dir = Path(_brainmarks) if _brainmarks else (Path(_study) / _BRAINMARKS_EVAL_SUBPATH if _study else None)
+    eval_dir = (
+        Path(_brainmarks)
+        if _brainmarks
+        else (Path(_study) / _BRAINMARKS_EVAL_SUBPATH if _study else None)
+    )
     if eval_dir is None:
         _logger.warning(
             "NEURALSET_STUDY_FOLDER is not set; cannot load Brainmarks split for %r",
