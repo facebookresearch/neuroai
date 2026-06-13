@@ -26,7 +26,7 @@ class Test2023Fmri(study.Study):
         num_subjects=3,
         num_events_in_query=11,
         event_types_in_query={"Fmri", "Word"},
-        data_shape=(20, 20, 20, 10),  # 32-channel EEG
+        data_shape=(20, 20, 20, 10),
         frequency=0.5,
         fmri_spaces=("custom",),
     )
@@ -105,7 +105,7 @@ class Fake2025Fmri(study.Study):
         num_subjects=2,
         num_events_in_query=22,
         event_types_in_query={"Fmri", "Image", "Audio", "Text", "Word"},
-        data_shape=(91, 109, 91, 80),  # 32-channel EEG
+        data_shape=(91, 109, 91, 80),
         frequency=2,
         fmri_spaces=("custom",),
     )

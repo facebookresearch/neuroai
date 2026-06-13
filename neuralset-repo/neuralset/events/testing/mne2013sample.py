@@ -41,7 +41,7 @@ class Mne2013Sample(study.Study):
         num_subjects=1,
         num_events_in_query=289,
         event_types_in_query={"Meg", "Stimulus"},
-        data_shape=(306, 41700),  # 32-channel EEG
+        data_shape=(306, 41700),
         frequency=150.15,
     )
 
@@ -110,7 +110,7 @@ class Mne2013SampleEeg(Mne2013Sample):
         num_subjects=1,
         num_events_in_query=289,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(60, 41700),  # 32-channel EEG
+        data_shape=(60, 41700),
         frequency=150.15,
     )
 
@@ -160,7 +160,7 @@ class Fake2025Meg(Mne2013Sample):
             "Word",
             "Sentence",
         },
-        data_shape=(306, 41700),  # 32-channel EEG
+        data_shape=(306, 41700),
         frequency=150.15,
     )
 
