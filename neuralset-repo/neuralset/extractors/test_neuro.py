@@ -1884,7 +1884,6 @@ def test_mne_timed_array_channel_order() -> None:
 
     ch_names = ["Cz", "Fp1", "Oz", "T7", "Pz"]
     sfreq = 128.0
-    rng = np.random.RandomState(42)
     # each channel gets a unique constant so we can identify it
     signature = np.arange(1, len(ch_names) + 1, dtype=np.float32)
     n_times = int(sfreq * 2)
