@@ -398,6 +398,17 @@ def list_segments(
     if not len(trigger_df):
         raise ValueError("Empty trigger events")
 
+    # Two triggers of the same type starting at the same time on the same
+    # timeline (e.g. two Fmri events differing only by metadata) define
+    # ambiguous/duplicate segments and can corrupt train/test splits.
+    keys = ["type", "timeline", "start"]
+    collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
+    if len(collisions):
+        raise ValueError(
+            f"{len(collisions)} triggers of the same type start at the same time "
+            f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` mask."
+        )
+
     df_to_pos = events.index.get_indexer(trigger_df.index)
 
     seg_starts: list[tp.Any] = []
