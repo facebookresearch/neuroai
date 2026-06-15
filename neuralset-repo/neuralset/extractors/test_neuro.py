@@ -1872,3 +1872,89 @@ def test_channel_positions_meg_2d_rejected() -> None:
         NotImplementedError, match="n_spatial_dims=2 is not supported for MEG"
     ):
         ns.extractors.ChannelPositions(neuro=meg, n_spatial_dims=2)
+
+# ---------------------------------------------------------------------------
+# Channel order: header ch_names must match loaded data row order
+# ---------------------------------------------------------------------------
+
+
+def test_mne_timed_array_channel_order() -> None:
+    """MneTimedArray.ch_names[i] must correspond to data row i."""
+    from neuralset.extractors.neuro import MneTimedArray
+
+    ch_names = ["Cz", "Fp1", "Oz", "T7", "Pz"]
+    sfreq = 128.0
+    rng = np.random.RandomState(42)
+    # each channel gets a unique constant so we can identify it
+    signature = np.arange(1, len(ch_names) + 1, dtype=np.float32)
+    n_times = int(sfreq * 2)
+    data = signature[:, None] * np.ones((1, n_times), dtype=np.float32)
+
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="eeg")
+    raw = mne.io.RawArray(data, info, verbose=False)
+
+    ta = MneTimedArray.from_native(raw)
+
+    assert ta.ch_names == ch_names
+    for i, name in enumerate(ch_names):
+        np.testing.assert_allclose(
+            ta.data[i, :].mean(),
+            signature[i],
+            atol=1e-6,
+            err_msg=f"data row for {name} (index {i}) has wrong values",
+        )
+
+
+def test_eeg_extractor_channel_order(tmp_path: Path) -> None:
+    """EegExtractor must preserve the channel order from the raw file."""
+    ch_names = ["Oz", "Fp1", "Cz", "T7", "Pz"]
+    sfreq = 128.0
+    n_times = int(sfreq * 10)
+    # channel i gets constant value (i+1) so we can verify ordering
+    data = (
+        np.arange(1, len(ch_names) + 1, dtype=np.float32)[:, None]
+        * np.ones((1, n_times), dtype=np.float32)
+    )
+
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="eeg")
+    raw = mne.io.RawArray(data, info, verbose=False)
+    fif_path = tmp_path / "sub-0-raw.fif"
+    raw.save(fif_path, verbose=False)
+
+    fp = str(fif_path)
+    timeline = "test_timeline"
+    df = pd.DataFrame(
+        [
+            dict(
+                start=0,
+                duration=raw.times[-1],
+                timeline=timeline,
+                filepath=fp,
+                type="Eeg",
+                subject="sub0",
+            ),
+        ]
+    )
+    df = ns.events.standardize_events(df)
+
+    extractor = ns.extractors.EegExtractor(
+        frequency=sfreq, channel_order="unique"
+    )
+    eeg_event = ns.events.Event.from_dict(df.iloc[0])
+    ta = next(iter(extractor._get_data([eeg_event])))
+
+    header_ch_names = ta.ch_names
+    assert header_ch_names == ch_names
+
+    for i, name in enumerate(ch_names):
+        expected_val = float(i + 1)
+        actual_mean = float(ta.data[i, :].mean())
+        np.testing.assert_allclose(
+            actual_mean,
+            expected_val,
+            atol=1e-6,
+            err_msg=(
+                f"channel {name} at header index {i}: "
+                f"expected ~{expected_val}, got {actual_mean}"
+            ),
+        )
