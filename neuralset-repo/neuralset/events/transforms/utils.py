@@ -101,6 +101,13 @@ def _normalize_with_positions(text: str) -> tuple[str, list[int]]:
     return "".join(out), orig
 
 
+@dataclass(frozen=True)
+class _TokenSpan:
+    text: str
+    idx: int
+    sent: tp.Any
+
+
 class TextWordMatcher:
     """Match annotated words to character positions in a spaCy-parsed text.
 
@@ -114,11 +121,37 @@ class TextWordMatcher:
     """
 
     _PUNCT_RE = re.compile(r"^[\W_]+|[\W_]+$", re.UNICODE)
+    _CONTRACTION_SUFFIX_RE = re.compile(r"^(?:n't|'re|'ve|'ll|'d|'m)$")
 
     def __init__(self, text: str, language: str = "") -> None:
         self.doc = parse_text(text, language=language)
         self.text = text
-        self.tokens: list[tp.Any] = [tok for sent in self.doc.sents for tok in sent]
+        self.tokens = self._merge_contraction_tokens(
+            [tok for sent in self.doc.sents for tok in sent]
+        )
+
+    @classmethod
+    def _merge_contraction_tokens(cls, tokens: list[tp.Any]) -> list[tp.Any]:
+        """Merge spaCy splits like ``do`` + ``n't`` into a single ``don't`` token."""
+        if not tokens:
+            return tokens
+        merged: list[tp.Any] = []
+        i = 0
+        while i < len(tokens):
+            tok = tokens[i]
+            if (
+                i + 1 < len(tokens)
+                and cls._CONTRACTION_SUFFIX_RE.match(tokens[i + 1].text)
+            ):
+                nxt = tokens[i + 1]
+                merged.append(
+                    _TokenSpan(text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent)
+                )
+                i += 2
+            else:
+                merged.append(tok)
+                i += 1
+        return merged
 
     @staticmethod
     def normalize(word: str) -> str:
