@@ -155,17 +155,13 @@ class TextWordMatcher:
                 nxt = tokens[i + 1]
                 if "en" in kinds and self._CONTRACTION_SUFFIX_RE.match(nxt.text):
                     merged.append(
-                        _TokenSpan(
-                            text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent
-                        )
+                        _TokenSpan(text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent)
                     )
                     i += 2
                     continue
                 if "fr" in kinds and self._FR_ELISION_PREFIX_RE.match(tok.text):
                     merged.append(
-                        _TokenSpan(
-                            text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent
-                        )
+                        _TokenSpan(text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent)
                     )
                     i += 2
                     continue

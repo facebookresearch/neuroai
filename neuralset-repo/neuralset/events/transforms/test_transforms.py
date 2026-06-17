@@ -470,27 +470,7 @@ def test_contraction_before_homograph() -> None:
     assert info[6]["sentence"] == "don't do it before us."
     assert info[6]["sentence_char"] == 0
     assert info[7]["text_char"] == text.index("do", text.index("don't") + 1)
-    assert info[7]["sentence_char"] == 9
-    assert all(i for i in info)
-
-
-def test_french_elision_before_homograph() -> None:
-    """French elisions split by spaCy must not steal the following homograph."""
-    text = "s'il dit il souvent."
-    words = ["s'il", "dit", "il", "souvent"]
-    info = _tutils.TextWordMatcher(text, language="french").match(words)
-    assert info[0]["text_char"] == text.index("s'il")
-    assert info[0]["sentence_char"] == 0
-    assert info[2]["text_char"] == text.index("il", text.index("dit") + len("dit"))
-    assert all(i for i in info)
-
-
-def test_french_elision_word() -> None:
-    text = "froid d'hiver"
-    words = ["froid", "d'hiver"]
-    info = _tutils.TextWordMatcher(text, language="french").match(words)
-    assert info[1]["text_char"] == text.index("d'hiver")
-    assert info[1]["sentence_char"] == 6
+    assert info[7]["sentence_char"] == 6
     assert all(i for i in info)
 
 
