@@ -122,35 +122,55 @@ class TextWordMatcher:
 
     _PUNCT_RE = re.compile(r"^[\W_]+|[\W_]+$", re.UNICODE)
     _CONTRACTION_SUFFIX_RE = re.compile(r"^(?:n't|'re|'ve|'ll|'d|'m)$")
+    _FR_ELISION_PREFIX_RE = re.compile(r"^(?:qu|[jldsmntc])'$", re.IGNORECASE)
 
     def __init__(self, text: str, language: str = "") -> None:
+        self.language = language
         self.doc = parse_text(text, language=language)
         self.text = text
         self.tokens = self._merge_contraction_tokens(
             [tok for sent in self.doc.sents for tok in sent]
         )
 
-    @classmethod
-    def _merge_contraction_tokens(cls, tokens: list[tp.Any]) -> list[tp.Any]:
-        """Merge spaCy splits like ``do`` + ``n't`` into a single ``don't`` token."""
+    def _apostrophe_merge_kinds(self) -> frozenset[str]:
+        lang = self.language.lower()
+        if lang in ("french", "fr"):
+            return frozenset({"fr"})
+        return frozenset({"en"})
+
+    def _merge_contraction_tokens(self, tokens: list[tp.Any]) -> list[tp.Any]:
+        """Merge spaCy apostrophe splits before token alignment.
+
+        English: suffix tokens such as ``do`` + ``n't`` → ``don't``.
+        French: elision prefixes such as ``d'`` + ``hiver`` → ``d'hiver``.
+        """
         if not tokens:
             return tokens
+        kinds = self._apostrophe_merge_kinds()
         merged: list[tp.Any] = []
         i = 0
         while i < len(tokens):
             tok = tokens[i]
-            if (
-                i + 1 < len(tokens)
-                and cls._CONTRACTION_SUFFIX_RE.match(tokens[i + 1].text)
-            ):
+            if i + 1 < len(tokens):
                 nxt = tokens[i + 1]
-                merged.append(
-                    _TokenSpan(text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent)
-                )
-                i += 2
-            else:
-                merged.append(tok)
-                i += 1
+                if "en" in kinds and self._CONTRACTION_SUFFIX_RE.match(nxt.text):
+                    merged.append(
+                        _TokenSpan(
+                            text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent
+                        )
+                    )
+                    i += 2
+                    continue
+                if "fr" in kinds and self._FR_ELISION_PREFIX_RE.match(tok.text):
+                    merged.append(
+                        _TokenSpan(
+                            text=tok.text + nxt.text, idx=tok.idx, sent=tok.sent
+                        )
+                    )
+                    i += 2
+                    continue
+            merged.append(tok)
+            i += 1
         return merged
 
     @staticmethod
