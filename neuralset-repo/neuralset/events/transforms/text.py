@@ -64,7 +64,6 @@ class EnsureTexts(EventsTransform):
         if words.empty:
             return events
         text_rows: list[dict[str, tp.Any]] = []
-        eps = 1e-6
         for timeline, word_group in words.groupby("timeline"):
             raw = " ".join(word_group.text.values)
             text_str = self._punctuate(raw, word_group)
@@ -74,7 +73,7 @@ class EnsureTexts(EventsTransform):
                 dict(
                     type="Text",
                     start=start,
-                    duration=stop - start + 2 * eps,
+                    duration=stop - start,
                     timeline=timeline,
                     text=text_str,
                     language=(
@@ -134,11 +133,14 @@ class AddSentenceToWords(EventsTransform):
     ----------
     max_unmatched_ratio : float
         Maximum ratio of words without a character-positioned match.
+    tol : float, optional
+        Tolerance for Text event start and end times. Default is 0.0.
     override_sentences : bool, default=False
         Whether to replace existing Sentence rows if they are already present.
     """
 
     max_unmatched_ratio: float = 0.0  # raises if did not match enough words
+    tol: float = 0.0
     override_sentences: bool = False
 
     @classmethod
@@ -189,6 +191,7 @@ class AddSentenceToWords(EventsTransform):
                 events,
                 start=float(context.start),  # type: ignore[arg-type]
                 duration=float(context.duration),  # type: ignore[arg-type]
+                tol=self.tol,
             )
             sub = events.loc[encl]
             sel = sub[sub.type.isin(wtypes.names)].index
