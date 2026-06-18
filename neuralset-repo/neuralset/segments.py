@@ -505,7 +505,7 @@ def _prepare_strided_windows(
 
 
 def find_enclosed(
-    df: pd.DataFrame, start: float, duration: float, tol: float = 0.0
+    df: pd.DataFrame, start: float, duration: float, tolerance: float = 0.0
 ) -> pd.Series:
     """Find events fully enclosed within a time window.
 
@@ -517,8 +517,8 @@ def find_enclosed(
         Start time of the enclosing window.
     duration : float
         Duration of the enclosing window.
-    tol : float, optional
-        Tolerance for event start and end times. Default is 0.0.
+    tolerance : float, optional
+        Tolerance (in seconds) for event start and end times. Default is 0.0.
 
     Returns
     -------
@@ -529,7 +529,7 @@ def find_enclosed(
     Notes
     -----
     An event is considered enclosed if both its start and end times fall within
-    the window: :code:`start - tol <= event_start` and :code:`event_end <= start + duration + tol`.
+    the window: :code:`start - tolerance <= event_start` and :code:`event_end <= start + duration + tolerance`.
 
     Examples
     --------
@@ -538,7 +538,9 @@ def find_enclosed(
     """
     estart = np.array(df.start)
     estop = estart + np.array(df.duration)
-    is_enclosed = np.logical_and(estart >= start - tol, estop <= start + duration + tol)
+    is_enclosed = np.logical_and(
+        estart >= start - tolerance, estop <= start + duration + tolerance
+    )
     return pd.Series(df.index[is_enclosed])
 
 

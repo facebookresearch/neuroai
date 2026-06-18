@@ -507,7 +507,7 @@ def test_ensure_texts_encloses_words() -> None:
     result = _transf.EnsureTexts(punctuation=None)(df)
     text = result.loc[result.type == "Text"].iloc[0]
     encl = ns.segments.find_enclosed(
-        result, start=float(text.start), duration=float(text.duration), tol=1e-6
+        result, start=float(text.start), duration=float(text.duration), tolerance=1e-6
     )
     words = result.index[result.type == "Word"]
     assert words.isin(encl).all()
