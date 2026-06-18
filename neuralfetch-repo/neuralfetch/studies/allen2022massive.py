@@ -138,6 +138,7 @@ class Allen2022Massive(study.Study):
         - Paradigm: passive viewing of 73,000 natural images from COCO dataset
     """
 
+    folder_name: tp.ClassVar[str | None] = "Allen2022Massive"
     aliases: tp.ClassVar[tuple[str, ...]] = ("NSD",)
     dataset_name: tp.ClassVar[str] = "Natural Scenes Dataset"
     bibtex: tp.ClassVar[str] = """

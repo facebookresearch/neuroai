@@ -33,6 +33,7 @@ class Miltiadous2023Dice(study.Study):
 
     """
 
+    folder_name: tp.ClassVar[str | None] = "Miltiadous2023Dice"
     bibtex: tp.ClassVar[str] = """
     @article{miltiadous2023dice,
         title={{{DICE-Net}}: {{A Novel Convolution-Transformer Architecture}} for {{Alzheimer Detection}} in {{EEG Signals}}},

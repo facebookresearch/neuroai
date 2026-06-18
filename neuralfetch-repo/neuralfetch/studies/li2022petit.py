@@ -56,6 +56,7 @@ class Li2022Petit(study.Study):
         - Multiple text fixes applied for alignment between audio and transcripts.
     """
 
+    folder_name: tp.ClassVar[str | None] = "Li2022Petit"
     aliases: tp.ClassVar[tuple[str, ...]] = ("Le Petit Prince fMRI Corpus", "LPPC-fMRI")
 
     bibtex: tp.ClassVar[str] = """

@@ -48,6 +48,7 @@ class Grootswagers2022Human(study.Study):
         - Participants 49-50 have 127 channels; all others have 63
     """
 
+    folder_name: tp.ClassVar[str | None] = "Grootswagers2022Human"
     aliases: tp.ClassVar[tuple[str, ...]] = ("THINGS-EEG1",)
     licence: tp.ClassVar[str] = "CC0-1.0"
     bibtex: tp.ClassVar[str] = """

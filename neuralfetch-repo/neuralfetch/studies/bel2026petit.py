@@ -77,6 +77,7 @@ def _clean_text(text: str) -> str:
 
 
 class _Bel2026PetitBase(study.Study):
+    folder_name: tp.ClassVar[str | None] = "Bel2026Petit"
     requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py",)
 
     task: tp.ClassVar[str]

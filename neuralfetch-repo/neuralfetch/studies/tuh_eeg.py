@@ -45,7 +45,6 @@ import pandas as pd
 from neuralfetch import utils
 from neuralset.events import study
 from neuralset.events.etypes import CategoricalEvent
-from neuralset.events.study import _identify_study_subfolder
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +109,7 @@ def _fix_ch_name(name: str) -> str:
 
 
 class _BaseTuhEeg(study.Study):
+    folder_name: tp.ClassVar[str | None] = "tuh_eeg"
     aliases: tp.ClassVar[tuple[str, ...]] = ("TUH EEG Corpus", "TUH EEG")
     STUDY_CODE_MAP: tp.ClassVar[dict] = {
         "obeid2016": "tueg",
@@ -686,12 +686,6 @@ class HaratiAbhishaike2015Tuev(Harati2015Tuev):
         data_shape=(23, 306500),
         frequency=250.0,
     )
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        # hack to use Harati2015Tuev subfolder
-        # pylint: disable=attribute-defined-outside-init
-        self.path = _identify_study_subfolder(self.path, "Harati2015Tuev")
-        super().model_post_init(log__)
 
     # pylint: disable=arguments-differ
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:  # type: ignore
