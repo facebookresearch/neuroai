@@ -153,11 +153,15 @@ class Experiment(pydantic.BaseModel):
 
         return logger
 
-    def _setup_trainer(self) -> pl.Trainer:
-        callbacks = [
+    def _setup_trainer(
+        self, extra_callbacks: list[pl.Callback] | None = None
+    ) -> pl.Trainer:
+        callbacks: list[pl.Callback] = [
             EarlyStopping(monitor="val_loss", mode="min", patience=self.patience),
             LearningRateMonitor(logging_interval="epoch"),
         ]
+        if extra_callbacks is not None:
+            callbacks.extend(extra_callbacks)
 
         if self.save_checkpoints:
             callbacks.append(
@@ -205,13 +209,23 @@ class Experiment(pydantic.BaseModel):
             max_epochs=self.n_epochs,
         )
 
-    @infra.apply
-    def run(self) -> dict[str, float | None]:
+    def fit_test(
+        self,
+        extra_callbacks: list[pl.Callback] | None = None,
+        post_fit: tp.Callable[[], None] | None = None,
+    ) -> dict[str, float | None]:
+        """Uncached train+test with injectable trainer callbacks.
+
+        Public seam for drivers that need to run training with extra callbacks (e.g. an
+        HP-search pruning callback) and an optional ``post_fit`` hook called between fit
+        and test (it may raise to skip the test pass). Keeps the experiment agnostic to
+        whatever tool injects the callbacks. ``run()`` is the cached, no-callback wrapper.
+        """
         pl.seed_everything(self.seed, workers=True)
         loaders = self.data.build()
 
         brain_module = self._build_brain_module(loaders["train"])
-        trainer = self._setup_trainer()
+        trainer = self._setup_trainer(extra_callbacks=extra_callbacks)
 
         ckpt_path = self._get_checkpoint_path()
         if not self.test_only:
@@ -221,9 +235,15 @@ class Experiment(pydantic.BaseModel):
                 val_dataloaders=loaders["val"],
                 ckpt_path=ckpt_path,
             )
+            if post_fit is not None:
+                post_fit()  # may raise to skip the (now-pointless) test pass
         results = trainer.test(
             brain_module,
             dataloaders=loaders["test"],
             ckpt_path=ckpt_path if self.test_only else None,
         )
         return dict(results[0])
+
+    @infra.apply
+    def run(self) -> dict[str, float | None]:
+        return self.fit_test()

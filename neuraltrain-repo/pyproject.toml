@@ -39,6 +39,10 @@ dependencies = [
         "lightning>=2.0.8,<=2.6.1",
         "wandb>=0.15.11",
     ]
+    tuning = [  # For run_optuna hyperparameter search (with Lightning pruning)
+        "optuna>=4.0",
+        "optuna-integration>=4.0",
+    ]
     dev = [
         # Test
         "pytest>=4.3.0",
