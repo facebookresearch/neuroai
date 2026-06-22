@@ -405,7 +405,9 @@ class DownstreamWrapper(pydantic.BaseModel):
     layers_to_freeze: list[str] | None = None
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
     strict_matching: bool = True
-    aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None = "flatten"
+    aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None = (
+        "flatten"
+    )
     probe_config: Mlp | tp.Literal["linear"] | None = "linear"
     probe_layer: str | None = None
 
@@ -472,66 +474,7 @@ class DownstreamWrapper(pydantic.BaseModel):
             if self.probe_layer is None:
                 orig_output = model(**model_batch)
             else:
-                if self.model_output_key is not None:
-                    raise ValueError(
-                        f"probe_layer={self.probe_layer!r} requires "
-                        f"model_output_key=None (intermediate captures are tensors, "
-                        f"not dicts); got {self.model_output_key!r}."
-                    )
-                try:
-                    submodule = model.get_submodule(self.probe_layer)
-                except AttributeError as exc:
-                    valid = [n for n, _ in model.named_modules() if n]
-                    raise AttributeError(
-                        f"probe_layer={self.probe_layer!r} not in "
-                        f"{type(model).__name__} ({len(valid)} submodules; "
-                        f"e.g. {valid[:3]})"
-                    ) from exc
-                # Single-slot buffer the hook appends into; the lambda cannot
-                # rebind a non-local, so it mutates a list instead.  Same idiom:
-                # https://github.com/meta-pytorch/captum/blob/36ad45af252049df5d8a74cfc3db25e62d0b344b/captum/_utils/gradient.py#L331
-                probed_activation: list[torch.Tensor] = []
-                handle = submodule.register_forward_hook(
-                    lambda _m, _i, out: probed_activation.append(out)
-                )
-                try:
-                    model(**model_batch)
-                finally:
-                    handle.remove()
-                if not probed_activation:
-                    raise RuntimeError(
-                        f"probe_layer={self.probe_layer!r} hook did not fire during "
-                        f"the dummy forward; the submodule is unreachable from this input."
-                    )
-                # Last fire wins when the submodule is reused (e.g. recurrent).
-                orig_output = probed_activation[-1]
-                if not isinstance(orig_output, torch.Tensor):
-                    raise TypeError(
-                        f"probe_layer={self.probe_layer!r} returned "
-                        f"{type(orig_output).__name__}; only tensor-returning "
-                        f"submodules are supported (e.g. probe a parent of "
-                        f"nn.MultiheadAttention, not the MHA itself)."
-                    )
-                # Check aggregation matches the captured tensor's batch axis.
-                dummy_batch_size = next(iter(model_batch.values())).shape[0]
-                batch_axes = [
-                    i for i, s in enumerate(orig_output.shape) if s == dummy_batch_size
-                ]
-                seq_first = bool(batch_axes) and 0 not in batch_axes
-                batch_first = bool(batch_axes) and 0 in batch_axes
-                if seq_first and self.aggregation in ("flatten", "mean", "first"):
-                    raise ValueError(
-                        f"probe_layer={self.probe_layer!r} captured shape "
-                        f"{tuple(orig_output.shape)} with batch on dim {batch_axes[0]}; "
-                        f"aggregation={self.aggregation!r} expects batch-first. "
-                        f"Use aggregation='mean_tokens' for sequence-first."
-                    )
-                if batch_first and self.aggregation == "mean_tokens":
-                    raise ValueError(
-                        f"probe_layer={self.probe_layer!r} captured batch-first shape "
-                        f"{tuple(orig_output.shape)}; aggregation='mean_tokens' is "
-                        f"for sequence-first (T, B, D). Use 'mean' or 'flatten'."
-                    )
+                orig_output = self._capture_probe_output(model, model_batch)
             if self.model_output_key is not None:
                 orig_output = orig_output[self.model_output_key]
             model.train()
@@ -558,6 +501,103 @@ class DownstreamWrapper(pydantic.BaseModel):
 
         return wrapper_model
 
+    def _capture_probe_output(
+        self, model: nn.Module, model_batch: dict[str, torch.Tensor | None]
+    ) -> torch.Tensor:
+        """Capture and validate the activation tapped at ``probe_layer``.
+
+        Runs a dummy forward with a temporary hook on the probed submodule and
+        returns its output tensor, raising if the configuration is unusable
+        (dict outputs, unreachable submodule, non-tensor capture, or an
+        aggregation that does not match the captured tensor's batch axis).
+        """
+        assert self.probe_layer is not None  # guaranteed by the caller
+        if self.model_output_key is not None:
+            raise ValueError(
+                f"probe_layer={self.probe_layer!r} requires "
+                f"model_output_key=None (intermediate captures are tensors, "
+                f"not dicts); got {self.model_output_key!r}."
+            )
+        try:
+            submodule = model.get_submodule(self.probe_layer)
+        except AttributeError as exc:
+            valid = [n for n, _ in model.named_modules() if n]
+            raise AttributeError(
+                f"probe_layer={self.probe_layer!r} not in "
+                f"{type(model).__name__} ({len(valid)} submodules; "
+                f"e.g. {valid[:3]})"
+            ) from exc
+
+        # Single-slot buffer: keep only the last fire so a submodule that runs
+        # many times (e.g. recurrent) costs O(1) memory rather than O(n_fires).
+        probed_activation: list[torch.Tensor] = []
+
+        def _hook(_m, _i, out):
+            probed_activation[:] = [out]
+
+        handle = submodule.register_forward_hook(_hook)
+        try:
+            model(**model_batch)
+        finally:
+            handle.remove()
+        if not probed_activation:
+            raise RuntimeError(
+                f"probe_layer={self.probe_layer!r} hook did not fire during "
+                f"the dummy forward; the submodule is unreachable from this input."
+            )
+        orig_output = probed_activation[0]
+        if not isinstance(orig_output, torch.Tensor):
+            raise TypeError(
+                f"probe_layer={self.probe_layer!r} returned "
+                f"{type(orig_output).__name__}; only tensor-returning "
+                f"submodules are supported (e.g. probe a parent of "
+                f"nn.MultiheadAttention, not the MHA itself)."
+            )
+        self._check_probe_aggregation(orig_output, model_batch)
+        return orig_output
+
+    def _check_probe_aggregation(
+        self,
+        orig_output: torch.Tensor,
+        model_batch: dict[str, torch.Tensor | None],
+    ) -> None:
+        """Validate ``aggregation`` against the captured tensor's batch axis.
+
+        The batch axis is inferred by matching dim sizes to the dummy batch
+        size, so this only works when that size is unambiguous (it must match
+        exactly one dimension). Sequence-first ``(T, B, D)`` captures require
+        ``aggregation='mean_tokens'``; all other (batch-first) layouts reject
+        ``'mean_tokens'``.
+        """
+        first_input = next(v for v in model_batch.values() if isinstance(v, torch.Tensor))
+        dummy_batch_size = first_input.shape[0]
+        batch_axes = [i for i, s in enumerate(orig_output.shape) if s == dummy_batch_size]
+        if not batch_axes:
+            # Batch size matches no dimension; cannot infer the layout, so skip.
+            return
+        if len(batch_axes) > 1:
+            raise ValueError(
+                f"probe_layer={self.probe_layer!r} captured shape "
+                f"{tuple(orig_output.shape)}, where the dummy batch size "
+                f"({dummy_batch_size}) matches multiple dimensions {batch_axes}; "
+                f"the batch axis is ambiguous. Use a dummy batch whose size "
+                f"differs from the sequence/feature dimensions."
+            )
+        if batch_axes[0] != 0:  # sequence-first (batch not on dim 0)
+            if self.aggregation != "mean_tokens":
+                raise ValueError(
+                    f"probe_layer={self.probe_layer!r} captured sequence-first "
+                    f"shape {tuple(orig_output.shape)} with batch on dim "
+                    f"{batch_axes[0]}; aggregation={self.aggregation!r} expects "
+                    f"batch-first. Use aggregation='mean_tokens'."
+                )
+        elif self.aggregation == "mean_tokens":  # batch-first
+            raise ValueError(
+                f"probe_layer={self.probe_layer!r} captured batch-first shape "
+                f"{tuple(orig_output.shape)}; aggregation='mean_tokens' is only "
+                f"for sequence-first (T, B, D) captures."
+            )
+
 
 class DownstreamWrapperModel(nn.Module):
     """Wrapper for downstream evaluation of pretrained models.
@@ -578,7 +618,9 @@ class DownstreamWrapperModel(nn.Module):
         layers_to_freeze: list[str] | None = None,
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
-        aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"] | int | None = "flatten",
+        aggregation: tp.Literal["flatten", "mean", "mean_tokens", "first"]
+        | int
+        | None = "flatten",
         probe_config: Mlp | tp.Literal["linear"] | None = None,
         probe_layer: str | None = None,
     ):
@@ -600,9 +642,15 @@ class DownstreamWrapperModel(nn.Module):
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
         self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
 
-        # Hook -> weakref so the closure doesn't pin self alive; finalizer
-        # removes the hook when this wrapper is GC'd, so shared backbones
-        # don't accumulate stale hooks across folds.
+        # The hook lives on ``self.wrapped_model`` (a submodule of ``self``), so
+        # a strong closure over ``self`` would form a self -> wrapped_model ->
+        # submodule -> hook -> self reference cycle that keeps this wrapper (and
+        # its captured GPU activations) alive past its useful life. A weakref
+        # lets the hook no-op once the wrapper is collected, and
+        # ``weakref.finalize`` deterministically detaches the hook on GC so a
+        # shared backbone doesn't accumulate stale hooks across CV folds.
+        # Single-slot buffer (overwrite, not append): keeps only the last fire
+        # so a submodule that runs many times costs O(1) memory.
         self._probed_activation: list[torch.Tensor] = []
         self._probe_handle: torch.utils.hooks.RemovableHandle | None = None
         if probe_layer is not None:
@@ -611,7 +659,7 @@ class DownstreamWrapperModel(nn.Module):
             def _capture(_m, _i, out, _ref=self_ref):
                 s = _ref()
                 if s is not None:
-                    s._probed_activation.append(out)
+                    s._probed_activation[:] = [out]
 
             self._probe_handle = self.wrapped_model.get_submodule(
                 probe_layer

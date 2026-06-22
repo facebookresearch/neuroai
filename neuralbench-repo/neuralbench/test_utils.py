@@ -58,7 +58,11 @@ def test_downstream_wrapper_probe_layer_invalid():
     "kwargs, exc, match",
     [
         # model_output_key with probe_layer must error.
-        (dict(probe_layer="0", model_output_key="logits"), ValueError, "model_output_key"),
+        (
+            dict(probe_layer="0", model_output_key="logits"),
+            ValueError,
+            "model_output_key",
+        ),
         # mean_tokens on a batch-first (B, C, T) Conv1d capture must error.
         (dict(probe_layer="0", aggregation="mean_tokens"), ValueError, "batch-first"),
     ],
@@ -73,7 +77,54 @@ def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
     # nn.RNN returns (output, h_n); probing it must raise.
     model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
     with pytest.raises(TypeError, match="tensor-returning"):
-        DownstreamWrapper(probe_layer="").build(model, {"input": torch.Tensor(2, 5, 10)}, 3)
+        DownstreamWrapper(probe_layer="").build(
+            model, {"input": torch.Tensor(2, 5, 10)}, 3
+        )
+
+
+class _SeqFirstEnc(nn.Module):
+    """Emits sequence-first (T, B, D), like a ``batch_first=False`` transformer."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x).transpose(0, 1)  # (B, T, F) -> (T, B, D)
+
+
+class _SeqFirstProbeNet(nn.Module):
+    """Probed submodule ``enc`` emits sequence-first (T, B, D)."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.enc = _SeqFirstEnc(n_in, emb)
+        self.head = nn.Linear(emb, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(x).mean(0))
+
+
+def test_downstream_wrapper_probe_layer_mean_tokens():
+    B, T, F, D, Fp = 8, 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(probe_layer="enc", aggregation="mean_tokens").build(
+        model, {"x": torch.Tensor(B, T, F)}, Fp
+    )
+    # Probe is sized from the embedding dim (D), with tokens averaged away.
+    assert wrapped.probe.in_features == D
+    out = wrapped(x=torch.Tensor(B, T, F))
+    assert out.shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", [None, 2, "mean", "flatten", "first"])
+def test_downstream_wrapper_probe_layer_seq_first_needs_mean_tokens(aggregation):
+    # Any non-mean_tokens aggregation on a sequence-first capture must error.
+    model = _SeqFirstProbeNet(10, 6)
+    with pytest.raises(ValueError, match="mean_tokens"):
+        DownstreamWrapper(probe_layer="enc", aggregation=aggregation).build(
+            model, {"x": torch.Tensor(8, 5, 10)}, 3
+        )
 
 
 class LinearOutDict(nn.Module):
