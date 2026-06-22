@@ -347,3 +347,40 @@ def test_csv_logger(tmp_path: Path) -> None:
         lines = f.readlines()
     assert lines[0].strip() == "step,test-pearsonr"
     assert lines[1].strip() == "0,1.0"
+
+
+class _ScoreExperiment(BaseExperiment):
+    """Tiny experiment for run_optuna self-check: score is a parabola in `x`."""
+
+    x: float = 0.0
+    infra: exca.TaskInfra = exca.TaskInfra(version="1")
+
+    @infra.apply
+    def run(self) -> dict[str, float]:
+        return {"score": (self.x - 3.0) ** 2}
+
+
+def test_run_optuna(tmp_path: Path) -> None:
+    optuna = pytest.importorskip("optuna")
+
+    base_config = {"x": 0.0, "infra": {"folder": str(tmp_path / "study")}}
+
+    def search_space(trial):
+        return {"x": trial.suggest_float("x", 0.0, 10.0)}
+
+    study = utils.run_optuna(
+        _ScoreExperiment,
+        "selfcheck",
+        base_config,
+        search_space,
+        metric="score",
+        direction="minimize",
+        n_trials=15,
+        prune=False,  # _ScoreExperiment has no run_trial hook
+        sampler=optuna.samplers.TPESampler(seed=0),
+    )
+
+    assert len(study.trials) == 15
+    assert "x" in study.best_params
+    # TPE should beat blind picking; optimum (x=3) gives score 0.
+    assert study.best_value < 4.0

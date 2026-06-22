@@ -114,6 +114,23 @@ class BaseExperiment(BaseModel):
         raise NotImplementedError
 
 
+def _apply_overrides(
+    base_config: dict[str, tp.Any],
+    overrides: dict[str, tp.Any],
+    folder: str | Path | None = None,
+) -> exca.ConfDict:
+    """Clone ``base_config`` and apply flattened (dotted-key) overrides.
+
+    Shared by :func:`run_grid` and :func:`run_optuna` so both sweeps build per-task
+    configs the same way. ``ConfDict(base_config)`` copies, so ``base_config`` is untouched.
+    """
+    config = exca.ConfDict(base_config)
+    config.update(overrides)
+    if folder is not None:
+        config["infra.folder"] = str(folder)
+    return config
+
+
 def run_grid(
     exp_cls: tp.Type[BaseExperiment],
     exp_name: str,
@@ -222,8 +239,7 @@ def run_grid(
     tmp = task.infra.clone_obj(**{"infra.mode": infra_mode})
     with tmp.infra.job_array(**job_array_kwargs) as tasks:
         for params in grid_product:
-            config = exca.ConfDict(base_config)
-            config.update(params)
+            config = _apply_overrides(base_config, params)
             uid_suffix = config.to_uid()[-8:]
             job_name = exca.ConfDict(params).to_uid()[:-8] + uid_suffix
 
@@ -254,6 +270,190 @@ def run_grid(
     print("Done.")
 
     return out_configs
+
+
+def _optuna_worker(
+    study_kwargs: dict[str, tp.Any],
+    objective: tp.Callable,
+    n_trials: int,
+    timeout: int | None,
+) -> None:
+    """Worker entrypoint: (re)attach to the shared study and run trials.
+
+    The study is recreated from ``study_kwargs`` inside each (possibly remote) process
+    so it binds to the RDB storage locally rather than shipping a live study object
+    (which holds an unpicklable SQLAlchemy engine) across the wire.
+    """
+    import optuna
+
+    study = optuna.create_study(load_if_exists=True, **study_kwargs)
+    study.optimize(objective, n_trials=n_trials, timeout=timeout)
+
+
+def run_optuna(
+    exp_cls: tp.Type[BaseExperiment],
+    study_name: str,
+    base_config: dict[str, tp.Any],
+    search_space: tp.Callable[[tp.Any], dict[str, tp.Any]],
+    *,
+    metric: str,
+    direction: str = "minimize",
+    n_trials: int = 50,
+    n_workers: int = 1,
+    timeout: int | None = None,
+    storage: tp.Any = None,
+    sampler: tp.Any = None,
+    pruner: tp.Any = None,
+    prune: bool = True,
+    monitor: str = "val_loss",
+    overwrite: bool = False,
+) -> tp.Any:
+    """Run an RDB-backed, optionally parallel Optuna study over an experiment.
+
+    Adaptive (TPE) sibling of :func:`run_grid`. Each trial samples a config via
+    ``search_space``, builds an ``exp_cls`` and trains it; ``n_workers`` workers pull
+    trials concurrently from a shared RDB study, so adaptive search still parallelises.
+    With ``prune=True`` and an experiment exposing
+    ``fit_test(extra_callbacks=..., post_fit=...) -> dict``, underperforming trials are
+    stopped mid-training — this driver owns the Optuna pruning callback and injects it
+    through that generic callback seam, so the experiment stays Optuna-agnostic.
+
+    Parameters
+    ----------
+    exp_cls :
+        Experiment class. Must accept the flattened ``base_config`` as kwargs and expose
+        ``run() -> dict[str, float]``. For pruning, also
+        ``fit_test(extra_callbacks=list, post_fit=callable) -> dict`` (uncached, runs the
+        injected trainer callbacks and calls ``post_fit`` between fit and test).
+    study_name :
+        Optuna study name; also the sub-folder under ``base_config["infra"]["folder"]``.
+    base_config :
+        Base configuration, updated per trial with the overrides from ``search_space``.
+        Its ``infra`` block also drives parallel launching (see ``n_workers``).
+    search_space :
+        ``fn(trial) -> dict`` of flattened-config overrides, e.g.
+        ``{"optim.optimizer.lr": trial.suggest_float("lr", 1e-5, 1e-2, log=True)}``.
+        Keys use the same dotted notation as :func:`run_grid`.
+    metric :
+        Key of the ``run()``/``fit_test()`` result dict to optimise (e.g. ``"test_acc"``).
+    direction :
+        ``"minimize"`` or ``"maximize"``.
+    n_trials :
+        Approximate total number of trials. Split across workers with ceil division,
+        so up to ``n_workers - 1`` extra trials may run.
+    n_workers :
+        Number of concurrent workers. ``1`` runs in-process. ``>1`` launches workers via
+        the executor built from ``base_config["infra"]`` (set ``infra.cluster`` to
+        ``"auto"``/``"local"``/``"slurm"``); if ``infra.cluster`` is ``None`` there is no
+        executor, so it falls back to in-process and warns.
+    timeout :
+        Optional per-worker wall-clock budget in seconds.
+    storage :
+        Optuna storage (URL or object). Defaults to a sqlite DB under the study folder.
+        For multi-node parallelism prefer a Postgres/MySQL URL — sqlite locks under
+        heavy concurrent writes.
+    sampler, pruner :
+        Optuna sampler/pruner. Default ``TPESampler`` and (if ``prune``) ``MedianPruner``.
+    prune :
+        Enable mid-training pruning via the experiment's ``fit_test`` hook.
+    monitor :
+        Validation metric the pruning callback watches each epoch. **Must improve in the
+        same ``direction`` as the study** — the pruner ranks intermediate values using the
+        study direction, so e.g. ``direction="maximize"`` requires a metric that increases
+        (``"val_acc"``), not ``"val_loss"``. Mismatch prunes the *best* trials.
+    overwrite :
+        Start fresh: delete the local study folder and the study in ``storage`` (the
+        default sqlite DB, or the named study in a user-supplied storage) before starting.
+
+    Returns
+    -------
+    optuna.Study
+        The completed study (query ``study.best_trial`` / ``study.best_params``).
+    """
+    import optuna
+
+    base_folder = Path(base_config["infra"]["folder"])
+    study_dir = base_folder / study_name
+    if overwrite and study_dir.exists():
+        print(f"Deleting {study_dir}.")
+        shutil.rmtree(study_dir)
+    study_dir.mkdir(parents=True, exist_ok=True)
+
+    if storage is None:
+        # sqlite with a generous lock timeout so a few local workers don't trip over
+        # each other. Swap for a Postgres URL when scaling to many nodes.
+        storage = optuna.storages.RDBStorage(
+            url=f"sqlite:///{study_dir / 'optuna.db'}",
+            engine_kwargs={"connect_args": {"timeout": 60}},
+        )
+    if sampler is None:
+        sampler = optuna.samplers.TPESampler()
+    if pruner is None:
+        pruner = optuna.pruners.MedianPruner() if prune else optuna.pruners.NopPruner()
+    if overwrite:
+        # rmtree above only clears local folders (incl. the default sqlite file); a
+        # user-supplied storage keeps the study, so drop it explicitly for a fresh start.
+        try:
+            optuna.delete_study(study_name=study_name, storage=storage)
+        except KeyError:
+            pass  # no such study yet
+
+    use_pruning = prune and hasattr(exp_cls, "fit_test")
+
+    def objective(trial: tp.Any) -> float:
+        # Per-trial folder so checkpoints/logs from concurrent trials don't collide.
+        config = _apply_overrides(
+            base_config, search_space(trial), folder=study_dir / f"trial_{trial.number}"
+        )
+        exp = exp_cls(**config)
+        if use_pruning:
+            # The driver owns the Optuna pruning callback and injects it through the
+            # experiment's generic callback seam, keeping the experiment Optuna-agnostic.
+            from optuna_integration import PyTorchLightningPruningCallback
+
+            cb = PyTorchLightningPruningCallback(trial, monitor=monitor)
+            # post_fit raises TrialPruned between fit and test (under DDP the callback
+            # only flags pruning), so a pruned trial skips the wasted test pass.
+            results = exp.fit_test(extra_callbacks=[cb], post_fit=cb.check_pruned)
+        else:
+            results = exp.run()
+        if metric not in results:
+            raise KeyError(f"Metric {metric!r} not in result keys {sorted(results)}.")
+        return float(results[metric])
+
+    study_kwargs = dict(
+        study_name=study_name,
+        storage=storage,
+        sampler=sampler,
+        pruner=pruner,
+        direction=direction,
+    )
+    study = optuna.create_study(load_if_exists=True, **study_kwargs)
+
+    executor = exp_cls(**base_config).infra.executor() if n_workers > 1 else None
+    if executor is None:
+        if n_workers > 1:
+            warn(
+                "n_workers > 1 but base_config['infra']['cluster'] gives no executor "
+                "(set it to 'auto'/'local'/'slurm'); running in-process instead."
+            )
+        study.optimize(objective, n_trials=n_trials, timeout=timeout)
+    else:
+        per_worker = -(-n_trials // n_workers)  # ceil division
+        print(f"Launching {n_workers} optuna workers ({per_worker} trials each).")
+        jobs = [
+            executor.submit(_optuna_worker, study_kwargs, objective, per_worker, timeout)
+            for _ in range(n_workers)
+        ]
+        for job in jobs:
+            job.result()  # wait + surface worker exceptions
+        study = optuna.load_study(study_name=study_name, storage=storage)
+
+    if study.trials and any(t.state.name == "COMPLETE" for t in study.trials):
+        print(f"Done. Best {metric}={study.best_value:.4f} with {study.best_params}")
+    else:
+        warn(f"Study {study_name!r} finished with no completed trials.")
+    return study
 
 
 class CsvLoggerConfig(BaseModel):
