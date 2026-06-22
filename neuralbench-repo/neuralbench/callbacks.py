@@ -362,6 +362,82 @@ class TestFullRetrievalMetrics(Callback):
         return out
 
 
+class WindowPredictionCollector(Callback):
+    """Collect raw per-window test predictions and targets for caching.
+
+    Accumulates the ``(y_pred, y_true)`` returned by ``test_step`` for every
+    window in the test set, plus light per-window metadata (recording
+    ``timeline`` and, when available, the encoded ``subject_id``). The result
+    is exposed on the module as ``test_predictions`` so :class:`Experiment` can
+    fold it into its exca-cached ``run`` result. exca then serializes the small
+    metadata table as CSV (human-readable) and the potentially large
+    ``y_true``/``y_pred`` arrays via its memmap handler (efficient, lazy).
+
+    This is task-agnostic: ``y_pred``/``y_true`` are stored with their native
+    shape (class logits, regression vectors, retrieval embeddings, CTC
+    log-probs, ...), so no per-task aggregation happens here.
+    """
+
+    def __init__(self) -> None:
+        self._y_pred: list[np.ndarray] = []
+        self._y_true: list[np.ndarray] = []
+        self._timeline: list[str] = []
+        self._subject_id: list[int] = []
+        self._batch_idx: list[int] = []
+        self._has_subject = True
+
+    def on_test_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        self._y_pred = []
+        self._y_true = []
+        self._timeline = []
+        self._subject_id = []
+        self._batch_idx = []
+        self._has_subject = True
+
+    def on_test_batch_end(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs,
+        batch,
+        batch_idx,
+        dataloader_idx=0,
+    ) -> None:
+        y_pred, y_true = outputs
+        self._y_pred.append(y_pred.detach().cpu().numpy())
+        self._y_true.append(y_true.detach().cpu().numpy())
+        self._timeline.extend(segment.timeline for segment in batch.segments)
+        self._batch_idx.extend([batch_idx] * len(batch.segments))
+
+        subject = batch.data.get("subject_id")
+        if subject is None:
+            self._has_subject = False
+        else:
+            self._subject_id.extend(subject.detach().cpu().reshape(-1).tolist())
+
+    def on_test_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if not self._y_pred:
+            return
+
+        metadata = {"timeline": self._timeline, "batch_idx": self._batch_idx}
+        if self._has_subject and len(self._subject_id) == len(self._timeline):
+            metadata["subject_id"] = self._subject_id  # type: ignore[assignment]
+
+        setattr(
+            pl_module,
+            "test_predictions",
+            {
+                "metadata": pd.DataFrame(metadata),
+                "y_true": np.concatenate(self._y_true, axis=0),
+                "y_pred": np.concatenate(self._y_pred, axis=0),
+            },
+        )
+
+
 class RecordingLevelEval(Callback):
     """Callback to evaluate average prediction over each recording (timeline)."""
 
@@ -432,7 +508,7 @@ class RecordingLevelEval(Callback):
                 lambda counts: counts[i] / sum(counts) if sum(counts) > 0 else 0.0
             )
 
-        # Create prediction tensor with shape (n_recordings, num_classes)
+        # Per-recording probabilities, shape (n_recordings, num_classes).
         pred_columns = [f"y_pred{i}" for i in range(self.num_classes)]
         y_pred_probs = torch.from_numpy(outputs_df[pred_columns].values)
         # Convert y_true to int64 explicitly to avoid object dtype issues
