@@ -216,11 +216,17 @@ def test_run_writes_test_predictions_when_flag_set(monkeypatch) -> None:
 
     written: list[dict] = []
     monkeypatch.setattr(Experiment, "setup_run", lambda self: None)
-    monkeypatch.setattr(Experiment, "setup_trainer", lambda self, *a, **kw: SimpleNamespace(global_rank=0))
+    monkeypatch.setattr(
+        Experiment, "setup_trainer", lambda self, *a, **kw: SimpleNamespace(global_rank=0)
+    )
     monkeypatch.setattr(Experiment, "prepare_pl_module", fake_prepare_pl_module)
-    monkeypatch.setattr(Experiment, "_test", lambda self, loaders, ckpt: {"test/acc": 1.0})
+    monkeypatch.setattr(
+        Experiment, "_test", lambda self, loaders, ckpt: {"test/acc": 1.0}
+    )
     monkeypatch.setattr(Experiment, "_cleanup", lambda self, trainer: None)
-    monkeypatch.setattr(Experiment, "_write_test_predictions", lambda self, preds: written.append(preds))
+    monkeypatch.setattr(
+        Experiment, "_write_test_predictions", lambda self, preds: written.append(preds)
+    )
 
     # Call the unwrapped run() body directly: invoking the exca-wrapped method on
     # a ``model_construct`` instance is order-dependent (binding happens in a
