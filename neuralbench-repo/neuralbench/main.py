@@ -13,6 +13,7 @@ import typing as tp
 from pathlib import Path
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import yaml
 from exca import TaskInfra
@@ -270,7 +271,17 @@ class Experiment(BaseExperiment):
             callbacks.append(PlotConfusionMatrix(labels=labels))
         if is_test:
             if self.save_test_predictions:
-                callbacks.append(WindowPredictionCollector())
+                uid_folder = self.infra.uid_folder()
+                if uid_folder is None:
+                    raise RuntimeError(
+                        "save_test_predictions=True requires an infra cache "
+                        "folder; configure ``infra.folder``."
+                    )
+                callbacks.append(
+                    WindowPredictionCollector(
+                        folder=uid_folder / self._TEST_PREDICTIONS_DIR
+                    )
+                )
             if self.test_full_metrics:
                 callbacks.append(RecordingLevelEval())
             if self.test_full_retrieval_metrics:
@@ -456,19 +467,13 @@ class Experiment(BaseExperiment):
             torch.distributed.destroy_process_group()
 
         if trainer.global_rank == 0:
+            # ``WindowPredictionCollector`` (added in ``setup_trainer`` when
+            # ``save_test_predictions`` is set) streams the raw per-window
+            # predictions to ``infra.uid_folder()/<_TEST_PREDICTIONS_DIR>`` as a
+            # byproduct of the test loop. They live next to ``job.pkl`` so they
+            # survive cache hits and stay out of the cached result dict; read
+            # them back via ``test_predictions()``.
             test_results.update(self._test(loaders, best_model_path))
-            # Persist raw per-window predictions (a byproduct of the test loop)
-            # as side artifacts in the uid folder, via exca's CacheDict: the
-            # metadata is stored as CSV (human-readable) and the potentially
-            # large y_true/y_pred arrays via the MemmapArray handler (lazy,
-            # RAM-flat on load). They live next to ``job.pkl`` so they survive
-            # cache hits without bloating the cached result dict, which only
-            # records a small marker pointing at the artifact folder.
-            if self.save_test_predictions:
-                predictions = getattr(self._brain_module, "test_predictions", None)
-                if predictions is not None:
-                    self._write_test_predictions(predictions)
-                    test_results["test_predictions_dir"] = self._TEST_PREDICTIONS_DIR
 
         self._cleanup(trainer)
 
@@ -483,27 +488,9 @@ class Experiment(BaseExperiment):
         )
         return test_results
 
-    # Subfolder (under ``infra.uid_folder()``) holding the per-window test
-    # prediction artifacts written via exca's ``CacheDict``.
+    # Subfolder (under ``infra.uid_folder()``) where ``WindowPredictionCollector``
+    # streams the per-window test prediction artifacts via exca's ``CacheDict``.
     _TEST_PREDICTIONS_DIR: tp.ClassVar[str] = "test_predictions"
-
-    def _test_predictions_cache(self) -> CacheDict:
-        """``CacheDict`` over the per-window prediction artifact folder."""
-        uid_folder = self.infra.uid_folder()
-        if uid_folder is None:
-            raise RuntimeError(
-                "Cannot store test predictions without an infra cache folder; "
-                "configure ``infra.folder``."
-            )
-        return CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
-
-    def _write_test_predictions(self, predictions: dict[str, tp.Any]) -> None:
-        """Dump per-window predictions as side artifacts (CSV + memmap)."""
-        cache = self._test_predictions_cache()
-        cache.clear()  # avoid CacheDict's no-overwrite error on re-runs
-        with cache.write():
-            for key, value in predictions.items():
-                cache[key] = value
 
     def test_predictions(self) -> dict[str, tp.Any]:
         """Raw per-window test predictions.
@@ -511,24 +498,44 @@ class Experiment(BaseExperiment):
         Requires ``save_test_predictions=True``. Returns a dict with:
 
         - ``"metadata"``: a :class:`pandas.DataFrame` with one row per test
-          window (``timeline``, ``batch_idx``, and ``subject_id`` when
-          available);
+          window (``timeline``, ``batch_idx``, ``dataloader_idx``, plus
+          ``subject_id`` and a retrieval ``group`` label when available);
         - ``"y_true"`` / ``"y_pred"``: arrays of shape ``(n_windows, ...)``
-          aligned with ``metadata``, returned as lazy ``np.memmap`` views.
+          aligned with ``metadata``, concatenated across batches.
 
-        The predictions are stored as side artifacts in the uid folder by
-        exca's ``CacheDict`` (metadata as CSV, arrays via the memmap handler),
-        so they survive cache hits and are read here without re-running.
+        ``WindowPredictionCollector`` streams the predictions to the uid folder
+        during the test loop (metadata as CSV, arrays appended to a shared
+        memmap file), so they survive cache hits and are read straight from
+        disk. This is a read-only accessor: call :meth:`run` first (a cache hit
+        is fine); if the artifacts are missing it raises rather than launching a
+        run. The per-batch array chunks are concatenated on read, so loading
+        materializes the full arrays in RAM.
         """
-        results = self.run()
-        if "test_predictions_dir" not in results:
+        uid_folder = self.infra.uid_folder()
+        if uid_folder is None:
+            raise RuntimeError(
+                "Cannot read test predictions without an infra cache folder; "
+                "configure ``infra.folder``."
+            )
+        cache: CacheDict = CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
+        keys = set(cache.keys())
+        if not keys:
             raise ValueError(
                 "Test predictions are unavailable. Set "
                 "save_test_predictions=True and (re)run the experiment "
                 "(toggling the flag yields a fresh cache entry)."
             )
-        cache = self._test_predictions_cache()
-        return {key: cache[key] for key in cache.keys()}
+
+        def _concat(prefix: str) -> np.ndarray:
+            chunks = sorted(key for key in keys if key.startswith(prefix))
+            return np.concatenate([np.asarray(cache[key]) for key in chunks], axis=0)
+
+        collector = WindowPredictionCollector
+        return {
+            "metadata": cache[collector._METADATA_KEY],
+            "y_true": _concat(collector._Y_TRUE_PREFIX),
+            "y_pred": _concat(collector._Y_PRED_PREFIX),
+        }
 
 
 # BenchmarkAggregator lives in aggregator.py and forward-references Experiment

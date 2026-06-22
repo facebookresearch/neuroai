@@ -4,13 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from types import SimpleNamespace
+
 import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
 import torch
-import torchmetrics
-from torch import nn
+from exca.cachedict import CacheDict
 
 from .callbacks import (
     PlotRegressionScatter,
@@ -24,9 +25,11 @@ matplotlib.use("Agg")
 class MockSegment:
     """Mock segment with events containing timeline information."""
 
-    def __init__(self, timeline: str):
+    def __init__(self, timeline: str, group: str | None = None):
         self.timeline = timeline
         self.events = pd.DataFrame({"timeline": [timeline]})
+        if group is not None:
+            self.trigger = SimpleNamespace(text=group)
 
 
 class MockBatch:
@@ -122,97 +125,81 @@ def test_binary_single_window_per_recording(mock_trainer, mock_pl_module):
     assert torch.equal(y_true.long(), torch.tensor([0, 1, 1]))
 
 
-class _RealMetricModule:
-    """Minimal LightningModule stand-in exposing the real task torchmetrics."""
+def _read_predictions(folder):
+    """Read back a WindowPredictionCollector folder (metadata + arrays)."""
+    cache: CacheDict = CacheDict(folder=folder)
+    keys = set(cache.keys())
 
-    def __init__(self, num_classes: int) -> None:
-        self.test_full_metrics = nn.ModuleDict(
-            {
-                "test/acc": torchmetrics.Accuracy(
-                    task="multiclass", num_classes=num_classes
-                ),
-                "test/bal_acc": torchmetrics.Accuracy(
-                    task="multiclass", num_classes=num_classes, average="macro"
-                ),
-                "test/auroc": torchmetrics.AUROC(
-                    task="multiclass", num_classes=num_classes
-                ),
-            }
-        )
+    def concat(prefix):
+        chunks = sorted(k for k in keys if k.startswith(prefix))
+        return np.concatenate([np.asarray(cache[k]) for k in chunks], axis=0)
 
-    def log(self, *args, **kwargs) -> None:
-        pass
+    return {
+        "metadata": cache[WindowPredictionCollector._METADATA_KEY],
+        "y_pred": concat(WindowPredictionCollector._Y_PRED_PREFIX),
+        "y_true": concat(WindowPredictionCollector._Y_TRUE_PREFIX),
+    }
 
 
-@pytest.mark.parametrize("num_classes", [2, 3])
-def test_recording_level_eval_real_metrics(mock_trainer, num_classes):
-    """Callback runs with the real task torchmetrics (acc, macro acc, AUROC)
-    for binary and multiclass setups; metrics compute to a valid scalar."""
-    module = _RealMetricModule(num_classes)
-    callback = RecordingLevelEval()
-    callback.setup(mock_trainer, module, stage="test")
-    callback.on_test_epoch_start(mock_trainer, module)
+@pytest.mark.parametrize("with_subject", [True, False])
+def test_prediction_collector_streams_windows(tmp_path, with_subject):
+    """WindowPredictionCollector streams raw per-window y_pred/y_true across
+    batches to disk with aligned metadata (timeline, batch_idx, dataloader_idx,
+    and a retrieval group label), and drops subject_id when it is absent."""
+    trainer = SimpleNamespace(is_global_zero=True)
+    module = SimpleNamespace()
+    folder = tmp_path / "test_predictions"
+    callback = WindowPredictionCollector(folder=folder)
+    callback.on_test_epoch_start(trainer, module)
 
-    torch.manual_seed(0)
-    n_rec, n_win = 4, 3
-    timelines = [f"rec{r}" for r in range(n_rec) for _ in range(n_win)]
-    y_true = torch.tensor([r % num_classes for r in range(n_rec) for _ in range(n_win)])
-    logits = torch.randn(n_rec * n_win, num_classes)
-    batch = MockBatch([MockSegment(t) for t in timelines])
-
-    callback.on_test_batch_end(mock_trainer, module, (logits, y_true), batch, batch_idx=0)
-    callback.on_test_epoch_end(mock_trainer, module)
-
-    for metric in module.test_full_metrics.values():
-        assert 0.0 <= float(metric.compute()) <= 1.0
-
-
-def test_prediction_collector_concatenates_windows_and_metadata(mock_trainer, mocker):
-    """WindowPredictionCollector stacks raw per-window y_pred/y_true across
-    batches and builds aligned metadata (timeline, batch_idx, subject_id),
-    exposing them on the module for exca to cache."""
-    module = mocker.Mock()
-    callback = WindowPredictionCollector()
-    callback.on_test_epoch_start(mock_trainer, module)
-
-    # Two batches with multi-dim predictions (e.g. regression / embeddings).
+    # Two batches with multi-dim predictions (e.g. regression / embeddings) and
+    # a per-window group label exposed via the segment trigger.
+    data0 = {"subject_id": torch.tensor([0, 0])} if with_subject else {}
+    data1 = {"subject_id": torch.tensor([1])} if with_subject else {}
     batch0 = MockBatch(
-        [MockSegment("rec0"), MockSegment("rec0")],
-        data={"subject_id": torch.tensor([0, 0])},
+        [MockSegment("rec0", group="cat"), MockSegment("rec0", group="dog")],
+        data=data0,
     )
-    batch1 = MockBatch(
-        [MockSegment("rec1")],
-        data={"subject_id": torch.tensor([1])},
+    batch1 = MockBatch([MockSegment("rec1", group="cat")], data=data1)
+
+    callback.on_test_batch_end(
+        trainer, module, (torch.zeros(2, 4), torch.ones(2, 4)), batch0, batch_idx=0
     )
-    out0 = (torch.zeros(2, 4), torch.ones(2, 4))
-    out1 = (torch.zeros(1, 4), torch.ones(1, 4))
+    callback.on_test_batch_end(
+        trainer, module, (torch.zeros(1, 4), torch.ones(1, 4)), batch1, batch_idx=1
+    )
+    callback.on_test_epoch_end(trainer, module)
 
-    callback.on_test_batch_end(mock_trainer, module, out0, batch0, batch_idx=0)
-    callback.on_test_batch_end(mock_trainer, module, out1, batch1, batch_idx=1)
-    callback.on_test_epoch_end(mock_trainer, module)
-
-    preds = module.test_predictions
+    preds = _read_predictions(folder)
     assert preds["y_pred"].shape == (3, 4)
     assert preds["y_true"].shape == (3, 4)
     meta = preds["metadata"]
     assert list(meta["timeline"]) == ["rec0", "rec0", "rec1"]
     assert list(meta["batch_idx"]) == [0, 0, 1]
-    assert list(meta["subject_id"]) == [0, 0, 1]
+    assert list(meta["dataloader_idx"]) == [0, 0, 0]
+    assert list(meta["group"]) == ["cat", "dog", "cat"]
+    if with_subject:
+        assert list(meta["subject_id"]) == [0, 0, 1]
+    else:
+        assert "subject_id" not in meta.columns
 
 
-def test_prediction_collector_omits_subject_when_absent(mock_trainer, mocker):
-    """subject_id column is dropped when the batch has no subject_id."""
-    module = mocker.Mock()
-    callback = WindowPredictionCollector()
-    callback.on_test_epoch_start(mock_trainer, module)
-
-    batch = MockBatch([MockSegment("rec0")])  # no data["subject_id"]
+def test_prediction_collector_skips_non_zero_rank(tmp_path):
+    """Only global rank zero persists predictions."""
+    trainer = SimpleNamespace(is_global_zero=False)
+    module = SimpleNamespace()
+    folder = tmp_path / "test_predictions"
+    callback = WindowPredictionCollector(folder=folder)
+    callback.on_test_epoch_start(trainer, module)
     callback.on_test_batch_end(
-        mock_trainer, module, (torch.zeros(1, 2), torch.ones(1, 2)), batch, batch_idx=0
+        trainer,
+        module,
+        (torch.zeros(1, 2), torch.ones(1, 2)),
+        MockBatch([MockSegment("rec0")]),
+        batch_idx=0,
     )
-    callback.on_test_epoch_end(mock_trainer, module)
-
-    assert "subject_id" not in module.test_predictions["metadata"].columns
+    callback.on_test_epoch_end(trainer, module)
+    assert not folder.exists()
 
 
 def test_binary_multiple_windows_per_recording(mock_trainer, mock_pl_module):

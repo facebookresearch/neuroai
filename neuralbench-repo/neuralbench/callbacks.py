@@ -18,6 +18,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 import torchmetrics
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import Callback
 from matplotlib.figure import Figure
 from sklearn.metrics import ConfusionMatrixDisplay
@@ -363,38 +364,77 @@ class TestFullRetrievalMetrics(Callback):
 
 
 class WindowPredictionCollector(Callback):
-    """Collect raw per-window test predictions and targets for caching.
+    """Stream raw per-window test predictions and targets to disk.
 
-    Accumulates the ``(y_pred, y_true)`` returned by ``test_step`` for every
-    window in the test set, plus light per-window metadata (recording
-    ``timeline`` and, when available, the encoded ``subject_id``). The result
-    is exposed on the module as ``test_predictions`` so :class:`Experiment` can
-    fold it into its exca-cached ``run`` result. exca then serializes the small
-    metadata table as CSV (human-readable) and the potentially large
-    ``y_true``/``y_pred`` arrays via its memmap handler (efficient, lazy).
+    For every window in the test set, the ``(y_pred, y_true)`` returned by
+    ``test_step`` is written **incrementally** (one chunk per batch) to an
+    exca :class:`~exca.cachedict.CacheDict` under ``folder``, alongside light
+    per-window metadata (recording ``timeline``, ``batch_idx``,
+    ``dataloader_idx`` and, when available, the encoded ``subject_id`` and a
+    retrieval ``group`` label). Arrays go through exca's memmap handler (one
+    shared binary file, appended per batch) and the metadata table is stored as
+    CSV, so peak RAM stays proportional to a single batch rather than the whole
+    test set.
 
     This is task-agnostic: ``y_pred``/``y_true`` are stored with their native
     shape (class logits, regression vectors, retrieval embeddings, CTC
     log-probs, ...), so no per-task aggregation happens here.
+
+    Writing only happens on global rank zero. In neuralbench the test loop is
+    single-device by construction (``Experiment._test`` runs on global rank zero
+    with ``devices=1`` after the training process group is torn down), so the
+    saved predictions cover the *full* test set even after multi-GPU training;
+    the rank-zero guard is defensive against a hypothetical distributed tester.
+
+    Parameters
+    ----------
+    folder:
+        Destination directory for the prediction artifacts. The folder is
+        cleared at the start of each test epoch.
+    group_field:
+        Trigger attribute used as the retrieval ``group`` label (the stimulus
+        identity, e.g. word ``text``). Falls back to ``category`` then
+        ``filepath`` when absent; the column is omitted if no window exposes
+        any of them.
     """
 
-    def __init__(self) -> None:
-        self._y_pred: list[np.ndarray] = []
-        self._y_true: list[np.ndarray] = []
-        self._timeline: list[str] = []
-        self._subject_id: list[int] = []
-        self._batch_idx: list[int] = []
+    _Y_PRED_PREFIX: tp.ClassVar[str] = "y_pred_"
+    _Y_TRUE_PREFIX: tp.ClassVar[str] = "y_true_"
+    _METADATA_KEY: tp.ClassVar[str] = "metadata"
+
+    def __init__(self, folder: Path | str, group_field: str = "text") -> None:
+        self._folder = Path(folder)
+        self._group_field = group_field
+        self._reset()
+
+    def _reset(self) -> None:
+        self._cache: CacheDict | None = None
+        self._writer: tp.Any = None
+        self._n_chunks = 0
+        self._metadata: dict[str, list[tp.Any]] = defaultdict(list)
         self._has_subject = True
+        self._has_group = True
+
+    def _segment_group(self, segment: tp.Any) -> tp.Any:
+        """Best-effort retrieval ``group`` label for a window's segment."""
+        trigger = getattr(segment, "trigger", None)
+        if trigger is None:
+            return None
+        for attr in (self._group_field, "category", "filepath"):
+            if hasattr(trigger, attr):
+                return getattr(trigger, attr)
+        return None
 
     def on_test_epoch_start(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
-        self._y_pred = []
-        self._y_true = []
-        self._timeline = []
-        self._subject_id = []
-        self._batch_idx = []
-        self._has_subject = True
+        self._reset()
+        if not trainer.is_global_zero:
+            return
+        self._cache = CacheDict(folder=self._folder)
+        self._cache.clear()  # avoid CacheDict's no-overwrite error on re-runs
+        self._writer = self._cache.write()
+        self._writer.__enter__()
 
     def on_test_batch_end(
         self,
@@ -405,37 +445,53 @@ class WindowPredictionCollector(Callback):
         batch_idx,
         dataloader_idx=0,
     ) -> None:
+        if self._cache is None:
+            return  # non-zero rank: nothing to persist
+
         y_pred, y_true = outputs
-        self._y_pred.append(y_pred.detach().cpu().numpy())
-        self._y_true.append(y_true.detach().cpu().numpy())
-        self._timeline.extend(segment.timeline for segment in batch.segments)
-        self._batch_idx.extend([batch_idx] * len(batch.segments))
+        chunk = f"{self._n_chunks:08d}"
+        self._cache[f"{self._Y_PRED_PREFIX}{chunk}"] = y_pred.detach().cpu().numpy()
+        self._cache[f"{self._Y_TRUE_PREFIX}{chunk}"] = y_true.detach().cpu().numpy()
+        self._n_chunks += 1
+
+        n_windows = len(batch.segments)
+        self._metadata["timeline"].extend(seg.timeline for seg in batch.segments)
+        self._metadata["batch_idx"].extend([batch_idx] * n_windows)
+        self._metadata["dataloader_idx"].extend([dataloader_idx] * n_windows)
 
         subject = batch.data.get("subject_id")
         if subject is None:
             self._has_subject = False
         else:
-            self._subject_id.extend(subject.detach().cpu().reshape(-1).tolist())
+            self._metadata["subject_id"].extend(
+                subject.detach().cpu().reshape(-1).tolist()
+            )
+
+        groups = [self._segment_group(seg) for seg in batch.segments]
+        if any(g is None for g in groups):
+            self._has_group = False
+        else:
+            self._metadata["group"].extend(groups)
 
     def on_test_epoch_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
     ) -> None:
-        if not self._y_pred:
+        if self._cache is None:
             return
-
-        metadata = {"timeline": self._timeline, "batch_idx": self._batch_idx}
-        if self._has_subject and len(self._subject_id) == len(self._timeline):
-            metadata["subject_id"] = self._subject_id  # type: ignore[assignment]
-
-        setattr(
-            pl_module,
-            "test_predictions",
-            {
-                "metadata": pd.DataFrame(metadata),
-                "y_true": np.concatenate(self._y_true, axis=0),
-                "y_pred": np.concatenate(self._y_pred, axis=0),
-            },
-        )
+        try:
+            if self._n_chunks:
+                n_windows = len(self._metadata["timeline"])
+                columns = ["timeline", "batch_idx", "dataloader_idx"]
+                if self._has_subject and len(self._metadata["subject_id"]) == n_windows:
+                    columns.append("subject_id")
+                if self._has_group and len(self._metadata["group"]) == n_windows:
+                    columns.append("group")
+                self._cache[self._METADATA_KEY] = pd.DataFrame(
+                    {col: self._metadata[col] for col in columns}
+                )
+        finally:
+            self._writer.__exit__(None, None, None)
+            self._writer = None
 
 
 class RecordingLevelEval(Callback):
