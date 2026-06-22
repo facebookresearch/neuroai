@@ -117,6 +117,15 @@ comparison figures and tables from the stored results (no retraining):
       Reproduce the NeurIPS 2025 challenge tasks (cross-task reaction
       time and externalizing-factor prediction) with NeuralBench.
 
+   .. grid-item-card:: :fas:`trophy` EEG/EMG Foundation Challenge 2026
+      :link: auto_examples/biosignal_challenge_2026/plot_overview
+      :link-type: doc
+      :class-card: sd-shadow-sm
+
+      Starter kit for the proposed 2026 multi-track challenge:
+      EEG-to-Image, BCI, sleep onset, EMG-to-Text, and Foundation
+      Transfer.
+
 ----
 
 Running the full EEG benchmark
@@ -202,6 +211,7 @@ If you use NeuralBench in your research, please cite the
    auto_examples/adding_model/index
    auto_examples/advanced/index
    auto_examples/eeg_challenge/index
+   auto_examples/biosignal_challenge_2026/index
 
 .. toctree::
     :maxdepth: 3

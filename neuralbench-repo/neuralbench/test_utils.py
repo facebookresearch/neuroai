@@ -14,6 +14,11 @@ import numpy as np
 import pytest
 import torch
 
+from neuralbench.utils import SequenceLabelEncoder
+from neuralset import utils as ns_utils
+from neuralset.events import etypes
+from neuralset.extractors.meta import CroppedExtractor
+
 from .data import Data
 from .utils import (
     _compute_regression_bin_weights,
@@ -148,6 +153,141 @@ def test_make_regression_bin_sampler_balances_bins(mocker):
     counts = torch.bincount(drawn_bins, minlength=4).float()
     proportions = counts / counts.sum()
     assert torch.allclose(proportions, torch.full((4,), 0.25), atol=0.01)
+
+
+# --- SequenceLabelEncoder -------------------------------------------------
+#
+# The CTC head's target stream comes from a fixed-length integer-label
+# extractor that lives in ``neuralbench`` (not ``neuralset``). We keep
+# this CTC-specific shape out of the base ``LabelEncoder`` and read the
+# pre-computed ``label`` field that the emg/typing study writes onto
+# each Keystroke event.
+
+_KS_PAD = 27  # blank index for the toy 27-class vocab below
+
+
+@pytest.fixture
+def _fresh_warn_registry():
+    """warn_once dedupes per-process; reset so per-test assertions are stable."""
+    ns_utils.ISSUED_WARNINGS.clear()
+    yield
+    ns_utils.ISSUED_WARNINGS.clear()
+
+
+def _ks_events(labels: list[int], starts: list[float] | None = None):
+    """Build Keystroke events with a pre-computed integer ``label`` in extras."""
+    starts = starts or [0.1 * i for i in range(len(labels))]
+    return [
+        etypes.Keystroke(
+            start=s,
+            duration=0.05,
+            text=f"k{lbl}",
+            timeline="t",
+            extra={"label": lbl},
+        )
+        for s, lbl in zip(starts, labels, strict=False)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("labels", "starts", "win_start", "win_dur", "expected"),
+    [
+        # Every event fits the window.
+        ([7, 8, 26], None, 0.0, 1.0, [7, 8, 26]),
+        # Window [10.9, 14.9) keeps c@11, d@14.5; the rest fall outside.
+        (list(range(5)), [10.0, 10.5, 11.0, 14.5, 14.95], 10.9, 4.0, [2, 3]),
+    ],
+)
+def test_sequence_label_encoder_padded_layout(
+    labels, starts, win_start, win_dur, expected
+):
+    """``SequenceLabelEncoder`` produces a fixed-shape tensor of concatenated
+    integer labels, right-padded with ``pad_value`` (the CTC blank)."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=8,
+        pad_value=_KS_PAD,
+    )
+    events = _ks_events(labels, starts)
+    out = ext(events, start=win_start, duration=win_dur)
+
+    n = len(expected)
+    assert out.shape == (8,)
+    assert out[:n].tolist() == expected
+    assert (out[n:] == _KS_PAD).all()
+
+
+def test_cropped_sequence_label_encoder_composition():
+    """``CroppedExtractor`` wrapping ``SequenceLabelEncoder`` restricts label
+    collection to the cropped sub-window; ``model_factory`` unwraps the
+    ``.extractor`` chain to read ``n_classes`` off the inner encoder and
+    size the CTC head through the composition."""
+    inner = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=8,
+        pad_value=_KS_PAD,
+    )
+    # Outer crop [start+0.9, start+0.9+4.0) — for start=10.0 keeps c@11, d@14.5.
+    cropped = CroppedExtractor(extractor=inner, offset=0.9, duration=4.0)
+    events = _ks_events(list(range(5)), [10.0, 10.5, 11.0, 14.5, 14.95])
+    out = cropped(events, start=10.0, duration=5.0)
+
+    assert out.shape == (8,)
+    assert out[:2].tolist() == [2, 3]
+    assert (out[2:] == _KS_PAD).all()
+    # ``CroppedExtractor`` itself doesn't carry ``n_classes``; the head
+    # width lives on the wrapped encoder, which ``model_factory`` reaches
+    # by unwrapping ``.extractor``.
+    assert not hasattr(cropped, "n_classes")
+    assert cropped.extractor.n_classes == _KS_PAD + 1
+
+
+def test_sequence_label_encoder_truncation_warns_once(_fresh_warn_registry):
+    """Truncation of overlong segments warns once per process."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=2,
+        pad_value=_KS_PAD,
+    )
+    events = _ks_events([7, 4, 11, 11, 14])
+    with pytest.warns(UserWarning, match="truncating") as records:
+        ext(events, start=0.0, duration=1.0)
+        ext(events, start=0.0, duration=1.0)
+    assert sum("truncating" in str(r.message) for r in records) == 1
+
+
+def test_sequence_label_encoder_empty_segment():
+    """Segments without matching events return all-blank padding."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=4,
+        pad_value=_KS_PAD,
+    )
+    events = _ks_events([7, 4])
+    # Target window 10..11 excludes both events at t=0.0, t=0.1.
+    out = ext(events, start=10.0, duration=1.0)
+    assert out.shape == (4,)
+    assert (out == _KS_PAD).all()
+
+
+def test_sequence_label_encoder_n_classes_property():
+    """``n_classes`` is the CTC head width: ``pad_value + 1``."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=4,
+        pad_value=98,
+    )
+    assert ext.n_classes == 99
 
 
 # ---------------------------------------------------------------------------

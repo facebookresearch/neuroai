@@ -396,3 +396,30 @@ def test_torchmetricskwargs_rank(torchmetrics_kwargs):
             _ = metrics.Rank(torchmetrics_kwargs=torchmetrics_kwargs)
     else:
         _ = metrics.Rank(torchmetrics_kwargs=torchmetrics_kwargs)
+
+
+def _ctc_y_true(seqs, null_class, max_len=8):
+    """Pack ``seqs`` into the blank-padded layout that ``nn.CTCLoss`` and
+    ``CharacterErrorRates`` consume.  Lengths are recovered downstream as
+    ``(y_true != null_class).sum(-1)``."""
+    labels = torch.full((len(seqs), max_len), null_class, dtype=torch.long)
+    for i, s in enumerate(seqs):
+        labels[i, : len(s)] = torch.tensor([ord(c) - ord("a") for c in s])
+    return labels
+
+
+def test_character_error_rates_perfect_predictions():
+    """CER == 0 when greedy-decoded predictions match targets exactly."""
+    seqs = ("hey", "world")
+    null_class = 26  # 26-letter alphabet → blank index 26.
+
+    y_true = _ctc_y_true(seqs, null_class)
+    y_pred = torch.full((len(seqs), 30, null_class + 1), -100.0)
+    for i, s in enumerate(seqs):
+        for t, c in enumerate(s):
+            y_pred[i, t, ord(c) - ord("a")] = 0.0
+        y_pred[i, len(s) :, null_class] = 0.0
+
+    metric = metrics.CharacterErrorRates(blank_idx=null_class)
+    metric.update(torch.log_softmax(y_pred, dim=-1), y_true)
+    assert float(metric.compute()) == 0.0

@@ -166,6 +166,26 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     assert nifti.shape == cached_val.data.shape
 
 
+@pytest.mark.parametrize("kind", ["Fmri", "Meg"])
+def test_extractor_cached_start(test_data_path: Path, tmp_path: Path, kind: str) -> None:
+    infra: tp.Any = {"folder": tmp_path / "cache", **_NO_CLUSTER}
+    study = ns.Study(
+        name=f"Test2023{kind}",
+        path=test_data_path,
+        query="timeline_index<1",
+        infra_timelines=_NO_CLUSTER,
+    ).run()
+    event = study.query(f'type=="{kind}"').iloc[:1]
+    start, duration = event["start"].item(), event["duration"].item()
+    extractor = getattr(ns.extractors, f"{kind}Extractor")(infra=infra)
+    # same path/offset/duration => shared cache uid; only the timeline start differs
+    first = extractor(event, start=start, duration=duration).numpy()
+    moved = event.assign(start=start + 100)
+    shifted = extractor(moved, start=start + 100, duration=duration).numpy()
+    assert shifted.max() > 0, "second event inherited the first's cached start"
+    np.testing.assert_array_equal(first, shifted)
+
+
 @pytest.mark.parametrize("frequency", [0.25, 0.33, 0.5, 1.0, 1.33, 10.01])
 def test_fmri_resample(test_data_path: Path, frequency: float) -> None:
     study = ns.Study(
@@ -1852,3 +1872,29 @@ def test_channel_positions_meg_2d_rejected() -> None:
         NotImplementedError, match="n_spatial_dims=2 is not supported for MEG"
     ):
         ns.extractors.ChannelPositions(neuro=meg, n_spatial_dims=2)
+
+
+# ---------------------------------------------------------------------------
+# FmriCleaner.ensure_finite is honored when other cleaning is disabled
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("ensure_finite", [True, False])
+def test_fmri_cleaner_ensure_finite(ensure_finite: bool) -> None:
+    """ensure_finite must apply even with detrend/standardize/filters all off."""
+    data = np.random.randn(3, 50).astype(np.float32)
+    data[0, 10] = np.nan
+    data[1, 20] = np.inf
+    data[2, 30] = -np.inf
+
+    cleaner = ns.extractors.FmriCleaner(
+        detrend=False, standardize=False, ensure_finite=ensure_finite
+    )
+    cleaned = cleaner.clean(data, t_r=1.0)
+
+    assert cleaned.shape == data.shape
+    assert cleaned.dtype == data.dtype
+    if ensure_finite:
+        assert np.isfinite(cleaned).all()
+    else:
+        assert not np.isfinite(cleaned).all()

@@ -6,6 +6,7 @@
 
 """Pydantic configurations for models."""
 
+import importlib
 import typing as tp
 
 import pydantic
@@ -65,8 +66,6 @@ class BaseBrainDecodeModel(BaseModelConfig):
             raise RuntimeError(
                 f"{cls.__name__} has neither `_MODEL_CLASS` nor `_MODEL_CLASS_PATH` set."
             )
-        import importlib
-
         module_name, attr = cls._MODEL_CLASS_PATH.rsplit(".", 1)
         cls._MODEL_CLASS = getattr(importlib.import_module(module_name), attr)
 

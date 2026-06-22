@@ -55,8 +55,26 @@ regimes that demand fundamentally different algorithmic capabilities.
 Standard regression metrics (MAE, RMSE, Pearson r, R^2, normalized RMSE) are
 also logged alongside the headline ``bmae``.
 
+Additional Datasets
+~~~~~~~~~~~~~~~~~~~
+
+The following additional polysomnography datasets can also be used with this
+task. Both expose annotated sleep stages, so ``AddSleepOnsetTargets`` derives
+the N2-onset target the same way as on Sleep-EDF.
+
+* ``Alvarez2022Haaglanden`` (HMC-Sleep-Staging) -- 151 whole-night PSG recordings (6-channel EEG, 256 Hz) from clinical sleep-center patients [Alvarez2022]_.
+* ``Ghassemi2018You`` (PhysioNet/CinC Challenge 2018) -- clinical PSG recordings; only the labeled training split (N=994) is used [Ghassemi2018]_.
+
+To run with an alternate dataset:
+
+.. code-block:: bash
+
+   neuralbench eeg sleep_onset --dataset alvarez2022haaglanden
+
 References
 ~~~~~~~~~~
 
 .. [Kemp2000] B Kemp, AH Zwinderman, B Tuk, HAC Kamphuisen, JJL Oberyé. Analysis of a sleep-dependent neuronal feedback loop: the slow-wave microcontinuity of the EEG. IEEE-BME 47(9):1185-1194 (2000).
 .. [Rechtschaffen1968] A Rechtschaffen, AE Kales. A manual of standardized terminology, techniques and scoring systems for sleep stages of human subjects. Los Angeles, CA: UCLA Brain Information Service. Brain Research Institute 10 (1968).
+.. [Alvarez2022] D Alvarez-Estevez, R Rijsman. Haaglanden Medisch Centrum Sleep Staging Database (version 1.1). PhysioNet (2022). doi:10.13026/T79Q-FR32.
+.. [Ghassemi2018] MM Ghassemi, BE Moody, L-w H Lehman, C Song, Q Li, H Sun, RG Mark, MB Westover, GD Clifford. You Snooze, You Win: The PhysioNet/Computing in Cardiology Challenge 2018. Computing in Cardiology 45 (2018).

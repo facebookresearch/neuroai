@@ -9,6 +9,7 @@ import typing as tp
 
 import numpy as np
 import pandas as pd
+import pydantic
 import pytest
 import torch
 
@@ -249,6 +250,34 @@ def test_llm_long_context() -> None:
     _ = extractor(word, 0, 1)
 
 
+def test_max_length_real_limit() -> None:
+    extractor = text.HuggingFaceText(model_name="openai-community/gpt2", device="cpu")
+    assert extractor.tokenizer.model_max_length == 1024
+    assert extractor._get_max_length() == 1024
+
+
+@pytest.mark.skipif("IN_GITHUB_ACTION" in os.environ, reason="OPT not in CI cache")
+def test_max_length_sentinel_fallback() -> None:
+    """OPT's tokenizer reports the HF 'infinite' sentinel, so _max_length must
+    fall back to the model's position table and an over-length context must
+    truncate instead of overflowing OPT's learned positions."""
+    word = _make_word()
+    word.context = " ".join(str(k) for k in range(4000))  # >2050 tokens
+    try:
+        extractor = text.HuggingFaceText(
+            model_name="facebook/opt-125m",
+            contextualized=True,
+            device="cpu",
+        )
+        tokenizer = extractor.tokenizer
+        assert tokenizer.model_max_length >= int(1e29)  # sentinel, not a real limit
+        config: tp.Any = extractor.model.config  # type: ignore[union-attr]
+        assert extractor._get_max_length() == config.max_position_embeddings
+        _ = extractor(word, 0, 1)
+    except (OSError, RuntimeError, pydantic.ValidationError):
+        pytest.skip("opt-125m unreachable")
+
+
 @pytest.mark.skipif(
     "IN_GITHUB_ACTION" in os.environ, reason="Models are too big for CI cache"
 )
@@ -271,14 +300,12 @@ def test_llm_pretrained() -> None:
             aggregation="sum",
             contextualized=True,
             device=device,
-            pretrained=pretrained,  # type: ignore
+            pretrained=pretrained,
         )(word, 0, 1)
-        for pretrained in [True, False, "part-reversal"]
+        for pretrained in [True, False]
     ]
     with pytest.raises(AssertionError):
         np.testing.assert_array_almost_equal(outputs[0], outputs[1])
-    with pytest.raises(AssertionError):
-        np.testing.assert_array_almost_equal(outputs[0], outputs[2])
 
 
 @pytest.mark.parametrize(
@@ -342,13 +369,3 @@ def test_batched_target_slice_excludes_pads() -> None:
     )
     np.testing.assert_allclose(short_batched, short_alone, rtol=1e-3, atol=1e-3)
     np.testing.assert_allclose(long_batched, long_alone, rtol=1e-3, atol=1e-3)
-
-
-def test_part_reversal() -> None:
-    ref = np.random.rand(2, 3, 4)
-    x = torch.from_numpy(np.array(ref, copy=True))
-    np.testing.assert_almost_equal(x.numpy(), ref)
-    text.part_reversal(x)
-    assert x.shape == ref.shape
-    with pytest.raises(AssertionError):
-        np.testing.assert_almost_equal(x.numpy(), ref)

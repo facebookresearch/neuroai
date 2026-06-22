@@ -7,16 +7,7 @@
 data:
   study:
     source:
-      name: Allen2022MassiveRaw
-    # Keep a single preprocessed fMRI space per timeline. Allen2022MassiveRaw
-    # (and other deepprep studies) emit one Fmri event per
-    # {T1w, MNI152NLin2009cAsym, fsnative, fsaverage}; extractors like the
-    # subject-id LabelEncoder have no from_space filter, so we narrow to
-    # fsaverage (matching the SurfaceProjector(mesh=fsaverage5) below) upstream
-    # of segmentation.
-    filter_fmri_space:
-      name: QueryEvents
-      query: 'type != "Fmri" or space == "fsaverage"'
+      name: Chang2019Bold5000
     split:
       name: PredefinedSplit
       test_split_query: null

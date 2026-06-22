@@ -41,8 +41,8 @@ class _LabramChannelWrapper(nn.Module):
 
     * ``_labram_names`` -- the LaBraM-cased name to forward to the inner
       model for each union channel (channels with no LaBraM mapping fall
-      back to their original name and are dropped by braindecode's
-      case-insensitive ``ch_names`` matching).
+      back to their original name; see ``_known_mask`` below for how those
+      are then filtered out before reaching braindecode).
     * ``_positionless_mask`` -- a boolean buffer marking channels that have
       a valid LaBraM mapping but no montage position (bipolar derivations
       resolved via anode fallback, or channels added via an explicit
@@ -50,11 +50,20 @@ class _LabramChannelWrapper(nn.Module):
       ``channel_positions`` row, so e.g. SleepEDF's bipolar ``Fpz-Cz`` or
       Geodesic E-numbers reach LaBraM even when ``set_montage`` could not
       assign them coordinates.
+    * ``_known_mask`` -- a boolean buffer marking channels whose
+      wrapper-resolved name is in :data:`LABRAM_CHANNEL_ORDER`
+      (case-insensitively).  Channels that fail this check (e.g. unmapped
+      EGI ``E5``, ``E7``, ...) are filtered out entirely so braindecode
+      never sees them.  This matters because braindecode dropped its
+      ``on_unknown_chs`` parameter in ``>=1.5`` and now hard-raises a
+      ``ValueError`` on the first unknown name; doing the filtering here
+      keeps the wrapper's behaviour ("warn-and-drop") stable across
+      braindecode versions.
 
-    At forward time the per-sample mask ``(channel_positions != sentinel)``
-    is OR-combined with ``_positionless_mask`` and intersected across the
-    batch (LaBraM's ``ch_names`` is per-batch, so heterogeneous batches
-    fall back to the channels valid in every sample).
+    At forward time the per-sample position mask is OR-combined with
+    ``_positionless_mask``, AND-combined with ``_known_mask``, then
+    intersected across the batch (LaBraM's ``ch_names`` is per-batch, so
+    heterogeneous batches fall back to the channels valid in every sample).
 
     Parameters
     ----------
@@ -66,8 +75,8 @@ class _LabramChannelWrapper(nn.Module):
     ch_name_to_labram : dict mapping str to str
         Mapping from dataset channel names to LaBraM channel names, as
         returned by :meth:`NtLabram._build_channel_remapping`.  Channels not
-        in this dict are forwarded with their original name and dropped by
-        braindecode's case-insensitive ``ch_names`` matching.
+        in this dict are dropped by the wrapper before the inner model
+        sees them.
     positionless_ch_names : set of str, optional
         Subset of ``ch_name_to_labram`` keys whose channels are not expected
         to carry montage positions.  Defaults to an empty set.
@@ -101,6 +110,24 @@ class _LabramChannelWrapper(nn.Module):
                 dtype=torch.bool,
             ),
         )
+        # ``_known_mask`` gates whether each union channel survives to the
+        # inner braindecode model.  Built lazily-imported because braindecode
+        # is an optional dependency at module-import time (model is
+        # instantiated only when present, so reaching here implies the
+        # import works).
+        from braindecode.models.labram import LABRAM_CHANNEL_ORDER
+
+        labram_upper = {ch.upper() for ch in LABRAM_CHANNEL_ORDER}
+        known = [name.upper() in labram_upper for name in self._labram_names]
+        if not all(known):
+            unknown = sorted({union_ch_names[i] for i, ok in enumerate(known) if not ok})
+            logger.warning(
+                "%d channel(s) not in LABRAM_CHANNEL_ORDER will be dropped "
+                "at forward time: %s",
+                len(unknown),
+                unknown,
+            )
+        self.register_buffer("_known_mask", torch.tensor(known, dtype=torch.bool))
 
     def forward(self, x: torch.Tensor, channel_positions: torch.Tensor) -> torch.Tensor:
         """Forward pass with dynamic channel selection.
@@ -112,6 +139,7 @@ class _LabramChannelWrapper(nn.Module):
         """
         valid = (channel_positions != INVALID_POS_VALUE).any(dim=-1)
         valid = valid | self._positionless_mask  # type: ignore[operator]
+        valid = valid & self._known_mask  # type: ignore[operator]
         # Intersect across the batch: braindecode's ``ch_names`` is per-batch.
         common = valid.all(dim=0)
 

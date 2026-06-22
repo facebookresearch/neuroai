@@ -54,6 +54,7 @@ def _make_wrapper(names, remap=None):
 # ---------------------------------------------------------------------------
 
 
+@requires_labram_channel_order
 def test_wrapper_filters_to_valid_channels():
     wrapper, inner = _make_wrapper(CH_NAMES)
 
@@ -70,16 +71,46 @@ def test_wrapper_filters_to_valid_channels():
     assert inner.last_x_shape == (B, 3, T)
 
 
-def test_wrapper_remapping_and_passthrough():
-    """Mapped names are remapped; unmapped names pass through as-is."""
+@requires_labram_channel_order
+def test_wrapper_remapping_and_unknown_dropped():
+    """Mapped names are remapped; names not in LABRAM_CHANNEL_ORDER are dropped.
+
+    Filtering happens inside the wrapper rather than relying on
+    braindecode, because braindecode>=1.5 hard-raises on unknown names
+    instead of silently dropping them.
+    """
     remap = {"Fp1": "FP1", "C3": "C3"}
     wrapper, inner = _make_wrapper(["Fp1", "C3", "WEIRD_CH"], remap)
 
     wrapper(torch.randn(1, 3, 50), torch.rand(1, 3, 2))
 
-    assert inner.last_ch_names == ["FP1", "C3", "WEIRD_CH"]
+    assert inner.last_ch_names == ["FP1", "C3"]
+    assert inner.last_x_shape == (1, 2, 50)
 
 
+@requires_labram_channel_order
+def test_wrapper_drops_unmapped_egi_channels():
+    """Regression test for HBN-style EGI E-channels mixed with mapped names.
+
+    Mirrors the production failure mode on the HBN ``reaction_time`` task:
+    most ``E*`` channels are absent from ``channel_mappings/labram.json``
+    but still carry valid montage positions, so without explicit filtering
+    they would reach braindecode and trigger
+    ``ValueError: ch_names contains a name not in LABRAM_CHANNEL_ORDER``.
+    """
+    union = ["Fp1", "E5", "Cz", "E7", "O2"]
+    remap = {"Fp1": "FP1", "Cz": "CZ", "O2": "O2"}
+    wrapper, inner = _make_wrapper(union, remap)
+
+    B, C, T, D = 1, len(union), 50, 2
+    pos = torch.rand(B, C, D)
+    wrapper(torch.randn(B, C, T), pos)
+
+    assert inner.last_ch_names == ["FP1", "CZ", "O2"]
+    assert inner.last_x_shape == (B, 3, T)
+
+
+@requires_labram_channel_order
 def test_wrapper_heterogeneous_batch_uses_intersection():
     wrapper, inner = _make_wrapper(CH_NAMES)
 

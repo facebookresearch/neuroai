@@ -65,6 +65,7 @@ class BenchmarkAggregator(ns.BaseModel):
         "MSELoss": "test/pearsonr",
         "MultiLoss": "test/bmae",  # currently sleep-onset only
         "ClipLoss": "test/full_retrieval/top5_acc_subject-agg",
+        "CTCLoss": "test/CER",  # currently emg/typing only
     }
 
     def prepare(self) -> None:
