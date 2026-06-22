@@ -16,7 +16,12 @@ import torch
 
 from . import utils
 from .models import BaseModelConfig
-from .utils import BaseExperiment, StandardScaler, all_subclasses, run_grid
+from .utils import (
+    BaseExperiment,
+    StandardScaler,
+    all_subclasses,
+    run_grid,
+)
 
 
 class Experiment(BaseExperiment):
