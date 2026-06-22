@@ -505,11 +505,12 @@ class Experiment(BaseExperiment):
 
         ``WindowPredictionCollector`` streams the predictions to the uid folder
         during the test loop (metadata as CSV, arrays appended to a shared
-        memmap file), so they survive cache hits and are read here without
-        re-running. The per-batch array chunks are concatenated on read, so
-        loading materializes the full arrays in RAM.
+        memmap file), so they survive cache hits and are read straight from
+        disk. This is a read-only accessor: call :meth:`run` first (a cache hit
+        is fine); if the artifacts are missing it raises rather than launching a
+        run. The per-batch array chunks are concatenated on read, so loading
+        materializes the full arrays in RAM.
         """
-        self.run()  # ensure the experiment ran (cache hit is fine)
         uid_folder = self.infra.uid_folder()
         if uid_folder is None:
             raise RuntimeError(
