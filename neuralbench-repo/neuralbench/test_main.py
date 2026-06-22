@@ -21,6 +21,7 @@ from neuraltrain.losses import BaseLoss
 from neuraltrain.models.base import BaseModelConfig
 from neuraltrain.optimizers import LightningOptimizer
 
+from .callbacks import WindowPredictionCollector
 from .data import Data
 from .main import Experiment
 from .utils import TrainerConfig
@@ -181,9 +182,11 @@ def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
 
 
 _PREDS: dict[str, tp.Any] = {
-    "metadata": pd.DataFrame({"timeline": ["rec0", "rec1"], "batch_idx": [0, 0]}),
-    "y_true": np.array([[0.0, 1.0], [1.0, 0.0]]),
-    "y_pred": np.array([[0.2, 0.8], [0.7, 0.3]]),
+    "metadata": pd.DataFrame(
+        {"timeline": ["rec0", "rec1", "rec2"], "batch_idx": [0, 0, 1]}
+    ),
+    "y_true": np.array([[0.0, 1.0], [1.0, 0.0], [0.5, 0.5]]),
+    "y_pred": np.array([[0.2, 0.8], [0.7, 0.3], [0.4, 0.6]]),
 }
 
 
@@ -205,57 +208,36 @@ def _make_eval_experiment(save_test_predictions: bool) -> Experiment:
     )
 
 
-def test_run_writes_test_predictions_when_flag_set(monkeypatch) -> None:
-    """``save_test_predictions`` gates persisting predictions in run():
-    True writes the artifacts and records a marker, False (default) leaves it
-    out so existing caches stay valid."""
-
-    def fake_prepare_pl_module(self, train_loader, val_loader=None) -> None:
-        del train_loader, val_loader
-        self._brain_module = SimpleNamespace(test_predictions=_PREDS)
-
-    written: list[dict] = []
-    monkeypatch.setattr(Experiment, "setup_run", lambda self: None)
-    monkeypatch.setattr(Experiment, "setup_trainer", lambda self, *a, **kw: SimpleNamespace(global_rank=0))
-    monkeypatch.setattr(Experiment, "prepare_pl_module", fake_prepare_pl_module)
-    monkeypatch.setattr(Experiment, "_test", lambda self, loaders, ckpt: {"test/acc": 1.0})
-    monkeypatch.setattr(Experiment, "_cleanup", lambda self, trainer: None)
-    monkeypatch.setattr(Experiment, "_write_test_predictions", lambda self, preds: written.append(preds))
-
-    # Call the unwrapped run() body directly: invoking the exca-wrapped method on
-    # a ``model_construct`` instance is order-dependent (binding happens in a
-    # pydantic validator that ``model_construct`` skips), which is irrelevant here.
-    raw_run = Experiment.model_fields["infra"].default._infra_method.method
-    result = raw_run(_make_eval_experiment(True))
-    assert result["test_predictions_dir"] == Experiment._TEST_PREDICTIONS_DIR
-    assert written and written[0] is _PREDS
-    assert "test_predictions_dir" not in raw_run(_make_eval_experiment(False))
+def _write_streamed_predictions(folder: str) -> None:
+    """Mimic WindowPredictionCollector's on-disk layout: per-batch array chunks
+    plus a single metadata table."""
+    cache: CacheDict = CacheDict(folder=folder)
+    with cache.write():
+        # Two "batches": rows [0:2] then [2:3], matching ``batch_idx``.
+        for chunk, sl in enumerate([slice(0, 2), slice(2, 3)]):
+            tag = f"{chunk:08d}"
+            cache[WindowPredictionCollector._Y_PRED_PREFIX + tag] = _PREDS["y_pred"][sl]
+            cache[WindowPredictionCollector._Y_TRUE_PREFIX + tag] = _PREDS["y_true"][sl]
+        cache[WindowPredictionCollector._METADATA_KEY] = _PREDS["metadata"]
 
 
 def test_test_predictions_roundtrip(monkeypatch, tmp_path) -> None:
-    """Predictions written via CacheDict round-trip through the accessor:
-    metadata as a DataFrame, arrays as memmaps."""
+    """Streamed per-batch chunks round-trip through the accessor: arrays are
+    concatenated in order and metadata is returned as a DataFrame."""
     experiment = _make_eval_experiment(save_test_predictions=True)
-    folder = str(tmp_path / "test_predictions")
-    # Fresh CacheDict per call on the same folder -> a genuine disk round-trip.
-    monkeypatch.setattr(
-        Experiment, "_test_predictions_cache", lambda self: CacheDict(folder=folder)
-    )
+    _write_streamed_predictions(str(tmp_path / Experiment._TEST_PREDICTIONS_DIR))
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
 
-    experiment._write_test_predictions(_PREDS)
-    monkeypatch.setattr(
-        Experiment, "run", lambda self: {"test_predictions_dir": "test_predictions"}
-    )
     out = experiment.test_predictions()
 
     pd.testing.assert_frame_equal(out["metadata"], _PREDS["metadata"])
-    assert np.array_equal(np.asarray(out["y_true"]), _PREDS["y_true"])
-    assert np.array_equal(np.asarray(out["y_pred"]), _PREDS["y_pred"])
+    assert np.array_equal(out["y_true"], _PREDS["y_true"])
+    assert np.array_equal(out["y_pred"], _PREDS["y_pred"])
 
 
-def test_test_predictions_accessor_errors_when_unsaved(monkeypatch) -> None:
-    """The accessor errors when predictions were not saved."""
+def test_test_predictions_accessor_errors_when_unsaved(monkeypatch, tmp_path) -> None:
+    """The accessor errors when the prediction folder is empty (flag was off)."""
     experiment = _make_eval_experiment(save_test_predictions=False)
-    monkeypatch.setattr(Experiment, "run", lambda self: {"test/acc": 1.0})
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
     with pytest.raises(ValueError, match="save_test_predictions=True"):
         experiment.test_predictions()
