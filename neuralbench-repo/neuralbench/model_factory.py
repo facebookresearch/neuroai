@@ -43,12 +43,12 @@ def build_braindecode_model(
     n_times: int,
     n_outputs: int,
 ) -> torch.nn.Module:
-    """Build a braindecode model, handling channel name extraction.
+    """Build a braindecode model.
 
-    Some braindecode models (REVE, BENDR, LaBraM) require explicit channel
-    name information via ``chs_info``.  Model-specific adaptation (e.g.
-    temporal embedding resizing for LaBraM) is handled by the model
-    config's own ``build()`` method.
+    Forwards the standard EEG arguments and drops the ones the target
+    class's ``__init__`` doesn't accept, so the full ``braindecode.models``
+    catalogue builds without per-model YAML overrides.  ``input_window_seconds``
+    is intentionally omitted: braindecode derives it from ``n_times / sfreq``.
 
     When *downstream_model_wrapper* is set, ``n_outputs`` is not passed to
     the model (the wrapper's probe handles output projection).
@@ -60,13 +60,17 @@ def build_braindecode_model(
             "BIOT requires a downstream_model_wrapper"
         )
         build_kwargs["n_outputs"] = n_outputs
+    neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
+    ch_names = list(neuro_extractor._channels.keys())
     if _needs_ch_names:
-        neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
-        ch_names = list(neuro_extractor._channels.keys())
         assert len(ch_names) == n_in_channels, (
             f"Expected {n_in_channels} channels, but got {len(ch_names)} channel names."
         )
+    if len(ch_names) == n_in_channels:
         build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
+    frequency = getattr(neuro_extractor, "frequency", None)
+    if isinstance(frequency, (int, float)):
+        build_kwargs["sfreq"] = float(frequency)
 
     if brain_model_config.from_pretrained_name is not None:
         n_adapter_chans = (
@@ -82,6 +86,9 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
+    params = inspect.signature(type(brain_model_config)._MODEL_CLASS.__init__).parameters
+    if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        build_kwargs = {k: v for k, v in build_kwargs.items() if k in params}
     return brain_model_config.build(**build_kwargs)
 
 
