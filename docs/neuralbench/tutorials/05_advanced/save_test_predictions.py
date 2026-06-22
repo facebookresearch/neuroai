@@ -171,7 +171,9 @@ without re-running the experiment.
 #   concatenates the per-batch chunks, so loading materializes the full arrays
 #   in RAM.  For very large outputs, read and process the chunk keys directly
 #   from the underlying ``CacheDict`` instead.
-# - **Multi-GPU testing.** Only global rank zero writes predictions, so under
-#   distributed testing the saved set covers rank zero's shard only.
+# - **Multi-GPU training.** NeuralBench always runs the test loop on a single
+#   device (global rank zero, ``devices=1``, after the training process group is
+#   torn down), so the saved predictions cover the full test set even when
+#   training used multiple GPUs.
 # - **Disk usage.** The arrays are stored uncompressed; budget roughly
 #   ``n_windows * output_dim * 4`` bytes each for ``y_true`` and ``y_pred``.

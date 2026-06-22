@@ -380,8 +380,11 @@ class WindowPredictionCollector(Callback):
     shape (class logits, regression vectors, retrieval embeddings, CTC
     log-probs, ...), so no per-task aggregation happens here.
 
-    Writing only happens on global rank zero; under multi-GPU testing the saved
-    predictions cover rank zero's shard only.
+    Writing only happens on global rank zero. In neuralbench the test loop is
+    single-device by construction (``Experiment._test`` runs on global rank zero
+    with ``devices=1`` after the training process group is torn down), so the
+    saved predictions cover the *full* test set even after multi-GPU training;
+    the rank-zero guard is defensive against a hypothetical distributed tester.
 
     Parameters
     ----------
