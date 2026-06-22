@@ -54,23 +54,14 @@ def test_downstream_wrapper_probe_layer_invalid():
         )
 
 
-@pytest.mark.parametrize(
-    "kwargs, exc, match",
-    [
-        # model_output_key with probe_layer must error.
-        (
-            dict(probe_layer="0", model_output_key="logits"),
-            ValueError,
-            "model_output_key",
-        ),
-        # mean_tokens on a batch-first (B, C, T) Conv1d capture must error.
-        (dict(probe_layer="0", aggregation="mean_tokens"), ValueError, "batch-first"),
-    ],
-)
-def test_downstream_wrapper_probe_layer_rejects(kwargs, exc, match):
-    model = nn.Sequential(nn.Conv1d(3, 8, kernel_size=5), nn.Flatten(), nn.Linear(64, 4))
-    with pytest.raises(exc, match=match):
-        DownstreamWrapper(**kwargs).build(model, {"input": torch.Tensor(2, 3, 12)}, 3)
+def test_downstream_wrapper_probe_layer_requires_no_output_key():
+    with pytest.raises(ValueError, match="model_output_key"):
+        DownstreamWrapper(probe_layer="0", model_output_key="logits")
+
+
+def test_downstream_wrapper_probe_batch_dim_requires_probe_layer():
+    with pytest.raises(ValueError, match="probe_batch_dim only applies"):
+        DownstreamWrapper(probe_batch_dim=1)
 
 
 def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
@@ -105,26 +96,40 @@ class _SeqFirstProbeNet(nn.Module):
         return self.head(self.enc(x).mean(0))
 
 
-def test_downstream_wrapper_probe_layer_mean_tokens():
+@pytest.mark.parametrize("aggregation", ["mean", "flatten", "first"])
+def test_downstream_wrapper_probe_layer_seq_first(aggregation):
+    # A sequence-first (T, B, D) capture is auto-detected and moved to
+    # batch-first, so the standard aggregations apply with no special-casing.
     B, T, F, D, Fp = 8, 5, 10, 6, 3
     model = _SeqFirstProbeNet(F, D)
-    wrapped = DownstreamWrapper(probe_layer="enc", aggregation="mean_tokens").build(
+    wrapped = DownstreamWrapper(probe_layer="enc", aggregation=aggregation).build(
         model, {"x": torch.Tensor(B, T, F)}, Fp
     )
-    # Probe is sized from the embedding dim (D), with tokens averaged away.
+    expected_in = {"mean": D, "flatten": T * D, "first": D}[aggregation]
+    assert wrapped.probe.in_features == expected_in
+    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_batch_seq_collision():
+    # Two-pass detection resolves the batch axis even when batch == seq length.
+    n, F, D, Fp = 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(probe_layer="enc", aggregation="mean").build(
+        model, {"x": torch.Tensor(n, n, F)}, Fp
+    )
     assert wrapped.probe.in_features == D
-    out = wrapped(x=torch.Tensor(B, T, F))
-    assert out.shape == (B, Fp)
+    assert wrapped(x=torch.Tensor(n, n, F)).shape == (n, Fp)
 
 
-@pytest.mark.parametrize("aggregation", [None, 2, "mean", "flatten", "first"])
-def test_downstream_wrapper_probe_layer_seq_first_needs_mean_tokens(aggregation):
-    # Any non-mean_tokens aggregation on a sequence-first capture must error.
-    model = _SeqFirstProbeNet(10, 6)
-    with pytest.raises(ValueError, match="mean_tokens"):
-        DownstreamWrapper(probe_layer="enc", aggregation=aggregation).build(
-            model, {"x": torch.Tensor(8, 5, 10)}, 3
-        )
+def test_downstream_wrapper_probe_layer_batch_dim_override():
+    # Explicit probe_batch_dim=1 skips auto-detection for the (T, B, D) capture.
+    B, T, F, D, Fp = 8, 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(
+        probe_layer="enc", aggregation="mean", probe_batch_dim=1
+    ).build(model, {"x": torch.Tensor(B, T, F)}, Fp)
+    assert wrapped.probe.in_features == D
+    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
 
 
 class LinearOutDict(nn.Module):
