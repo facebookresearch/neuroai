@@ -143,6 +143,11 @@ class BenchmarkAggregator(ns.BaseModel):
         if cached_only and experiment.infra.status() != "completed":
             return None, task, model
         out = experiment.run()
+        # Per-window test predictions are saved as side artifacts in the uid
+        # folder; ``run`` only records a marker pointing at them. Drop it here
+        # so it does not pollute the results DataFrame. The predictions remain
+        # available via ``experiment.test_predictions()``.
+        out.pop("test_predictions_dir", None)
         out["task_name"] = experiment.task_name
         study = experiment.data.study
         if isinstance(study, ns.Chain):

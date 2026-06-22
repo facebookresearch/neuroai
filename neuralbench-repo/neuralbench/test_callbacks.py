@@ -9,8 +9,14 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torchmetrics
+from torch import nn
 
-from .callbacks import PlotRegressionScatter, RecordingLevelEval
+from .callbacks import (
+    PlotRegressionScatter,
+    RecordingLevelEval,
+    WindowPredictionCollector,
+)
 
 matplotlib.use("Agg")
 
@@ -19,14 +25,18 @@ class MockSegment:
     """Mock segment with events containing timeline information."""
 
     def __init__(self, timeline: str):
+        self.timeline = timeline
         self.events = pd.DataFrame({"timeline": [timeline]})
 
 
 class MockBatch:
     """Mock batch containing segments."""
 
-    def __init__(self, segments: list[MockSegment]):
+    def __init__(
+        self, segments: list[MockSegment], data: dict[str, torch.Tensor] | None = None
+    ):
         self.segments = segments
+        self.data = data if data is not None else {}
 
 
 @pytest.fixture
@@ -110,6 +120,99 @@ def test_binary_single_window_per_recording(mock_trainer, mock_pl_module):
 
     # Check true labels (convert to same dtype for comparison)
     assert torch.equal(y_true.long(), torch.tensor([0, 1, 1]))
+
+
+class _RealMetricModule:
+    """Minimal LightningModule stand-in exposing the real task torchmetrics."""
+
+    def __init__(self, num_classes: int) -> None:
+        self.test_full_metrics = nn.ModuleDict(
+            {
+                "test/acc": torchmetrics.Accuracy(
+                    task="multiclass", num_classes=num_classes
+                ),
+                "test/bal_acc": torchmetrics.Accuracy(
+                    task="multiclass", num_classes=num_classes, average="macro"
+                ),
+                "test/auroc": torchmetrics.AUROC(
+                    task="multiclass", num_classes=num_classes
+                ),
+            }
+        )
+
+    def log(self, *args, **kwargs) -> None:
+        pass
+
+
+@pytest.mark.parametrize("num_classes", [2, 3])
+def test_recording_level_eval_real_metrics(mock_trainer, num_classes):
+    """Callback runs with the real task torchmetrics (acc, macro acc, AUROC)
+    for binary and multiclass setups; metrics compute to a valid scalar."""
+    module = _RealMetricModule(num_classes)
+    callback = RecordingLevelEval()
+    callback.setup(mock_trainer, module, stage="test")
+    callback.on_test_epoch_start(mock_trainer, module)
+
+    torch.manual_seed(0)
+    n_rec, n_win = 4, 3
+    timelines = [f"rec{r}" for r in range(n_rec) for _ in range(n_win)]
+    y_true = torch.tensor([r % num_classes for r in range(n_rec) for _ in range(n_win)])
+    logits = torch.randn(n_rec * n_win, num_classes)
+    batch = MockBatch([MockSegment(t) for t in timelines])
+
+    callback.on_test_batch_end(mock_trainer, module, (logits, y_true), batch, batch_idx=0)
+    callback.on_test_epoch_end(mock_trainer, module)
+
+    for metric in module.test_full_metrics.values():
+        assert 0.0 <= float(metric.compute()) <= 1.0
+
+
+def test_prediction_collector_concatenates_windows_and_metadata(mock_trainer, mocker):
+    """WindowPredictionCollector stacks raw per-window y_pred/y_true across
+    batches and builds aligned metadata (timeline, batch_idx, subject_id),
+    exposing them on the module for exca to cache."""
+    module = mocker.Mock()
+    callback = WindowPredictionCollector()
+    callback.on_test_epoch_start(mock_trainer, module)
+
+    # Two batches with multi-dim predictions (e.g. regression / embeddings).
+    batch0 = MockBatch(
+        [MockSegment("rec0"), MockSegment("rec0")],
+        data={"subject_id": torch.tensor([0, 0])},
+    )
+    batch1 = MockBatch(
+        [MockSegment("rec1")],
+        data={"subject_id": torch.tensor([1])},
+    )
+    out0 = (torch.zeros(2, 4), torch.ones(2, 4))
+    out1 = (torch.zeros(1, 4), torch.ones(1, 4))
+
+    callback.on_test_batch_end(mock_trainer, module, out0, batch0, batch_idx=0)
+    callback.on_test_batch_end(mock_trainer, module, out1, batch1, batch_idx=1)
+    callback.on_test_epoch_end(mock_trainer, module)
+
+    preds = module.test_predictions
+    assert preds["y_pred"].shape == (3, 4)
+    assert preds["y_true"].shape == (3, 4)
+    meta = preds["metadata"]
+    assert list(meta["timeline"]) == ["rec0", "rec0", "rec1"]
+    assert list(meta["batch_idx"]) == [0, 0, 1]
+    assert list(meta["subject_id"]) == [0, 0, 1]
+
+
+def test_prediction_collector_omits_subject_when_absent(mock_trainer, mocker):
+    """subject_id column is dropped when the batch has no subject_id."""
+    module = mocker.Mock()
+    callback = WindowPredictionCollector()
+    callback.on_test_epoch_start(mock_trainer, module)
+
+    batch = MockBatch([MockSegment("rec0")])  # no data["subject_id"]
+    callback.on_test_batch_end(
+        mock_trainer, module, (torch.zeros(1, 2), torch.ones(1, 2)), batch, batch_idx=0
+    )
+    callback.on_test_epoch_end(mock_trainer, module)
+
+    assert "subject_id" not in module.test_predictions["metadata"].columns
 
 
 def test_binary_multiple_windows_per_recording(mock_trainer, mock_pl_module):
