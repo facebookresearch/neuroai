@@ -162,8 +162,40 @@ class BrainModule(pl.LightningModule):
             y_pred = y_pred.reshape(y_pred.shape[0], -1)
             y_true = y_true.reshape(y_true.shape[0], -1)
 
-        loss = self.loss(y_pred, y_true)
-        self.log(f"{step_name}/loss", loss, **log_kwargs)
+        if isinstance(self.loss, nn.CTCLoss):
+            # ``nn.CTCLoss`` needs four arguments and a transposed time axis.
+            # ``y_pred`` is ``(B, T_out, C)`` log-probs from a CTC head;
+            # ``y_true`` is ``(B, max_length)`` integer labels padded with
+            # the blank index (see ``SequenceLabelEncoder`` with
+            # ``aggregation='cat'`` + ``max_length``).
+            blank = self.loss.blank
+            y_true = y_true.long()
+            target_lengths = (y_true != blank).sum(dim=-1)
+            input_lengths = torch.full(
+                (y_true.shape[0],),
+                y_pred.shape[1],
+                dtype=torch.long,
+                device=y_pred.device,
+            )
+            loss = self.loss(
+                y_pred.transpose(0, 1), y_true, input_lengths, target_lengths
+            )
+        else:
+            loss = self.loss(y_pred, y_true)
+
+        # A loss may return a dict of named components with a ``"total"``
+        # key (e.g. multi-term objectives); CTC and plain losses return a
+        # single tensor and fall through to the ``else`` branch.
+        if isinstance(loss, dict):
+            loss_total = loss["total"]
+            for k, v in loss.items():
+                if k == "total":
+                    self.log(f"{step_name}/loss", v, **log_kwargs)
+                else:
+                    self.log(f"{step_name}/loss_{k}", v, **log_kwargs)
+            loss = loss_total
+        else:
+            self.log(f"{step_name}/loss", loss, **log_kwargs)
 
         # Just update metrics, don't compute or log yet
         for metric_name, metric in self.metrics.items():

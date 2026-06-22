@@ -36,6 +36,29 @@ def test_neuralfetch_discovery() -> None:
     )
 
 
+def test_physionet_study_download_root(tmp_path: Path) -> None:
+    """A Physionet-backed study should resolve files under download/<study>/<version>/."""
+    from neuralfetch.studies.zyma2019electroencephalograms import (
+        Zyma2019Electroencephalograms,
+    )
+
+    study = Zyma2019Electroencephalograms(path=tmp_path)
+    # model_post_init appends the study subfolder to the generic root, then the
+    # Physionet backend nests data under download/<study>/<version>/.
+    expected_root = (
+        tmp_path
+        / "Zyma2019Electroencephalograms"
+        / "download"
+        / study._PHYSIONET_STUDY  # noqa: SLF001
+        / study._PHYSIONET_VERSION  # noqa: SLF001
+    )
+
+    assert study._download_root() == expected_root  # noqa: SLF001
+    assert study._get_eeg_filename(  # noqa: SLF001
+        {"subject": "Subject01", "run": "1"}
+    ) == (expected_root / "Subject01_1.edf")
+
+
 @pytest.mark.parametrize("name", INFO_STUDIES)
 def test_study_info(name: str, tmp_path: Path) -> None:
     """Validate that a study's declared ``_info`` matches its actual data.
@@ -53,9 +76,9 @@ def test_study_info(name: str, tmp_path: Path) -> None:
     if not folder.exists():
         pytest.skip(f"Missing folder {folder} for study {name}")
     study = _study_mod.STUDIES[name](path=folder)
-    if study.path == folder and folder.name.lower() != name.lower():
-        # path was not updated from generic to study-specific
-        pytest.skip(f"Study data not found for {name} in {folder}")
+    if not study.path.exists():
+        # the study-specific subfolder (resolved in model_post_init) has no data
+        pytest.skip(f"Study data not found for {name} in {study.path}")
     assert study._info is not None
     try:
         actual = utils.compute_study_info(name, folder)

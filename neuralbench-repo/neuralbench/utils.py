@@ -21,6 +21,9 @@ from torch import nn
 
 import neuralset as ns
 from neuralset.dataloader import SegmentDataset
+from neuralset.events import etypes
+from neuralset.extractors import LabelEncoder
+from neuralset.utils import warn_once
 
 LOGGER = logging.getLogger(__name__)
 
@@ -277,6 +280,116 @@ def make_weighted_sampler(
     return sampler
 
 
+def _compute_regression_bin_weights(
+    targets: torch.Tensor,
+    bin_edges: tp.Sequence[float],
+) -> torch.Tensor:
+    """Compute per-sample inverse-frequency weights from a regression target tensor.
+
+    Targets are bucketised into ``len(bin_edges) - 1`` bins defined by
+    ``bin_edges``.  Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
+    ``i < n_bins - 1``; the top bin is closed on the right
+    (``[bin_edges[-2], bin_edges[-1]]``) so that targets exactly at
+    ``bin_edges[-1]`` (e.g. the cap value in ``AddSleepOnsetTargets``) are
+    counted in the top bin.  This matches the bin semantics of
+    :class:`~neuralbench.metrics.BinnedMAE`.
+
+    Targets falling outside ``[bin_edges[0], bin_edges[-1]]`` receive a weight
+    of ``0`` (they are effectively excluded from sampling) and do not
+    contribute to any bin's count.
+
+    Each sample's weight is ``1 / count_in_its_bin`` so that, in expectation,
+    every populated bin contributes the same total mass to a weighted sampler.
+
+    Parameters
+    ----------
+    targets : torch.Tensor
+        1-D float tensor of shape ``(n_samples,)``.  Trailing singleton dims are
+        not handled here; squeeze upstream.
+    bin_edges : Sequence[float]
+        Strictly increasing sequence of length ``>= 2``.
+
+    Returns
+    -------
+    torch.Tensor
+        1-D float tensor of shape ``(n_samples,)`` with per-sample sampling
+        weights.  Empty bins and out-of-range samples contribute zero weight.
+    """
+    if targets.ndim != 1:
+        raise ValueError(f"Expected 1-D targets, got shape {tuple(targets.shape)}.")
+    if len(bin_edges) < 2:
+        raise ValueError(
+            f"bin_edges must have length >= 2, got {len(bin_edges)}: {list(bin_edges)}"
+        )
+
+    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
+    n_bins = len(bin_edges) - 1
+    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+
+    in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
+    counts = torch.bincount(bin_idx[in_range], minlength=n_bins).to(dtype=torch.float32)
+    inv_counts = torch.where(counts > 0, 1.0 / counts, torch.zeros_like(counts))
+
+    weights = torch.zeros(targets.shape[0], dtype=torch.float32, device=targets.device)
+    weights[in_range] = inv_counts[bin_idx[in_range]]
+    return weights
+
+
+def make_regression_bin_sampler(
+    dataset: SegmentDataset,
+    bin_edges: tp.Sequence[float],
+    logger: logging.Logger,
+    generator: torch.Generator | None = None,
+) -> torch.utils.data.WeightedRandomSampler:
+    """Create a regression-bin stratified weighted sampler.
+
+    Materialises the dataset's targets, bins them by ``bin_edges`` and assigns
+    inverse-frequency sampling weights so that, in expectation, every populated
+    bin contributes equally to each training epoch.  This is the regression
+    counterpart of :func:`make_weighted_sampler`.
+
+    Parameters
+    ----------
+    dataset : SegmentDataset
+        Training segment dataset; its ``target`` extractor must yield a scalar
+        regression target per sample.
+    bin_edges : Sequence[float]
+        Strictly increasing bin edges.  Targets outside
+        ``[bin_edges[0], bin_edges[-1]]`` receive zero sampling weight (matches
+        the bin semantics of :class:`~neuralbench.metrics.BinnedMAE`).
+    logger : logging.Logger
+        Logger used to report per-bin counts and the number of out-of-range
+        targets.
+    """
+    targets = get_targets_from_dataset(dataset)
+    if targets.ndim == 2 and targets.shape[-1] == 1:
+        targets = targets.squeeze(-1)
+    weights = _compute_regression_bin_weights(targets, bin_edges)
+
+    n_bins = len(bin_edges) - 1
+    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
+    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
+    counts = torch.bincount(bin_idx[in_range], minlength=n_bins).tolist()
+    bin_labels = [
+        f"[{bin_edges[i]:g}, {bin_edges[i + 1]:g}" + ("]" if i == n_bins - 1 else ")")
+        for i in range(n_bins)
+    ]
+    logger.info(
+        "Regression-bin sampler counts: %s (out-of-range: %d)",
+        dict(zip(bin_labels, counts)),
+        int((~in_range).sum().item()),
+    )
+
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=weights.tolist(),
+        num_samples=len(weights),
+        replacement=True,
+        generator=generator,
+    )
+    return sampler
+
+
 class TrainerConfig(ns.BaseModel):
     """Joint configuration for Trainer and some callbacks."""
 
@@ -328,4 +441,91 @@ class TrainerConfig(ns.BaseModel):
             logger=logger,
             callbacks=callbacks,
             enable_model_summary=False,
+        )
+
+
+class SequenceLabelEncoder(LabelEncoder):
+    """Fixed-length integer-label sequence extractor for CTC training.
+
+    Reads a pre-computed integer ``event_field`` from events,
+    concatenates the per-segment values, and pads or truncates the
+    result to ``max_length`` with ``pad_value`` (the canonical CTC
+    blank index).  Labels are assumed already in ``[0, pad_value)`` --
+    no string→int mapping happens at encode time; upstream code (e.g.
+    the study's events-dataframe construction) is responsible for
+    dropping OOV rows and assigning the canonical paper labels.
+
+    Inheriting from :class:`neuralset.extractors.LabelEncoder` keeps
+    the shared Pydantic surface (``event_types``, ``event_field``,
+    ``aggregation``, ``allow_missing``) while replacing the
+    string-encoding machinery with a direct integer read.
+    """
+
+    max_length: int
+    pad_value: int
+    aggregation: tp.Literal["cat"] = "cat"
+
+    @property
+    def n_classes(self) -> int:
+        """CTC head width: ``pad_value`` labels + one blank = ``pad_value + 1``."""
+        return self.pad_value + 1
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        # Skip ``LabelEncoder.model_post_init``: its "missing events ->
+        # all-zero default" warning is a false positive here (missing
+        # segments are encoded as an empty sequence padded with
+        # ``pad_value`` -- see ``__call__`` -- not zeros), and its
+        # ``predefined_mapping`` validation doesn't apply (labels are read
+        # as integers, no string->int mapping).  Run the grandparent
+        # (``EventField``) init only -- mirrors how ``prepare`` deliberately
+        # bypasses ``LabelEncoder.prepare``.
+        super(LabelEncoder, self).model_post_init(log__)
+        if self.max_length <= 0:
+            raise ValueError(f"max_length must be > 0, got {self.max_length}.")
+        if self.pad_value < 0:
+            raise ValueError(f"pad_value must be >= 0, got {self.pad_value}.")
+
+    def prepare(self, obj: tp.Any) -> None:
+        # Skip ``LabelEncoder.prepare`` which would try to learn a
+        # string→int mapping from the integer ``label`` field — it
+        # builds a *sorted-enumerate* mapping, so missing values in
+        # ``obj`` would corrupt the canonical ``[0, pad_value)``
+        # layout.  ``EventField.prepare`` (one level up the MRO) still
+        # validates the field's dtype, and the one-shot ``self(...)``
+        # call populates the output shape used when
+        # ``allow_missing=True``.
+        super(LabelEncoder, self).prepare(obj)
+        events = self._event_types_helper.extract(obj)
+        if events:
+            self(events[0], events[0].start, duration=0.001, trigger=events[0])
+
+    def get_static(self, event: etypes.Event) -> torch.Tensor:  # type: ignore[override]
+        return torch.tensor(
+            [int(event._get_field_or_extra(self.event_field))],
+            dtype=torch.long,
+        )
+
+    def __call__(  # type: ignore[override]
+        self,
+        events: tp.Any,
+        start: float,
+        duration: float,
+        trigger: tp.Any = None,
+    ) -> torch.Tensor:
+        # CTC accepts length-0 targets; short-circuit empty segments
+        # instead of letting ``BaseExtractor`` synthesize a 1-label
+        # ``_missing_default`` fallback (which would land in the
+        # middle of the vocabulary).
+        if self.allow_missing and not any(
+            start <= e.start < start + duration
+            for e in self._event_types_helper.extract(events)
+        ):
+            return torch.full((self.max_length,), self.pad_value, dtype=torch.long)
+        seq = super().__call__(events, start, duration, trigger=trigger)
+        n = int(seq.numel())
+        if n > self.max_length:
+            warn_once(f"{self.name}: truncating labels to max_length={self.max_length}")
+            seq, n = seq[: self.max_length], self.max_length
+        return torch.nn.functional.pad(
+            seq, (0, self.max_length - n), value=self.pad_value
         )

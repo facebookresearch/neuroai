@@ -44,7 +44,8 @@ data:
   duration: 15.0
   stride: 15.0
   stride_drop_incomplete: true
-  use_weighted_sampler: true
+  sampler:
+    name: ClassificationSampler
   summary_columns: [state, label]
 brain_model_output_size: &brain_model_output_size 2
 trainer_config.monitor: val/bal_acc

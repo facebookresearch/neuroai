@@ -127,19 +127,20 @@ class AddSentenceToWords(EventsTransform):
     For each sentence found in the Text rows, it:
 
     1. Creates a new Sentence row for each sentence.
-    2. Assigns `sentence` and `sentence_char` annotations to Word rows to indicate
-       which sentence each word belongs to, and which character the word starts at in the sentence.
+    2. Assigns `sentence`, `sentence_char`, and `text_char` annotations to Word rows.
 
     Parameters
     ----------
     max_unmatched_ratio : float
-        Maximum allowed ratio of word rows that do not match any sentence.
-        Raises an error if this ratio is exceeded.
+        Maximum ratio of words without a character-positioned match.
+    tolerance : float
+        Tolerance (in seconds) for Text event start and end times.
     override_sentences : bool, default=False
         Whether to replace existing Sentence rows if they are already present.
     """
 
     max_unmatched_ratio: float = 0.0  # raises if did not match enough words
+    tolerance: float = 0.0
     override_sentences: bool = False
 
     @classmethod
@@ -181,14 +182,15 @@ class AddSentenceToWords(EventsTransform):
         words = events[events.type.isin(wtypes.names)]
         events.loc[:, "sentence_char"] = np.nan
         events["sentence"] = ""
+        events["text_char"] = np.nan
 
-        sentences: list[dict[str, tp.Any]] = []
         for context in contexts.itertuples():
             # find words that are enclosed in this context (requires unique timeline)
             encl = _segs.find_enclosed(
                 events,
                 start=float(context.start),  # type: ignore[arg-type]
                 duration=float(context.duration),  # type: ignore[arg-type]
+                tolerance=self.tolerance,
             )
             sub = events.loc[encl]
             sel = sub[sub.type.isin(wtypes.names)].index
@@ -206,9 +208,9 @@ class AddSentenceToWords(EventsTransform):
                 index=sel,
             )
             events.loc[sel, info.columns] = info
-            # create sentence events; standardize_events backfills BIDS/study
-            # from sibling rows in the same timeline.
-            sentences.extend(s.to_dict() for s in _extract_sentences(events))
+        # create sentence events; standardize_events backfills BIDS/study
+        # from sibling rows in the same timeline.
+        sentences = [s.to_dict() for s in _extract_sentences(events)]
         sentences = [s for s in sentences if s["text"] != MISSING_SENTENCE]
         sentence_df = pd.DataFrame(sentences)
         events = pd.concat([events, sentence_df], ignore_index=True)
@@ -218,11 +220,13 @@ class AddSentenceToWords(EventsTransform):
         words = events[events.type.isin(wtypes.names)]
         if len(words) == 0:
             return events
-        ratio = sum(not s or not isinstance(s, str) for s in words.sentence) / len(words)
+        ratio = int(words["text_char"].isna().sum()) / len(words)
         if ratio > self.max_unmatched_ratio:
             max_unmatched_ratio = self.max_unmatched_ratio
             cls = self.__class__.__name__
-            msg = f"Ratio of unmatched words is {ratio:.4f} on {len(words)} words "
+            msg = (
+                f"Ratio of words without text_char is {ratio:.4f} on {len(words)} words "
+            )
             msg += f"while {cls}.{max_unmatched_ratio=}"
             raise RuntimeError(msg)
         return events

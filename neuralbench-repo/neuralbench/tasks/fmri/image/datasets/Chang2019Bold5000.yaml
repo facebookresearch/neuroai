@@ -1,0 +1,20 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    =replace=: true
+    source:
+      name: Chang2019Bold5000
+    split:
+      name: PredefinedSplit
+      test_split_query: null
+      col_name: split
+      valid_split_by: timeline
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  neuro:
+    from_space: auto

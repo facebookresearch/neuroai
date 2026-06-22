@@ -398,6 +398,17 @@ def list_segments(
     if not len(trigger_df):
         raise ValueError("Empty trigger events")
 
+    # Two triggers of the same type starting at the same time on the same
+    # timeline (e.g. two Fmri events differing only by metadata) define
+    # ambiguous/duplicate segments and can corrupt train/test splits.
+    keys = ["type", "timeline", "start"]
+    collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
+    if len(collisions):
+        raise ValueError(
+            f"{len(collisions)} triggers of the same type start at the same time "
+            f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` mask."
+        )
+
     df_to_pos = events.index.get_indexer(trigger_df.index)
 
     seg_starts: list[tp.Any] = []
@@ -504,7 +515,9 @@ def _prepare_strided_windows(
     return starts, durations
 
 
-def find_enclosed(df: pd.DataFrame, start: float, duration: float) -> pd.Series:
+def find_enclosed(
+    df: pd.DataFrame, start: float, duration: float, tolerance: float = 0.0
+) -> pd.Series:
     """Find events fully enclosed within a time window.
 
     Parameters
@@ -515,6 +528,8 @@ def find_enclosed(df: pd.DataFrame, start: float, duration: float) -> pd.Series:
         Start time of the enclosing window.
     duration : float
         Duration of the enclosing window.
+    tolerance : float, optional
+        Tolerance (in seconds) for event start and end times. Default is 0.0.
 
     Returns
     -------
@@ -525,7 +540,7 @@ def find_enclosed(df: pd.DataFrame, start: float, duration: float) -> pd.Series:
     Notes
     -----
     An event is considered enclosed if both its start and end times fall within
-    the window: :code:`start <= event_start` and :code:`event_end <= start + duration`.
+    the window: :code:`start - tolerance <= event_start` and :code:`event_end <= start + duration + tolerance`.
 
     Examples
     --------
@@ -534,7 +549,9 @@ def find_enclosed(df: pd.DataFrame, start: float, duration: float) -> pd.Series:
     """
     estart = np.array(df.start)
     estop = estart + np.array(df.duration)
-    is_enclosed = np.logical_and(estart >= start, estop <= start + duration)
+    is_enclosed = np.logical_and(
+        estart >= start - tolerance, estop <= start + duration + tolerance
+    )
     return pd.Series(df.index[is_enclosed])
 
 

@@ -1,0 +1,123 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# emg/typing CTC task: surface-EMG → keystroke sequence (Sivakumar2024Emg2qwerty).
+# Cross-subject baseline restricted to the first ~10 subjects
+# (timeline_index < 120) to keep benchmark runtime tractable.
+
+# Paper recipe optimizer (Adam + OneCycleLR, lr 1e-8 → 1e-3 → 1e-6 with
+# 40 % warmup).  Without the slow warmup CTC collapses to all-blank
+# within an epoch.
+lightning_optimizer_config:
+  =replace=: true
+  optimizer:
+    name: Adam
+    lr: 1.0e-3
+    kwargs: {}
+  scheduler:
+    name: OneCycleLR
+    kwargs:
+      max_lr: 1.0e-3
+      pct_start: 0.4
+      anneal_strategy: cos
+      div_factor: 1.0e+5
+      final_div_factor: 1.0e+3
+  interval: step
+# Default backbone for this task is the paper's CTC sequence model.  Models
+# that don't override ``brain_model_config`` (notably ``chance``) inherit it,
+# so ``chance`` becomes an *untrained* EMG2QwertyNet — a sequence-shaped
+# (B, T_out, 99) emitter compatible with the CTC head/metric — rather than the
+# global EEGNet default, whose single-vector output is incompatible with CTC.
+# ``dummy`` and ``emg2qwerty`` replace this via their own ``=replace=``.
+brain_model_config:
+  =replace=: true
+  name: EMG2QwertyNet
+  kwargs:
+    log_softmax: true
+    spec_augment: true
+data:
+  batch_size: 16
+  study:
+    source:
+      name: Sivakumar2024Emg2qwerty
+      query: "timeline_index < 120"
+    split:
+      name: SklearnSplit
+      split_by: subject
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  # No filter / notch / baseline / scaler / clamp — matches the paper
+  # pipeline (Sivakumar et al. 2024): raw 2 kHz EMG is fed straight to
+  # the model, which handles SpecAugment and per-window normalization
+  # internally (``EMG2QwertyNet``).
+  # TODO: when a second EMG task lands, lift this preprocessing block
+  # to a shared device-level default and reference it from here.
+  neuro:
+    =replace=: true
+    name: EmgExtractor
+    picks: [emg]
+    frequency: 2000.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+    infra:
+      cluster: auto
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      keep_in_ram: true
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 200
+  target:
+    =replace=: true
+    # CroppedExtractor restricts label collection to the un-padded 4 s
+    # "core" of the padded 5 s window; the inner SequenceLabelEncoder
+    # turns the keystrokes in that core into a fixed-length blank-padded
+    # CTC target of shape ``(128,)``.
+    name: CroppedExtractor
+    offset: 0.9
+    duration: 4.0
+    # Sliding windows that land in typing gaps legitimately contain no
+    # Keystroke events; permit them (empty CTC target, handled by
+    # ``zero_infinity=True``).  ``CroppedExtractor`` does not inherit
+    # ``allow_missing`` from its wrapped extractor, so set it here too.
+    allow_missing: true
+    extractor:
+      # Reads the pre-computed integer ``label`` column written by the
+      # study's events-dataframe construction (in
+      # ``sivakumar2024emg2qwerty.py``) — no string→int mapping at
+      # encode time, no OOV branch (OOV keys are dropped upstream).
+      name: SequenceLabelEncoder
+      event_types: Keystroke
+      event_field: label
+      allow_missing: true
+      max_length: 128
+      pad_value: 98
+  # Paper-faithful sliding-window segmentation: 4 s core + 0.9 s left +
+  # 0.1 s right padding; stride = core duration so windows abut.
+  trigger_event_type: BidsEmg
+  start: -0.9
+  duration: 5.0
+  stride: 4.0
+  stride_drop_incomplete: true
+  summary_columns: [text]
+trainer_config.monitor: val/CER
+trainer_config.mode: min
+loss:
+  =replace=: true
+  name: CTCLoss
+  kwargs:
+    blank: 98
+    zero_infinity: true
+metrics:
+  - name: CharacterErrorRates
+    log_name: CER
+    blank_idx: 98

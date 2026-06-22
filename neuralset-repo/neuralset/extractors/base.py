@@ -7,7 +7,6 @@
 import logging
 import typing as tp
 import warnings
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -22,7 +21,6 @@ from neuralset.base import TimedArray as TimedArray
 from neuralset.events import Event, EventTypesHelper, etypes
 from neuralset.segments import Segment
 
-T = tp.TypeVar("T", bound=torch.Tensor | np.ndarray)
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +53,8 @@ class BaseExtractor(base._Module, base.NamedModel):
         Strategy for combining values when multiple matching events fall
         inside the same segment:
 
-        * ``"single"`` — exactly one event expected (raises otherwise).
+        * ``"single"`` — at most one event per output sample (raises on
+          collision).
         * ``"sum"`` / ``"mean"`` — element-wise sum or mean.
         * ``"first"`` / ``"middle"`` / ``"last"`` — pick one event.
         * ``"cat"`` — concatenate along the first dimension.
@@ -330,15 +329,7 @@ class BaseExtractor(base._Module, base.NamedModel):
             # the zero-fill in _tarrays_to_tensor (see test_first_samp).
             ns_events = in_window or ns_events
 
-        if self.aggregation in ("first", "trigger", "single"):
-            if self.aggregation == "single" and len(ns_events) > 1:
-                msg = (
-                    f"Found {len(ns_events)} events in the segment but expected only one "
-                )
-                msg += f"since {self.name}.aggregation='single'. "
-                msg += "Update it to sum/average/first/trigger/... ?\n"
-                msg += f"{ns_events=}"
-                raise ValueError(msg)
+        if self.aggregation in ("first", "trigger"):
             ns_events = ns_events[:1]
         elif self.aggregation == "last":
             ns_events = ns_events[-1:]
@@ -353,62 +344,40 @@ class BaseExtractor(base._Module, base.NamedModel):
         start: float,
         duration: float,
         frequency: float,
-        aggregation: (
-            tp.Literal["mean", "sum", "trigger", "cat", "stack"]
-            | tp.Literal[
-                "single", "first", "middle", "last"
-            ]  # equivalent to sum, expect a single tarrays
-        ),
+        aggregation: str,
     ) -> torch.Tensor:
         """Combine a list of time array into a torch Tensor."""
-
-        # aggregate time arrays
-        err_msg = "Something went wrong. There should be only 1 trigger, got %s"
-        if aggregation == "trigger" and not frequency:
-            if not len(tarrays) == 1:
-                raise RuntimeError(err_msg % tarrays)
-            tarrays[0].start = start  # fake an overlap as start time does not matter
-
-        match aggregation:
-            case "trigger" | "single" | "first" | "middle" | "last":
-                aggregation = "sum"
-                # expect a single Event
-                if not len(tarrays) == 1:
-                    raise RuntimeError(err_msg % tarrays)
-            case "mean" | "sum" | "cat" | "stack":
-                pass
-            case _:
-                raise RuntimeError(f"unknown aggregation: {aggregation}")
+        # picker modes: keep the chosen tarray and accumulate as sum
+        if aggregation in ("trigger", "first", "middle", "last"):
+            if len(tarrays) != 1:
+                msg = f"Expected 1 tarray for {aggregation=!r}, got {tarrays}"
+                raise RuntimeError(msg)
+            if aggregation == "trigger" and not frequency:
+                tarrays[0].start = start  # static trigger: fake an overlap
+            aggregation = "sum"
 
         segment_info: dict[str, tp.Any] = {
             "start": start,
             "frequency": frequency,
             "duration": duration,
         }
-
-        if aggregation not in ("cat", "stack"):
-            # Sum event data in that segment
+        if aggregation in ("sum", "mean", "single"):
             tarray = TimedArray(aggregation=aggregation, **segment_info)  # type: ignore
             for ta in tarrays:
                 tarray += ta
-            tensor = torch.from_numpy(tarray.data)
-        else:
-            # Gather all event data
+            data = tarray.data
+        elif aggregation in ("cat", "stack"):
             arrays = []
             for ta in tarrays:
-                # Define the time window to populate the data tensor
-                tarray = TimedArray(**segment_info)
-                # Actually add the data
-                tarray += ta
-                # Concatenate the tensors
-                arrays.append(tarray.data)
-            if aggregation == "cat":
-                data = np.concatenate(arrays, axis=0)
-            else:
-                assert aggregation == "stack"
-                data = np.stack(arrays, axis=0)
-            tensor = torch.from_numpy(data)
+                buf = TimedArray(**segment_info)
+                buf += ta
+                arrays.append(buf.data)
+            combine = np.concatenate if aggregation == "cat" else np.stack
+            data = combine(arrays, axis=0)
+        else:
+            raise RuntimeError(f"unknown aggregation: {aggregation}")
 
+        tensor = torch.from_numpy(data)
         if not tensor.ndim:
             tensor = tensor.unsqueeze(0)
         return tensor
@@ -465,188 +434,6 @@ def _skip_new_event_types(key, val, prev):
 
 
 DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
-
-
-class HuggingFaceMixin(base.BaseModel):
-    """Mixin for extractors that use a HuggingFace model.
-    These extractors all return a tensor of shape (n_layers, n_tokens, *embedding_shape).
-    This mixin determines how to aggregate the layers and tokens.
-
-    Parameters
-    ----------
-    model_name: str
-        Name of the model to use.
-    device: str
-        Device to use for the model:
-        - cpu: for cpu computation
-        - cuda: for using gpu0
-        - auto: to use gpu if available else cpu
-        - accelerate: to use huggingface accelerate (maps to multiple-gpus + use float16)
-    layers: float | list[float] | "all"
-        Specifies the layers to keep.
-        - "all": keep all layers
-        - a float between 0 and 1 (or list of): the relative depth of the layer(s) to use,
-        where 0 stands for the first layer and 1 for the last layer.
-    cache_n_layers: None, int
-        if provided, n equidistributed layers will be cached
-        If None, only cache the output of the layers specified by `layers`.
-    layer_aggregation: str
-        How to aggregate the layers (first dimension of the tensor of activations).
-        Can be "mean", "sum", "group_mean" or None (in which case we keep the original dimension).
-        "group_mean" will average the layers by groups defined by the layers parameter,
-        e.g. if layers=[0, 0.5, 1] and there are 10 layers, the layers will be grouped as [0:5], [5:10].
-    token_aggregation: str
-        How to aggregate the tokens (second dimension of the tensor of activations).
-        Can be "first", "last", "mean", "sum", "max", or None (in which case we keep the original dimension).
-
-    Requires `transformers` and `huggingface_hub`. You can install them manually
-    or via `pip install "neuralset[all]"`.
-    """
-
-    requirements: tp.ClassVar[tuple[str, ...]] = (
-        "transformers>=4.29.2",
-        "huggingface_hub>=0.27.0",
-    )
-    model_name: str
-    device: tp.Literal["auto", "cpu", "cuda", "accelerate"] = "auto"
-    layers: float | list[float] | tp.Literal["all"] = 2 / 3
-    cache_n_layers: int | None = None
-    layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
-    token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
-    _REPOS: tp.ClassVar[list[str]] = []
-    _skip_repo_check: bool = False  # for simpler hacking (eg: custom dinov2 checkpoints)
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        name = self.__class__.__name__
-        if self.device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if self.layers != "all":
-            layers = self.layers if isinstance(self.layers, list) else [self.layers]
-            if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
-                raise ValueError(f"The layers must be floats between 0 and 1 for {name}")
-        if self.cache_n_layers == 1:
-            msg = f"Set {name}.cache_n_layers=None instead of 1"
-            raise ValueError(msg)
-        if not self._skip_repo_check and not self.repo_exists():
-            raise ValueError(f"The model {self.model_name} does not exist")
-
-    def repo_exists(self) -> bool:
-        fp = Path(__file__).with_name("data") / "huggingface-repos.txt"
-        name = self.model_name
-        if not self._REPOS:  # load offline huggingface white list
-            if not fp.exists():
-                raise RuntimeError(f"Please reinstall neuralset: missing file {fp}")
-            self._REPOS.extend(fp.read_text("utf8").splitlines())
-        if name in self._REPOS:
-            return True
-        else:
-            from huggingface_hub import repo_info
-
-            try:  # if not in whitelist, check through API and save it if it exists
-                repo_info(name)
-                self._REPOS.append(name)
-                self._REPOS.sort()
-                try:
-                    fp.write_text("\n".join(self._REPOS))
-                except Exception:
-                    pass  # nevermind if there is no write permission
-                return True
-            except Exception:
-                return False
-
-    @classmethod
-    def _exclude_from_cls_uid(cls) -> list[str]:
-        return ["device"]
-
-    def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["device"]
-        if self.cache_n_layers is not None:
-            excluded.extend(["layers", "layer_aggregation"])
-        return excluded
-
-    def _aggregate_layers(self, latents: np.ndarray) -> np.ndarray:
-        """
-        Input:
-            a tensor of activations of shape (n_model_layers, *embedding_shape)
-        Output:
-            a tensor of activations of following shape:
-            - (len(self.layers), *embedding_shape) if layer_aggregation is None,
-            - (len(self.layers)-1, *embedding_shape) if layer_aggregation is "group_mean",
-            - (*embedding_shape) if layer_aggregation is "mean" or "sum".
-        This function should be called before caching to reduce the size of the cached tensors,
-        except if cache_n_layers > 1, in which case it should be called after caching.
-        """
-        n_model_layers = latents.shape[0]
-        if self.layers == "all":
-            layer_indices = list(range(n_model_layers))
-        else:
-            layers = self.layers if isinstance(self.layers, list) else [self.layers]
-            layer_indices = np.unique(
-                [int(i * (n_model_layers - 1)) for i in layers]
-            ).tolist()  # type: ignore
-        if len(layer_indices) == 1:
-            if self.layer_aggregation is None:
-                return latents[layer_indices[0]][None, :]
-            else:
-                return latents[layer_indices[0]]
-        else:  # aggregate
-            latents = np.asarray(latents)  # ContiguousMemmap must be loaded first
-            if self.layer_aggregation == "mean":
-                return latents[layer_indices].mean(0)  # type: ignore
-            elif self.layer_aggregation == "sum":
-                return latents[layer_indices].sum(0)  # type: ignore
-            elif self.layer_aggregation == "group_mean":
-                groups = []
-                layer_indices[-1] += 1
-                for l1, l2 in zip(layer_indices[:-1], layer_indices[1:]):
-                    groups.append(latents[l1:l2].mean(0))
-                return np.stack(groups)
-            elif self.layer_aggregation is None:
-                return latents[layer_indices]
-            else:
-                raise ValueError(f"Unknown layer aggregation: {self.layer_aggregation}")
-
-    def _layer_subselection(self, latents: T) -> T:
-        n_layers = latents.shape[0]
-        if self.cache_n_layers is None or self.cache_n_layers >= n_layers:
-            return latents
-        selected = [
-            int(round(x)) for x in np.linspace(0, n_layers - 1, self.cache_n_layers)
-        ]
-        return latents[selected, ...]  # type: ignore
-
-    def _aggregate_tokens(self, latents: T) -> T:
-        """Aggregate tokens and subselects the layers
-
-        Input:
-            a tensor of activations of shape (layer_idx, token_idx, *embedding_shape)
-        Output:
-            a tensor of activations with possibly downsampled number of layers, and token
-            dimension removed through the aggregation method (if not None)
-        This function should always be called before caching, to reduce the size
-        of the cached tensors.
-        """
-        latents = self._layer_subselection(latents)
-        match self.token_aggregation:
-            case "mean":
-                out = latents.mean(axis=1)  # type: ignore
-            case "sum":
-                out = latents.sum(axis=1)  # type: ignore
-            case "max":
-                out = latents.max(axis=1)  # type: ignore
-                if isinstance(latents, torch.Tensor):
-                    out = out.values
-            case "first":
-                # np.take in numpy, torch.select in torch
-                out = latents[:, 0, ...]
-            case "last":
-                out = latents[:, -1, ...]
-            case None:
-                out = latents
-        if isinstance(out, torch.Tensor):
-            out = out.float()  # recast bf16
-        return out  # type: ignore
 
 
 class Pulse(BaseStatic):

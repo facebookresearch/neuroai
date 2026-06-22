@@ -1,0 +1,22 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Splitting: Xu2024Alljoined has no predefined train/test partition. We replicate
+# the base image-decoding design (leave-concept-out, within-subject) by splitting
+# on the stimulus image.
+data:
+  study:
+    =replace=: true
+    source:
+      name: Xu2024Alljoined
+    split:
+      name: SklearnSplit
+      split_by: filepath
+      valid_split_ratio: 0.2
+      test_split_ratio: 0.2
+      valid_random_state: 33
+      test_random_state: 33
+  summary_columns: [filepath]

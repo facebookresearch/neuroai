@@ -6,7 +6,6 @@
 
 """Pytest configuration for neuralset tests."""
 
-import multiprocessing
 from pathlib import Path
 
 import matplotlib
@@ -17,34 +16,10 @@ import neuralset as ns
 matplotlib.use("Agg")
 
 
-def _in_sandbox() -> bool:
-    """Detect the Cursor sandbox (macOS SemLock restriction)."""
-    try:
-        multiprocessing.Lock()
-        return False
-    except (OSError, PermissionError):
-        return True
-
-
-IN_SANDBOX = _in_sandbox()
-
-
 def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers", "sandbox_skip: skip when running inside the Cursor sandbox"
-    )
     config.addinivalue_line(
         "markers", "slow: end-to-end pipeline test (opt-in via `pytest -m slow`)"
     )
-
-
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    if not IN_SANDBOX:
-        return
-    skip = pytest.mark.skip(reason="sandbox: multiprocessing blocked (macOS SemLock)")
-    for item in items:
-        if "sandbox_skip" in item.keywords:
-            item.add_marker(skip)
 
 
 @pytest.fixture(scope="session")
