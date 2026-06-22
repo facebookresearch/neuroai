@@ -1,0 +1,22 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Grootswagers2022Human (THINGS-EEG1) ships a predefined train/test partition in
+# its ``split`` column (test = the repeated validation images), so we reuse the
+# base image-decoding design with ``PredefinedSplit`` on that column.
+data:
+  study:
+    =replace=: true
+    source:
+      name: Grootswagers2022Human
+    split:
+      name: PredefinedSplit
+      test_split_query: null
+      col_name: split
+      valid_split_by: timeline
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+  summary_columns: [category, filepath]

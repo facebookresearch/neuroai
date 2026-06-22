@@ -8,7 +8,7 @@ Dementia diagnosis,:bdg-danger:`subject`,EEG,:py:class:`~neuralset.studies.Milti
 Depression diagnosis,:bdg-danger:`subject`,EEG,:py:class:`~neuralset.studies.Mumtaz2018Machine`,5.0,19,Classification,2,14683,8756,69,2760,64,
 Emotion,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Chen2023Large`,5.0,32,Classification,9,20664,12264,96,3840,123,
 Error-related negativity,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kappenman2021ErpErn`,1.0,30,Classification,2,15972,9591,75,3000,40,Chavarriaga2010Learning; Kueper2024Eeg
-Image,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Gifford2022Large`,1.0,63,Retrieval,1536,830640,534720,4178,167120,10,
+Image,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Gifford2022Large`,1.0,63,Retrieval,1536,830640,534720,4178,167120,10,Xu2024Alljoined; Xu2025Alljoined
 Lrp,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kappenman2021ErpLrp`,1.0,30,Classification,2,15972,9591,75,3000,40,
 Mental arithmetic,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Zyma2019Eeg`,5.0,20,Classification,2,1659,986,8,320,35,Shin2017OpenB
 Mental imagery,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Scherer2015Individually`,4.0,30,Classification,5,3550,1620,13,520,9,
@@ -29,7 +29,7 @@ Seizure,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Dan2023Bids`,5.0,
 Sentence,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Hollenstein2018Zuco`,3.0,128,Retrieval,768,25819,17181,135,5400,12,
 Sex,:bdg-danger:`subject`,EEG,:py:class:`~neuralset.studies.Shirazi2024Hbn`,2.0,129,Classification,2,171480,123120,962,38480,2858,
 Sleep arousal,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Ghassemi2018You`,15.0,6,Classification,2,1838941,1106687,8646,345840,994,
-Sleep stage,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kemp2000Analysis`,30.0,2,Classification,5,196220,116493,911,36440,78,
+Sleep stage,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kemp2000Analysis`,30.0,2,Classification,5,196220,116493,911,36440,78,Ghassemi2018You; Alvarez2022Haaglanden
 Speech,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Brennan2019Hierarchical`,3.0,60,Retrieval,4096,70257,46827,366,14640,33,
 Ssvep,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Wang2017Benchmark`,4.0,64,Classification,40,8160,4800,38,1520,34,Kalunga2016Online; Lee2019EegSsvep; Nakanishi2015Comparison; Oikonomou2016ComparativeA; Oikonomou2016ComparativeB; Oikonomou2016ComparativeC; Wang2017Benchmark
 Typing,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Levy2025BrainEeg`,1.0,61,Classification,29,146551,87650,685,27400,20,
@@ -37,4 +37,4 @@ Video,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Liu2024Eeg2video`,2
 Word,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Nieuwland2018Large`,3.0,74,Retrieval,1024,529730,425399,3324,132960,222,
 Image,:bdg-success:`event`,MEG,:py:class:`~neuralset.studies.Hebart2023ThingsMeg`,1.0,300,Retrieval,1536,98592,71201,557,22280,4,
 Typing,:bdg-success:`event`,MEG,:py:class:`~neuralset.studies.Levy2025BrainMeg`,1.0,306,Classification,29,193051,119479,934,37360,23,
-Image,:bdg-success:`event`,fMRI,:py:class:`~neuralset.studies.Allen2022Nsd`,7.0,,Retrieval,1536,213000,153559,1200,48000,8,
+Image,:bdg-success:`event`,fMRI,:py:class:`~neuralset.studies.Allen2022Nsd`,7.0,,Retrieval,1536,213000,153559,1200,48000,8,Chang2019Bold5000; Hebart2023ThingsBold

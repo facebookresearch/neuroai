@@ -157,6 +157,7 @@ class AssignWordSplitAndContext(EventsTransform):
     ratios: tuple[float, float, float] = (0.8, 0.1, 0.1)
     seed: int = 0
     max_unmatched_ratio: float = 0.0
+    tolerance: float = 0.0
     sentence_only: bool = True
     max_context_len: int | None = None
     override_sentences: bool = False

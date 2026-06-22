@@ -13,7 +13,7 @@ wandb_config:
   project: !!python/name:neuralbench.config_manager.PROJECT_NAME
   name: null
 infra:
-  cluster: auto
+  cluster: !!python/name:neuralbench.config_manager.CLUSTER
   folder: !!python/name:neuralbench.config_manager.SAVE_DIR
   slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
   timeout_min: 1440
@@ -68,7 +68,7 @@ data:
     scaler: RobustScaler
     clamp: 20.0
     infra:
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       keep_in_ram: true
       slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
@@ -81,7 +81,7 @@ data:
     include_ref_eeg: false
   target:
     infra:
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS

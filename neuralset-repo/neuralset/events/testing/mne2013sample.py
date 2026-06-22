@@ -6,7 +6,6 @@
 
 import typing as tp
 from pathlib import Path
-from warnings import warn
 
 import exca.utils
 import mne
@@ -20,7 +19,7 @@ from neuralset.events.utils import extract_events
 
 class Mne2013Sample(study.Study):
     # Study level
-    url: tp.ClassVar[str] = "https://mne.tools/stable/overview/datasets_index.html#sample"
+    url: tp.ClassVar[str] = "https://mne.tools/stable/documentation/datasets.html#sample"
     bibtex: tp.ClassVar[str] = """
     @article{gramfort2013meg,
         title = {{{MEG}} and {{EEG}} Data Analysis with {{MNE-Python}}},
@@ -41,7 +40,7 @@ class Mne2013Sample(study.Study):
         num_subjects=1,
         num_events_in_query=289,
         event_types_in_query={"Meg", "Stimulus"},
-        data_shape=(306, 41700),  # 32-channel EEG
+        data_shape=(306, 41700),
         frequency=150.15,
     )
 
@@ -51,28 +50,36 @@ class Mne2013Sample(study.Study):
             "v3"  # other option requires overriding _load_events
         )
 
+    def _download_root(self) -> Path:
+        # raw downloads live under <study path>/download (package convention);
+        # absolute: mne.datasets.sample.data_path nests relative paths
+        return (self.path / "download").absolute()
+
+    def _mne_data_path(self) -> Path:
+        """Resolve (and download if missing) the MNE sample-data directory.
+
+        Single source of truth for the dataset root so that ``download()`` and
+        ``run()`` never disagree on where the data lives (see issue #153).
+        ``verbose=True`` so the progress bar shows whether the fetch is
+        triggered by ``download()`` or ``run()``.
+        """
+        root = self._download_root()
+        root.mkdir(parents=True, exist_ok=True)
+        return mne.datasets.sample.data_path(root, verbose=True)
+
     def _download(self) -> None:
         """Download the MNE sample dataset.
 
         The dataset will be automatically downloaded by MNE-Python
         if not already present at the specified path.
         """
-
-        # absolute: mne.datasets.sample.data_path nests relative paths
-        path = (self.path / "download").absolute()
-        path.mkdir(parents=True, exist_ok=True)
-        mne.datasets.sample.data_path(path, verbose=True)
+        self._mne_data_path()
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         yield {"subject": "sample"}
 
     def _get_data_path(self) -> Path:
-        if self.path.absolute().is_relative_to(ns.CACHE_FOLDER):
-            return mne.datasets.sample.data_path(ns.CACHE_FOLDER) / "MEG" / "sample"
-        else:
-            msg = f"Standard cache folder for MNE sample not available ({ns.CACHE_FOLDER=}), using {self.path=})"
-            warn(msg)
-            return self.path / "download" / "MNE-sample-data" / "MEG" / "sample"
+        return self._mne_data_path() / "MEG" / "sample"
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         data_path = self._get_data_path()
@@ -110,7 +117,7 @@ class Mne2013SampleEeg(Mne2013Sample):
         num_subjects=1,
         num_events_in_query=289,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(60, 41700),  # 32-channel EEG
+        data_shape=(60, 41700),
         frequency=150.15,
     )
 
@@ -160,13 +167,13 @@ class Fake2025Meg(Mne2013Sample):
             "Word",
             "Sentence",
         },
-        data_shape=(306, 41700),  # 32-channel EEG
+        data_shape=(306, 41700),
         frequency=150.15,
     )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         # download before concurrent timeline processing:
-        mne.datasets.sample.data_path(self.path.absolute())
+        self._mne_data_path()
         for k in range(2):
             yield {"subject": f"sample{k}"}
 
@@ -179,8 +186,7 @@ class Fake2025Meg(Mne2013Sample):
         first_start = min(e.start for e in stims)
         tot_duration = max(e.start + e.duration for e in stims) - first_start
         # Generate fake images
-        path = Path(self.path).absolute()
-        data_path = mne.datasets.sample.data_path(path) / "fake-data"
+        data_path = self._mne_data_path() / "fake-data"
         data_path.mkdir(exist_ok=True)
         for side in ["right", "left"]:
             fp = data_path / f"fake-{side}-image.png"

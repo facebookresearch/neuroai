@@ -140,3 +140,4 @@ lightning_logs/
 
 # Local tooling installs (e.g. `pip install --target .tools/ codespell`)
 .tools/
+REVIEW.toml

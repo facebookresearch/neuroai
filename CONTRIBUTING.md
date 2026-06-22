@@ -11,6 +11,7 @@ The repo contains several packages, each in its own directory:
 | `neuralset-repo/` | **neuralset** | Core pipeline: events, extractors, segmenters, dataloaders |
 | `neuralfetch-repo/` | **neuralfetch** | Curated study catalog — download & access public brain datasets |
 | `neuraltrain-repo/` | **neuraltrain** | Deep learning tools: models, losses, metrics, optimizers |
+| `neuralbench-repo/` | **neuralbench** | Benchmark framework: tasks, models, training loops, evaluation |
 
 ## Ways to contribute
 
@@ -27,7 +28,8 @@ git clone https://github.com/facebookresearch/neuroai.git
 cd neuroai
 pip install -e 'neuralset-repo/.[dev,all]'
 pip install -e 'neuralfetch-repo/.[dev]'
-pip install -e 'neuraltrain-repo/.[dev]'
+pip install -e 'neuraltrain-repo/.[dev,all]'
+pip install -e 'neuralbench-repo/.[dev]'
 ```
 
 ## Pull requests

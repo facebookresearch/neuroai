@@ -12,7 +12,7 @@ dependencies = [
   "neuralset>=0.0.1",
   "h5py",
   "pybv>=0.7.3",
-  "mne_bids>=0.16",
+  "mne_bids>=0.19",
 ]
 
 [project.urls]
@@ -56,7 +56,7 @@ extend = "../pyproject.toml"
   show_error_codes = true
 [[tool.mypy.overrides]]
   module = [
-  'mne', 'mne.io', 'mne.io.fiff', 'mne.datasets', 'mne_bids',
+  'mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets', 'mne.utils', 'mne_bids',
   'scipy.*', 'nibabel', 'h5py',
   'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack',
   'moviepy',

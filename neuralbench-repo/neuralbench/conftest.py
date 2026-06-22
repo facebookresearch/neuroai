@@ -12,11 +12,32 @@ from pathlib import Path
 
 import pytest
 
+from . import config_manager
 from .data import Data
 
 # Bypass multiprocessing in the test sandbox; ``Test2024Eeg`` is tiny enough
 # that in-process execution is fast.
 _NO_CLUSTER: tp.Any = {"cluster": None}
+
+
+@pytest.fixture
+def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
+    """Override resolved neuralbench config values (CLUSTER, WANDB_HOST, ...).
+
+    Returns a callable that installs a synthetic config and forces the lazy
+    module-level variables to re-resolve from it, so YAML ``!!python/name``
+    references pick up the overrides on the next ``config.yaml`` load.
+    """
+
+    def _apply(**overrides: tp.Any) -> None:
+        base = config_manager._default_config()
+        base.update(overrides)
+        monkeypatch.setattr(config_manager, "_config", base)
+        monkeypatch.setattr(config_manager, "_initialized", False)
+        for key in config_manager._LAZY_CONFIG_KEYS:
+            monkeypatch.delattr(config_manager, key, raising=False)
+
+    return _apply
 
 
 @pytest.fixture(scope="session")

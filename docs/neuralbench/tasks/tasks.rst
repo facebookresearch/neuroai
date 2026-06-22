@@ -56,4 +56,4 @@ EMG
     :glob:
     :titlesonly:
 
-*Coming soon* :octicon:`gear`
+    emg/**

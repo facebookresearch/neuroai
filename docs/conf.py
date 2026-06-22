@@ -376,6 +376,7 @@ sphinx_gallery_conf = {
         "neuralbench/tutorials/04_adding_model",
         "neuralbench/tutorials/05_advanced",
         "neuralbench/tutorials/06_eeg_challenge",
+        "neuralbench/tutorials/07_biosignal_challenge_2026",
     ],
     "gallery_dirs": [
         # neuralset
@@ -395,6 +396,7 @@ sphinx_gallery_conf = {
         "neuralbench/auto_examples/adding_model",
         "neuralbench/auto_examples/advanced",
         "neuralbench/auto_examples/eeg_challenge",
+        "neuralbench/auto_examples/biosignal_challenge_2026",
     ],
     "filename_pattern": r"/.+\.py$",
     "backreferences_dir": "gen_modules/backreferences",
