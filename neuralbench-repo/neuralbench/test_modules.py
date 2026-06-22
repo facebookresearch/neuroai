@@ -475,3 +475,45 @@ def test_channel_projection_bipolar_end_to_end():
     out = wrapped_model(**{"input": raw_input.clone()}).reshape(B, len(target), T)
     assert torch.allclose(out[:, 0, :], raw_input[:, 0, :] - raw_input[:, 1, :])
     assert torch.allclose(out[:, 1, :], raw_input[:, 1, :] - raw_input[:, 2, :])
+
+
+def test_downstream_wrapper_probe_layer():
+    B, F, Fp = 8, 10, 3
+    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
+    dummy_batch = {"input": torch.Tensor(B, F)}
+    wrapped = DownstreamWrapper(probe_layer="0").build(model, dummy_batch, Fp)
+
+    # Probe is sized from layer "0"'s output (16) — not the final layer (4).
+    assert wrapped.probe.in_features == 16
+    out = wrapped(**dummy_batch)
+    assert out.shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_invalid():
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    with pytest.raises(AttributeError, match="not in Sequential"):
+        DownstreamWrapper(probe_layer="no_such_layer").build(
+            model, {"input": torch.Tensor(2, 10)}, 3
+        )
+
+
+@pytest.mark.parametrize(
+    "kwargs, exc, match",
+    [
+        # model_output_key with probe_layer must error.
+        (dict(probe_layer="0", model_output_key="logits"), ValueError, "model_output_key"),
+        # mean_tokens on a batch-first (B, C, T) Conv1d capture must error.
+        (dict(probe_layer="0", aggregation="mean_tokens"), ValueError, "batch-first"),
+    ],
+)
+def test_downstream_wrapper_probe_layer_rejects(kwargs, exc, match):
+    model = nn.Sequential(nn.Conv1d(3, 8, kernel_size=5), nn.Flatten(), nn.Linear(64, 4))
+    with pytest.raises(exc, match=match):
+        DownstreamWrapper(**kwargs).build(model, {"input": torch.Tensor(2, 3, 12)}, 3)
+
+
+def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
+    # nn.RNN returns (output, h_n); probing it must raise.
+    model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        DownstreamWrapper(probe_layer="").build(model, {"input": torch.Tensor(2, 5, 10)}, 3)
