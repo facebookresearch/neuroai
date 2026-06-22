@@ -69,7 +69,7 @@ without re-running the experiment.
 # a separate object: ``y_true`` holds the per-window target embeddings (one row
 # per window, with repeats), and the ``group`` column records which stimulus
 # each row corresponds to.  That is enough to reconstruct the retrieval set by
-# de-duplicating ``y_true`` per ``group`` (see the retrieval example below).
+# de-duplicating ``y_true`` per ``group``.
 
 # %%
 # Reading the predictions back
@@ -122,45 +122,6 @@ without re-running the experiment.
 # The metadata columns make it easy to slice first, e.g. compute the metric
 # per subject with ``metadata.groupby("subject_id")`` and indexing into
 # ``y_pred`` / ``y_true`` with each group's row indices.
-
-# %%
-# Recomputing a retrieval metric
-# ------------------------------
-#
-# For retrieval tasks, rebuild the retrieval set by de-duplicating the target
-# embeddings per ``group``, then score each window's predicted embedding against
-# that set.  The snippet below ranks the true stimulus among all candidates and
-# reports top-1 accuracy:
-#
-# .. code-block:: python
-#
-#    import numpy as np
-#
-#    preds = experiment.test_predictions()
-#    meta = preds["metadata"]
-#    y_pred = np.asarray(preds["y_pred"])
-#    y_true = np.asarray(preds["y_true"])
-#
-#    # Retrieval set: one (de-duplicated) target embedding per stimulus.
-#    groups = meta["group"].to_numpy()
-#    unique_groups, first_idx = np.unique(groups, return_index=True)
-#    retrieval_set = y_true[first_idx]          # (n_stimuli, dim)
-#    group_to_row = {g: i for i, g in enumerate(unique_groups)}
-#
-#    # Cosine similarity of each prediction to every retrieval-set item.
-#    def _l2_normalize(x):
-#        return x / (np.linalg.norm(x, axis=-1, keepdims=True) + 1e-8)
-#
-#    scores = _l2_normalize(y_pred) @ _l2_normalize(retrieval_set).T
-#    ranking = np.argsort(-scores, axis=1)
-#    target_rows = np.array([group_to_row[g] for g in groups])
-#    top1 = (ranking[:, 0] == target_rows).mean()
-#    print("top-1 retrieval accuracy:", top1)
-#
-# This mirrors what :class:`~neuralbench.callbacks.TestFullRetrievalMetrics`
-# does internally; logging the predictions lets you reproduce or vary it offline
-# (different retrieval-set sizes, per-subject aggregation, alternative
-# similarity functions, ...).
 
 # %%
 # Caveats

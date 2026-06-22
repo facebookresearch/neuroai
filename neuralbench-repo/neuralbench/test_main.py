@@ -225,11 +225,8 @@ def test_test_predictions_roundtrip(monkeypatch, tmp_path) -> None:
     """Streamed per-batch chunks round-trip through the accessor: arrays are
     concatenated in order and metadata is returned as a DataFrame."""
     experiment = _make_eval_experiment(save_test_predictions=True)
-    folder = str(tmp_path / "test_predictions")
-    _write_streamed_predictions(folder)
-    monkeypatch.setattr(
-        Experiment, "_test_predictions_cache", lambda self: CacheDict(folder=folder)
-    )
+    _write_streamed_predictions(str(tmp_path / Experiment._TEST_PREDICTIONS_DIR))
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
     monkeypatch.setattr(Experiment, "run", lambda self: {"test/acc": 1.0})
 
     out = experiment.test_predictions()
@@ -242,10 +239,7 @@ def test_test_predictions_roundtrip(monkeypatch, tmp_path) -> None:
 def test_test_predictions_accessor_errors_when_unsaved(monkeypatch, tmp_path) -> None:
     """The accessor errors when the prediction folder is empty (flag was off)."""
     experiment = _make_eval_experiment(save_test_predictions=False)
-    folder = str(tmp_path / "test_predictions")
-    monkeypatch.setattr(
-        Experiment, "_test_predictions_cache", lambda self: CacheDict(folder=folder)
-    )
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
     monkeypatch.setattr(Experiment, "run", lambda self: {"test/acc": 1.0})
     with pytest.raises(ValueError, match="save_test_predictions=True"):
         experiment.test_predictions()

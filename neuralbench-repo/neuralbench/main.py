@@ -492,16 +492,6 @@ class Experiment(BaseExperiment):
     # streams the per-window test prediction artifacts via exca's ``CacheDict``.
     _TEST_PREDICTIONS_DIR: tp.ClassVar[str] = "test_predictions"
 
-    def _test_predictions_cache(self) -> CacheDict:
-        """``CacheDict`` over the per-window prediction artifact folder."""
-        uid_folder = self.infra.uid_folder()
-        if uid_folder is None:
-            raise RuntimeError(
-                "Cannot read test predictions without an infra cache folder; "
-                "configure ``infra.folder``."
-            )
-        return CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
-
     def test_predictions(self) -> dict[str, tp.Any]:
         """Raw per-window test predictions.
 
@@ -520,7 +510,13 @@ class Experiment(BaseExperiment):
         loading materializes the full arrays in RAM.
         """
         self.run()  # ensure the experiment ran (cache hit is fine)
-        cache = self._test_predictions_cache()
+        uid_folder = self.infra.uid_folder()
+        if uid_folder is None:
+            raise RuntimeError(
+                "Cannot read test predictions without an infra cache folder; "
+                "configure ``infra.folder``."
+            )
+        cache: CacheDict = CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
         keys = set(cache.keys())
         if not keys:
             raise ValueError(
@@ -528,22 +524,17 @@ class Experiment(BaseExperiment):
                 "save_test_predictions=True and (re)run the experiment "
                 "(toggling the flag yields a fresh cache entry)."
             )
+
+        def _concat(prefix: str) -> np.ndarray:
+            chunks = sorted(key for key in keys if key.startswith(prefix))
+            return np.concatenate([np.asarray(cache[key]) for key in chunks], axis=0)
+
         collector = WindowPredictionCollector
-        y_pred = self._concat_prediction_chunks(cache, keys, collector._Y_PRED_PREFIX)
-        y_true = self._concat_prediction_chunks(cache, keys, collector._Y_TRUE_PREFIX)
         return {
             "metadata": cache[collector._METADATA_KEY],
-            "y_true": y_true,
-            "y_pred": y_pred,
+            "y_true": _concat(collector._Y_TRUE_PREFIX),
+            "y_pred": _concat(collector._Y_PRED_PREFIX),
         }
-
-    @staticmethod
-    def _concat_prediction_chunks(
-        cache: CacheDict, keys: set[str], prefix: str
-    ) -> np.ndarray:
-        """Concatenate the per-batch array chunks sharing ``prefix``."""
-        chunk_keys = sorted(key for key in keys if key.startswith(prefix))
-        return np.concatenate([np.asarray(cache[key]) for key in chunk_keys], axis=0)
 
 
 # BenchmarkAggregator lives in aggregator.py and forward-references Experiment
