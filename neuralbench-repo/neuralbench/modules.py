@@ -397,9 +397,9 @@ class DownstreamWrapper(pydantic.BaseModel):
         hook taps activations for probing.  ``None`` (default) probes the final
         model output.  Requires ``model_output_key=None`` (intermediate captures
         are tensors, not dicts).
-    probe_batch_dim : int | None, optional
-        Axis of the probed activation that indexes the batch.  ``None`` (default)
-        auto-detects it by running the dummy forward at two batch sizes and
+    probe_batch_dim : int | "auto", optional
+        Axis of the probed activation that indexes the batch.  ``"auto"``
+        (default) detects it by running the dummy forward at two batch sizes and
         finding the axis that scales with the batch.  Set explicitly (e.g. ``1``
         for sequence-first ``(T, B, D)`` transformer outputs) to skip detection
         or resolve an ambiguous layout.  Only used when ``probe_layer`` is set.
@@ -415,7 +415,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
     probe_config: Mlp | tp.Literal["linear"] | None = "linear"
     probe_layer: str | None = None
-    probe_batch_dim: int | None = None
+    probe_batch_dim: int | tp.Literal["auto"] = "auto"
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -441,7 +441,7 @@ class DownstreamWrapper(pydantic.BaseModel):
                 f"got {self.model_output_key!r}."
             )
 
-        if self.probe_batch_dim is not None and self.probe_layer is None:
+        if self.probe_batch_dim != "auto" and self.probe_layer is None:
             raise ValueError(
                 "probe_batch_dim only applies when probe_layer is set; "
                 f"got probe_batch_dim={self.probe_batch_dim} with probe_layer=None."
@@ -547,7 +547,9 @@ class DownstreamWrapper(pydantic.BaseModel):
             ) from exc
 
         capture = self._run_probe_hook(model, submodule, model_batch)
-        if self.probe_batch_dim is not None:
+        if self.probe_batch_dim == "auto":
+            batch_dim = self._detect_batch_dim(model, submodule, model_batch, capture)
+        else:
             batch_dim = self.probe_batch_dim
             if not 0 <= batch_dim < capture.ndim:
                 raise ValueError(
@@ -555,8 +557,6 @@ class DownstreamWrapper(pydantic.BaseModel):
                     f"probe_layer={self.probe_layer!r} capture of shape "
                     f"{tuple(capture.shape)}."
                 )
-        else:
-            batch_dim = self._detect_batch_dim(model, submodule, model_batch, capture)
         return capture.movedim(batch_dim, 0), batch_dim
 
     def _run_probe_hook(

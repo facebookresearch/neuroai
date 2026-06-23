@@ -14,6 +14,7 @@ import typing as tp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from exca import ConfDict
 from pydantic import Field
 from tqdm import tqdm
 
@@ -38,6 +39,49 @@ def _default_output_dir() -> str:
     from neuralbench.config_manager import get_config
 
     return str(Path(get_config()["SAVE_DIR"]) / "outputs")
+
+
+def _experiment_variant(experiment: "Experiment") -> str:
+    """Signature of config axes that vary *independently* of ``brain_model_name``.
+
+    ``brain_model_name`` alone does not uniquely identify a configuration: the
+    same backbone can be run with different downstream wrappers (``-w``),
+    checkpoints (``--checkpoint``), probe layers, or model hyperparameters (a
+    grid sweep, or two YAMLs sharing a config class).  Aggregation groups by
+    model name and collapses seeds, so without an extra discriminator these
+    distinct configs would be silently averaged together.
+
+    The tag is a ``;``-separated set of ``key=value`` components:
+
+    - ``ckpt=<stem>`` -- the downstream checkpoint, when set;
+    - ``cfg=<uid>`` -- exca's own UID for the full ``brain_model_config``
+      (``ConfDict.from_model(...).to_uid()``), which generally disambiguates
+      *any* model-hyperparameter difference without enumerating fields.  Reusing
+      exca's UID keeps this consistent with how exca canonicalises and hashes
+      configs for caching, rather than maintaining a parallel scheme;
+    - the downstream wrapper's non-default fields, rendered readably (the common
+      ``-w`` / probe-layer / aggregation knobs).
+
+    ``build_results_df`` surfaces only the components that actually differ
+    between a model's variants, so the ``cfg`` UID stays invisible unless a
+    model hyperparameter is the thing that varies.
+    """
+    parts: list[str] = []
+    checkpoint = getattr(experiment, "pretrained_weights_fname", None)
+    if checkpoint:
+        parts.append(f"ckpt={Path(checkpoint).stem}")
+    config = getattr(experiment, "brain_model_config", None)
+    if config is not None:
+        parts.append(f"cfg={ConfDict.from_model(config).to_uid()}")
+    wrapper = getattr(experiment, "downstream_model_wrapper", None)
+    if wrapper is not None:
+        # ``exclude_defaults`` keeps only fields overridden from the wrapper's
+        # defaults, so the canonical single-wrapper case stays minimal while any
+        # sweep over wrapper knobs (aggregation, probe_layer, freezing, ...)
+        # produces a distinct tag.
+        overrides = wrapper.model_dump(exclude_defaults=True, exclude_none=True)
+        parts.extend(f"{key}={overrides[key]}" for key in sorted(overrides))
+    return ";".join(parts)
 
 
 class BenchmarkAggregator(ns.BaseModel):
@@ -116,6 +160,7 @@ class BenchmarkAggregator(ns.BaseModel):
         else:
             out["dataset_name"] = type(study).__name__
         out["brain_model_name"] = experiment.brain_model_name
+        out["model_variant"] = _experiment_variant(experiment)
         out["loss"] = {"name": type(experiment.loss).__name__}
         out["seed"] = experiment.seed
         return out, task, model
