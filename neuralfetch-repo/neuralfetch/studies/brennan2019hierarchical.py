@@ -87,7 +87,7 @@ class Brennan2019Hierarchical(study.Study):
         frequency=500.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dl_dir = self.path / "download"
 
         # Deep Blue Data guest collection + record-scoped path for Brennan2019

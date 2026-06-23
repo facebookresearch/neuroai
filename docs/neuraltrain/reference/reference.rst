@@ -252,6 +252,7 @@ Metrics
    TopkAccFromScores
    ImageSimilarity
    GroupedMetric
+   CharacterErrorRates
 
 Augmentations
 -------------

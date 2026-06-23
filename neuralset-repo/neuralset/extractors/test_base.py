@@ -8,17 +8,19 @@ import typing as tp
 from pathlib import Path
 
 import exca
+import httpx
 import numpy as np
 import pandas as pd
 import pytest
 import torch
+from huggingface_hub.errors import LocalEntryNotFoundError, RepositoryNotFoundError
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 
 import neuralset as ns
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from . import base
+from . import base, hf
 
 
 class Model(ns.BaseModel):
@@ -214,20 +216,15 @@ def test_aggreg(aggreg: tp.Literal["first", "trigger"], expected: list[float]) -
     np.testing.assert_array_almost_equal(out, expected)
 
 
-def test_single_aggregation_scoped_to_window() -> None:
-    """``aggregation='single'`` counts events inside the segment window,
-    not across the whole input (typical when the caller passes a full
-    recording's DataFrame rather than a segment-scoped subset)."""
+def test_single_aggregation_accepts_disjoint() -> None:
     feat = Time(frequency=3, aggregation="single")
     events = [
-        etypes.Image(start=s, duration=0.5, timeline="stuff", filepath=__file__)
-        for s in [0.0, 2.0, 4.0]
+        etypes.Image(start=s, duration=0.9, timeline="stuff", filepath=__file__)
+        for s in [0.11, 1.01, 1.5]
     ]
-    # One overlaps [2, 3): picked, no raise.
-    feat(events, start=2.0, duration=1.0)
-    # Two overlap [0, 3): still ambiguous.
-    with pytest.raises(ValueError, match="expected only one"):
-        feat(events, start=0.0, duration=3.0)
+    feat(events[:2], start=0.0, duration=2.0)
+    with pytest.raises(ValueError, match="aggregation='single'"):
+        feat(events, start=0.0, duration=2.0)
 
 
 def test_trigger_outside_window() -> None:
@@ -321,11 +318,13 @@ def test_cfg_feature_uid(tmp_path: Path) -> None:
 )
 def test_hf_aggregate_tokens(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     shape: tuple[int, ...],
     agg: str | None,
     max_layers: int | None,
     out: tuple[int, ...],
 ) -> None:
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **_: None)
     extractor: tp.Any = {
         "name": "HuggingFaceImage",
         "cache_n_layers": max_layers,
@@ -341,10 +340,46 @@ def test_hf_aggregate_tokens(
     np.testing.assert_array_almost_equal(agged_t.numpy(), agged_n)
 
 
-def test_huggingface_model_exists():
-    base.HuggingFaceMixin(model_name="gpt2")
-    with pytest.raises(ValueError):
-        base.HuggingFaceMixin(model_name="not_a_model")
+def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    def snapshot_download(repo_id: str, **kwargs: tp.Any) -> None:
+        if repo_id == "not_a_model" and kwargs.get("local_files_only"):
+            raise LocalEntryNotFoundError("missing")
+        if repo_id == "not_a_model":
+            request = httpx.Request("GET", "https://huggingface.co/not_a_model")
+            response = httpx.Response(404, request=request)
+            raise RepositoryNotFoundError("missing", response=response)  # type: ignore
+
+    monkeypatch.setattr("huggingface_hub.snapshot_download", snapshot_download)
+    hf.HuggingFaceMixin(model_name="gpt2")
+    with pytest.raises(RepositoryNotFoundError):
+        hf.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_config_resolves_class_defaults() -> None:
+    class DummyConfig(hf.HuggingFaceConfig):
+        HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+            "custom-model": {
+                "model_cls_name": "PatternModel",
+                "processor_cls_name": "PatternProcessor",
+            },
+        }
+
+    config = DummyConfig()
+    assert (
+        config._resolved_cls_name("model_cls_name", "org/custom-model-small")
+        == "PatternModel"
+    )
+    assert (
+        config._resolved_cls_name("processor_cls_name", "org/custom-model-small")
+        == "PatternProcessor"
+    )
+    assert config._resolved_cls_name("model_cls_name", "org/other") == "AutoModel"
+
+    config = DummyConfig(model_cls_name="ExplicitModel")
+    assert (
+        config._resolved_cls_name("model_cls_name", "org/custom-model-small")
+        == "ExplicitModel"
+    )
 
 
 @pytest.mark.parametrize(

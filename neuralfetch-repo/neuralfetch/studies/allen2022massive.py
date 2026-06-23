@@ -49,6 +49,8 @@ from tqdm import trange
 
 from neuralfetch.download import success_writer
 from neuralset.events import study
+from neuralset.events import utils as event_utils
+from neuralset.utils import get_bids_filepath, read_bids_events
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,12 @@ def get_nsd_tcs_marker() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME")
     config_dir = Path(xdg) if xdg else Path.home() / ".config"
     return config_dir / "neuralfetch" / ".nsd_tcs_accepted"
+
+
+def get_allen2022massive_common_path(path: str | Path) -> Path:
+    """Sibling ``nsd_common`` folder shared by NSD variants (raw, betas)."""
+    path = Path(path)
+    return (path / ".." / "nsd_common").resolve(strict=False)
 
 
 # Helper to load 'nsd_expdesign.mat' file Copy-pasted,
@@ -325,6 +333,14 @@ IIS-1822929."
         if marker.exists():
             logger.info("NSD Data Access Agreement already accepted (marker file found).")
             return
+
+        accept = os.environ.get("NSD_ACCEPT_LICENCE", "").lower() in ("1", "true", "yes")
+        if not accept:
+            raise PermissionError(
+                "NSD dataset requires accepting the Data Access Agreement before "
+                "downloading. Set NSD_ACCEPT_LICENCE=1 to enable the interactive "
+                "consent flow, then re-run download()."
+            )
 
         if not sys.stdin or not getattr(sys.stdin, "isatty", lambda: False)():
             raise RuntimeError(
@@ -610,6 +626,261 @@ IIS-1822929."
                 )
 
         return pd.concat([pd.DataFrame([fmri]), pd.DataFrame(image_events)], axis=0)
+
+
+# # # # # BIDS / deepprep variant # # # # #
+
+
+class Allen2022MassiveRaw(Allen2022Massive):
+    """Natural Scenes Dataset (NSD): 7T fMRI responses to natural images (BIDS/deepprep).
+
+    This variant requires fMRIPrep or deepprep preprocessing and loads data
+    from BIDS derivative directories. See Allen2022Massive for the version that uses
+    NSD's own preprocessed timeseries (no external preprocessing needed).
+
+    Experimental Design:
+        - 7T fMRI recordings (TR = 1.6 s)
+        - 8 participants
+        - 30-40 sessions, 12 runs per session
+        - Paradigm: passive viewing of 73,000 natural images from COCO dataset
+    """
+
+    description: tp.ClassVar[str] = (
+        "Natural Scenes Dataset: 7T BOLD fMRI from 8 participants viewing "
+        "73,000 natural images from Microsoft COCO dataset (BIDS/deepprep variant)"
+    )
+
+    requirements: tp.ClassVar[tuple[str, ...]] = (
+        "scipy>=1.11.4",
+        "h5py>=3.10.0",
+        "requests>=2.31.0",
+        "pybids",
+    )
+
+    RUNS_PER_SESSION: tp.ClassVar[int] = 12
+    CAPTION_SEPARATOR: tp.ClassVar[str] = "\n"
+    BIDS_FOLDER: tp.ClassVar[str] = "nsddata_rawdata"
+    DERIVATIVES_FOLDER: tp.ClassVar[str] = "derivatives/deepprep/bids"
+    BOLD_SPACE: tp.ClassVar[str] = "T1w"  # MNI152NLin2009aSym"
+    SESSION_SUFFIX: tp.ClassVar[str] = "nsd"
+    TR_FMRI_S: tp.ClassVar[float] = 1.6
+    DEEPPREP_FSAVERAGE_OUTPUT_DIR: tp.ClassVar[str] = "derivatives/deepprep/bids"
+
+    _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
+        num_timelines=3408,
+        num_subjects=8,
+        num_events_in_query=67,
+        event_types_in_query={"Fmri", "Image"},
+        data_shape=(79, 103, 83, 188),
+        frequency=0.625,
+        fmri_spaces={"MNI152NLin2009cAsym", "T1w", "fsaverage", "fsnative"},
+    )
+
+    def _download(self) -> None:
+        self._check_nsd_data_access_agreement()
+        with success_writer(self.path / "download_all") as already_done:
+            if already_done:
+                return
+            nsd_common_path = get_allen2022massive_common_path(self.path)
+            self._download_nsd_raw_dataset()
+            self._validate_downloaded_and_fmriprepped_dataset()
+            self._prepare_dataset(nsd_common_path)
+            self._validate_prepared_dataset(nsd_common_path)
+
+    def _validate_downloaded_and_fmriprepped_dataset(self) -> None:
+        nsd_common_path = get_allen2022massive_common_path(self.path)
+        for tl in self._iter_subject_session_run():
+            params = dict(tl)
+            params.update(ses_suffix=self.SESSION_SUFFIX, task=self.TASK)
+            fps = []
+            fps.append(
+                get_bids_filepath(
+                    self.path / self.DERIVATIVES_FOLDER,
+                    filetype="bold",
+                    data_type="Fmri",
+                    space=self.BOLD_SPACE,
+                    **params,
+                )
+            )
+            fps.append(
+                get_bids_filepath(
+                    self.path / self.DERIVATIVES_FOLDER,
+                    filetype="bold_mask",
+                    data_type="Fmri",
+                    space=self.BOLD_SPACE,
+                    **params,
+                )
+            )
+            fps.append(
+                get_bids_filepath(
+                    self.path / self.BIDS_FOLDER,
+                    filetype="events",
+                    data_type="Fmri",
+                    **params,
+                )
+            )
+            filenames = [
+                "nsd_expdesign.mat",
+                "nsd_stimuli.hdf5",
+                "COCO_73k_annots_curated.npy",
+            ]
+            fps.extend([nsd_common_path / filename for filename in filenames])
+            for fp in fps:
+                if not fp.exists():
+                    msg = f"Missing file {fp} for {tl}"
+                    raise RuntimeError(msg)
+
+    def _validate_prepared_dataset(self, path: Path) -> None:  # type: ignore[override]
+        self._validate_file_count(path, "nsd_captions", ".npy")
+        self._validate_file_count(path, "nsd_stimuli", ".png")
+
+    def _validate_file_count(self, path: Path, sub_dir: str, extension: str) -> None:
+        files = [f for f in (path / sub_dir).iterdir() if f.suffix == extension]
+        assert len(files) == self.N_STIMULI, (
+            f"There should be {self.N_STIMULI} {extension} files in"
+            f" {path / sub_dir} but found only {len(files)}"
+        )
+
+    def _download_nsd_raw_dataset(self) -> None:
+        self.path.mkdir(exist_ok=True, parents=True)
+        nsd_common_path = get_allen2022massive_common_path(self.path)
+        nsd_common_path.mkdir(parents=True, exist_ok=True)
+
+        aws_cmds = []
+        raw_bold_aws_cmd = (
+            "aws s3 sync --no-sign-request"
+            " s3://natural-scenes-dataset/nsddata_rawdata/"
+            f" {self.path}/{self.BIDS_FOLDER}"
+        )
+        aws_cmds.append(raw_bold_aws_cmd)
+        expdesign_mat_aws_cmd = (
+            "aws s3 cp --no-sign-request"
+            " s3://natural-scenes-dataset/nsddata/experiments/nsd/nsd_expdesign.mat"
+            f" {nsd_common_path}"
+        )
+        aws_cmds.append(expdesign_mat_aws_cmd)
+        stimuli_mat_aws_cmd = (
+            "aws s3 cp --no-sign-request"
+            " s3://natural-scenes-dataset/nsddata_stimuli/stimuli/nsd/nsd_stimuli.hdf5"
+            f" {nsd_common_path}"
+        )
+        aws_cmds.append(stimuli_mat_aws_cmd)
+        for aws_cmd in aws_cmds:
+            result = subprocess.run(aws_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                error_msg = result.stderr if result.stderr else result.stdout
+                raise RuntimeError(
+                    f"AWS command failed with return code {result.returncode}:\n"
+                    f"Command: {aws_cmd}\n"
+                    f"Error: {error_msg}\n"
+                    "Hint: Make sure the AWS CLI is installed and "
+                    "that the S3 bucket is reachable."
+                )
+        url = (
+            "https://huggingface.co/datasets/pscotti/naturalscenesdataset/resolve/main/"
+            "COCO_73k_annots_curated.npy"
+        )
+        response = requests.get(url)
+        (nsd_common_path / "COCO_73k_annots_curated.npy").write_bytes(response.content)
+
+    def _prepare_dataset(self, path: Path) -> None:  # type: ignore[override]
+        self._extract_stimuli(path)
+        self._extract_captions(path)
+        self._extract_test_images_ids(path)
+
+    def _extract_captions(self, path: Path) -> None:
+        path_to_caption_npys = path / "nsd_captions"
+        path_to_caption_npys.mkdir(exist_ok=True, parents=True)
+        path_to_caption_file = path / "COCO_73k_annots_curated.npy"
+        captions = np.load(path_to_caption_file, mmap_mode="r")
+        for idx in trange(captions.shape[0]):
+            annots_idx = np.array(
+                [annot for annot in captions[idx] if len(annot.strip()) > 0]
+            )
+            np.save(path_to_caption_npys / f"{idx}.npy", annots_idx)
+
+    def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
+        self._validate_downloaded_and_fmriprepped_dataset()
+        for tl in self._iter_subject_session_run():
+            yield tl
+
+    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
+        fp = get_bids_filepath(
+            root_path=self.path / self.DERIVATIVES_FOLDER,
+            filetype="bold",
+            data_type="Fmri",
+            space="T1w",
+            ses_suffix=self.SESSION_SUFFIX,
+            **timeline,
+        )
+        fp = fp.parent / (fp.name.split("space", maxsplit=1)[0] + "*")
+
+        fmri_events = event_utils.expand_bids_fmri(
+            str(fp),
+            preproc="deepprep",
+            start=0.0,
+            frequency=self._get_fmri_frequency(),
+        )
+        bids_events_df_fp = get_bids_filepath(
+            root_path=self.path / self.BIDS_FOLDER,
+            filetype="events",
+            data_type="Fmri",
+            ses_suffix=self.SESSION_SUFFIX,
+            **timeline,
+        )
+        bids_events_df = read_bids_events(bids_events_df_fp)
+        path_to_stimuli = get_allen2022massive_common_path(self.path) / "nsd_stimuli"
+        ns_events_df = self._get_ns_img_events_df(
+            bids_events_df, path_to_stimuli, timeline
+        )
+        return pd.concat([pd.DataFrame(fmri_events), ns_events_df], axis=0)
+
+    def _get_test_image_ids(self) -> list[int]:
+        return np.load(
+            get_allen2022massive_common_path(self.path) / "test_images_ids.npy"
+        ).tolist()
+
+    def _get_captions(self, image_id: int) -> str:
+        if image_id < 0:
+            msg = f"Parameter 'image_id' has value {image_id} but should be positive"
+            raise ValueError(msg)
+        npy_path = (
+            get_allen2022massive_common_path(self.path) / f"nsd_captions/{image_id}.npy"
+        )
+        captions = np.load(npy_path).tolist()
+        captions = [cap.replace(self.CAPTION_SEPARATOR, "") for cap in captions]
+        return self.CAPTION_SEPARATOR.join(captions)
+
+    def _get_ns_img_events_df(
+        self,
+        bids_events_df: pd.DataFrame,
+        stimuli_path: str | Path,
+        timeline: dict[str, tp.Any],
+    ) -> pd.DataFrame:
+        bids_events = bids_events_df.to_dict("records")
+        ns_events = []
+        for bids_event in bids_events:
+            image_id = bids_event["73k_id"]  # 1-based
+            ns_event = dict(
+                type="Image",
+                start=bids_event["onset"],
+                duration=bids_event["duration"],
+                filepath=str(Path(stimuli_path) / f"{image_id - 1}.png"),
+                split="test" if image_id in self._get_test_image_ids() else "train",
+                caption=self._get_captions(image_id - 1),
+            )
+            ns_events.append(ns_event)
+        return pd.DataFrame(ns_events)
+
+    @classmethod
+    def _iter_subject_session_run(cls) -> tp.Iterator[dict[str, tp.Any]]:
+        for subject in cls.SESSIONS_PER_SUBJECT.keys():
+            for session in range(1, cls.SESSIONS_PER_SUBJECT[subject] + 1):
+                for run in range(1, cls.RUNS_PER_SESSION + 1):
+                    yield dict(subject=subject, session=session, task=cls.TASK, run=run)
+
+    def _get_fmri_frequency(self) -> float:
+        return 1.0 / self.TR_FMRI_S
 
 
 # # # # # mini dataset # # # # #

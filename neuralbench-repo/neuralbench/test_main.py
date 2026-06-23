@@ -8,8 +8,12 @@ import typing as tp
 from types import SimpleNamespace
 
 import lightning.pytorch as pl
+import numpy as np
+import pandas as pd
+import pytest
 import torch
 from exca import TaskInfra
+from exca.cachedict import CacheDict
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -17,6 +21,7 @@ from neuraltrain.losses import BaseLoss
 from neuraltrain.models.base import BaseModelConfig
 from neuraltrain.optimizers import LightningOptimizer
 
+from .callbacks import WindowPredictionCollector
 from .data import Data
 from .main import Experiment
 from .utils import TrainerConfig
@@ -174,3 +179,65 @@ def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
     assert events[-2:] == ["prepare_pl_module", "cleanup"]
     assert result["n_total_params"] is None
     assert result["n_trainable_params"] is None
+
+
+_PREDS: dict[str, tp.Any] = {
+    "metadata": pd.DataFrame(
+        {"timeline": ["rec0", "rec1", "rec2"], "batch_idx": [0, 0, 1]}
+    ),
+    "y_true": np.array([[0.0, 1.0], [1.0, 0.0], [0.5, 0.5]]),
+    "y_pred": np.array([[0.2, 0.8], [0.7, 0.3], [0.4, 0.6]]),
+}
+
+
+def _make_eval_experiment(save_test_predictions: bool) -> Experiment:
+    class _DummyData:
+        def prepare(self) -> dict[str, object]:
+            return {"train": object(), "val": object(), "test": object()}
+
+    return Experiment.model_construct(
+        data=tp.cast(Data, _DummyData()),
+        brain_model_config=tp.cast(BaseModelConfig, object()),
+        trainer_config=tp.cast(TrainerConfig, object()),
+        loss=tp.cast(BaseLoss, _DummyLoss()),
+        lightning_optimizer_config=tp.cast(LightningOptimizer, object()),
+        metrics=[],
+        eval_only=True,
+        infra=TaskInfra(version="1", gpus_per_node=0),
+        save_test_predictions=save_test_predictions,
+    )
+
+
+def _write_streamed_predictions(folder: str) -> None:
+    """Mimic WindowPredictionCollector's on-disk layout: per-batch array chunks
+    plus a single metadata table."""
+    cache: CacheDict = CacheDict(folder=folder)
+    with cache.write():
+        # Two "batches": rows [0:2] then [2:3], matching ``batch_idx``.
+        for chunk, sl in enumerate([slice(0, 2), slice(2, 3)]):
+            tag = f"{chunk:08d}"
+            cache[WindowPredictionCollector._Y_PRED_PREFIX + tag] = _PREDS["y_pred"][sl]
+            cache[WindowPredictionCollector._Y_TRUE_PREFIX + tag] = _PREDS["y_true"][sl]
+        cache[WindowPredictionCollector._METADATA_KEY] = _PREDS["metadata"]
+
+
+def test_test_predictions_roundtrip(monkeypatch, tmp_path) -> None:
+    """Streamed per-batch chunks round-trip through the accessor: arrays are
+    concatenated in order and metadata is returned as a DataFrame."""
+    experiment = _make_eval_experiment(save_test_predictions=True)
+    _write_streamed_predictions(str(tmp_path / Experiment._TEST_PREDICTIONS_DIR))
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
+
+    out = experiment.test_predictions()
+
+    pd.testing.assert_frame_equal(out["metadata"], _PREDS["metadata"])
+    assert np.array_equal(out["y_true"], _PREDS["y_true"])
+    assert np.array_equal(out["y_pred"], _PREDS["y_pred"])
+
+
+def test_test_predictions_accessor_errors_when_unsaved(monkeypatch, tmp_path) -> None:
+    """The accessor errors when the prediction folder is empty (flag was off)."""
+    experiment = _make_eval_experiment(save_test_predictions=False)
+    monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
+    with pytest.raises(ValueError, match="save_test_predictions=True"):
+        experiment.test_predictions()

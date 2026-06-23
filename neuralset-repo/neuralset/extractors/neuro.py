@@ -23,7 +23,7 @@ from mne._fiff.pick import _VALID_CHANNEL_TYPES  # type: ignore
 from tqdm import tqdm
 
 import neuralset as ns
-from neuralset import utils
+from neuralset import base, utils
 from neuralset.base import TimedArray
 from neuralset.events import etypes
 
@@ -1074,7 +1074,7 @@ class FmriCleaner(pydantic.BaseModel):
     filter: tp.Literal["butterworth", "cosine"] | None
         Filter to use: "butterworth" or "cosine".
     ensure_finite: bool
-        Whether to set nans to 0.
+        Whether to replace non-finite values (NaN, +/-Inf) with 0.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -1089,6 +1089,7 @@ class FmriCleaner(pydantic.BaseModel):
         if (
             self.detrend
             or self.standardize
+            or self.ensure_finite
             or (self.high_pass is not None)
             or (self.low_pass is not None)
         ):
@@ -1708,7 +1709,7 @@ class FmriExtractor(BaseExtractor):
         return FmriTimedArray(
             data=data.astype(np.float32),
             frequency=freq,
-            start=event.start,
+            start=base._UNSET_START,
             duration=event.duration,
             header=header,
         )
@@ -1726,24 +1727,17 @@ class FmriExtractor(BaseExtractor):
     ) -> tp.Iterable[TimedArray]:
         if self.padding == "auto" and self._padding is None:
             raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
-        for ta in self._get_data(events):
-            data = ta.data
+        for event, ta in zip(events, self._get_data(events)):
+            out = ta.with_start(event.start - self.offset)
             if self._padding is not None:
-                if data.ndim != 2:
-                    raise ValueError(f"Only 1D+T FMRI can be padded, got {data.shape=}")
-                padding = self._padding - data.shape[0]
-                if padding < 0:
-                    raise ValueError(
-                        f"Padding to length {self._padding} but got {data.shape=}"
-                    )
-                data = np.pad(data, [(0, self._padding - data.shape[0]), (0, 0)])
-            yield FmriTimedArray(
-                data=data,
-                frequency=ta.frequency,
-                start=ta.start - self.offset,
-                duration=ta.duration,
-                header=ta.header,
-            )
+                shape = out.data.shape
+                if out.data.ndim != 2:
+                    raise ValueError(f"Only 1D+T FMRI can be padded, got {shape=}")
+                pad = self._padding - shape[0]
+                if pad < 0:
+                    raise ValueError(f"Padding to {self._padding} but got {shape=}")
+                out.data = np.pad(out.data, [(0, pad), (0, 0)])
+            yield out
 
 
 class ChannelPositions(BaseStatic):

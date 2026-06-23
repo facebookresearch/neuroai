@@ -150,7 +150,9 @@ def _resolve_study(name: str = "") -> tp.Type["Study"] | None:
         hint = "import the module that defines it before use"
         if importlib.util.find_spec("neuralfetch") is None:
             hint = f"run `pip install neuralfetch` for public-data studies, or {hint}"
-        raise ImportError(f"Study {name!r} not found (scanned: {scanned}), {hint}.")
+        raise ImportError(
+            f"Study or EventsTransform {name!r} not found (scanned: {scanned}), {hint}."
+        )
     return cls
 
 
@@ -380,12 +382,9 @@ class Study(base.Step):
     @tp.final
     def download(self, **kwargs: tp.Any) -> None:
         self._check_requirements()
-        # Ensure download goes into a subfolder named after the study
-        name = self.__class__.__name__
-        if self.path.name.lower() != name.lower():
-            self.path = self.path / name
-            STUDY_PATHS[self.__class__.__name__] = self.path
-            logger.info("Download path updated to %s", self.path)
+        # The study subfolder is settled in ``model_post_init`` (see there), so
+        # ``download()`` never reassigns ``self.path`` and is safe to call on a
+        # frozen post-``run()`` instance.
         self.path.mkdir(parents=True, exist_ok=True)
         self._download(**kwargs)
         if not self.path.exists():
@@ -436,7 +435,14 @@ class Study(base.Step):
                 "or pass name= to dispatch: Study(name='MyStudy2024', path=...)"
             )
         name = self.__class__.__name__
+        # Settle the study subfolder once, here at construction, before exca can
+        # freeze the instance: prefer an existing ``<path>/<name>`` (or lowercase)
+        # folder, otherwise append ``<name>``. ``download()`` then never reassigns
+        # ``self.path`` — which would crash on a frozen post-``run()`` instance
+        # (issue #153, run -> download order).
         self.path = _identify_study_subfolder(self.path, name)
+        if self.path.name.lower() != name.lower():
+            self.path = self.path / name
         STUDY_PATHS[self.__class__.__name__] = self.path  # record for path lookup
         # Auto-propagate cache folder and mode so users only need to set it once
         if self.infra is not None:

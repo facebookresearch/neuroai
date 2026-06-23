@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import itertools
 import typing as tp
 from abc import abstractmethod
 
@@ -22,7 +21,8 @@ import neuralset as ns
 from neuralset import events as _ev  # avoid circular import
 from neuralset import utils
 from neuralset.base import TimedArray
-from neuralset.extractors.base import BaseStatic, HuggingFaceMixin
+from neuralset.extractors.base import BaseStatic
+from neuralset.extractors.hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=unused-variable
@@ -85,14 +85,29 @@ class WordFrequency(BaseText):
     event_types: tp.Literal["Word"] = "Word"
     requirements: tp.ClassVar[tuple[str, ...]] = ("wordfreq",)
     LANGUAGES: tp.ClassVar[dict[str, str]] = dict(
-        english="en", french="fr", spanish="es", dutch="nl", chinese="zh"
+        english="en",
+        french="fr",
+        spanish="es",
+        dutch="nl",
+        chinese="zh",
+        japanese="ja",
     )
 
     # pylint: disable=unused-argument
     def get_embedding(self, text: str, language: str = "") -> np.ndarray:
         from wordfreq import zipf_frequency  # noqa
 
-        value = zipf_frequency(text, self.LANGUAGES.get(self.language, self.language))
+        # The per-event language wins (it is the ground truth for the data),
+        # falling back to the extractor's `language` only when the event carries
+        # none -- same precedence as SpacyEmbedding. Lowercase so both names and
+        # 2-letter codes resolve (wordfreq needs lowercase).
+        lang = (language or self.language or "").lower()
+        if not lang:
+            raise ValueError(
+                "No language specified: set language on the extractor or "
+                "populate language on events."
+            )
+        value = zipf_frequency(text, self.LANGUAGES.get(lang, lang))
         return np.array([value])
 
 
@@ -247,6 +262,21 @@ class TextDataset(Dataset):
         return sel.text, getattr(sel, "context", "")
 
 
+class HuggingFaceTextConfig(HuggingFaceConfig):
+    processor_cls_name: str = "AutoTokenizer"
+    processor_kwargs: dict[str, tp.Any] | None = {
+        "truncation_side": "left",
+        "padding_side": "right",
+    }
+    HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {
+        "t5": {"model_cls_name": "AutoModelForTextEncoding"},
+        "facebook/opt": {"model_cls_name": "OPTModel"},
+        "facebook/bart": {"model_cls_name": "BartModel"},
+        "gpt2": {"model_cls_name": "GPT2Model"},
+        "phi-4": {"model_cls_name": "AutoModelForCausalLM"},
+    }
+
+
 class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     """
     Get embeddings from HuggingFace language models.
@@ -258,9 +288,6 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         Batch size for the language model.
     contextualized: bool
         True by default, the context of the event is used to compute the embeddings.
-    pretrained: bool or "part-reversal"
-        use pretrained model if True, untrained initial model if False, or custom
-        scrambling of the model pretrained weights if "part-reveral"
 
     Note
     ----
@@ -286,11 +313,9 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     # extractor attributes
     batch_size: int = 32
     contextualized: bool = True
-    pretrained: bool | tp.Literal["part-reversal"] = True
 
-    # initialized later
-    _model: nn.Module = pydantic.PrivateAttr()
-    _tokenizer: tp.Any = pydantic.PrivateAttr()
+    _max_length: int | None = pydantic.PrivateAttr(None)
+    hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -315,74 +340,30 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         )
 
     @property
-    def model(self) -> nn.Module:
-        if not hasattr(self, "_model"):
-            from transformers import AutoTokenizer
-
-            kwargs: dict[str, tp.Any] = {}
-            if self.model_name.lower().startswith("microsoft/phi"):
-                kwargs["trust_remote_code"] = True
-            # pinned for `_get_data`'s slicing: target at tail, pads trailing
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                truncation_side="left",
-                padding_side="right",
-                **kwargs,
-            )
-            # tokens
-            if self._tokenizer.pad_token is None:
-                # previously:
-                # self._tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-                # self._model.resize_token_embeddings(len(self._tokenizer))
-                # simpler to use existing EOS token:
-                self._tokenizer.pad_token = self._tokenizer.eos_token
-            try:
-                self._model = self._load_model()
-            except Exception as e:
-                # some exceptions (AttributeError in particular)
-                # are hidden by pydantic
-                raise RuntimeError("Model loading went wrong") from e
-        return self._model
-
-    def _load_model(self, **kwargs: tp.Any) -> nn.Module:
-        # do all the loading in a function without modifying
-        # self, so that if an intermediate bug is caught, the
-        # model is never in cache
-        # (pydantic seems to catch some of the exceptions in the
-        # model property, which creates weird silent bugs)
-        Model: tp.Any  # ignore typing as we'll override the imports
-        from transformers import AutoModel as Model
-
-        if "t5" in self.model_name or "bert" in self.model_name:
-            from transformers import AutoModelForTextEncoding as Model
-        elif "Phi-3" in self.model_name:
-            from transformers import AutoModelForCausalLM as Model
-        elif "Llama-3.2-11B-Vision" in self.model_name:
-            from transformers import MllamaForConditionalGeneration as Model
-        # instantiate
-        if self.device == "accelerate":
-            kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
-        model = Model.from_pretrained(self.model_name, **kwargs)
-        if not self.pretrained:
-            rawmodel = Model.from_config(model.config)
-            with torch.no_grad():
-                for p1, p2 in itertools.zip_longest(
-                    model.parameters(), rawmodel.parameters()
-                ):
-                    p1.data = p2.to(p1)
-        elif self.pretrained == "part-reversal":
-            with torch.no_grad():
-                for p in model.parameters():
-                    part_reversal(p)
-        if self.device != "accelerate":
-            model.to(self.device)
-        model.eval()
-        return model
-
-    @property
     def tokenizer(self) -> tp.Any:
-        self.model
-        return self._tokenizer
+        tokenizer = self.processor
+        if tokenizer.pad_token is None:
+            # Use an existing token so model weights stay unchanged.
+            tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+
+    def _get_max_length(self) -> int | None:
+        """Token truncation limit, falling back to the model's positional capacity."""
+        if self._max_length is not None:
+            return self._max_length
+        tok_max = self.tokenizer.model_max_length
+        # HF "infinite" sentinel (~1e30) would disable truncation (overflows OPT)
+        if isinstance(tok_max, int) and tok_max < int(1e29):
+            self._max_length = tok_max
+            return self._max_length
+        # learned-position table is sized capacity + offset, so the offset cancels
+        config = self.model.config
+        for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
+            value = getattr(config, attr, None)
+            if isinstance(value, int) and value > 0:
+                self._max_length = value
+                return self._max_length
+        return None
 
     def _get_timed_arrays(
         self,
@@ -390,12 +371,13 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         start: float,
         duration: float,
     ) -> tp.Iterable[TimedArray]:
-        # Backward compatibility check for contextualized for people that used it as a default without context
-        # : raise if contextualized is True but no context is provided
         if self.contextualized and any(
             not getattr(event, "context", None) for event in events
         ):
-            msg = "Contextualized embeddings require a context. Please provide a context for all events or set contextualized to False. This might happen since contextualized is now True by default. "
+            msg = (
+                "Contextualized embeddings require non-empty context for all events. "
+                "Set contextualized=False for context-free text."
+            )
             raise ValueError(msg)
         # optimized fetch of multiple events compared to individual get_static calls:
         for event, latent in zip(events, self._get_data(events)):
@@ -423,9 +405,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         # Processing the data in batches
         if len(dloader) > 1:
             dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
-        device = "auto" if self.device == "accelerate" else self.device
-        if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = self.model_device
         with torch.no_grad():
             for target_words, context in dloader:
                 # tokenize context
@@ -444,6 +424,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         return_tensors="pt",
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
+                        max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
                     ).to(device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
@@ -492,22 +473,5 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                     yield out
                 # erase variables / free memory
                 del hidden_states, hidden_state, word_state, states, outputs, inputs
-                if self.device == "accelerate" and torch.cuda.is_available():
-                    # in case of multi-GPU models, explicitly empty cache "just in case"
+                if device.type == "cuda":
                     torch.cuda.empty_cache()
-
-
-def part_reversal(tensor: torch.Tensor) -> None:
-    """reverse coefficients by parts, to scramble the weights of a network
-    without changing its statistics and with low enough memory footprint
-    """
-    x = tensor.view(-1)
-    # use around 14 splits, and not an integer to avoid alignment with data
-    sq200 = 10 * np.sqrt(2)
-    num = max(len(x) / sq200, sq200)
-    first = 0
-    last = num
-    while first < len(x):
-        x[first : int(last)] = reversed(x[first : int(last)])  # type: ignore
-        last += num
-        first = int(last)

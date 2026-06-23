@@ -14,6 +14,7 @@ config assembly are delegated to :mod:`neuralbench.registry` and
 
 import argparse
 import logging
+import os
 import sys
 import traceback
 import typing as tp
@@ -130,6 +131,13 @@ def run_benchmark(
     default_config = load_yaml_config(DEFAULTS_DIR / "config.yaml")
     config = ConfDict(default_config)
 
+    # Disable W&B entirely when no host is configured (blank WANDB_HOST), so the
+    # whole pipeline treats logging as off (mirrors the debug-mode overlay).
+    wandb_cfg = config.get("wandb_config")
+    host = wandb_cfg.get("host") if isinstance(wandb_cfg, dict) else None
+    if not host:
+        config["wandb_config"] = None
+
     default_grid = load_yaml_config(DEFAULTS_DIR / "grid.yaml")
     grid_conf = ConfDict(default_grid)
 
@@ -189,8 +197,6 @@ def run_benchmark(
         return []
 
     if plot_cached:
-        import os
-
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     from neuralbench.main import BenchmarkAggregator

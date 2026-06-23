@@ -13,9 +13,11 @@ import typing as tp
 from pathlib import Path
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import yaml
 from exca import TaskInfra
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import (
     Callback,
     EarlyStopping,
@@ -49,6 +51,7 @@ from .callbacks import (
     PlotRegressionVectors,
     RecordingLevelEval,
     TestFullRetrievalMetrics,
+    WindowPredictionCollector,
 )
 from .data import Data as Data  # noqa: F401
 from .model_factory import build_brain_model
@@ -88,6 +91,9 @@ class Experiment(BaseExperiment):
     validate_before_training: bool = True
     test_full_metrics: list[BaseMetric] = []
     test_full_retrieval_metrics: list[BaseMetric] = []
+    # When True, raw per-window test predictions/targets are folded into the
+    # cached ``run`` result (see ``WindowPredictionCollector``).
+    save_test_predictions: bool = False
 
     # Weights & Biases
     csv_config: CsvLoggerConfig | None = None
@@ -156,6 +162,7 @@ class Experiment(BaseExperiment):
             train_loader=train_loader,
             val_loader=val_loader,
             wandb_logger=self._wandb_logger,
+            loss=self.loss,
         )
 
         if self.target_scaler is not None:
@@ -263,6 +270,18 @@ class Experiment(BaseExperiment):
                 labels = [ind_to_label[i] for i in sorted(ind_to_label)]
             callbacks.append(PlotConfusionMatrix(labels=labels))
         if is_test:
+            if self.save_test_predictions:
+                uid_folder = self.infra.uid_folder()
+                if uid_folder is None:
+                    raise RuntimeError(
+                        "save_test_predictions=True requires an infra cache "
+                        "folder; configure ``infra.folder``."
+                    )
+                callbacks.append(
+                    WindowPredictionCollector(
+                        folder=uid_folder / self._TEST_PREDICTIONS_DIR
+                    )
+                )
             if self.test_full_metrics:
                 callbacks.append(RecordingLevelEval())
             if self.test_full_retrieval_metrics:
@@ -448,6 +467,12 @@ class Experiment(BaseExperiment):
             torch.distributed.destroy_process_group()
 
         if trainer.global_rank == 0:
+            # ``WindowPredictionCollector`` (added in ``setup_trainer`` when
+            # ``save_test_predictions`` is set) streams the raw per-window
+            # predictions to ``infra.uid_folder()/<_TEST_PREDICTIONS_DIR>`` as a
+            # byproduct of the test loop. They live next to ``job.pkl`` so they
+            # survive cache hits and stay out of the cached result dict; read
+            # them back via ``test_predictions()``.
             test_results.update(self._test(loaders, best_model_path))
 
         self._cleanup(trainer)
@@ -462,6 +487,55 @@ class Experiment(BaseExperiment):
             }
         )
         return test_results
+
+    # Subfolder (under ``infra.uid_folder()``) where ``WindowPredictionCollector``
+    # streams the per-window test prediction artifacts via exca's ``CacheDict``.
+    _TEST_PREDICTIONS_DIR: tp.ClassVar[str] = "test_predictions"
+
+    def test_predictions(self) -> dict[str, tp.Any]:
+        """Raw per-window test predictions.
+
+        Requires ``save_test_predictions=True``. Returns a dict with:
+
+        - ``"metadata"``: a :class:`pandas.DataFrame` with one row per test
+          window (``timeline``, ``batch_idx``, ``dataloader_idx``, plus
+          ``subject_id`` and a retrieval ``group`` label when available);
+        - ``"y_true"`` / ``"y_pred"``: arrays of shape ``(n_windows, ...)``
+          aligned with ``metadata``, concatenated across batches.
+
+        ``WindowPredictionCollector`` streams the predictions to the uid folder
+        during the test loop (metadata as CSV, arrays appended to a shared
+        memmap file), so they survive cache hits and are read straight from
+        disk. This is a read-only accessor: call :meth:`run` first (a cache hit
+        is fine); if the artifacts are missing it raises rather than launching a
+        run. The per-batch array chunks are concatenated on read, so loading
+        materializes the full arrays in RAM.
+        """
+        uid_folder = self.infra.uid_folder()
+        if uid_folder is None:
+            raise RuntimeError(
+                "Cannot read test predictions without an infra cache folder; "
+                "configure ``infra.folder``."
+            )
+        cache: CacheDict = CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
+        keys = set(cache.keys())
+        if not keys:
+            raise ValueError(
+                "Test predictions are unavailable. Set "
+                "save_test_predictions=True and (re)run the experiment "
+                "(toggling the flag yields a fresh cache entry)."
+            )
+
+        def _concat(prefix: str) -> np.ndarray:
+            chunks = sorted(key for key in keys if key.startswith(prefix))
+            return np.concatenate([np.asarray(cache[key]) for key in chunks], axis=0)
+
+        collector = WindowPredictionCollector
+        return {
+            "metadata": cache[collector._METADATA_KEY],
+            "y_true": _concat(collector._Y_TRUE_PREFIX),
+            "y_pred": _concat(collector._Y_PRED_PREFIX),
+        }
 
 
 # BenchmarkAggregator lives in aggregator.py and forward-references Experiment

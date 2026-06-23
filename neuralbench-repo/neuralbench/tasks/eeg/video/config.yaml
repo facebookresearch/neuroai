@@ -21,9 +21,7 @@ data:
     time_aggregation: mean
     extractor:
       name: HuggingFaceVideo
-      image:
-        model_name: "facebook/vjepa2-vitg-fpc64-256"
-        infra.keep_in_ram: False
+      model_name: "facebook/vjepa2-vitg-fpc64-256"
       frequency: 4
       use_audio: False
       aggregation: trigger

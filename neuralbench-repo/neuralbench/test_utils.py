@@ -15,616 +15,282 @@ import pytest
 import torch
 from torch import nn
 
-from neuraltrain.models.common import ChannelMerger, FourierEmb
-from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
+from neuralbench.utils import SequenceLabelEncoder
+from neuralset import utils as ns_utils
+from neuralset.events import etypes
+from neuralset.extractors.meta import CroppedExtractor
 
 from .data import Data
-from .modules import ChannelProjection, DownstreamWrapper, DownstreamWrapperModel
 from .utils import (
+    _compute_regression_bin_weights,
     detect_batch_dim,
+    make_regression_bin_sampler,
     make_weighted_sampler,
     run_probe_hook,
     seed_worker,
 )
 
-
-def test_downstream_wrapper():
-    B, F, Fp = 8, 10, 3
-    model = nn.Linear(F, 4)
-    dummy_batch = {"input": torch.Tensor(B, F)}
-    model = DownstreamWrapper().build(model, dummy_batch, Fp)
-
-    assert isinstance(model, DownstreamWrapperModel)
-    out = model(**dummy_batch)
-    assert out.shape == (B, Fp)
-
-
-def test_downstream_wrapper_probe_layer():
-    B, F, Fp = 8, 10, 3
-    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
-    dummy_batch = {"input": torch.Tensor(B, F)}
-    wrapped = DownstreamWrapper(probe_layer="0").build(model, dummy_batch, Fp)
-
-    # Probe is sized from layer "0"'s output (16) — not the final layer (4).
-    assert wrapped.probe.in_features == 16
-    out = wrapped(**dummy_batch)
-    assert out.shape == (B, Fp)
-
-
-def test_downstream_wrapper_probe_layer_invalid():
-    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
-    with pytest.raises(AttributeError, match="not in Sequential"):
-        DownstreamWrapper(probe_layer="no_such_layer").build(
-            model, {"input": torch.Tensor(2, 10)}, 3
-        )
-
-
-def test_downstream_wrapper_probe_layer_requires_no_output_key():
-    with pytest.raises(ValueError, match="model_output_key"):
-        DownstreamWrapper(probe_layer="0", model_output_key="logits")
-
-
-def test_downstream_wrapper_probe_batch_dim_requires_probe_layer():
-    with pytest.raises(ValueError, match="probe_batch_dim only applies"):
-        DownstreamWrapper(probe_batch_dim=1)
-
-
-def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
-    # nn.RNN returns (output, h_n); probing it must raise.
-    model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
-    with pytest.raises(TypeError, match="tensor-returning"):
-        DownstreamWrapper(probe_layer="").build(
-            model, {"input": torch.Tensor(2, 5, 10)}, 3
-        )
-
-
-class _SeqFirstEnc(nn.Module):
-    """Emits sequence-first (T, B, D), like a ``batch_first=False`` transformer."""
-
-    def __init__(self, n_in: int, emb: int):
-        super().__init__()
-        self.lin = nn.Linear(n_in, emb)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.lin(x).transpose(0, 1)  # (B, T, F) -> (T, B, D)
-
-
-class _SeqFirstProbeNet(nn.Module):
-    """Probed submodule ``enc`` emits sequence-first (T, B, D)."""
-
-    def __init__(self, n_in: int, emb: int):
-        super().__init__()
-        self.enc = _SeqFirstEnc(n_in, emb)
-        self.head = nn.Linear(emb, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.head(self.enc(x).mean(0))
-
-
-@pytest.mark.parametrize("aggregation", ["mean", "flatten", "first"])
-def test_downstream_wrapper_probe_layer_seq_first(aggregation):
-    # A sequence-first (T, B, D) capture is auto-detected and moved to
-    # batch-first, so the standard aggregations apply with no special-casing.
-    B, T, F, D, Fp = 8, 5, 10, 6, 3
-    model = _SeqFirstProbeNet(F, D)
-    wrapped = DownstreamWrapper(probe_layer="enc", aggregation=aggregation).build(
-        model, {"x": torch.Tensor(B, T, F)}, Fp
-    )
-    expected_in = {"mean": D, "flatten": T * D, "first": D}[aggregation]
-    assert wrapped.probe.in_features == expected_in
-    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
-
-
-def test_downstream_wrapper_probe_layer_batch_seq_collision():
-    # Two-pass detection resolves the batch axis even when batch == seq length.
-    n, F, D, Fp = 5, 10, 6, 3
-    model = _SeqFirstProbeNet(F, D)
-    wrapped = DownstreamWrapper(probe_layer="enc", aggregation="mean").build(
-        model, {"x": torch.Tensor(n, n, F)}, Fp
-    )
-    assert wrapped.probe.in_features == D
-    assert wrapped(x=torch.Tensor(n, n, F)).shape == (n, Fp)
-
-
-def test_downstream_wrapper_probe_layer_batch_dim_override():
-    # Explicit probe_batch_dim=1 skips auto-detection for the (T, B, D) capture.
-    B, T, F, D, Fp = 8, 5, 10, 6, 3
-    model = _SeqFirstProbeNet(F, D)
-    wrapped = DownstreamWrapper(
-        probe_layer="enc", aggregation="mean", probe_batch_dim=1
-    ).build(model, {"x": torch.Tensor(B, T, F)}, Fp)
-    assert wrapped.probe.in_features == D
-    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
-
-
 # ---------------------------------------------------------------------------
-# run_probe_hook / detect_batch_dim (probe mechanics, exercised in isolation)
+# Regression-bin sampler
 # ---------------------------------------------------------------------------
 
-
-class _Const(nn.Module):
-    """Emits a fixed-size tensor, independent of the input batch size."""
-
-    def forward(self, _x: torch.Tensor) -> torch.Tensor:
-        return torch.zeros(3, 6)
+_BMAE_EDGES = (0.0, 40.0, 90.0, 300.0, 600.0)
 
 
-class _BatchInvariantNet(nn.Module):
-    """Probed submodule ``const`` emits a fixed-size tensor, ignoring batch size."""
+def test_compute_regression_bin_weights_inverse_frequency():
+    """Each populated bin contributes equal mass; inside a bin, weights are equal."""
+    targets = torch.tensor(
+        [
+            5.0,
+            10.0,  # bin 0: [0, 40), count = 2
+            50.0,  # bin 1: [40, 90), count = 1
+            100.0,
+            200.0,  # bin 2: [90, 300), count = 2
+            400.0,
+            580.0,
+            590.0,  # bin 3: [300, 600], count = 3
+        ]
+    )
+    weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
 
-    def __init__(self, n_in: int):
-        super().__init__()
-        self.const = _Const()
-        self.lin = nn.Linear(n_in, 4)
+    assert weights.shape == targets.shape
+    expected = torch.tensor([1 / 2, 1 / 2, 1 / 1, 1 / 2, 1 / 2, 1 / 3, 1 / 3, 1 / 3])
+    assert torch.allclose(weights, expected)
+    # Total mass equals the number of populated bins.
+    assert torch.isclose(weights.sum(), torch.tensor(4.0))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.const(x)  # fire the hook with a batch-independent output
-        return self.lin(x)
+
+def test_compute_regression_bin_weights_includes_upper_boundary_in_last_bin():
+    """A target equal to the last upper edge belongs to the last bin (matches BinnedMAE)."""
+    targets = torch.tensor([100.0, 600.0])
+    weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
+    # 100 alone in bin 2, 600 alone in bin 3 -> each weight is 1.0
+    assert torch.allclose(weights, torch.tensor([1.0, 1.0]))
+
+
+def test_compute_regression_bin_weights_handles_empty_bins():
+    """Empty bins cause no crash; populated bins still get inverse-frequency weights."""
+    targets = torch.tensor([10.0, 15.0, 400.0, 500.0])  # only bins 0 and 3 populated
+    weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
+    assert torch.allclose(weights, torch.tensor([0.5, 0.5, 0.5, 0.5]))
+    assert torch.isclose(weights.sum(), torch.tensor(2.0))
+
+
+def test_compute_regression_bin_weights_zeros_out_of_range():
+    """Targets outside [bin_edges[0], bin_edges[-1]] get zero weight (matches BinnedMAE)."""
+    # 100 in bin 2; -5 below first edge; 700 / 1000 above last edge.
+    targets = torch.tensor([-5.0, 100.0, 700.0, 1_000.0])
+    weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
+    assert torch.allclose(weights, torch.tensor([0.0, 1.0, 0.0, 0.0]))
+    # Out-of-range targets do not contribute to any bin's count.
+    assert torch.isclose(weights.sum(), torch.tensor(1.0))
+
+
+def test_compute_regression_bin_weights_rejects_non_1d_targets():
+    """Trailing singleton dims must be squeezed upstream; the helper enforces 1-D input."""
+    with pytest.raises(ValueError, match="1-D targets"):
+        _compute_regression_bin_weights(torch.zeros(4, 1), _BMAE_EDGES)
+
+
+def test_compute_regression_bin_weights_rejects_short_edges():
+    """A degenerate single edge cannot define any bin."""
+    with pytest.raises(ValueError, match=">= 2"):
+        _compute_regression_bin_weights(torch.zeros(4), [0.0])
+
+
+def test_make_regression_bin_sampler_returns_weighted_sampler(mocker):
+    """Factory wires `get_targets_from_dataset` -> weights -> WeightedRandomSampler."""
+    targets = torch.tensor([5.0, 50.0, 100.0, 400.0, 580.0])
+    mocker.patch("neuralbench.utils.get_targets_from_dataset", return_value=targets)
+    sampler = make_regression_bin_sampler(
+        mocker.MagicMock(), bin_edges=_BMAE_EDGES, logger=logging.getLogger("test")
+    )
+
+    assert isinstance(sampler, torch.utils.data.WeightedRandomSampler)
+    assert sampler.replacement is True
+    assert sampler.num_samples == len(targets)
+    # Pin the numerical wiring: passing the wrong tensor downstream would
+    # produce a shape-correct sampler with the wrong weights.  ``sampler.weights``
+    # is a Python list (float64 when re-tensored), so cast for the comparison.
+    expected = _compute_regression_bin_weights(targets, _BMAE_EDGES)
+    assert torch.allclose(torch.as_tensor(sampler.weights, dtype=torch.float32), expected)
+
+
+def test_make_regression_bin_sampler_squeezes_trailing_singleton(mocker):
+    """A ``(N, 1)`` target tensor is squeezed to ``(N,)`` before binning."""
+    targets_2d = torch.tensor([[5.0], [50.0], [100.0], [400.0], [580.0]])
+    mocker.patch("neuralbench.utils.get_targets_from_dataset", return_value=targets_2d)
+    sampler = make_regression_bin_sampler(
+        mocker.MagicMock(), bin_edges=_BMAE_EDGES, logger=logging.getLogger("test")
+    )
+
+    expected = _compute_regression_bin_weights(targets_2d.squeeze(-1), _BMAE_EDGES)
+    assert torch.allclose(torch.as_tensor(sampler.weights, dtype=torch.float32), expected)
+
+
+def test_make_regression_bin_sampler_balances_bins(mocker):
+    """Drawing from the sampler yields ~equal counts across populated bins."""
+    targets = torch.cat(
+        [
+            torch.full((10,), 10.0),  # bin 0
+            torch.full((50,), 50.0),  # bin 1
+            torch.full((200,), 100.0),  # bin 2
+            torch.full((1_000,), 400.0),  # bin 3
+        ]
+    )
+    mocker.patch("neuralbench.utils.get_targets_from_dataset", return_value=targets)
+    sampler = make_regression_bin_sampler(
+        mocker.MagicMock(), bin_edges=_BMAE_EDGES, logger=logging.getLogger("test")
+    )
+
+    weights_t = torch.as_tensor(sampler.weights)
+    generator = torch.Generator().manual_seed(0)
+    drawn_idx = torch.multinomial(
+        weights_t, num_samples=100_000, replacement=True, generator=generator
+    )
+
+    inner_edges = torch.tensor(_BMAE_EDGES[1:-1])
+    drawn_bins = torch.bucketize(targets[drawn_idx], inner_edges, right=False).clamp_(
+        0, 3
+    )
+    counts = torch.bincount(drawn_bins, minlength=4).float()
+    proportions = counts / counts.sum()
+    assert torch.allclose(proportions, torch.full((4,), 0.25), atol=0.01)
+
+
+# --- SequenceLabelEncoder -------------------------------------------------
+#
+# The CTC head's target stream comes from a fixed-length integer-label
+# extractor that lives in ``neuralbench`` (not ``neuralset``). We keep
+# this CTC-specific shape out of the base ``LabelEncoder`` and read the
+# pre-computed ``label`` field that the emg/typing study writes onto
+# each Keystroke event.
+
+_KS_PAD = 27  # blank index for the toy 27-class vocab below
+
+
+@pytest.fixture
+def _fresh_warn_registry():
+    """warn_once dedupes per-process; reset so per-test assertions are stable."""
+    ns_utils.ISSUED_WARNINGS.clear()
+    yield
+    ns_utils.ISSUED_WARNINGS.clear()
+
+
+def _ks_events(labels: list[int], starts: list[float] | None = None):
+    """Build Keystroke events with a pre-computed integer ``label`` in extras."""
+    starts = starts or [0.1 * i for i in range(len(labels))]
+    return [
+        etypes.Keystroke(
+            start=s,
+            duration=0.05,
+            text=f"k{lbl}",
+            timeline="t",
+            extra={"label": lbl},
+        )
+        for s, lbl in zip(starts, labels, strict=False)
+    ]
 
 
 @pytest.mark.parametrize(
-    "model, probe_layer, batch, expected_shape, expected_dim",
+    ("labels", "starts", "win_start", "win_dur", "expected"),
     [
-        # batch-first (B, D) capture from a Sequential -> batch axis 0
-        (
-            nn.Sequential(nn.Linear(10, 16), nn.Linear(16, 4)),
-            "0",
-            {"input": torch.randn(4, 10)},
-            (4, 16),
-            0,
-        ),
-        # sequence-first (T, B, D) capture -> batch axis 1 (auto-detected)
-        (
-            _SeqFirstProbeNet(10, 6),
-            "enc",
-            {"x": torch.randn(4, 5, 10)},
-            (5, 4, 6),
-            1,
-        ),
+        # Every event fits the window.
+        ([7, 8, 26], None, 0.0, 1.0, [7, 8, 26]),
+        # Window [10.9, 14.9) keeps c@11, d@14.5; the rest fall outside.
+        (list(range(5)), [10.0, 10.5, 11.0, 14.5, 14.95], 10.9, 4.0, [2, 3]),
     ],
 )
-def test_run_probe_hook_and_detect_batch_dim(
-    model, probe_layer, batch, expected_shape, expected_dim
+def test_sequence_label_encoder_padded_layout(
+    labels, starts, win_start, win_dur, expected
 ):
-    """run_probe_hook returns the submodule output; detect_batch_dim finds its batch axis."""
-    submodule = model.get_submodule(probe_layer)
-    assert run_probe_hook(model, submodule, batch, probe_layer).shape == expected_shape
-    assert detect_batch_dim(model, submodule, batch, probe_layer) == expected_dim
-
-
-def test_run_probe_hook_rejects_unreachable_and_non_tensor():
-    # A submodule never reached during forward -> RuntimeError.
-    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
-    detached = nn.Linear(4, 4)  # not part of model's forward graph
-    with pytest.raises(RuntimeError, match="did not fire"):
-        run_probe_hook(model, detached, {"input": torch.randn(2, 10)}, "detached")
-    # A tuple-returning submodule (nn.RNN -> (output, h_n)) -> TypeError.
-    rnn = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
-    with pytest.raises(TypeError, match="tensor-returning"):
-        run_probe_hook(rnn, rnn, {"input": torch.randn(2, 5, 10)}, "")
-
-
-def test_detect_batch_dim_raises_when_no_axis_scales():
-    # A capture independent of batch size yields zero candidate axes.
-    model = _BatchInvariantNet(10)
-    with pytest.raises(ValueError, match="batch axis is ambiguous"):
-        detect_batch_dim(model, model.const, {"x": torch.randn(4, 10)}, "const")
-
-
-class LinearOutDict(nn.Module):
-    def __init__(self, n_inputs: int, n_outputs: int):
-        super().__init__()
-        self.linear = nn.Linear(n_inputs, n_outputs)
-
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        out = self.linear(x)
-        return {
-            "key1": out,
-            "key2": out * 2,
-        }
-
-
-def test_downstream_wrapper_with_key():
-    model = LinearOutDict(10, 4)
-    B, F, Fp = 8, 10, 3
-    dummy_batch = {"x": torch.Tensor(B, F)}
-    model = DownstreamWrapper(
-        model_output_key="key2",
-    ).build(model, dummy_batch, Fp)
-
-    assert isinstance(model, DownstreamWrapperModel)
-    out = model(**dummy_batch)
-    assert out.shape == (B, Fp)
-
-
-def test_downstream_wrapper_with_preprocessor():
-    """Test that on-the-fly preprocessing is applied inside the wrapper."""
-    B, C, T, Fp = 4, 18, 200, 3
-    model = nn.Identity()
-    raw_input = torch.randn(B, C, T) * 1000.0
-    dummy_batch = {"input": raw_input.clone()}
-
-    preprocessor_config = OnTheFlyPreprocessor(
-        scaler="StandardScaler",
-        scale_dim=-1,
+    """``SequenceLabelEncoder`` produces a fixed-shape tensor of concatenated
+    integer labels, right-padded with ``pad_value`` (the CTC blank)."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=8,
+        pad_value=_KS_PAD,
     )
-    wrapper = DownstreamWrapper(
-        on_the_fly_preprocessor=preprocessor_config,
-        aggregation="flatten",
+    events = _ks_events(labels, starts)
+    out = ext(events, start=win_start, duration=win_dur)
+
+    n = len(expected)
+    assert out.shape == (8,)
+    assert out[:n].tolist() == expected
+    assert (out[n:] == _KS_PAD).all()
+
+
+def test_cropped_sequence_label_encoder_composition():
+    """``CroppedExtractor`` wrapping ``SequenceLabelEncoder`` restricts label
+    collection to the cropped sub-window; ``model_factory`` unwraps the
+    ``.extractor`` chain to read ``n_classes`` off the inner encoder and
+    size the CTC head through the composition."""
+    inner = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=8,
+        pad_value=_KS_PAD,
     )
-    wrapped_model = wrapper.build(model, dummy_batch, Fp)
+    # Outer crop [start+0.9, start+0.9+4.0) — for start=10.0 keeps c@11, d@14.5.
+    cropped = CroppedExtractor(extractor=inner, offset=0.9, duration=4.0)
+    events = _ks_events(list(range(5)), [10.0, 10.5, 11.0, 14.5, 14.95])
+    out = cropped(events, start=10.0, duration=5.0)
 
-    assert isinstance(wrapped_model, DownstreamWrapperModel)
-    assert wrapped_model.preprocessor is not None
-    out = wrapped_model(**{"input": raw_input.clone()})
-    assert out.shape == (B, Fp)
-
-    # Verify that the preprocessing was actually applied: the output should
-    # differ from a wrapper without preprocessing on the same input.
-    wrapper_no_preproc = DownstreamWrapper(aggregation="flatten")
-    model_no_preproc = wrapper_no_preproc.build(nn.Identity(), dummy_batch, Fp)
-    out_no_preproc = model_no_preproc(**{"input": raw_input.clone()})
-    msg = "Preprocessor should have modified the data going through the wrapper"
-    assert not torch.allclose(out, out_no_preproc), msg
+    assert out.shape == (8,)
+    assert out[:2].tolist() == [2, 3]
+    assert (out[2:] == _KS_PAD).all()
+    # ``CroppedExtractor`` itself doesn't carry ``n_classes``; the head
+    # width lives on the wrapped encoder, which ``model_factory`` reaches
+    # by unwrapping ``.extractor``.
+    assert not hasattr(cropped, "n_classes")
+    assert cropped.extractor.n_classes == _KS_PAD + 1
 
 
-def test_downstream_wrapper_with_channel_merger():
-    """Test that ChannelMerger projects channels before the inner model."""
-    B, C_in, T = 4, 32, 200
-    C_virtual = 8
-
-    model = nn.Identity()
-    channel_positions = torch.rand(B, C_in, 3)
-    subject_ids = torch.zeros(B, dtype=torch.long)
-    raw_input = torch.randn(B, C_in, T)
-
-    dummy_batch = {
-        "input": raw_input.clone(),
-        "channel_positions": channel_positions,
-        "subject_ids": subject_ids,
-    }
-
-    merger_config = ChannelMerger(
-        n_virtual_channels=C_virtual,
-        per_subject=False,
-        fourier_emb_config=FourierEmb(n_dims=3),
+def test_sequence_label_encoder_truncation_warns_once(_fresh_warn_registry):
+    """Truncation of overlong segments warns once per process."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=2,
+        pad_value=_KS_PAD,
     )
-    wrapper = DownstreamWrapper(
-        channel_adapter_config=merger_config,
-        aggregation="flatten",
-        probe_config=None,
+    events = _ks_events([7, 4, 11, 11, 14])
+    with pytest.warns(UserWarning, match="truncating") as records:
+        ext(events, start=0.0, duration=1.0)
+        ext(events, start=0.0, duration=1.0)
+    assert sum("truncating" in str(r.message) for r in records) == 1
+
+
+def test_sequence_label_encoder_empty_segment():
+    """Segments without matching events return all-blank padding."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=4,
+        pad_value=_KS_PAD,
     )
-    n_outputs = C_virtual * T
-    wrapped_model = wrapper.build(model, dummy_batch, n_outputs)
+    events = _ks_events([7, 4])
+    # Target window 10..11 excludes both events at t=0.0, t=0.1.
+    out = ext(events, start=10.0, duration=1.0)
+    assert out.shape == (4,)
+    assert (out == _KS_PAD).all()
 
-    assert isinstance(wrapped_model, DownstreamWrapperModel)
-    assert wrapped_model.channel_adapter is not None
-    assert wrapped_model._adapter_needs_positions
 
-    out = wrapped_model(
-        **{
-            "input": raw_input.clone(),
-            "channel_positions": channel_positions,
-            "subject_ids": subject_ids,
-        }
+def test_sequence_label_encoder_n_classes_property():
+    """``n_classes`` is the CTC head width: ``pad_value + 1``."""
+    ext = SequenceLabelEncoder(
+        event_types="Keystroke",
+        event_field="label",
+        allow_missing=True,
+        max_length=4,
+        pad_value=98,
     )
-    assert out.shape == (B, C_virtual * T)
-
-
-def test_downstream_wrapper_with_channel_projection():
-    """Test that ChannelProjection projects channels via Conv1d before the inner model."""
-    B, C_in, T = 4, 32, 200
-    C_target = 18
-
-    model = nn.Identity()
-    raw_input = torch.randn(B, C_in, T)
-    dummy_batch = {"input": raw_input.clone()}
-
-    proj_config = ChannelProjection(n_target_channels=C_target, max_norm=1.0)
-    wrapper = DownstreamWrapper(
-        channel_adapter_config=proj_config,
-        aggregation="flatten",
-        probe_config=None,
-    )
-    n_outputs = C_target * T
-    wrapped_model = wrapper.build(model, dummy_batch, n_outputs)
-
-    assert isinstance(wrapped_model, DownstreamWrapperModel)
-    assert wrapped_model.channel_adapter is not None
-    assert not wrapped_model._adapter_needs_positions
-
-    out = wrapped_model(**{"input": raw_input.clone()})
-    assert out.shape == (B, C_target * T)
-
-
-def _identity_expected(
-    target: list[str],
-    inputs: list[str],
-    rename: dict[str, str] | None = None,
-) -> torch.Tensor:
-    """Compute the one-hot weight pattern the identity init should produce."""
-    canon_inputs = [(rename or {}).get(n, n).upper() for n in inputs]
-    target_upper = [t.upper() for t in target]
-    weight = torch.zeros(len(target), len(inputs), 1)
-    used_inputs: set[int] = set()
-    for i, tu in enumerate(target_upper):
-        for j, cn in enumerate(canon_inputs):
-            if cn == tu and j not in used_inputs:
-                weight[i, j, 0] = 1.0
-                used_inputs.add(j)
-                break
-    return weight
-
-
-@pytest.mark.parametrize(
-    "target,inputs,rename,max_norm",
-    [
-        pytest.param(
-            ["Fp1", "Fp2", "Cz", "O1"],
-            ["Fp1", "Fp2", "Cz", "O1"],
-            None,
-            None,
-            id="exact_match",
-        ),
-        pytest.param(
-            ["Fp1", "Fp2", "Cz", "O1", "O2"],
-            ["Cz", "Fp1", "EXTRA", "O1"],
-            None,
-            None,
-            id="reorder_and_pad",
-        ),
-        pytest.param(
-            ["T7", "P7", "FP2"],
-            ["T3", "T5", "e9"],
-            {"T3": "T7", "T5": "P7", "e9": "Fp2"},
-            None,
-            id="rename_and_case_insensitive",
-        ),
-        pytest.param(
-            ["A", "B", "C"],
-            ["A", "B", "C"],
-            None,
-            1.0,
-            id="with_max_norm",
-        ),
-    ],
-)
-def test_channel_projection_identity_patterns(target, inputs, rename, max_norm):
-    """Identity init sets the expected one-hot pattern and zeros the bias.
-
-    Covers exact-match, reorder+zero-pad-missing, rename/case-insensitive
-    canonicalisation, and the ``Conv1dWithConstraint`` parametrize hook.
-    A row for a covered target exposes its matched input through the
-    forward pass; missing targets emit zeros.
-    """
-    proj = ChannelProjection(
-        n_target_channels=len(target),
-        init="identity",
-        target_channel_names=target,
-        rename_mapping=rename,
-        max_norm=max_norm,
-    )
-    conv = proj.build(n_in_channels=len(inputs), input_channel_names=inputs)
-
-    expected = _identity_expected(target, inputs, rename)
-    assert torch.allclose(conv.weight, expected)
-    assert conv.bias is not None
-    assert torch.allclose(conv.bias, torch.zeros_like(conv.bias))
-
-    x = torch.randn(2, len(inputs), 10)
-    out = conv(x)
-    for i in range(len(target)):
-        src = expected[i, :, 0].nonzero(as_tuple=False).squeeze(-1).tolist()
-        if src:
-            assert torch.allclose(out[:, i, :], x[:, src[0], :])
-        else:
-            assert torch.allclose(out[:, i, :], torch.zeros_like(out[:, i, :]))
-
-
-@pytest.mark.parametrize(
-    "kwargs,build_kwargs,match",
-    [
-        pytest.param(
-            {"n_target_channels": 2, "target_channel_names": ["A", "B"]},
-            {"n_in_channels": 2},
-            "input_channel_names",
-            id="missing_input_names_at_build",
-        ),
-        pytest.param(
-            {"n_target_channels": 3, "target_channel_names": ["A", "B"]},
-            None,
-            "target_channel_names",
-            id="wrong_target_length_in_config",
-        ),
-    ],
-)
-def test_channel_projection_identity_validation(kwargs, build_kwargs, match):
-    """``init='identity'`` rejects incomplete / inconsistent configurations."""
-    if build_kwargs is None:
-        with pytest.raises(ValueError, match=match):
-            ChannelProjection(init="identity", max_norm=None, **kwargs)
-    else:
-        proj = ChannelProjection(init="identity", max_norm=None, **kwargs)
-        with pytest.raises(ValueError, match=match):
-            proj.build(**build_kwargs)
-
-
-def test_channel_projection_identity_end_to_end():
-    """Identity-init adapter is a pass-through inside a DownstreamWrapper."""
-    target = ["Fp1", "Fp2", "Cz", "O1"]
-    B, T = 3, 20
-    raw_input = torch.randn(B, len(target), T)
-    dummy_batch = {"input": raw_input.clone()}
-
-    proj_config = ChannelProjection(
-        n_target_channels=len(target),
-        init="identity",
-        target_channel_names=target,
-        max_norm=None,
-    )
-    wrapper = DownstreamWrapper(
-        channel_adapter_config=proj_config,
-        aggregation="flatten",
-        probe_config=None,
-    )
-    wrapped_model = wrapper.build(
-        nn.Identity(), dummy_batch, len(target) * T, input_channel_names=target
-    )
-    out = wrapped_model(**{"input": raw_input.clone()})
-    assert torch.allclose(out, raw_input.flatten(1))
-
-
-def _bipolar_expected(
-    target: list[str],
-    inputs: list[str],
-    rename: dict[str, str] | None = None,
-) -> torch.Tensor:
-    """Compute the +1/-1 pattern the bipolar init should *add* to Kaiming."""
-    canon_inputs = [(rename or {}).get(n, n).upper() for n in inputs]
-    canon_to_idx: dict[str, int] = {}
-    for j, cn in enumerate(canon_inputs):
-        canon_to_idx.setdefault(cn, j)
-    pattern = torch.zeros(len(target), len(inputs), 1)
-    for i, tname in enumerate(target):
-        if "-" in tname:
-            pos, neg = tname.split("-", 1)
-        else:
-            pos, neg = tname, None
-        pos_idx = canon_to_idx.get(pos.upper())
-        neg_idx = canon_to_idx.get(neg.upper()) if neg else None
-        if neg is None:
-            if pos_idx is not None:
-                pattern[i, pos_idx, 0] = 1.0
-        elif pos_idx is not None and neg_idx is not None:
-            pattern[i, pos_idx, 0] = 1.0
-            pattern[i, neg_idx, 0] = -1.0
-        # Partial / fully-missing rows stay at 0 (additive means row = Kaiming).
-    return pattern
-
-
-@pytest.mark.parametrize(
-    "target,inputs,rename",
-    [
-        pytest.param(
-            ["FP1-F7", "F7-T7", "C3-A2"],
-            ["Fp1", "F7", "T7", "C3"],
-            None,
-            id="full_and_partial_mix",
-        ),
-        pytest.param(
-            ["FP1-F7", "T7-P7"],
-            ["Fp1", "T3", "T5"],
-            {"T3": "T7", "T5": "P7"},
-            id="rename",
-        ),
-        pytest.param(
-            ["FP1-F7", "F7-T7"],
-            ["UNK_0", "UNK_1", "UNK_2"],
-            None,
-            id="no_match",
-        ),
-        pytest.param(
-            ["Fp1", "FP1-F7"],
-            ["Fp1", "F7"],
-            None,
-            id="unipolar_and_bipolar_mix",
-        ),
-    ],
-)
-def test_channel_projection_bipolar_patterns(target, inputs, rename):
-    """Bipolar init adds the +1/-1 pattern on top of the Kaiming baseline.
-
-    Verified by building the same-shape adapter with ``init='random'`` under
-    the same torch seed and asserting ``W_bipolar - W_random == pattern``.
-    Fully missing rows stay at the Kaiming baseline so the forward output
-    (and therefore the gradient through ``|STFT|``) is non-zero.
-    """
-    kwargs: dict = dict(
-        n_target_channels=len(target),
-        target_channel_names=target,
-        rename_mapping=rename,
-        max_norm=None,
-    )
-
-    torch.manual_seed(0)
-    bipolar = ChannelProjection(init="bipolar", **kwargs).build(
-        n_in_channels=len(inputs), input_channel_names=inputs
-    )
-    torch.manual_seed(0)
-    random = ChannelProjection(init="random", **kwargs).build(n_in_channels=len(inputs))
-
-    expected = _bipolar_expected(target, inputs, rename)
-    assert torch.allclose(bipolar.weight - random.weight, expected, atol=1e-6)
-    assert bipolar.bias is not None
-    assert torch.allclose(bipolar.bias, torch.zeros_like(bipolar.bias))
-
-    # Rows left at the Kaiming baseline (partial / fully missing) must stay
-    # non-zero -- otherwise BIOT's |STFT(0)| would freeze their gradient.
-    pattern_row_abs = expected.abs().sum(dim=(1, 2))
-    for i in range(len(target)):
-        if pattern_row_abs[i] == 0:
-            assert bipolar.weight[i].abs().sum() > 0
-
-
-@pytest.mark.parametrize(
-    "kwargs,build_kwargs,match",
-    [
-        pytest.param(
-            {"n_target_channels": 2, "target_channel_names": ["A-B", "C-D"]},
-            {"n_in_channels": 4},
-            "input_channel_names",
-            id="missing_input_names_at_build",
-        ),
-        pytest.param(
-            {"n_target_channels": 3, "target_channel_names": ["A-B", "C-D"]},
-            None,
-            "target_channel_names",
-            id="wrong_target_length_in_config",
-        ),
-    ],
-)
-def test_channel_projection_bipolar_validation(kwargs, build_kwargs, match):
-    """``init='bipolar'`` rejects incomplete / inconsistent configurations."""
-    if build_kwargs is None:
-        with pytest.raises(ValueError, match=match):
-            ChannelProjection(init="bipolar", max_norm=None, **kwargs)
-    else:
-        proj = ChannelProjection(init="bipolar", max_norm=None, **kwargs)
-        with pytest.raises(ValueError, match=match):
-            proj.build(**build_kwargs)
-
-
-def test_channel_projection_bipolar_end_to_end():
-    """Bipolar-init adapter computes (A - B) for covered pairs end-to-end."""
-    target = ["FP1-F7", "F7-T7"]
-    inputs = ["Fp1", "F7", "T7"]
-    B, T = 3, 20
-    raw_input = torch.randn(B, len(inputs), T)
-    dummy_batch = {"input": raw_input.clone()}
-
-    proj_config = ChannelProjection(
-        n_target_channels=len(target),
-        init="bipolar",
-        target_channel_names=target,
-        max_norm=None,
-    )
-    wrapper = DownstreamWrapper(
-        channel_adapter_config=proj_config,
-        aggregation="flatten",
-        probe_config=None,
-    )
-    wrapped_model = wrapper.build(
-        nn.Identity(), dummy_batch, len(target) * T, input_channel_names=inputs
-    )
-    adapter = wrapped_model.channel_adapter
-    assert adapter is not None
-    # Strip the Kaiming baseline to isolate the bipolar pattern's contribution,
-    # then verify the adapter computes (A - B) for each covered pair.
-    with torch.no_grad():
-        adapter.weight.copy_(_bipolar_expected(target, inputs))
-    out = wrapped_model(**{"input": raw_input.clone()}).reshape(B, len(target), T)
-    assert torch.allclose(out[:, 0, :], raw_input[:, 0, :] - raw_input[:, 1, :])
-    assert torch.allclose(out[:, 1, :], raw_input[:, 1, :] - raw_input[:, 2, :])
+    assert ext.n_classes == 99
 
 
 # ---------------------------------------------------------------------------
@@ -632,10 +298,11 @@ def test_channel_projection_bipolar_end_to_end():
 # ---------------------------------------------------------------------------
 
 
-def test_seed_worker_seeds_numpy_and_random(monkeypatch) -> None:
+def test_seed_worker_seeds_numpy_and_random(mocker) -> None:
     """seed_worker must reseed numpy and Python random from torch's per-worker seed."""
-    fake_worker_info = SimpleNamespace(seed=42)
-    monkeypatch.setattr(torch.utils.data, "get_worker_info", lambda: fake_worker_info)
+    mocker.patch.object(
+        torch.utils.data, "get_worker_info", return_value=SimpleNamespace(seed=42)
+    )
 
     np.random.seed(0)
     random.seed(0)
@@ -654,17 +321,17 @@ def test_seed_worker_seeds_numpy_and_random(monkeypatch) -> None:
 
     np.random.seed(0)
     random.seed(0)
-    monkeypatch.setattr(
-        torch.utils.data, "get_worker_info", lambda: SimpleNamespace(seed=999)
+    mocker.patch.object(
+        torch.utils.data, "get_worker_info", return_value=SimpleNamespace(seed=999)
     )
     seed_worker(worker_id=0)
     different_np = np.random.rand(3)
     assert not np.allclose(after_np, different_np)
 
 
-def test_seed_worker_raises_when_called_outside_worker(monkeypatch) -> None:
+def test_seed_worker_raises_when_called_outside_worker(mocker) -> None:
     """seed_worker should fail loudly when called outside a DataLoader worker."""
-    monkeypatch.setattr(torch.utils.data, "get_worker_info", lambda: None)
+    mocker.patch.object(torch.utils.data, "get_worker_info", return_value=None)
     with pytest.raises(AssertionError):
         seed_worker(worker_id=0)
 
@@ -748,3 +415,100 @@ def test_make_weighted_sampler_without_generator_follows_global_rng(
     indices_b = list(iter(sampler_b))
 
     assert indices_a == indices_b
+
+
+# ---------------------------------------------------------------------------
+# run_probe_hook / detect_batch_dim (probe mechanics, exercised in isolation)
+# ---------------------------------------------------------------------------
+
+
+class _SeqFirstEnc(nn.Module):
+    """Emits sequence-first (T, B, D), like a ``batch_first=False`` transformer."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x).transpose(0, 1)  # (B, T, F) -> (T, B, D)
+
+
+class _SeqFirstProbeNet(nn.Module):
+    """Probed submodule ``enc`` emits sequence-first (T, B, D)."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.enc = _SeqFirstEnc(n_in, emb)
+        self.head = nn.Linear(emb, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(x).mean(0))
+
+
+class _Const(nn.Module):
+    """Emits a fixed-size tensor, independent of the input batch size."""
+
+    def forward(self, _x: torch.Tensor) -> torch.Tensor:
+        return torch.zeros(3, 6)
+
+
+class _BatchInvariantNet(nn.Module):
+    """Probed submodule ``const`` emits a fixed-size tensor, ignoring batch size."""
+
+    def __init__(self, n_in: int):
+        super().__init__()
+        self.const = _Const()
+        self.lin = nn.Linear(n_in, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.const(x)  # fire the hook with a batch-independent output
+        return self.lin(x)
+
+
+@pytest.mark.parametrize(
+    "model, probe_layer, batch, expected_shape, expected_dim",
+    [
+        # batch-first (B, D) capture from a Sequential -> batch axis 0
+        (
+            nn.Sequential(nn.Linear(10, 16), nn.Linear(16, 4)),
+            "0",
+            {"input": torch.randn(4, 10)},
+            (4, 16),
+            0,
+        ),
+        # sequence-first (T, B, D) capture -> batch axis 1 (auto-detected)
+        (
+            _SeqFirstProbeNet(10, 6),
+            "enc",
+            {"x": torch.randn(4, 5, 10)},
+            (5, 4, 6),
+            1,
+        ),
+    ],
+)
+def test_run_probe_hook_and_detect_batch_dim(
+    model, probe_layer, batch, expected_shape, expected_dim
+):
+    """run_probe_hook returns the submodule output; detect_batch_dim finds its batch axis."""
+    submodule = model.get_submodule(probe_layer)
+    assert run_probe_hook(model, submodule, batch, probe_layer).shape == expected_shape
+    assert detect_batch_dim(model, submodule, batch, probe_layer) == expected_dim
+
+
+def test_run_probe_hook_rejects_unreachable_and_non_tensor():
+    # A submodule never reached during forward -> RuntimeError.
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    detached = nn.Linear(4, 4)  # not part of model's forward graph
+    with pytest.raises(RuntimeError, match="did not fire"):
+        run_probe_hook(model, detached, {"input": torch.randn(2, 10)}, "detached")
+    # A tuple-returning submodule (nn.RNN -> (output, h_n)) -> TypeError.
+    rnn = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        run_probe_hook(rnn, rnn, {"input": torch.randn(2, 5, 10)}, "")
+
+
+def test_detect_batch_dim_raises_when_no_axis_scales():
+    # A capture independent of batch size yields zero candidate axes.
+    model = _BatchInvariantNet(10)
+    with pytest.raises(ValueError, match="batch axis is ambiguous"):
+        detect_batch_dim(model, model.const, {"x": torch.randn(4, 10)}, "const")

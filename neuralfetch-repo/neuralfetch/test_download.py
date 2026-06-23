@@ -187,83 +187,132 @@ def test_globus_missing_credentials_raises(tmp_path: Path) -> None:
         )
 
 
-def test_nsd_data_access_agreement(tmp_path: Path) -> None:
-    """NSD consent flow: T&C display, user info collection, marker persistence."""
-    from neuralfetch.studies.allen2022massive import Allen2022Massive
+def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
+    """Physionet sets prefix/output_dir and writes under download/<study>/<version>/."""
+    physionet = download.Physionet(
+        study="eegmat",
+        version="1.0.0",
+        dset_dir=tmp_path / "study",
+    )
 
-    bold_path = tmp_path / "Allen2022Massive"
-    bold_path.mkdir()
-    bold = Allen2022Massive(path=bold_path)
+    def mock_s3_download(self: download.S3) -> None:
+        assert self.prefix == "eegmat/1.0.0"
+        assert self.output_dir == self._dl_dir / "eegmat" / "1.0.0"
+        out_dir = tp.cast(Path, self.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "file1.txt").write_text("data1")
+        (out_dir / "file2.txt").write_text("data2")
+
+    with patch.object(download.S3, "_download", mock_s3_download):
+        physionet._download()
+
+    out_root = tmp_path / "study" / "download" / "eegmat" / "1.0.0"
+    for name, expected in [("file1.txt", "data1"), ("file2.txt", "data2")]:
+        assert (out_root / name).read_text("utf8") == expected
+
+
+@pytest.mark.parametrize("study_name", ["Allen2022Massive", "Allen2022MassiveRaw"])
+def test_nsd_data_access_agreement(tmp_path: Path, study_name: str) -> None:
+    """NSD consent flow: env-var gate, T&C display, user info collection, marker persistence.
+
+    Both Allen2022Massive and Allen2022MassiveRaw share the same consent
+    implementation (Raw subclasses Massive), so the parametrized matrix
+    exercises both entry points.
+    """
+    from neuralfetch.studies import allen2022massive
+
+    study_cls = getattr(allen2022massive, study_name)
+
+    study_path = tmp_path / study_name
+    study_path.mkdir()
+    bold = study_cls(path=study_path)
     marker = tmp_path / "neuralfetch" / ".nsd_tcs_accepted"
 
-    with (
-        patch(
-            "neuralfetch.studies.allen2022massive.get_nsd_tcs_marker", return_value=marker
-        ),
-        patch("neuralfetch.studies.allen2022massive.sys") as mock_sys,
+    with patch(
+        "neuralfetch.studies.allen2022massive.get_nsd_tcs_marker", return_value=marker
     ):
-        mock_sys.stdin.isatty.return_value = True
-        # -- Declining T&C raises PermissionError --
-        with patch("builtins.input", return_value="n"):
-            with pytest.raises(PermissionError, match="Terms and Conditions"):
-                bold._check_nsd_data_access_agreement()
-        assert not marker.exists()
-
-        # -- Empty required fields raise ValueError --
-        for empty_at in range(1, 5):
-            # Sequence: agree, name, email, department, institution
-            answers = ["y", "John Doe", "john@example.com", "Department", "Institute"]
-            answers[empty_at] = ""  # leave one field empty
-            with patch("builtins.input", side_effect=answers):
-                with pytest.raises(ValueError, match="required"):
+        # -- Without NSD_ACCEPT_LICENCE the gate raises before any prompt --
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NSD_ACCEPT_LICENCE", None)
+            with patch("builtins.input") as mock_input:
+                with pytest.raises(PermissionError, match="NSD_ACCEPT_LICENCE"):
                     bold._check_nsd_data_access_agreement()
+            mock_input.assert_not_called()
         assert not marker.exists()
 
-        # -- Invalid role selection raises ValueError --
-        valid_fields = ["y", "John Doe", "john@example.com", "Department", "Institute"]
-        for bad_role in ["0", "-1", "99", "abc", ""]:
-            with patch("builtins.input", side_effect=[*valid_fields, bad_role]):
-                with pytest.raises(ValueError, match="Invalid role selection"):
+        with (
+            patch.dict(os.environ, {"NSD_ACCEPT_LICENCE": "1"}),
+            patch("neuralfetch.studies.allen2022massive.sys") as mock_sys,
+        ):
+            mock_sys.stdin.isatty.return_value = True
+
+            # -- Declining T&C raises PermissionError --
+            with patch("builtins.input", return_value="n"):
+                with pytest.raises(PermissionError, match="Terms and Conditions"):
                     bold._check_nsd_data_access_agreement()
-        assert not marker.exists()
+            assert not marker.exists()
 
-        # -- Declining form submission raises PermissionError --
-        inputs_declined = [*valid_fields, "4", "n"]
-        with (
-            patch("builtins.input", side_effect=inputs_declined),
-            patch("webbrowser.open", return_value=True),
-        ):
-            with pytest.raises(PermissionError, match="submit"):
+            # -- Empty required fields raise ValueError --
+            for empty_at in range(1, 5):
+                # Sequence: agree, name, email, department, institution
+                answers = ["y", "John Doe", "john@example.com", "Department", "Institute"]
+                answers[empty_at] = ""  # leave one field empty
+                with patch("builtins.input", side_effect=answers):
+                    with pytest.raises(ValueError, match="required"):
+                        bold._check_nsd_data_access_agreement()
+            assert not marker.exists()
+
+            # -- Invalid role selection raises ValueError --
+            valid_fields = [
+                "y",
+                "John Doe",
+                "john@example.com",
+                "Department",
+                "Institute",
+            ]
+            for bad_role in ["0", "-1", "99", "abc", ""]:
+                with patch("builtins.input", side_effect=[*valid_fields, bad_role]):
+                    with pytest.raises(ValueError, match="Invalid role selection"):
+                        bold._check_nsd_data_access_agreement()
+            assert not marker.exists()
+
+            # -- Declining form submission raises PermissionError --
+            inputs_declined = [*valid_fields, "4", "n"]
+            with (
+                patch("builtins.input", side_effect=inputs_declined),
+                patch("webbrowser.open", return_value=True),
+            ):
+                with pytest.raises(PermissionError, match="submit"):
+                    bold._check_nsd_data_access_agreement()
+            assert not marker.exists()
+
+            # -- Successful flow with a standard role --
+            inputs_standard = [*valid_fields, "4", "y"]
+            with (
+                patch("builtins.input", side_effect=inputs_standard),
+                patch("webbrowser.open", return_value=True) as mock_browser,
+            ):
                 bold._check_nsd_data_access_agreement()
-        assert not marker.exists()
+            assert marker.exists()
+            url = mock_browser.call_args[0][0]
+            assert "entry.1976545571=John+Doe" in url
+            assert "john%40example.com" in url
+            assert "entry.443953373=Faculty" in url
+            assert "__other_option__" not in url
 
-        # -- Successful flow with a standard role --
-        inputs_standard = [*valid_fields, "4", "y"]
-        with (
-            patch("builtins.input", side_effect=inputs_standard),
-            patch("webbrowser.open", return_value=True) as mock_browser,
-        ):
-            bold._check_nsd_data_access_agreement()
-        assert marker.exists()
-        url = mock_browser.call_args[0][0]
-        assert "entry.1976545571=John+Doe" in url
-        assert "john%40example.com" in url
-        assert "entry.443953373=Faculty" in url
-        assert "__other_option__" not in url
+            # -- Marker persistence: second call on Bold skips --
+            with patch("builtins.input") as mock_input:
+                bold._check_nsd_data_access_agreement()
+            mock_input.assert_not_called()
 
-        # -- Marker persistence: second call on Bold skips --
-        with patch("builtins.input") as mock_input:
-            bold._check_nsd_data_access_agreement()
-        mock_input.assert_not_called()
-
-        # -- "Other" role uses __other_option__ in URL --
-        marker.unlink()
-        inputs_other = [*valid_fields, "5", "Researcher", "y"]
-        with (
-            patch("builtins.input", side_effect=inputs_other),
-            patch("webbrowser.open", return_value=True) as mock_browser,
-        ):
-            bold._check_nsd_data_access_agreement()
-        url = mock_browser.call_args[0][0]
-        assert "__other_option__" in url
-        assert "Researcher" in url
+            # -- "Other" role uses __other_option__ in URL --
+            marker.unlink()
+            inputs_other = [*valid_fields, "5", "Researcher", "y"]
+            with (
+                patch("builtins.input", side_effect=inputs_other),
+                patch("webbrowser.open", return_value=True) as mock_browser,
+            ):
+                bold._check_nsd_data_access_agreement()
+            url = mock_browser.call_args[0][0]
+            assert "__other_option__" in url
+            assert "Researcher" in url
