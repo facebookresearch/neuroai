@@ -14,6 +14,7 @@ import inspect
 import logging
 import typing as tp
 
+import neuralset as ns
 import numpy as np
 import torch
 from lightning.pytorch.loggers import WandbLogger
@@ -27,6 +28,7 @@ from neuraltrain.models.dummy_predictor import DummyPredictor
 from .modules import DownstreamWrapper
 from .sklearn_baseline import SklearnBaseline
 from .utils import (
+    drop_unsupported_init_kwargs,
     get_neuro_and_targets_from_dataset,
     get_targets_from_dataset,
     load_checkpoint,
@@ -69,8 +71,9 @@ def build_braindecode_model(
     if len(ch_names) == n_in_channels:
         build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
     frequency = getattr(neuro_extractor, "frequency", None)
+    # guard skips the "native" sentinel (field is Literal["native"] | float)
     if isinstance(frequency, (int, float)):
-        build_kwargs["sfreq"] = float(frequency)
+        build_kwargs["sfreq"] = ns.base.Frequency(frequency)
 
     if brain_model_config.from_pretrained_name is not None:
         n_adapter_chans = (
@@ -86,9 +89,9 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
-    params = inspect.signature(type(brain_model_config)._MODEL_CLASS.__init__).parameters
-    if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        build_kwargs = {k: v for k, v in build_kwargs.items() if k in params}
+    build_kwargs = drop_unsupported_init_kwargs(
+        type(brain_model_config)._MODEL_CLASS, build_kwargs
+    )
     return brain_model_config.build(**build_kwargs)
 
 
