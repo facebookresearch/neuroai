@@ -84,30 +84,9 @@ CLASSIFIERS = sorted(
 )
 
 N_CHANS, N_TIMES, N_OUTPUTS, SFREQ = 22, 1000, 4, 120.0
-CH_NAMES = [
-    "Fp1",
-    "Fp2",
-    "F3",
-    "F4",
-    "C3",
-    "C4",
-    "P3",
-    "P4",
-    "O1",
-    "O2",
-    "F7",
-    "F8",
-    "T7",
-    "T8",
-    "P7",
-    "P8",
-    "Fz",
-    "Cz",
-    "Pz",
-    "FC1",
-    "FC2",
-    "CP1",
-]
+CH_NAMES = (
+    "Fp1 Fp2 F3 F4 C3 C4 P3 P4 O1 O2 F7 F8 T7 T8 P7 P8 Fz Cz Pz FC1 FC2 CP1".split()
+)
 
 
 def _loader() -> DataLoader:
@@ -116,20 +95,24 @@ def _loader() -> DataLoader:
     return cast(DataLoader, loader)
 
 
+def _build(config: bd_base.BaseBrainDecodeModel) -> torch.nn.Module:
+    return build_braindecode_model(
+        brain_model_config=config,
+        downstream_model_wrapper=None,
+        train_loader=_loader(),
+        n_in_channels=N_CHANS,
+        n_times=N_TIMES,
+        n_outputs=N_OUTPUTS,
+    )
+
+
 def test_build_raises_when_runtime_kwargs_overlap_config() -> None:
     """If a YAML pre-sets one of the six auto-injected params, the user is
     redefining a data-derived value -- ``BaseBrainDecodeModel.build()`` must
     raise so the mismatch surfaces instead of being silently overridden."""
     config = getattr(bd_base, "EEGNet")(kwargs={"sfreq": 250.0})
     with pytest.raises(ValueError, match="kwargs overlap with config kwargs for keys"):
-        build_braindecode_model(
-            brain_model_config=config,
-            downstream_model_wrapper=None,
-            train_loader=_loader(),
-            n_in_channels=N_CHANS,
-            n_times=N_TIMES,
-            n_outputs=N_OUTPUTS,
-        )
+        _build(config)
 
 
 @pytest.mark.parametrize("name", CLASSIFIERS)
@@ -137,14 +120,7 @@ def test_build_braindecode_classifier(name: str) -> None:
     config_cls = getattr(bd_base, name, None)
     if config_cls is None:
         pytest.skip(f"{name} not registered as a BaseBrainDecodeModel config")
-    model = build_braindecode_model(
-        brain_model_config=config_cls(),
-        downstream_model_wrapper=None,
-        train_loader=_loader(),
-        n_in_channels=N_CHANS,
-        n_times=N_TIMES,
-        n_outputs=N_OUTPUTS,
-    )
+    model = _build(config_cls())
     model.eval()
     with torch.no_grad():
         out = model(torch.randn(2, N_CHANS, N_TIMES))

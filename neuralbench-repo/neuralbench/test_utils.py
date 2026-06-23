@@ -22,29 +22,27 @@ from neuralset.extractors.meta import CroppedExtractor
 from .data import Data
 from .utils import (
     _compute_regression_bin_weights,
-    drop_unsupported_init_kwargs,
+    _drop_unsupported_init_kwargs,
     make_regression_bin_sampler,
     make_weighted_sampler,
     seed_worker,
 )
 
 
-def test_drop_unsupported_init_kwargs() -> None:
-    """Keys absent from ``__init__`` are dropped, unless the model takes **kwargs."""
-
-    class NoKwargs:
-        def __init__(self, a, b):  # noqa: D401
-            ...
-
-    class WithKwargs:
-        def __init__(self, a, **kwargs):  # noqa: D401
-            ...
-
-    extra = {"a": 1, "b": 2, "c": 3}
-    # Explicit signature, no **kwargs: unknown "c" (cf. TCN refusing sfreq) dropped.
-    assert drop_unsupported_init_kwargs(NoKwargs, extra) == {"a": 1, "b": 2}
-    # **kwargs present: everything is forwarded.
-    assert drop_unsupported_init_kwargs(WithKwargs, extra) == extra
+@pytest.mark.parametrize(
+    "init, expected",
+    [
+        (
+            lambda self, a, b: None,
+            {"a": 1, "b": 2},
+        ),  # no **kwargs -> "c" dropped (cf. TCN)
+        (lambda self, a, **kw: None, {"a": 1, "b": 2, "c": 3}),  # **kwargs -> keep all
+    ],
+    ids=["no_kwargs", "var_kwargs"],
+)
+def test_drop_unsupported_init_kwargs(init, expected) -> None:
+    cls = type("M", (), {"__init__": init})
+    assert _drop_unsupported_init_kwargs(cls, {"a": 1, "b": 2, "c": 3}) == expected
 
 
 # ---------------------------------------------------------------------------

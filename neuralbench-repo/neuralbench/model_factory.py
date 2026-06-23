@@ -28,7 +28,7 @@ from neuraltrain.models.dummy_predictor import DummyPredictor
 from .modules import DownstreamWrapper
 from .sklearn_baseline import SklearnBaseline
 from .utils import (
-    drop_unsupported_init_kwargs,
+    _drop_unsupported_init_kwargs,
     get_neuro_and_targets_from_dataset,
     get_targets_from_dataset,
     load_checkpoint,
@@ -89,7 +89,7 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
-    build_kwargs = drop_unsupported_init_kwargs(
+    build_kwargs = _drop_unsupported_init_kwargs(
         type(brain_model_config)._MODEL_CLASS, build_kwargs
     )
     return brain_model_config.build(**build_kwargs)

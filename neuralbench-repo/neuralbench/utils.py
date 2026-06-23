@@ -29,7 +29,7 @@ from neuralset.utils import warn_once
 LOGGER = logging.getLogger(__name__)
 
 
-def drop_unsupported_init_kwargs(
+def _drop_unsupported_init_kwargs(
     model_cls: type, kwargs: dict[str, tp.Any]
 ) -> dict[str, tp.Any]:
     """Keep only kwargs ``model_cls`` accepts (all of them if its init takes ``**kwargs``).
