@@ -46,6 +46,7 @@ def test_drop_unsupported_init_kwargs() -> None:
     # **kwargs present: everything is forwarded.
     assert drop_unsupported_init_kwargs(WithKwargs, extra) == extra
 
+
 # ---------------------------------------------------------------------------
 # Regression-bin sampler
 # ---------------------------------------------------------------------------

@@ -19,19 +19,21 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
-import neuraltrain.models  # noqa: F401  triggers BaseBrainDecodeModel subclass registration
 import pytest
 import torch
 from braindecode.models.util import models_dict
+from torch.utils.data import DataLoader
+
+import neuraltrain.models  # noqa: F401  triggers BaseBrainDecodeModel subclass registration
+from neuralbench.model_factory import build_braindecode_model
 from neuralbench.registry import load_yaml_config
 from neuraltrain.models import base as bd_base
 
-from neuralbench.model_factory import build_braindecode_model
 
-
-def _all_brain_model_configs() -> dict[str, type]:
-    out: dict[str, type] = {}
+def _all_brain_model_configs() -> dict[str, type[bd_base.BaseBrainDecodeModel]]:
+    out: dict[str, type[bd_base.BaseBrainDecodeModel]] = {}
     stack = [bd_base.BaseBrainDecodeModel]
     while stack:
         cls = stack.pop()
@@ -47,7 +49,7 @@ def _foundation_class_names() -> set[str]:
     names = set()
     for path in yaml_dir.glob("*.yaml"):
         cfg = load_yaml_config(path) or {}
-        bm = (cfg.get("brain_model_config") or {})
+        bm = cfg.get("brain_model_config") or {}
         if not isinstance(bm, dict) or "from_pretrained_name" not in bm:
             continue
         cfg_cls = configs.get(bm.get("name", ""))
@@ -68,31 +70,57 @@ ALREADY_IMPLEMENTED = _foundation_class_names()
 # minute-scale inputs, EMG/MEG-specific channel layouts, self-supervised
 # pretext nets with no classifier head).
 NON_EEG_CLASSIFIERS = {
-    "AttnSleep", "USleep",
-    "EMG2QwertyNet", "MetaNeuromotorHand",
-    "SignalJEPA", "SignalJEPA_Contextual",
+    "AttnSleep",
+    "USleep",
+    "EMG2QwertyNet",
+    "MetaNeuromotorHand",
+    "SignalJEPA",
+    "SignalJEPA_Contextual",
 }
 CLASSIFIERS = sorted(
-    name for name in models_dict
+    name
+    for name in models_dict
     if name not in ALREADY_IMPLEMENTED and name not in NON_EEG_CLASSIFIERS
 )
 
 N_CHANS, N_TIMES, N_OUTPUTS, SFREQ = 22, 1000, 4, 120.0
-CH_NAMES = ["Fp1", "Fp2", "F3", "F4", "C3", "C4", "P3", "P4",
-            "O1", "O2", "F7", "F8", "T7", "T8", "P7", "P8",
-            "Fz", "Cz", "Pz", "FC1", "FC2", "CP1"]
+CH_NAMES = [
+    "Fp1",
+    "Fp2",
+    "F3",
+    "F4",
+    "C3",
+    "C4",
+    "P3",
+    "P4",
+    "O1",
+    "O2",
+    "F7",
+    "F8",
+    "T7",
+    "T8",
+    "P7",
+    "P8",
+    "Fz",
+    "Cz",
+    "Pz",
+    "FC1",
+    "FC2",
+    "CP1",
+]
 
 
-def _loader() -> SimpleNamespace:
+def _loader() -> DataLoader:
     extractor = SimpleNamespace(frequency=SFREQ, _channels=dict.fromkeys(CH_NAMES))
-    return SimpleNamespace(dataset=SimpleNamespace(extractors={"neuro": extractor}))
+    loader = SimpleNamespace(dataset=SimpleNamespace(extractors={"neuro": extractor}))
+    return cast(DataLoader, loader)
 
 
 def test_build_raises_when_runtime_kwargs_overlap_config() -> None:
     """If a YAML pre-sets one of the six auto-injected params, the user is
     redefining a data-derived value -- ``BaseBrainDecodeModel.build()`` must
     raise so the mismatch surfaces instead of being silently overridden."""
-    config = bd_base.EEGNet(kwargs={"sfreq": 250.0})
+    config = getattr(bd_base, "EEGNet")(kwargs={"sfreq": 250.0})
     with pytest.raises(ValueError, match="kwargs overlap with config kwargs for keys"):
         build_braindecode_model(
             brain_model_config=config,

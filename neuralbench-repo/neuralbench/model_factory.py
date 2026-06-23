@@ -14,13 +14,13 @@ import inspect
 import logging
 import typing as tp
 
-import neuralset as ns
 import numpy as np
 import torch
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchinfo import summary
 
+import neuralset as ns
 from neuraltrain.models.base import BaseBrainDecodeModel, BaseModelConfig
 from neuraltrain.models.common import ChannelMerger
 from neuraltrain.models.dummy_predictor import DummyPredictor

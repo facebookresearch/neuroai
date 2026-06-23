@@ -32,12 +32,12 @@ LOGGER = logging.getLogger(__name__)
 def drop_unsupported_init_kwargs(
     model_cls: type, kwargs: dict[str, tp.Any]
 ) -> dict[str, tp.Any]:
-    """Keep only kwargs ``model_cls.__init__`` accepts (all of them if it takes ``**kwargs``).
+    """Keep only kwargs ``model_cls`` accepts (all of them if its init takes ``**kwargs``).
 
     Only bites for non-mixin models like ``TCN`` (no ``sfreq``/``chs_info``);
-    braindecode's own ``config.py`` introspects ``__init__`` the same way.
+    braindecode's own ``config.py`` introspects the constructor the same way.
     """
-    params = inspect.signature(model_cls.__init__).parameters
+    params = inspect.signature(model_cls).parameters
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return dict(kwargs)
     return {k: v for k, v in kwargs.items() if k in params}
