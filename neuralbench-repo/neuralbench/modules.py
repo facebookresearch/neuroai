@@ -550,9 +550,7 @@ class DownstreamWrapper(pydantic.BaseModel):
 
         capture = run_probe_hook(model, submodule, model_batch, self.probe_layer)
         if self.probe_batch_dim == "auto":
-            batch_dim = detect_batch_dim(
-                model, submodule, model_batch, capture, self.probe_layer
-            )
+            batch_dim = detect_batch_dim(model, submodule, model_batch, self.probe_layer)
         else:
             batch_dim = self.probe_batch_dim
             if not 0 <= batch_dim < capture.ndim:

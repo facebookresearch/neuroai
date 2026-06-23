@@ -105,14 +105,14 @@ def detect_batch_dim(
     model: nn.Module,
     submodule: nn.Module,
     model_batch: dict[str, torch.Tensor | None],
-    capture: torch.Tensor,
     probe_layer: str,
 ) -> int:
-    """Find the batch axis of ``capture`` by re-running at a doubled batch size.
+    """Find the batch axis of ``submodule``'s output via a doubled-batch forward.
 
-    The batch axis is the only one whose size scales with the input batch;
-    sequence/feature axes stay constant. ``probe_layer`` is used only for the
-    error message.
+    Captures the activation at the input batch size and again at a doubled batch
+    size: the batch axis is the only one whose size scales with the input batch,
+    while sequence/feature axes stay constant. ``probe_layer`` is used only for
+    the error message.
 
     Raises
     ------
@@ -123,6 +123,7 @@ def detect_batch_dim(
     batch_size = next(
         v.shape[0] for v in model_batch.values() if isinstance(v, torch.Tensor)
     )
+    capture = run_probe_hook(model, submodule, model_batch, probe_layer)
     doubled = {
         k: torch.cat([v, v], dim=0)
         if isinstance(v, torch.Tensor) and v.ndim and v.shape[0] == batch_size
