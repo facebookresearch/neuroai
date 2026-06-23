@@ -14,7 +14,7 @@ classifiers = [
 
 dependencies = [
   "pandas>=2.0.1",
-  "numpy>=2.1",
+  "numpy>=2.1,<2.5",  # <2.5 until numba/llvmlite ship a release supporting numpy 2.5 (#170)
   "scikit-learn>=0.21.2",
   "torch>=2.5.1",
   "torchvision>=0.20.1",

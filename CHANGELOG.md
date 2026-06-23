@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralset` / `neuraltrain`: capped `numpy<2.5` so a fresh co-install with `eegdash` on Python 3.12 no longer backtracks to the unbuildable `numba==0.53.1` / `llvmlite==0.36.0`; nothing needs numpy 2.5 and the cap lets the resolver settle on `numba==0.65.1` / `llvmlite==0.47.0` (#170).
 - `neuralset`: fixed `Mne2013Sample`/`Fake2025Meg` re-downloading the MNE sample dataset on `run()` after `download()` by funneling all paths through a single root; the download progress bar now also shows when `run()` triggers the fetch. The study subfolder is now resolved once in `model_post_init` instead of mutating `self.path` in `download()`, so calling `download()` after `run()` no longer crashes on the frozen instance (#153).
 - `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind the `NSD_ACCEPT_LICENCE` env var.
 - `neuralbench`: added a `CLUSTER` key to `~/.neuralbench/config.json` to force fully local execution (`null`) without `--debug`, keep the default SLURM auto-detection (`"auto"`), or always submit to SLURM (`"slurm"`); honored by `--prepare`.
