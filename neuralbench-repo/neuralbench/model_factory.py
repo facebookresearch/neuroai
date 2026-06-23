@@ -20,6 +20,7 @@ from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchinfo import summary
 
+import neuralset as ns
 from neuraltrain.models.base import BaseBrainDecodeModel, BaseModelConfig
 from neuraltrain.models.common import ChannelMerger
 from neuraltrain.models.dummy_predictor import DummyPredictor
@@ -27,6 +28,7 @@ from neuraltrain.models.dummy_predictor import DummyPredictor
 from .modules import DownstreamWrapper
 from .sklearn_baseline import SklearnBaseline
 from .utils import (
+    _drop_unsupported_init_kwargs,
     get_neuro_and_targets_from_dataset,
     get_targets_from_dataset,
     load_checkpoint,
@@ -43,12 +45,12 @@ def build_braindecode_model(
     n_times: int,
     n_outputs: int,
 ) -> torch.nn.Module:
-    """Build a braindecode model, handling channel name extraction.
+    """Build a braindecode model.
 
-    Some braindecode models (REVE, BENDR, LaBraM) require explicit channel
-    name information via ``chs_info``.  Model-specific adaptation (e.g.
-    temporal embedding resizing for LaBraM) is handled by the model
-    config's own ``build()`` method.
+    Forwards the standard EEG arguments and drops the ones the target
+    class's ``__init__`` doesn't accept, so the full ``braindecode.models``
+    catalogue builds without per-model YAML overrides.  ``input_window_seconds``
+    is intentionally omitted: braindecode derives it from ``n_times / sfreq``.
 
     When *downstream_model_wrapper* is set, ``n_outputs`` is not passed to
     the model (the wrapper's probe handles output projection).
@@ -60,13 +62,18 @@ def build_braindecode_model(
             "BIOT requires a downstream_model_wrapper"
         )
         build_kwargs["n_outputs"] = n_outputs
+    neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
+    ch_names = list(neuro_extractor._channels.keys())
     if _needs_ch_names:
-        neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
-        ch_names = list(neuro_extractor._channels.keys())
         assert len(ch_names) == n_in_channels, (
             f"Expected {n_in_channels} channels, but got {len(ch_names)} channel names."
         )
+    if len(ch_names) == n_in_channels:
         build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
+    frequency = getattr(neuro_extractor, "frequency", None)
+    # guard skips the "native" sentinel (field is Literal["native"] | float)
+    if isinstance(frequency, (int, float)):
+        build_kwargs["sfreq"] = ns.base.Frequency(frequency)
 
     if brain_model_config.from_pretrained_name is not None:
         n_adapter_chans = (
@@ -82,6 +89,9 @@ def build_braindecode_model(
     else:
         build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
 
+    build_kwargs = _drop_unsupported_init_kwargs(
+        type(brain_model_config)._MODEL_CLASS, build_kwargs
+    )
     return brain_model_config.build(**build_kwargs)
 
 

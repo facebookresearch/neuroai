@@ -6,6 +6,7 @@
 
 """Utility functions."""
 
+import inspect
 import logging
 import random
 import typing as tp
@@ -26,6 +27,20 @@ from neuralset.extractors import LabelEncoder
 from neuralset.utils import warn_once
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _drop_unsupported_init_kwargs(
+    model_cls: type, kwargs: dict[str, tp.Any]
+) -> dict[str, tp.Any]:
+    """Keep only kwargs ``model_cls`` accepts (all of them if its init takes ``**kwargs``).
+
+    Only bites for non-mixin models like ``TCN`` (no ``sfreq``/``chs_info``);
+    braindecode's own ``config.py`` introspects the constructor the same way.
+    """
+    params = inspect.signature(model_cls).parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return dict(kwargs)
+    return {k: v for k, v in kwargs.items() if k in params}
 
 
 def seed_worker(worker_id: int) -> None:

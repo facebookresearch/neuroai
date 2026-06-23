@@ -22,10 +22,28 @@ from neuralset.extractors.meta import CroppedExtractor
 from .data import Data
 from .utils import (
     _compute_regression_bin_weights,
+    _drop_unsupported_init_kwargs,
     make_regression_bin_sampler,
     make_weighted_sampler,
     seed_worker,
 )
+
+
+@pytest.mark.parametrize(
+    "init, expected",
+    [
+        (
+            lambda self, a, b: None,
+            {"a": 1, "b": 2},
+        ),  # no **kwargs -> "c" dropped (cf. TCN)
+        (lambda self, a, **kw: None, {"a": 1, "b": 2, "c": 3}),  # **kwargs -> keep all
+    ],
+    ids=["no_kwargs", "var_kwargs"],
+)
+def test_drop_unsupported_init_kwargs(init, expected) -> None:
+    cls = type("M", (), {"__init__": init})
+    assert _drop_unsupported_init_kwargs(cls, {"a": 1, "b": 2, "c": 3}) == expected
+
 
 # ---------------------------------------------------------------------------
 # Regression-bin sampler
