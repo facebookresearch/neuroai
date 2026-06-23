@@ -20,7 +20,12 @@ from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
 from .data import Data
 from .modules import ChannelProjection, DownstreamWrapper, DownstreamWrapperModel
-from .utils import make_weighted_sampler, seed_worker
+from .utils import (
+    detect_batch_dim,
+    make_weighted_sampler,
+    run_probe_hook,
+    seed_worker,
+)
 
 
 def test_downstream_wrapper():
@@ -130,6 +135,74 @@ def test_downstream_wrapper_probe_layer_batch_dim_override():
     ).build(model, {"x": torch.Tensor(B, T, F)}, Fp)
     assert wrapped.probe.in_features == D
     assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
+
+
+# ---------------------------------------------------------------------------
+# run_probe_hook / detect_batch_dim (probe mechanics, exercised in isolation)
+# ---------------------------------------------------------------------------
+
+
+class _ConstProbeNet(nn.Module):
+    """Probed submodule ``const`` emits a fixed-size tensor, ignoring batch size."""
+
+    def __init__(self, n_in: int):
+        super().__init__()
+        self.const = nn.Module()  # placeholder; hook target only needs to fire
+        self.const.forward = lambda _x: torch.zeros(3, 6)  # type: ignore[method-assign]
+        self.lin = nn.Linear(n_in, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.const(x)  # fire the hook with a batch-independent output
+        return self.lin(x)
+
+
+def test_run_probe_hook_captures_submodule_output():
+    B, F = 4, 10
+    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
+    capture = run_probe_hook(model, model[0], {"input": torch.randn(B, F)}, "0")
+    assert capture.shape == (B, 16)
+
+
+def test_run_probe_hook_raises_when_hook_never_fires():
+    # A submodule that is never reached during forward must raise.
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    detached = nn.Linear(4, 4)  # not part of model's forward graph
+    with pytest.raises(RuntimeError, match="did not fire"):
+        run_probe_hook(model, detached, {"input": torch.randn(2, 10)}, "detached")
+
+
+def test_run_probe_hook_raises_on_non_tensor():
+    # nn.RNN returns (output, h_n); probing it must raise.
+    model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        run_probe_hook(model, model, {"input": torch.randn(2, 5, 10)}, "")
+
+
+def test_detect_batch_dim_batch_first():
+    B, F = 4, 10
+    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
+    batch = {"input": torch.randn(B, F)}
+    capture = run_probe_hook(model, model[0], batch, "0")
+    assert detect_batch_dim(model, model[0], batch, capture, "0") == 0
+
+
+def test_detect_batch_dim_seq_first():
+    # _SeqFirstProbeNet.enc emits (T, B, D); the batch axis is 1.
+    B, T, F, D = 4, 5, 10, 6
+    model = _SeqFirstProbeNet(F, D)
+    batch = {"x": torch.randn(B, T, F)}
+    capture = run_probe_hook(model, model.enc, batch, "enc")
+    assert detect_batch_dim(model, model.enc, batch, capture, "enc") == 1
+
+
+def test_detect_batch_dim_raises_when_no_axis_scales():
+    # A capture independent of batch size yields zero candidate axes.
+    B, F = 4, 10
+    model = _ConstProbeNet(F)
+    batch = {"x": torch.randn(B, F)}
+    capture = run_probe_hook(model, model.const, batch, "const")
+    with pytest.raises(ValueError, match="batch axis is ambiguous"):
+        detect_batch_dim(model, model.const, batch, capture, "const")
 
 
 class LinearOutDict(nn.Module):

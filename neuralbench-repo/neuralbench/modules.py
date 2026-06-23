@@ -25,6 +25,8 @@ from torch import nn
 from neuraltrain.models.common import ChannelMerger, Mlp
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
+from .utils import detect_batch_dim, run_probe_hook
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -546,9 +548,11 @@ class DownstreamWrapper(pydantic.BaseModel):
                 f"e.g. {valid[:3]})"
             ) from exc
 
-        capture = self._run_probe_hook(model, submodule, model_batch)
+        capture = run_probe_hook(model, submodule, model_batch, self.probe_layer)
         if self.probe_batch_dim == "auto":
-            batch_dim = self._detect_batch_dim(model, submodule, model_batch, capture)
+            batch_dim = detect_batch_dim(
+                model, submodule, model_batch, capture, self.probe_layer
+            )
         else:
             batch_dim = self.probe_batch_dim
             if not 0 <= batch_dim < capture.ndim:
@@ -558,79 +562,6 @@ class DownstreamWrapper(pydantic.BaseModel):
                     f"{tuple(capture.shape)}."
                 )
         return capture.movedim(batch_dim, 0), batch_dim
-
-    def _run_probe_hook(
-        self,
-        model: nn.Module,
-        submodule: nn.Module,
-        model_batch: dict[str, torch.Tensor | None],
-    ) -> torch.Tensor:
-        """Run one dummy forward and return the tensor captured at ``submodule``."""
-        # Single-slot buffer: keep only the last fire so a submodule that runs
-        # many times (e.g. recurrent) costs O(1) memory rather than O(n_fires).
-        probed_activation: list[torch.Tensor] = []
-
-        def _hook(_m, _i, out):
-            probed_activation[:] = [out]
-
-        handle = submodule.register_forward_hook(_hook)
-        try:
-            model(**model_batch)
-        finally:
-            handle.remove()
-        if not probed_activation:
-            raise RuntimeError(
-                f"probe_layer={self.probe_layer!r} hook did not fire during "
-                f"the dummy forward; the submodule is unreachable from this input."
-            )
-        capture = probed_activation[0]
-        if not isinstance(capture, torch.Tensor):
-            raise TypeError(
-                f"probe_layer={self.probe_layer!r} returned "
-                f"{type(capture).__name__}; only tensor-returning "
-                f"submodules are supported (e.g. probe a parent of "
-                f"nn.MultiheadAttention, not the MHA itself)."
-            )
-        return capture
-
-    def _detect_batch_dim(
-        self,
-        model: nn.Module,
-        submodule: nn.Module,
-        model_batch: dict[str, torch.Tensor | None],
-        capture: torch.Tensor,
-    ) -> int:
-        """Find the batch axis by re-running the forward at a doubled batch size.
-
-        The batch axis is the only one whose size scales with the input batch;
-        sequence/feature axes stay constant. Raises (suggesting an explicit
-        ``probe_batch_dim``) when the layout is genuinely ambiguous.
-        """
-        batch_size = next(
-            v.shape[0] for v in model_batch.values() if isinstance(v, torch.Tensor)
-        )
-        doubled = {
-            k: torch.cat([v, v], dim=0)
-            if isinstance(v, torch.Tensor) and v.ndim and v.shape[0] == batch_size
-            else v
-            for k, v in model_batch.items()
-        }
-        capture2 = self._run_probe_hook(model, submodule, doubled)
-        candidates = [
-            i
-            for i in range(capture.ndim)
-            if i < capture2.ndim
-            and capture.shape[i] == batch_size
-            and capture2.shape[i] == 2 * batch_size
-        ]
-        if len(candidates) != 1:
-            raise ValueError(
-                f"probe_layer={self.probe_layer!r} batch axis is ambiguous: "
-                f"capture shape {tuple(capture.shape)} scaled to "
-                f"{tuple(capture2.shape)} when the batch size doubled, giving "
-                f"candidate axes {candidates}. Set probe_batch_dim explicitly."
-            )
-        return candidates[0]
 
 
 class DownstreamWrapperModel(nn.Module):
