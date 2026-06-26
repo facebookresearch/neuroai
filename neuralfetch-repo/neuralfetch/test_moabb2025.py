@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from neuralfetch.studies import moabb2025
 from neuralfetch.studies.moabb2025 import Tangermann2012Review
 
@@ -59,3 +61,24 @@ def test_basemoabb_disables_processpool(tmp_path: Path) -> None:
         infra_timelines={"cluster": "processpool"},  # type: ignore[arg-type]
     )
     assert study_pp.infra_timelines.cluster is None
+
+
+def test_construction_creates_no_directories(tmp_path: Path) -> None:
+    """Constructing a MOABB study must not touch the filesystem.
+
+    Regression: ``_BaseMoabb.model_post_init`` used to ``mkdir`` the study leaf
+    at construction. That made ``self.path.exists()`` return True for
+    never-downloaded studies (defeating the base "run study.download() first"
+    guard) and littered empty directories for any study merely instantiated.
+    """
+    study = Tangermann2012Review(path=tmp_path)
+    assert study.path == tmp_path / "moabb" / "Tangermann2012Review"
+    assert not study.path.exists()
+    assert not (tmp_path / "moabb").exists()
+
+
+def test_undownloaded_study_raises_actionable_error(tmp_path: Path) -> None:
+    """An undownloaded study surfaces the base download guidance, not a raw read error."""
+    study = Tangermann2012Review(path=tmp_path)
+    with pytest.raises(RuntimeError, match=r"study\.download\(\) first"):
+        study._run()

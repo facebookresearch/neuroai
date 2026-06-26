@@ -215,8 +215,9 @@ class _BaseMoabb(studies.Study):
                 parent = self.path
             self.path = parent / "moabb" / study_name
 
-            self.path.mkdir(parents=True, exist_ok=True)
-            # Update the STUDY_PATHS registry with the corrected path
+            # Settle the path here (must happen before exca freezes the
+            # instance); creating the directory is download()'s job, not the
+            # constructor's.
             STUDY_PATHS[self.__class__.__name__] = self.path
             logger.debug("Updated MOABB path to: %s", self.path)
 
