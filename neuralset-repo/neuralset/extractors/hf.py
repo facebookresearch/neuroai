@@ -284,7 +284,10 @@ class HuggingFaceMixin(base.BaseModel):
                 self.model_name,
                 **config_kwargs,
             )
-            constructor = getattr(Model, "from_config", Model._from_config)  # type: ignore[attr-defined]
+            if hasattr(Model, "from_config"):
+                constructor = Model.from_config
+            else:
+                constructor = Model._from_config  # type: ignore[attr-defined]
             model = constructor(config, **(hf_config.model_kwargs or {}))
             if isinstance(self.dtype, str) and self.dtype != "auto":
                 model.to(dtype=getattr(torch, self.dtype))
