@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
+from neuralset import preprocessing as ns_preprocessing
 from neuraltrain.losses import BaseLoss
 from neuraltrain.metrics import BaseMetric
 from neuraltrain.models.base import BaseModelConfig
@@ -70,6 +71,9 @@ class Experiment(BaseExperiment):
     # Data
     data: Data
     target_scaler: StandardScaler | None = None
+    # Declarative transforms fit on the train split then applied to every
+    # loader's ``neuro`` batch (see ``_apply_train_set_preprocessing``).
+    train_set_preprocessing: list[ns_preprocessing.Transform] = []
     compute_class_weights: bool = False
 
     # Model
@@ -222,6 +226,24 @@ class Experiment(BaseExperiment):
             val_dataloaders=valid_loader,
         )
 
+    def _apply_train_set_preprocessing(
+        self, loaders: dict[str, DataLoader]
+    ) -> dict[str, DataLoader]:
+        """Fit ``train_set_preprocessing`` on the train split, then wrap every
+        loader so the fitted transforms apply at iteration time.
+
+        No-op when ``train_set_preprocessing`` is empty.
+        """
+        if not self.train_set_preprocessing:
+            return loaders
+        transformers = ns_preprocessing.fit_train_set_transformers(
+            loaders["train"], self.train_set_preprocessing
+        )
+        return {
+            name: ns_preprocessing.wrap_loader(loader, transformers)
+            for name, loader in loaders.items()
+        }
+
     def setup_wandb_logger(
         self,
         wandb_config: WandbLoggerConfig,
@@ -353,7 +375,9 @@ class Experiment(BaseExperiment):
             logger=loggers,
             callbacks=callbacks,
             accelerator="cpu" if self.infra.gpus_per_node == 0 else "auto",
-            devices=1 if is_test else self.infra.gpus_per_node,
+            # cpu accelerator requires devices>=1 (devices=0 is invalid); fall back
+            # to a single device when no GPUs are requested.
+            devices=1 if (is_test or self.infra.gpus_per_node == 0) else self.infra.gpus_per_node,
             num_nodes=1,
         )
 
@@ -419,6 +443,7 @@ class Experiment(BaseExperiment):
         pl.seed_everything(self.seed, workers=True)
         self.setup_run()
         loaders = self.data.prepare()
+        loaders = self._apply_train_set_preprocessing(loaders)
         trainer = self.setup_trainer()
         self.prepare_pl_module(loaders["train"], loaders.get("val"))
 

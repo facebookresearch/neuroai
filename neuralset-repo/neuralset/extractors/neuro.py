@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 import neuralset as ns
 from neuralset import base, utils
+from neuralset import preprocessing as ns_preprocessing
 from neuralset.base import TimedArray
 from neuralset.events import etypes
 
@@ -274,6 +275,9 @@ class MneRaw(BaseExtractor):
     bipolar_ref: tuple[list[str], list[str]] | None = None
     channel_order: tp.Literal["unique", "original"] = "unique"
     allow_maxshield: bool = False
+    # Declarative transforms applied to the MNE ``Raw`` before this extractor's
+    # standard pipeline (see ``_preprocess_raw``).
+    raw_preprocessing: list[ns_preprocessing.Transform] = []
 
     _channels: dict[str, int] = {}
 
@@ -310,10 +314,16 @@ class MneRaw(BaseExtractor):
         """
         events: list[etypes.MneRaw]
         events = self._event_types_helper.extract(obj)  # type: ignore
-        for ta in self._get_data(events):
-            self._update_channels(ta.ch_names)
-        if events:
-            self(events[0], start=events[0].start, duration=0.001, trigger=events[0])
+        self._in_prepare = True
+        try:
+            for ta in self._get_data(events):
+                self._update_channels(ta.ch_names)
+            if events:
+                self(
+                    events[0], start=events[0].start, duration=0.001, trigger=events[0]
+                )
+        finally:
+            self._in_prepare = False
 
     @staticmethod
     def _pick_channels(
@@ -332,6 +342,9 @@ class MneRaw(BaseExtractor):
         return raw.pick(picks, verbose=False)
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
+        if self.raw_preprocessing:
+            raw.load_data()
+            raw = ns_preprocessing.apply_transforms(raw, self.raw_preprocessing)
         if raw.info.get("maxshield", False) and not self.allow_maxshield:
             raise ValueError(
                 f"Data for {event!r} was recorded with Elekta MaxShield "

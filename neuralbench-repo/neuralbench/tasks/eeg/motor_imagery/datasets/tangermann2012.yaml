@@ -8,4 +8,23 @@ data:
   study:
     source:
       name: Tangermann2012Review
+    split:
+      =replace=: true
+      # BNCI2014_001 (Tangermann2012Review): 9 subjects x 2 sessions
+      # (`0train` = calibration, `1test` = evaluation). Cross-session
+      # hold-out mirroring the replicability study's MOABB
+      # CrossSessionEvaluation: the evaluation session is the test set,
+      # the calibration session is training, and 20% of calibration
+      # *trials* are carved out for early-stopping validation (BNCI has
+      # only 2 sessions, so val cannot be session-disjoint). Train/val
+      # never share a session with test.
+      # NOTE: NeuralBench trains ONE pooled model across all subjects
+      # (not MOABB's per-subject folds), so the score differs from 75.63;
+      # only the evaluation axis is now cross-session.
+      name: PredefinedSplit
+      test_split_query: "session == '1test'"
+      col_name: split
+      valid_split_by: _index
+      valid_split_ratio: 0.2
+      valid_random_state: 33
 brain_model_output_size: 4

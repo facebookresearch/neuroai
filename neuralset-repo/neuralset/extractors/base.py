@@ -19,6 +19,7 @@ from neuralset import base
 from neuralset.base import Frequency as Frequency
 from neuralset.base import TimedArray as TimedArray
 from neuralset.events import Event, EventTypesHelper, etypes
+from neuralset.preprocessing import Transform, apply_array_transforms
 from neuralset.segments import Segment
 
 logger = logging.getLogger(__name__)
@@ -87,12 +88,18 @@ class BaseExtractor(base._Module, base.NamedModel):
     # builds output even when no corresponding event is provided
     allow_missing: bool = False
     frequency: float | tp.Literal["native"] = 0.0
+    # Declarative transforms applied to the extracted tensor in ``__call__``
+    # (raw-signal transforms live on ``MneRaw.raw_preprocessing``).
+    array_preprocessing: list[Transform] = []
 
     # internal
     _CLASSES: tp.ClassVar[dict[str, tp.Type["BaseExtractor"]]] = {}
     _effective_frequency: float | None = pydantic.PrivateAttr(None)
     _event_types_helper: EventTypesHelper = pydantic.PrivateAttr()
     _missing_default: torch.Tensor | None = pydantic.PrivateAttr(None)
+    # True only during ``prepare``'s shape-probing call, so array preprocessing
+    # is skipped on the dummy 0.001s segment.
+    _in_prepare: bool = pydantic.PrivateAttr(False)
 
     @classmethod
     def __pydantic_init_subclass__(cls, **kwargs: tp.Any) -> None:
@@ -292,6 +299,11 @@ class BaseExtractor(base._Module, base.NamedModel):
             # last dimension is time if frequency is not 0
             shape = tuple(tensor.shape[: -1 if freq else None])
             self._missing_default = torch.zeros(*shape, dtype=tensor.dtype)
+
+        # Declarative array preprocessing on the extracted tensor (skipped
+        # during ``prepare``'s dummy shape-probing call).
+        if not self._in_prepare:
+            tensor = apply_array_transforms(tensor, self.array_preprocessing)
 
         return tensor
 

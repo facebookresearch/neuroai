@@ -1,4 +1,4 @@
 # Auto-generated braindecode model registration for the replicability study.
 brain_model_config:
   =replace=: true
-  name: ATCNet
+  name: FBCNet
