@@ -8,7 +8,9 @@ import inspect
 import logging
 import typing as tp
 from collections import defaultdict
+from difflib import get_close_matches
 from itertools import compress
+from pathlib import Path
 
 import mne
 import numpy as np
@@ -41,6 +43,7 @@ FSAVERAGE_SIZES = {
     "fsaverage6": 40962,
     "fsaverage7": 163842,
 }
+HCP_CIFTI_91K_SIZE = 91282
 
 
 def _overlap(
@@ -1137,6 +1140,20 @@ class BaseFmriProjector(DiscriminatedModel, discriminator_key="name"):
         """
         raise NotImplementedError
 
+    def apply_after_cache(self, data: np.ndarray) -> np.ndarray:
+        """Cheap per-row transform applied to cached data after it is read.
+
+        Default is the identity; override for projections that
+        are deferred until after caching.
+        """
+        return data
+
+    def after_cache_fields(self) -> list[str]:
+        """Field names that only affect :meth:`apply_after_cache` and must
+        therefore be excluded from the cache uid. Default: none.
+        """
+        return []
+
 
 class SurfaceProjector(BaseFmriProjector):
     """Project data to an fsaverage surface mesh.
@@ -1344,27 +1361,52 @@ class AtlasProjector(BaseFmriProjector):
         return masker.fit_transform(rec).T
 
 
-class FoscoProjector(BaseFmriProjector):
-    """Subset HCP grayordinates to FOSCO visual ROIs.
+class GlasserProjector(BaseFmriProjector):
+    """Subset HCP grayordinates or fsaverage vertices to Glasser ROIs.
 
-    Applies a spatial mask using ``hcp_utils`` to keep only vertices
-    belonging to the FOSCO ROI set (41 visual areas from the HCP MMP1.0
-    parcellation).  Expects 2-D input of shape ``(nodes, time)``.
+    Applies a spatial mask to keep only vertices belonging to the selected
+    Glasser ROIs from the HCP MMP1.0 parcellation.  When ``selected_rois`` is
+    ``"dynamic"``, the projector uses the default dynamic ROI set (41 visual areas)
+    from Fosco et al., ECCV 2024:
+    https://blahner.github.io/BrainNetflixECCV/images/BrainGen_ECCV_2024_supplement.pdf
+    CIFTI/HCP grayordinate inputs use the existing ``hcp_utils`` path;
+    fsaverage surface inputs use the MNE HCP-MMP annotation.  Expects 2-D input
+    of shape ``(nodes, time)``.
+
+    Important
+    ---------
+    This projector masks vertices/grayordinates; it does **not** aggregate each
+    ROI to a single time series.  The number of output features therefore
+    depends on the input space and resolution.  For example, the same ROI can
+    contain more vertices on fsaverage7 than grayordinates in HCP CIFTI space.
+
+    Parameters
+    ----------
+    selected_rois : "dynamic" | set[str]
+        ROI selector.  ``"dynamic"`` (default) keeps the 41 dynamic ROIs, and a
+        set keeps those ROIs. Use :meth:`available_rois` to list valid ROI names.
+         Names have no ``L_``/``R_`` prefix; both hemispheres are always selected.
+    mode : "drop" | "zero"
+        ``"drop"`` returns only selected vertices/grayordinates. ``"zero"``
+        keeps the input shape and sets non-selected rows to zero.
 
     Examples
     --------
-    >>> FoscoProjector()
+    >>> GlasserProjector()
+    >>> GlasserProjector(selected_rois={"V1", "V2", "V3", "V4"})
+    >>> GlasserProjector.available_rois()
+    >>> GlasserProjector.available_rois("dynamic")
 
     Config usage::
 
         "neuro": {
             "name": "FmriExtractor",
-            "projection": {"name": "FoscoProjector"},
-            "from_space": "atlas_msmall",
+            "projection": {"name": "GlasserProjector", "selected_rois": ["V1", "V2"]},
+            "from_space": "fsLR",
         }
     """
 
-    ROIS: tp.ClassVar[list[str]] = [
+    DYNAMIC_ROIS: tp.ClassVar[list[str]] = [
         "V1",
         "MST",
         "V6",
@@ -1408,29 +1450,172 @@ class FoscoProjector(BaseFmriProjector):
         "VVC",
     ]
 
+    selected_rois: tp.Literal["dynamic"] | set[str] = pydantic.Field(
+        default="dynamic",
+        frozen=True,
+    )
+    mode: tp.Literal["drop", "zero"] = "drop"
     _mask: np.ndarray | None = pydantic.PrivateAttr(default=None)
 
-    def _get_mask(self) -> np.ndarray:
-        if self._mask is None:
-            import hcp_utils as hcp  # type: ignore[import-not-found]
+    def model_post_init(self, __context: tp.Any) -> None:
+        super().model_post_init(__context)
+        if isinstance(self.selected_rois, set) and not self.selected_rois:
+            raise ValueError("selected_rois cannot be empty")
 
-            self._mask = np.isin(
-                hcp.mmp.map_all,
-                [
-                    k
-                    for k, v in hcp.mmp.labels.items()
-                    if (v.startswith("R_") or v.startswith("L_")) and v[2:] in self.ROIS
-                ],
+    @classmethod
+    def available_rois(
+        cls,
+        roi_set: tp.Literal["dynamic"] | None = None,
+    ) -> list[str]:
+        """Return available unprefixed ROI names.
+
+        ``None`` returns the full HCP MMP1.0 cortical atlas, using ``hcp_utils`` when available and
+        falling back to the MNE HCP-MMP annotation.
+        ``"dynamic"`` returns the 41-ROI subset related to dynamic and visual areas.
+        """
+        if roi_set == "dynamic":
+            return list(cls.DYNAMIC_ROIS)
+        if roi_set is not None:
+            raise ValueError("roi_set must be None or 'dynamic'")
+        try:
+            import hcp_utils  # noqa: F401  # availability probe; _cifti_roi_nodes re-imports
+        except ModuleNotFoundError:
+            return sorted(cls._fsaverage_roi_vertices())
+        return sorted(cls._cifti_roi_nodes())
+
+    @staticmethod
+    def _unknown_rois_error(unknown: set[str], available_rois: set[str]) -> str:
+        available = sorted(available_rois)
+        suggestions = []
+        for roi in sorted(unknown):
+            matches = get_close_matches(roi, available, n=1)
+            if matches:
+                suggestions.append(f"{roi!r} -> {matches[0]!r}")
+
+        msg = f"Unknown Glasser ROIs: {sorted(unknown)}."
+        if suggestions:
+            msg += f" Did you mean {', '.join(suggestions)}?"
+        msg += f" Available Glasser ROIs: {', '.join(available)}"
+        return msg
+
+    @staticmethod
+    def _roi_name(label: str) -> str:
+        """Normalize an HCP-MMP label to its bare ROI name.
+
+        Handles both the ``hcp_utils`` convention (``L_V1``) and the MNE
+        annotation convention (``L_V1_ROI-lh``).
+        """
+        name = label.removesuffix("-lh").removesuffix("-rh").removesuffix("_ROI")
+        return name[2:] if name.startswith(("L_", "R_")) else name
+
+    @classmethod
+    def _fsaverage_roi_vertices(cls) -> dict[str, np.ndarray]:
+        """Map each unprefixed ROI name to its fsaverage7 global vertex indices.
+
+        Right-hemisphere vertices are offset by ``n_vertices`` so the indices
+        address the stacked ``(2 * n_vertices, time)`` surface. The MNE
+        background/unknown label (``???``) is excluded.
+        """
+        n_vertices = FSAVERAGE_SIZES["fsaverage7"]
+        roi_vertices: defaultdict[str, list[int]] = defaultdict(list)
+        for label in cls._read_mne_hcp_labels():
+            roi = cls._roi_name(label.name)
+            if roi == "???":
+                continue
+            vertices = np.asarray(label.vertices, dtype=int)
+            if label.hemi == "rh":
+                vertices = vertices + n_vertices
+            roi_vertices[roi].extend(vertices.tolist())
+        return {roi: np.asarray(v, dtype=int) for roi, v in roi_vertices.items()}
+
+    @classmethod
+    def _read_mne_hcp_labels(cls) -> list[tp.Any]:
+        configured_dir = mne.get_config("SUBJECTS_DIR")
+        if configured_dir is not None:
+            subjects_dir = Path(configured_dir).expanduser()
+        else:
+            mne_data = mne.get_config("MNE_DATA", str(Path.home() / "mne_data"))
+            subjects_dir = Path(mne_data).expanduser() / "subjects"
+        if not (subjects_dir / "fsaverage").exists():
+            mne.datasets.fetch_fsaverage(subjects_dir=subjects_dir, verbose=True)
+        mne.datasets.fetch_hcp_mmp_parcellation(
+            subjects_dir=subjects_dir,
+            accept=True,
+            verbose=True,
+            combine=False,
+        )
+        return mne.read_labels_from_annot(
+            "fsaverage",
+            "HCPMMP1",
+            hemi="both",
+            subjects_dir=subjects_dir,
+        )
+
+    @classmethod
+    def _cifti_roi_nodes(cls) -> dict[str, np.ndarray]:
+        try:
+            import hcp_utils as hcp
+        except ModuleNotFoundError as exc:
+            raise ValueError(
+                "GlasserProjector requires the 'hcp_utils' package to project "
+                "CIFTI/HCP grayordinate inputs. Install it with "
+                "`pip install hcp_utils`, or use an fsaverage7 surface input."
+            ) from exc
+
+        keys_by_roi: defaultdict[str, list[int]] = defaultdict(list)
+        for key, label in hcp.mmp.labels.items():
+            if label.startswith(("R_", "L_")):
+                keys_by_roi[cls._roi_name(label)].append(key)
+        return {
+            roi: np.nonzero(np.isin(hcp.mmp.map_all, keys))[0]
+            for roi, keys in keys_by_roi.items()
+        }
+
+    def _get_mask(self, n_nodes: int) -> np.ndarray:
+        if self._mask is None:
+            if n_nodes == 2 * FSAVERAGE_SIZES["fsaverage7"]:
+                roi_nodes = self._fsaverage_roi_vertices()
+            elif n_nodes == HCP_CIFTI_91K_SIZE:
+                roi_nodes = self._cifti_roi_nodes()
+            else:
+                raise ValueError(
+                    "Unsupported GlasserProjector input with "
+                    f"{n_nodes} nodes. Expected CIFTI/HCP grayordinates "
+                    f"({HCP_CIFTI_91K_SIZE} nodes) or full fsaverage7 surface "
+                    f"({2 * FSAVERAGE_SIZES['fsaverage7']} nodes)."
+                )
+            wanted = (
+                set(self.DYNAMIC_ROIS)
+                if self.selected_rois == "dynamic"
+                else set(self.selected_rois)
             )
+            unknown = wanted - roi_nodes.keys()
+            if unknown:
+                raise ValueError(self._unknown_rois_error(unknown, set(roi_nodes)))
+            mask = np.zeros(n_nodes, dtype=bool)
+            for roi in wanted:
+                mask[roi_nodes[roi]] = True
+            self._mask = mask
         return self._mask
 
-    def apply(self, rec: tp.Any, **kwargs: tp.Any) -> np.ndarray:
-        data = rec.get_fdata()
+    def apply_after_cache(self, data: np.ndarray) -> np.ndarray:
         if data.ndim != 2:
             raise ValueError(
-                f"FoscoProjector expects 2D (nodes, time) data, got {data.ndim}D"
+                f"GlasserProjector expects 2D (nodes, time) data, got {data.ndim}D"
             )
-        return data[self._get_mask(), :]
+        data = np.asarray(data)
+        mask = self._get_mask(data.shape[0])
+        if self.mode == "drop":
+            return data[mask, :]
+        out = data.copy()
+        out[~mask, :] = 0
+        return out
+
+    def after_cache_fields(self) -> list[str]:
+        return ["selected_rois", "mode"]
+
+    def apply(self, rec: tp.Any, **kwargs: tp.Any) -> np.ndarray:
+        return rec.get_fdata()
 
 
 # ---------------------------------------------------------------------------
@@ -1520,7 +1705,10 @@ class FmriExtractor(BaseExtractor):
             )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        return super()._exclude_from_cache_uid() + ["offset", "padding"]
+        excluded = super()._exclude_from_cache_uid() + ["offset", "padding"]
+        if self.projection is not None:
+            excluded += [f"projection.{f}" for f in self.projection.after_cache_fields()]
+        return excluded
 
     def _auto_filter_fmri_events(
         self, fmri_events: list[etypes.Fmri]
@@ -1592,6 +1780,12 @@ class FmriExtractor(BaseExtractor):
             self.projection, SurfaceProjector
         ) and self.projection.mesh.startswith(fs):
             candidates = [f"{fs}{n}" for n in range(3, 8)] + [fs]
+        elif isinstance(self.projection, GlasserProjector):
+            candidates = [
+                "fsLR",
+                "fsaverage",
+                "fsaverage7",
+            ]
         else:
             candidates = ["MNI152NLin2009cAsym"] + [s for s in spaces if "MNI" in s]
         best = next((c for c in candidates if c in spaces), None)
@@ -1610,7 +1804,15 @@ class FmriExtractor(BaseExtractor):
             # but we need on an object without padding since missing_default filling
             # will apply the extractor on 1 event, and we'll need the padding length for that
             self.infra.clone_obj(padding=None).prepare(events)
-            self._padding = max(ta.data.shape[0] for ta in self._get_data(events))  # type: ignore
+            feature_counts = (
+                (
+                    self.projection.apply_after_cache(ta.data)
+                    if self.projection is not None
+                    else ta.data
+                ).shape[0]
+                for ta in self._get_data(events)  # type: ignore
+            )
+            self._padding = max(feature_counts)
             # (recompute prepare to just fill the missing default value)
         super().prepare(events)
 
@@ -1729,6 +1931,8 @@ class FmriExtractor(BaseExtractor):
             raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
         for event, ta in zip(events, self._get_data(events)):
             out = ta.with_start(event.start - self.offset)
+            if self.projection is not None:
+                out.data = self.projection.apply_after_cache(out.data)
             if self._padding is not None:
                 shape = out.data.shape
                 if out.data.ndim != 2:

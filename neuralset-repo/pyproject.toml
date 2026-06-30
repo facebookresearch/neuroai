@@ -115,7 +115,7 @@ namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
   'scipy.*', 'skimage.*', 'nilearn.*', 'bids',
   'bs4', 'mne_nirs',
   'soundfile', 'matplotlib.*', 'plotly', 'plotly.*',
-  'cv2', 'h5py', 'huggingface_hub',
+  'cv2', 'h5py', 'huggingface_hub', 'hcp_utils',
   'sonar.*', 'deepmultilingualpunctuation']
   ignore_missing_imports = true
 [[tool.mypy.overrides]]

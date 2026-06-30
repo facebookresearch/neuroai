@@ -1360,6 +1360,36 @@ class _PseudoNifti:  # hack used in nastase
         return self.data
 
 
+def test_glasser_projector(monkeypatch: pytest.MonkeyPatch) -> None:
+    n_vertices = ns.extractors.neuro.FSAVERAGE_SIZES["fsaverage7"]
+    labels = [
+        SimpleNamespace(name="R_A1_ROI-rh", vertices=np.array([6, 7]), hemi="rh"),
+        SimpleNamespace(name="L_V1_ROI-lh", vertices=np.array([2, 3]), hemi="lh"),
+    ]
+    monkeypatch.setattr(
+        ns.extractors.neuro.GlasserProjector,
+        "_read_mne_hcp_labels",
+        staticmethod(lambda: labels),
+    )
+
+    data = np.arange(2 * n_vertices * 2).reshape(2 * n_vertices, 2)
+    projector = ns.extractors.neuro.GlasserProjector(selected_rois={"A1"})
+
+    expected_rows = [n_vertices + 6, n_vertices + 7]
+    np.testing.assert_array_equal(
+        projector.apply_after_cache(data),
+        data[expected_rows, :],
+    )
+
+    zero_projector = ns.extractors.neuro.GlasserProjector(
+        selected_rois={"A1"},
+        mode="zero",
+    )
+    expected = np.zeros_like(data)
+    expected[expected_rows, :] = data[expected_rows, :]
+    np.testing.assert_array_equal(zero_projector.apply_after_cache(data), expected)
+
+
 def test_fmri_mesh_from_2d() -> None:
     n_voxels = 40962 * 2  # fsaverage6
     n_times = 10
