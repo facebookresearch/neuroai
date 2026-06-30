@@ -27,6 +27,42 @@ from neuralset.base import BaseModel, PathLike, _Module
 logger = logging.getLogger(__name__)
 
 
+def ensure_study_symlink(studies_root: Path, link_name: str, target_name: str) -> None:
+    """Create ``studies_root/link_name -> target_name`` symlink if absent.
+
+    Used when multiple study classes share one physical data directory.  The
+    target directory is created if it does not yet exist so that the symlink is
+    valid even before data has been downloaded.
+
+    Parameters
+    ----------
+    studies_root:
+        Root folder that contains per-study subdirectories (value of
+        ``NEURALSET_STUDY_FOLDER``).
+    link_name:
+        Name of the symlink to create (typically the subclass name, e.g.
+        ``"Shirazi2024HbnVideo"``).
+    target_name:
+        Name of the directory to point at (typically the parent class name,
+        e.g. ``"Shirazi2024Hbn"``).  A *relative* symlink is created so the
+        link stays valid if the studies root is moved.
+    """
+    target = studies_root / target_name
+    symlink = studies_root / link_name
+    target.mkdir(parents=True, exist_ok=True)
+    if symlink.is_symlink():
+        return
+    if symlink.exists():
+        logger.warning(
+            "%s exists as a real directory, not a symlink — data will not resolve to %s.",
+            symlink,
+            target_name,
+        )
+    else:
+        symlink.symlink_to(target_name)  # relative, portable
+        logger.info("Created symlink %s -> %s", symlink, target_name)
+
+
 @contextlib.contextmanager
 def success_writer(
     fname: str | Path, suffix: str = "_success.txt", success_msg: str = "done"
