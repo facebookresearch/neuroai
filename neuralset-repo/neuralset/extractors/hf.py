@@ -376,7 +376,7 @@ class HuggingFaceMixin(base.BaseModel):
             case "max":
                 out = latents.max(axis=1)  # type: ignore
                 if isinstance(latents, torch.Tensor):
-                    out = out.values
+                    out = out.values  # type: ignore[union-attr]
             case "first":
                 # np.take in numpy, torch.select in torch
                 out = latents[:, 0, ...]

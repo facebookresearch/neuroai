@@ -1463,7 +1463,7 @@ def finalize_bar_grid(
     | None = None,
     legend_anchor_offset: float = 0.02,
     legend_box: tuple[int, int, int, int] | None = None,
-    legend_box_loc: str = "center",
+    legend_box_loc: tp.Any = "center",
 ) -> Path:
     """Apply ``tight_layout``, draw the grouped legend, watermark, and save.
 

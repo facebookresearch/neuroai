@@ -19,7 +19,6 @@ dependencies = [
   "exca",
   "lightning>=2.0.8",
   "pyriemann>=0.6",
-  "umap-learn",
   "seaborn",
   "torchinfo",
   # Pinning torch version to ensure support for CUDA capability sm_60
