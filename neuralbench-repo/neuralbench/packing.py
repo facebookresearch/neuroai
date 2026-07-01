@@ -6,11 +6,11 @@
 
 """Pack pending experiments into fewer scheduler jobs via exca's ``Parallel``.
 
-One job per experiment hits array limits on large grids (facebookresearch/exca#179).
-This dispatches the pending experiments as one ``Parallel`` sweep
-(facebookresearch/exca#280) into ``ceil(pending / N)`` array elements. Each variant
-delegates to the experiment's own ``run()``, so results still cache under each
-experiment's ``TaskInfra`` — re-running without packing reuses them.
+One job per experiment hits array limits on large grids. This dispatches the
+pending experiments as one ``Parallel`` sweep into ``ceil(pending / N)`` array
+elements. Each variant delegates to the experiment's own ``run()``, so results
+still cache under each experiment's ``TaskInfra`` — re-running without packing
+reuses them.
 """
 
 from __future__ import annotations
