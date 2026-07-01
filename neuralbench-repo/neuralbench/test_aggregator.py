@@ -37,7 +37,6 @@ def test_prepare_packs_experiments_and_preserves_child_caches(tmp_path: Path) ->
         collect_max_workers=1,
         debug=False,
         experiments_per_job=2,
-        local_workers_per_job=1,
         output_dir=str(tmp_path / "outputs"),
     )
 

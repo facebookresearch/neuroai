@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - `neuralbench`: pack pending experiments into fewer scheduler jobs via
-  `--experiments-per-job` (#PR 79).
+  `--experiments-per-job` (`all` packs every pending experiment into one job).
+  Built on `exca.steps.helpers.Parallel` (requires `exca>=0.5.27`): pending
+  experiments are dispatched as one packed sweep into `ceil(pending/N)` array
+  elements, each still caching under its own `TaskInfra` identity. Variants in
+  the same element run serially; the earlier `--local-workers-per-job` in-job
+  multiprocessing is dropped (no equivalent under a single scheduler element).
 - `neuralset`: fixed `Mne2013Sample`/`Fake2025Meg` re-downloading the MNE sample dataset on `run()` after `download()` by funneling all paths through a single root; the download progress bar now also shows when `run()` triggers the fetch. The study subfolder is now resolved once in `model_post_init` instead of mutating `self.path` in `download()`, so calling `download()` after `run()` no longer crashes on the frozen instance (#153).
 - `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind the `NSD_ACCEPT_LICENCE` env var.
 - `neuralbench`: added a `CLUSTER` key to `~/.neuralbench/config.json` to force fully local execution (`null`) without `--debug`, keep the default SLURM auto-detection (`"auto"`), or always submit to SLURM (`"slurm"`); honored by `--prepare`.

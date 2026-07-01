@@ -4,23 +4,27 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import pickle
 import typing as tp
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import exca
 import pytest
-from pydantic import ValidationError
 
 from neuraltrain.utils import BaseExperiment
 
+from . import packing
 from .packing import (
-    PackedExperiment,
+    _ExperimentStep,
+    _backend_config,
+    _pending_experiments,
     _should_submit_experiment,
-    pack_experiments_for_submission,
+    submit_packed,
 )
 
-# ---- module-level helpers (must be module-level so spawn workers can pickle) -
+# ---- module-level helpers (importable so workers can pickle them) ----------
 
 
 class ValueExperiment(BaseExperiment):
@@ -28,33 +32,26 @@ class ValueExperiment(BaseExperiment):
     infra: exca.TaskInfra = exca.TaskInfra(version="1")
 
     @infra.apply
-    def run(self):
+    def run(self) -> int:
         return self.value
 
 
 class FailingExperiment(BaseExperiment):
-    """Raises ``RuntimeError`` from :meth:`run` for error-propagation tests."""
+    """Raises ``RuntimeError`` from :meth:`run` for fault-isolation tests."""
 
     value: int
     infra: exca.TaskInfra = exca.TaskInfra(version="1")
 
     @infra.apply
-    def run(self):
+    def run(self) -> int:
         raise RuntimeError(f"intentional failure for value={self.value}")
 
 
 @pytest.fixture
 def infra(tmp_path: Path) -> tp.Any:
-    # ``tp.Any`` so the dict can be passed to pydantic models without
-    # tripping the pydantic-mypy strict-init check (the dict is converted
-    # to a ``TaskInfra`` at runtime).
-    return {"cluster": "auto", "folder": tmp_path, "mode": "force"}
-
-
-def _run_locally(packed: PackedExperiment, n_jobs: int = 1) -> list[tp.Any]:
-    cfg: tp.Any = packed.infra.model_dump(mode="python")
-    cfg["cluster"] = None
-    return type(packed)(experiments=packed.experiments, infra=cfg, n_jobs=n_jobs).run()
+    # ``tp.Any`` so the dict can be passed to pydantic models without tripping
+    # the pydantic-mypy strict-init check (converted to a ``TaskInfra`` at runtime).
+    return {"cluster": None, "folder": tmp_path, "mode": "cached"}
 
 
 # ---- _should_submit_experiment truth table ---------------------------------
@@ -86,105 +83,159 @@ def test_should_submit_experiment(mode: str, status: str, expected: bool) -> Non
     assert _should_submit_experiment(exp) is expected
 
 
-# ---- grouping + running, serial and parallel -------------------------------
+# ---- _pending_experiments: filter, sort, order-independence ----------------
 
 
-@pytest.mark.parametrize("n_jobs", [1, 2])
-@pytest.mark.parametrize(
-    ("experiments_per_job", "expected_sizes"),
-    [
-        (1, [1, 1, 1, 1, 1]),
-        (2, [2, 2, 1]),
-        (3, [3, 2]),
-        (5, [5]),
-        (10, [5]),
-        ("all", [5]),
-    ],
-)
-def test_pack_groups_and_runs(
-    infra: tp.Any,
-    experiments_per_job: int | tp.Literal["all"],
-    expected_sizes: list[int],
-    n_jobs: int,
-) -> None:
-    experiments = [ValueExperiment(value=i, infra=infra) for i in range(5)]
-
-    packed = pack_experiments_for_submission(
-        experiments, experiments_per_job=experiments_per_job, n_jobs=n_jobs
-    )
-
-    assert [len(job.experiments) for job in packed] == expected_sizes
-    assert len({job.infra.uid() for job in packed}) == len(packed)
-    assert all(exp.infra.cluster is None for job in packed for exp in job.experiments)
-
-    expected_values = [
-        exp.value for exp in sorted(experiments, key=lambda e: e.infra.uid())
-    ]
-    cursor = 0
-    for job, size in zip(packed, expected_sizes):
-        assert _run_locally(job, n_jobs=n_jobs) == expected_values[cursor : cursor + size]
-        cursor += size
+def test_pending_experiments_empty() -> None:
+    assert _pending_experiments([]) == []
 
 
-# ---- skip / empty ----------------------------------------------------------
-
-
-def test_pack_returns_empty_for_empty_input() -> None:
-    assert pack_experiments_for_submission([]) == []
-
-
-def test_pack_skips_all_read_only(infra: tp.Any) -> None:
+def test_pending_skips_all_read_only(infra: tp.Any) -> None:
     read_only: tp.Any = {**infra, "mode": "read-only"}
-    experiments = [ValueExperiment(value=i, infra=read_only) for i in range(3)]
-    assert pack_experiments_for_submission(experiments) == []
+    exps = [ValueExperiment(value=i, infra=read_only) for i in range(3)]
+    assert _pending_experiments(exps) == []
 
 
-# ---- UID order independence ------------------------------------------------
+def test_pending_sorted_by_uid_and_order_independent(infra: tp.Any) -> None:
+    exps = [ValueExperiment(value=i, infra=infra) for i in range(4)]
+    forward = _pending_experiments(exps)
+    reverse = _pending_experiments(exps[::-1])
+    uids = [e.infra.uid() for e in forward]
+    assert uids == sorted(uids)  # sorted by uid
+    assert uids == [e.infra.uid() for e in reverse]  # order-independent
 
 
-@pytest.mark.parametrize("experiments_per_job", [1, 2, 3, "all"])
-def test_pack_uid_order_independent(
-    infra: tp.Any,
-    experiments_per_job: int | tp.Literal["all"],
+# ---- _backend_config: TaskInfra -> steps backend translation ---------------
+
+
+def test_backend_config_local_is_cached_without_resource_knobs(tmp_path: Path) -> None:
+    ti = exca.TaskInfra(cluster=None, folder=tmp_path, gpus_per_node=2)
+    cfg = _backend_config(ti, ti.folder, max_jobs=5)
+    assert cfg == {"backend": "Cached", "folder": tmp_path, "mode": "force"}
+
+
+@pytest.mark.parametrize(("cluster", "backend"), [("auto", "Auto"), ("slurm", "Slurm")])
+def test_backend_config_translates_resources(
+    tmp_path: Path, cluster: str, backend: str
 ) -> None:
-    experiments = [ValueExperiment(value=i, infra=infra) for i in range(4)]
-    a = pack_experiments_for_submission(
-        experiments, experiments_per_job=experiments_per_job
+    ti = exca.TaskInfra(
+        cluster=cluster,
+        folder=tmp_path,
+        gpus_per_node=1,
+        cpus_per_task=4,
+        slurm_partition="gpu",
+        slurm_use_srun=False,
     )
-    b = pack_experiments_for_submission(
-        experiments[::-1], experiments_per_job=experiments_per_job
-    )
-    assert [j.infra.uid() for j in a] == [j.infra.uid() for j in b]
+    cfg = _backend_config(ti, ti.folder, max_jobs=7)
+    assert cfg["backend"] == backend
+    assert cfg["mode"] == "force"
+    assert cfg["max_jobs"] == 7
+    assert cfg["gpus_per_node"] == 1
+    assert cfg["cpus_per_task"] == 4
+    assert cfg["partition"] == "gpu"  # slurm_partition -> partition
+    assert "use_srun" not in cfg  # default False is dropped
+    # the produced dict must build a real backend
+    from exca.steps import backends
+
+    backends.Backend.model_validate(cfg)
 
 
-# ---- fault isolation through serial + spawn pool --------------------------
+def test_backend_config_rejects_unknown_cluster(tmp_path: Path) -> None:
+    # defensive guard: every real TaskInfra.cluster literal is mapped, so use a
+    # stub carrying an out-of-range value.
+    stub = SimpleNamespace(cluster="kubernetes")
+    with pytest.raises(ValueError, match="unsupported infra.cluster"):
+        _backend_config(stub, tmp_path, max_jobs=1)
 
 
-@pytest.mark.parametrize("n_jobs", [1, 2])
-def test_packed_experiment_isolates_failures(infra: tp.Any, n_jobs: int) -> None:
-    # A failing experiment yields None; the others still run.
-    mixed = [
+@pytest.mark.parametrize(
+    ("cluster", "backend"),
+    [(None, "Cached"), ("debug", "Cached"), ("local", "LocalProcess")],
+)
+def test_backend_config_maps_all_local_clusters(
+    tmp_path: Path, cluster: str | None, backend: str
+) -> None:
+    ti = exca.TaskInfra(cluster=cluster, folder=tmp_path)
+    cfg = _backend_config(ti, ti.folder, max_jobs=3)
+    assert cfg["backend"] == backend
+    from exca.steps import backends
+
+    backends.Backend.model_validate(cfg)  # must build a real backend
+
+
+# ---- _ExperimentStep identity + pickle -------------------------------------
+
+
+def test_experiment_step_identity_excludes_experiment(infra: tp.Any) -> None:
+    exps = [ValueExperiment(value=i, infra=infra) for i in range(3)]
+    steps = [_ExperimentStep(exp_uid=e.infra.uid()).bind(e) for e in exps]
+    # identity is the exp_uid alone; distinct experiments -> distinct steps
+    assert len({s.exp_uid for s in steps}) == 3
+
+
+def test_experiment_step_pickles_with_bound_experiment(infra: tp.Any) -> None:
+    exp = ValueExperiment(value=42, infra=infra)
+    step = _ExperimentStep(exp_uid=exp.infra.uid()).bind(exp)
+    restored = pickle.loads(pickle.dumps(step))  # workers pickle the step
+    assert restored._experiment.value == 42
+
+
+# ---- submit_packed: end-to-end via the local (Cached) backend --------------
+
+
+@pytest.mark.parametrize("experiments_per_job", [2, 3, "all"])
+def test_submit_packed_runs_and_preserves_child_caches(
+    infra: tp.Any, experiments_per_job: int | tp.Literal["all"]
+) -> None:
+    exps = [ValueExperiment(value=i, infra=infra) for i in range(5)]
+    dispatched = submit_packed(exps, experiments_per_job=experiments_per_job)
+    assert dispatched == 5
+    assert all(e.infra.status() == "completed" for e in exps)
+    # re-running each experiment hits its own TaskInfra cache
+    assert [e.run() for e in exps] == [0, 1, 2, 3, 4]
+    # nothing left to submit
+    assert submit_packed(exps, experiments_per_job=experiments_per_job) == 0
+
+
+def test_submit_packed_empty_when_all_cached(infra: tp.Any) -> None:
+    exps = [ValueExperiment(value=i, infra=infra) for i in range(3)]
+    for e in exps:
+        e.run()  # pre-populate caches
+    assert submit_packed(exps, experiments_per_job="all") == 0
+
+
+def test_submit_packed_isolates_failures(infra: tp.Any) -> None:
+    exps: list[BaseExperiment] = [
         ValueExperiment(value=10, infra=infra),
         FailingExperiment(value=0, infra=infra),
         ValueExperiment(value=20, infra=infra),
     ]
-    packed = pack_experiments_for_submission(mixed, experiments_per_job="all")
-    assert len(packed) == 1
-    results = _run_locally(packed[0], n_jobs=n_jobs)
-    assert sorted(r for r in results if r is not None) == [10, 20]
-    assert results.count(None) == 1
+    # a single failure must not abort the sweep
+    dispatched = submit_packed(exps, experiments_per_job="all")
+    assert dispatched == 3
+    assert exps[0].infra.status() == "completed"
+    assert exps[2].infra.status() == "completed"
+    assert exps[1].infra.status() == "failed"
 
 
-# ---- PackedExperiment constructor validation ------------------------------
+def test_submit_packed_experiments_per_job_caps_array_elements(
+    infra: tp.Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # cluster=slurm so max_jobs lands in the backend; stub Parallel to capture it
+    slurm: tp.Any = {**infra, "cluster": "slurm"}
+    exps = [ValueExperiment(value=i, infra=slurm) for i in range(10)]
 
+    captured: dict[str, tp.Any] = {}
 
-@pytest.mark.parametrize("n_jobs", [0, -1])
-def test_packed_experiment_rejects_bad_n_jobs(infra: tp.Any, n_jobs: int) -> None:
-    exp = ValueExperiment(value=0, infra=infra)
-    with pytest.raises(ValidationError):
-        PackedExperiment(experiments=[exp], n_jobs=n_jobs)
+    class _StubParallel:
+        def __init__(self, steps: tp.Any, infra: tp.Any) -> None:
+            captured["n_steps"] = len(steps)
+            captured["max_jobs"] = infra["max_jobs"]
 
+        def run(self) -> None:
+            pass
 
-def test_packed_experiment_rejects_empty_experiments() -> None:
-    with pytest.raises(ValidationError):
-        PackedExperiment(experiments=[], n_jobs=1)
+    monkeypatch.setattr(packing, "Parallel", _StubParallel)
+    submit_packed(exps, experiments_per_job=4)
+    assert captured["n_steps"] == 10
+    assert captured["max_jobs"] == 3  # ceil(10 / 4)

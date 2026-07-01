@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 import neuralset as ns
 
-from .packing import pack_experiments_for_submission
+from .packing import submit_packed
 from .plots.benchmark import plot_all_results
 from .plots.tables import print_skip_table
 
@@ -54,7 +54,6 @@ class BenchmarkAggregator(ns.BaseModel):
     collect_max_workers: int = 32
     debug: bool = False
     experiments_per_job: tp.Annotated[int, Field(ge=1)] | tp.Literal["all"] = 1
-    local_workers_per_job: int = Field(default=1, ge=1)
 
     output_dir: str = Field(default_factory=_default_output_dir)
 
@@ -100,34 +99,23 @@ class BenchmarkAggregator(ns.BaseModel):
                 )
                 return
 
-        if self.experiments_per_job == 1 and self.local_workers_per_job > 1:
-            LOGGER.warning(
-                "local_workers_per_job=%d is ignored because "
-                "experiments_per_job=1 (no in-job batching).",
-                self.local_workers_per_job,
-            )
-
         if self.debug:
             for experiment in self.experiments:
                 experiment.run()
         elif self.experiments_per_job != 1:
-            packed = pack_experiments_for_submission(
+            dispatched = submit_packed(
                 self.experiments,
                 experiments_per_job=self.experiments_per_job,
-                n_jobs=self.local_workers_per_job,
             )
-            if not packed:
+            if not dispatched:
                 LOGGER.info(
                     "No packed job submitted; all runnable experiments are cached."
                 )
                 return
             LOGGER.info(
-                "Submitting %d packed job(s) for %d pending experiment(s).",
-                len(packed),
-                sum(len(job.experiments) for job in packed),
+                "Dispatched %d pending experiment(s) via one Parallel sweep.",
+                dispatched,
             )
-            with packed[0].infra.job_array(max_workers=self.max_workers) as tasks:
-                tasks.extend(packed)
         else:
             tmp = self.experiments[0].infra.clone_obj()
             with tmp.infra.job_array(max_workers=self.max_workers) as tasks:

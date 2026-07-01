@@ -59,7 +59,6 @@ def run_benchmark(
     download: bool = False,
     plot_cached: bool = False,
     experiments_per_job: int | tp.Literal["all"] = 1,
-    local_workers_per_job: int = 1,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -207,7 +206,6 @@ def run_benchmark(
         experiments=configs,
         debug=debug,
         experiments_per_job=experiments_per_job,
-        local_workers_per_job=local_workers_per_job,
     )
 
     if not plot_cached:
@@ -318,12 +316,6 @@ def run_benchmark_cli() -> None:
         help="Experiments per scheduler job; pass 'all' to pack every pending experiment into one job.",
     )
     parser.add_argument(
-        "--local-workers-per-job",
-        type=int,
-        default=1,
-        help="Local worker processes inside each packed scheduler job (default: 1, serial).",
-    )
-    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -353,7 +345,6 @@ def run_benchmark_cli() -> None:
             download=args.download,
             plot_cached=args.plot_cached,
             experiments_per_job=args.experiments_per_job,
-            local_workers_per_job=args.local_workers_per_job,
         )
     except Exception:
         if not args.pdb:
