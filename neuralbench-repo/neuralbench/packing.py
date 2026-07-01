@@ -132,9 +132,7 @@ def _pending_experiments(
     return [e for _, e in keyed]
 
 
-def _backend_config(
-    infra: tp.Any, folder: tp.Any, max_jobs: int
-) -> dict[str, tp.Any]:
+def _backend_config(infra: tp.Any, folder: tp.Any, max_jobs: int) -> dict[str, tp.Any]:
     """Translate an experiment's ``TaskInfra`` into a steps backend config.
 
     The scheduler resource budget (partition/gpus/mem/time/...) is taken from a
@@ -192,7 +190,8 @@ def submit_packed(
         raise RuntimeError(
             "experiments need infra.folder set to pack; got infra.folder=None"
         )
-    backend = _backend_config(infra, infra.folder, max_jobs)
+    # tp.Any: the dict is validated into an exca steps Backend at construction.
+    backend: tp.Any = _backend_config(infra, infra.folder, max_jobs)
 
     variants = [
         # cluster=None so run() computes in-process inside the worker instead of

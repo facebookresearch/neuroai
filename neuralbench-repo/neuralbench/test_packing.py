@@ -17,8 +17,8 @@ from neuraltrain.utils import BaseExperiment
 
 from . import packing
 from .packing import (
-    _ExperimentStep,
     _backend_config,
+    _ExperimentStep,
     _pending_experiments,
     _should_submit_experiment,
     submit_packed,
