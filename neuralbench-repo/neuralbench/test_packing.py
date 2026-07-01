@@ -19,7 +19,6 @@ from . import packing
 from .packing import (
     _backend_config,
     _ExperimentStep,
-    _pending_experiments,
     _should_submit_experiment,
     submit_packed,
 )
@@ -70,16 +69,12 @@ def test_should_submit_experiment(mode: str, status: str, expected: bool) -> Non
     assert _should_submit_experiment(exp) is expected
 
 
-def test_pending_skips_read_only_sorts_and_is_order_independent(infra: tp.Any) -> None:
-    assert _pending_experiments([]) == []
+def test_submit_packed_skips_non_runnable(infra: tp.Any) -> None:
     read_only = [
         ValueExperiment(value=i, infra={**infra, "mode": "read-only"}) for i in range(3)
     ]
-    assert _pending_experiments(read_only) == []
-    exps = [ValueExperiment(value=i, infra=infra) for i in range(4)]
-    uids = [e.infra.uid() for e in _pending_experiments(exps)]
-    assert uids == sorted(uids)  # sorted by uid
-    assert uids == [e.infra.uid() for e in _pending_experiments(exps[::-1])]
+    assert submit_packed(read_only) == 0  # read-only filtered out
+    assert submit_packed([]) == 0
 
 
 def test_backend_config_local_is_cached_without_resource_knobs(tmp_path: Path) -> None:

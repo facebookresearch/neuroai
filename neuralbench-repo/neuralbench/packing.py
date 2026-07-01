@@ -18,9 +18,9 @@ from __future__ import annotations
 import logging
 import math
 import typing as tp
-from concurrent.futures import ThreadPoolExecutor
 
 import pydantic
+from exca.steps import backends
 from exca.steps.base import Step
 from exca.steps.helpers import Parallel
 
@@ -30,25 +30,6 @@ LOGGER = logging.getLogger(__name__)
 
 # TaskInfra.cluster -> steps backend class (the values neuralbench emits).
 _BACKENDS = {None: "Cached", "auto": "Auto", "slurm": "Slurm"}
-# TaskInfra fields passed straight to a submitit backend (same name).
-_PASS = (
-    "job_name",
-    "timeout_min",
-    "nodes",
-    "tasks_per_node",
-    "cpus_per_task",
-    "gpus_per_node",
-    "mem_gb",
-)
-# TaskInfra field -> renamed steps backend field.
-_RENAME = {
-    "slurm_partition": "partition",
-    "slurm_account": "account",
-    "slurm_qos": "qos",
-    "slurm_constraint": "constraint",
-    "slurm_additional_parameters": "additional_parameters",
-    "slurm_use_srun": "use_srun",
-}
 
 
 class _ExperimentStep(Step):
@@ -58,7 +39,8 @@ class _ExperimentStep(Step):
     ``PrivateAttr`` because ``BaseExperiment`` is not a discriminated model and
     would not survive ``Parallel``'s step re-validation as a field — a private
     attr is excluded from the uid yet pickled to workers. A failure is isolated
-    (logged, not raised) but still recorded in the experiment's own ``TaskInfra``.
+    (logged, not raised) so it does not abort the rest of the packed element; it
+    is still recorded in the experiment's own ``TaskInfra`` (status ``failed``).
     """
 
     exp_uid: str
@@ -88,47 +70,29 @@ def _should_submit_experiment(experiment: BaseExperiment) -> bool:
     )
 
 
-def _pending_experiments(
-    experiments: tp.Sequence[BaseExperiment],
-) -> list[BaseExperiment]:
-    """Runnable experiments, sorted by uid so packing is order-independent.
-
-    ``status()`` may hit NFS, so the filter is threaded.
-    """
-    if not experiments:
-        return []
-    with ThreadPoolExecutor(max_workers=min(32, len(experiments))) as pool:
-        keep = pool.map(_should_submit_experiment, experiments)
-    keyed = [(e.infra.uid(), e) for e, k in zip(experiments, keep) if k]
-    keyed.sort(key=lambda kv: kv[0])
-    return [e for _, e in keyed]
-
-
 def _backend_config(infra: tp.Any, folder: tp.Any, max_jobs: int) -> dict[str, tp.Any]:
     """Translate one experiment's ``TaskInfra`` into a steps backend config.
 
     Resources come from a single infra (group by resources before packing if they
-    differ). ``mode="force"`` makes the wrapper marker never the cache authority:
-    every pending variant is dispatched and the experiment's own ``TaskInfra``
-    decides what recomputes.
+    differ). Keeps every infra field the backend also accepts — ``TaskInfra``
+    prefixes slurm-only fields (``slurm_partition``), the backend does not.
+    ``mode="force"`` makes the wrapper marker never the cache authority: every
+    pending variant is dispatched and the experiment's own ``TaskInfra`` decides
+    what recomputes.
     """
     cluster = getattr(infra, "cluster", None)
     if cluster not in _BACKENDS:
         raise ValueError(f"unsupported infra.cluster={cluster!r}")
-    cfg: dict[str, tp.Any] = {
-        "backend": _BACKENDS[cluster],
-        "folder": folder,
-        "mode": "force",
+    name = _BACKENDS[cluster]
+    fields = getattr(backends, name).model_fields
+    shared = {
+        k.removeprefix("slurm_"): v
+        for k, v in infra.model_dump(exclude_defaults=True).items()
     }
-    if cluster is None:
-        return cfg  # local in-process backend: no resource/packing knobs
-    for name in _PASS:
-        if (val := getattr(infra, name, None)) is not None:
-            cfg[name] = val
-    for src, dst in _RENAME.items():
-        if (val := getattr(infra, src, None)) not in (None, False):
-            cfg[dst] = val  # skip unset + default use_srun=False
-    cfg["max_jobs"] = max_jobs
+    cfg = {k: v for k, v in shared.items() if k in fields}
+    cfg |= {"backend": name, "folder": folder, "mode": "force"}
+    if name != "Cached":  # Cached runs in-process; no packing knob
+        cfg["max_jobs"] = max_jobs
     return cfg
 
 
@@ -142,7 +106,7 @@ def submit_packed(
     caps the sweep at ``ceil(pending / N)`` array elements. Returns 0 when every
     runnable experiment is already cached.
     """
-    pending = _pending_experiments(experiments)
+    pending = [e for e in experiments if _should_submit_experiment(e)]
     if not pending:
         return 0
     n = len(pending)
