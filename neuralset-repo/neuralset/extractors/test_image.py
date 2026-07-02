@@ -227,6 +227,24 @@ def test_openai_clip_layer(
     else:
         assert out.shape == (768,)
 
+def test_bug_dinov2(cat_event: etypes.Image) -> None:
+    # Test: AttributeError when applying .cpu() to numpy array
+    # Happens with layers='all' and layer_aggregation=None
+    extractor = ns.extractors.HuggingFaceImage(
+        model_name="facebook/dinov2-base",
+        device="cpu",
+        layers="all",
+        layer_aggregation=None,
+    )
+    latent = next(iter(extractor._get_data([cat_event])))
+    assert isinstance(latent, np.ndarray)
+    # layer_aggregation=None + token_aggregation='mean' -> (n_layers, embed_dim)
+    assert latent.ndim == 2
+    n_layers, embed_dim = latent.shape
+    assert n_layers > 1, "Expected all layers to be returned"
+    assert embed_dim == 768  
+    assert np.isfinite(latent).all()
+
 
 def test_hf_dinov2(cat_event: etypes.Image) -> None:
     extractor = ns.extractors.HuggingFaceImage(
