@@ -183,10 +183,10 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
                     # notes: - aggregating with a batch would be slightly more efficient
                     # but code would be messier
                     # - aggregating in cuda avoids transferring too much data to cpu
-                    latent = self._aggregate_tokens(latent)
+                    latent = self._aggregate_tokens(latent).cpu().numpy()
                     if aggregate_layers:
                         latent = self._aggregate_layers(latent)
-                    yield latent.cpu().numpy()
+                    yield latent
 
     @infra.apply(
         item_uid=_huggingface_image_event_uid,
