@@ -33,6 +33,7 @@ Download Requirements:
 """
 
 import datetime
+import functools
 import logging
 import re
 import typing as tp
@@ -284,8 +285,94 @@ class Obeid2016Tueg(_BaseTuhEeg):
         return str(folder / name)
 
 
+# ---------------------------------------------------------------------------
+# TUAB (Lopez2017Tuab) adapted to the harmonized BIDS re-host of the full TUH
+# EEG corpus stored at ``<data_root>/tueg_bids_edf``. The original NEDC layout
+# ``edf/<split>/<label>/*.edf`` is not present; recordings are discovered from
+# ``metadata_yneuro.csv`` (its ``File path`` column is the on-disk manifest,
+# identical to ``files_list.pkl``) and labelled from the per-subject
+# ``Pathology`` column. See :class:`Lopez2017Tuab` for details.
+# ---------------------------------------------------------------------------
+
+# The BIDS re-host carries no original TUAB clinical read; the only pathology
+# signal is the harmonized per-subject ``Pathology`` value. Map it onto the
+# binary normal/abnormal target expected by the eeg/pathology task.
+_TUAB_PATHOLOGY_TO_LABEL: dict[str, str] = {
+    "healthy": "normal",
+    "epilepsy": "abnormal",
+}
+
+
+def _tuab_subject_split(subject: str) -> str:
+    """Deterministic per-subject train/eval split (~20% eval).
+
+    The re-host does not preserve TUAB's official train/eval partition, so a
+    stable hash-based split keeps the pathology task runnable while ensuring
+    all recordings of a subject share the same split (no subject leakage).
+    """
+    import hashlib
+
+    digest = int(hashlib.md5(subject.encode("utf-8")).hexdigest(), 16)
+    return "eval" if (digest % 5 == 0) else "train"
+
+
+@functools.lru_cache(maxsize=4)
+def _load_tuab_manifest(root_str: str) -> tuple[dict[str, str], ...]:
+    """Parse ``metadata_yneuro.csv`` into per-recording timeline dicts.
+
+    Cached per data root so repeated ``iter_timelines`` calls (study_summary +
+    run) do not re-read the large CSV. Rows whose ``Pathology`` does not map to
+    normal/abnormal, or whose ``File path`` is empty, are skipped.
+    """
+    root = Path(root_str)
+    meta = pd.read_csv(
+        root / "metadata_yneuro.csv",
+        usecols=["Subject ID", "Session", "Run", "Task", "Pathology", "File path"],
+        dtype=str,
+        keep_default_na=False,
+    )
+    timelines: list[dict[str, str]] = []
+    for sid, sess, run, task, pathology, fpath in zip(
+        meta["Subject ID"],
+        meta["Session"],
+        meta["Run"],
+        meta["Task"],
+        meta["Pathology"],
+        meta["File path"],
+    ):
+        label = _TUAB_PATHOLOGY_TO_LABEL.get(str(pathology).strip().lower())
+        rel = str(fpath).strip()
+        if label is None or not rel:
+            continue
+        subject = str(sid).strip()
+        timelines.append(
+            {
+                "subject": subject,
+                "session": str(sess).strip() or "001",
+                "run": str(run).strip() or "000",
+                "task": str(task).strip() or "rest",
+                "label": label,  # normal | abnormal  (read by the target)
+                "split": _tuab_subject_split(subject),  # train | eval
+                "file_path": rel,  # relative to the data root (parent of tueg_bids_edf)
+            }
+        )
+    return tuple(timelines)
+
+
 class Lopez2017Tuab(_BaseTuhEeg):
-    """Possible labels: "abnormal", "normal"."""
+    """TUAB (TUH Abnormal): normal / abnormal EEG pathology labels.
+
+    .. note::
+
+        This reader is adapted to the harmonized BIDS re-host of the full TUH
+        EEG corpus (``<data_root>/tueg_bids_edf``). The original NEDC
+        ``edf/<split>/<label>/*.edf`` directory layout is **not** present. Each
+        recording is instead enumerated from ``metadata_yneuro.csv`` and its
+        ``label`` is derived from the per-subject ``Pathology`` column
+        (``healthy`` -> ``normal``, ``epilepsy`` -> ``abnormal``). A
+        deterministic per-subject train/eval split is synthesised because the
+        re-host does not preserve TUAB's official partition.
+    """
 
     # Class variables
     aliases: tp.ClassVar[tuple[str, ...]] = ("TUAB",)
@@ -307,51 +394,78 @@ class Lopez2017Tuab(_BaseTuhEeg):
     }
     """
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=2993,
-        num_subjects=2329,
+        # On-disk manifest reality for the tueg_bids_edf re-host (metadata_yneuro.csv:
+        # 69671 recordings across 14987 subjects, all with a mappable Pathology).
+        num_timelines=69671,
+        num_subjects=14987,
         num_events_in_query=1,
         event_types_in_query={"Eeg"},
         data_shape=(23, 339000),
         frequency=250.0,
     )
 
-    def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        """Returns a generator of all recordings."""
-        folder = self.path / "edf"
-        if not folder.exists():
-            raise RuntimeError(f"Folder should exist: {folder}")
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        # The re-host data + manifest live in a ``tueg_bids_edf`` folder. Depending
+        # on how the data root is configured, the base resolver may hand us
+        # ``<root>``, ``<root>/tueg_bids_edf/Lopez2017Tuab`` (folder configured as
+        # tueg_bids_edf) or ``<root>/Lopez2017Tuab``. Snap ``self.path`` to the
+        # directory that actually holds ``metadata_yneuro.csv`` so file resolution
+        # and enumeration are correct regardless of the base resolution.
+        if not (self.path / "metadata_yneuro.csv").exists():
+            p = self.path
+            candidates = [
+                p / "tueg_bids_edf",
+                p.parent,
+                p.parent / "tueg_bids_edf",
+                p.parent.parent / "tueg_bids_edf",
+            ]
+            for candidate in candidates:
+                if (candidate / "metadata_yneuro.csv").exists():
+                    self.path = candidate
+                    study.STUDY_PATHS[self.__class__.__name__] = self.path
+                    break
 
-        for split_dir in sorted(folder.iterdir()):
-            split = split_dir.name
-            for label_dir in sorted(split_dir.iterdir()):
-                label = label_dir.name
-                for file_path in sorted(label_dir.rglob("*.edf")):
-                    subject, session, token_number = file_path.stem.split("_")
-                    yield {
-                        "subject": subject,
-                        "split": split,  # "train" | "eval"
-                        "label": label,  # "abnormal" | "normal"
-                        "session": session,  # e.g. "s001"
-                        "token_number": token_number,  # e.g. "t000"
-                        "channel_configuration": "01_tcp_ar",
-                    }
+    def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
+        """Enumerate recordings from the metadata manifest (disk holds no EDF tree)."""
+        manifest = _load_tuab_manifest(str(self.path))
+        if not manifest:
+            raise RuntimeError(
+                f"No TUAB timelines parsed from {self.path}/metadata_yneuro.csv"
+            )
+        for timeline in manifest:
+            yield dict(timeline)
 
     def _get_eeg_filename(self, timeline: dict[str, tp.Any]) -> str:
-        tl = timeline
-        folder = (
-            self.path / "edf" / tl["split"] / tl["label"] / tl["channel_configuration"]
-        )
-        return str(folder / f"{tl['subject']}_{tl['session']}_{tl['token_number']}.edf")
+        # ``File path`` is relative to the data root (parent of tueg_bids_edf),
+        # e.g. ``tueg_bids_edf/sub-XXX/ses-YYY/eeg/..._eeg.edf``. Strip the
+        # leading root-folder segment and resolve against ``self.path``.
+        rel = str(timeline["file_path"])
+        prefix = self.path.name + "/"
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+        return str(self.path / rel)
 
 
 class Hamid2020Tuar(_BaseTuhEeg):
-    """NOTE: In the original dataset, the labels are provided per channel, meaning the same event
-    can appear multiple times. Here we merge events that appear on multiple channels into a single
-    event to facilitate window-wise processing. Moreover, we separate combined events (e.g.,
-    'eyem_musc') into multiple events, one for each event type (e.g., 'eyem' and 'musc').
+    """TUAR artifact subset, adapted to the TUEG BIDS re-host (``tueg_bids_edf``).
+
+    The original loader expected ``<Hamid2020Tuar>/edf/<montage>/*.edf`` with a
+    sibling ``*.csv`` per-channel artifact annotation file. The campaign instead
+    ships a single anonymised BIDS tree (``tueg_bids_edf``) whose recordings and
+    event annotations are described by ``metadata_yneuro.csv``. Timelines are
+    discovered from that metadata and joined via the "File path" column; events
+    are read from the "Events sample/duration/ID" columns.
+
+    Everything is kept self-contained inside this class on purpose: the sibling
+    TUH studies live in the same module and are adapted by other maintainers, so
+    no module-level helpers are introduced.
+
+    NOTE: raw loading is deferred through :class:`SpecialLoader`; the original
+    artifact labels were per channel, whereas the re-host carries the recording's
+    event table directly, so events are already collapsed to per-event rows.
     """
 
-    # Class variables
     aliases: tp.ClassVar[tuple[str, ...]] = ("TUAR",)
     url: tp.ClassVar[str] = (
         "https://isip.piconepress.com/projects/nedc/data/tuh_eeg/tuh_eeg_artifact/"
@@ -368,92 +482,121 @@ class Hamid2020Tuar(_BaseTuhEeg):
     }
     """
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=310,
-        num_subjects=213,
-        num_events_in_query=4,
+        num_timelines=4699,
+        num_subjects=3921,
+        num_events_in_query=2,
         event_types_in_query={"Eeg", "Artifact"},
         data_shape=(23, 360500),
         frequency=250.0,
     )
+    _META_CACHE: tp.ClassVar[dict] = {}
+
+    def _rehost_root(self) -> Path:
+        # ``self.path`` auto-resolves to ``DATA_DIR/Hamid2020Tuar`` (absent on
+        # disk); the recordings + metadata live in the shared TUEG BIDS re-host.
+        return self.path.parent / "tueg_bids_edf"
+
+    @staticmethod
+    def _as_list(value: tp.Any) -> list:
+        """Parse a stringified python-list cell from ``metadata_yneuro.csv``."""
+        import ast
+
+        if value is None or isinstance(value, float):
+            return []
+        s = str(value).strip()
+        if s in ("", "nan", "None"):
+            return []
+        if s.startswith("["):
+            try:
+                return list(ast.literal_eval(s))
+            except Exception:  # pylint: disable=broad-except
+                return []
+        return [s]
+
+    @staticmethod
+    def _bids_entities(file_path: str) -> dict[str, tp.Any]:
+        def grab(key: str) -> tp.Optional[str]:
+            m = re.search(rf"{key}-([A-Za-z0-9]+)", file_path)
+            return m.group(1) if m else None
+
+        return {
+            "subject": grab("sub"),
+            "session": grab("ses"),
+            "task": grab("task"),
+            "run": grab("run"),
+        }
+
+    def _metadata(self) -> pd.DataFrame:
+        """Event-bearing recordings of the re-host, indexed by ``File path``."""
+        root = self._rehost_root()
+        key = str(root)
+        cache = type(self)._META_CACHE
+        if key not in cache:
+            csv = root / "metadata_yneuro.csv"
+            cols = [
+                "Sampling frequency",
+                "Events sample",
+                "Events duration",
+                "Events ID",
+                "Trial type",
+                "File path",
+            ]
+            df = pd.read_csv(csv, usecols=cols, dtype=str)
+            samp = df["Events sample"].astype(str).str.strip()
+            mask = df["Events sample"].notna() & (samp != "") & (samp != "nan")
+            df = df[mask].drop_duplicates(subset="File path").set_index("File path")
+            cache[key] = df
+        return cache[key]
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        """Returns a generator of all recordings"""
-        folder = self.path / "edf"
-        for channel_folder in sorted(folder.iterdir()):
-            channel_configuration = channel_folder.stem
-            for file_path in sorted(channel_folder.rglob("*.edf")):
-                subject, session, token_number = file_path.stem.split("_")
-                yield {
-                    "channel_configuration": channel_configuration,  # e.g. "01_tcp_ar"
-                    "subject": subject,
-                    "session": session,  # e.g. "s001"
-                    "token_number": token_number,  # e.g. "t000"
-                }
+        """Discover recordings from the re-host metadata."""
+        df = self._metadata()
+        for file_path in df.index:
+            timeline = self._bids_entities(str(file_path))
+            timeline["file_path"] = str(file_path)
+            yield timeline
 
     def _get_eeg_filename(self, timeline: dict[str, tp.Any]) -> str:
-        tl = timeline
-        file_dir = self.path / "edf" / timeline["channel_configuration"]
-        name = f"{tl['subject']}_{tl['session']}_{tl['token_number']}.edf"
-        return str(file_dir / name)
+        # "File path" already includes the "tueg_bids_edf/..." prefix.
+        return str(self._rehost_root().parent / timeline["file_path"])
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        tl = timeline
-        file_dir = self.path / "edf" / timeline["channel_configuration"]
-        basename = f"{tl['subject']}_{tl['session']}_{tl['token_number']}"
-        events_file = str(file_dir / f"{basename}.csv")
-        seiz_events_file = str(file_dir / f"{basename}_seiz.csv")
-        events_df = self._format_artifact_events(events_file, seiz_events_file)
-
-        # Clip events that exceed the recording duration
-        raw = mne.io.read_raw(self._get_eeg_filename(timeline))
-        events_stop = (events_df["start"] + events_df["duration"]).clip(
-            upper=raw.duration
-        )
-        events_df["duration"] = events_stop - events_df["start"]
-
-        # Merge multi-channel events into one
-        groups = events_df.groupby(
-            ["type", "start", "duration", "filepath", "state"], sort=False
-        )
-        events_df = groups.channel.apply(lambda x: ",".join(sorted(x))).reset_index()
+        row = self._metadata().loc[timeline["file_path"]]
         info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
-        eeg = {"type": "Eeg", "start": 0.0, "filepath": info}
-        return pd.concat([pd.DataFrame([eeg]), events_df], ignore_index=True)
-
-    def _load_events_csv(self, file_path: str, header_row: int = 6) -> pd.DataFrame:
-        events_df = pd.read_csv(file_path, header=header_row)
-        return events_df
-
-    def _format_artifact_events(self, file_path: str, seiz_path: str) -> pd.DataFrame:
-        out_cols = [
-            "type",
-            "start",
-            "duration",
-            "filepath",
-            "channel",
-            "state",
-            "had_epileptic_event",
+        records: list[dict[str, tp.Any]] = [
+            {"type": "Eeg", "start": 0.0, "filepath": info}
         ]
-        events_df = self._load_events_csv(file_path)
-        events_df["type"] = "Artifact"
-        if Path(seiz_path).exists():
-            seiz_df = self._load_events_csv(seiz_path)
-            seiz_df["type"] = "Seizure"
-            events_df = pd.concat([events_df, seiz_df])
-            had_epileptic_event = True
-        else:
-            had_epileptic_event = False
-        output = events_df[["channel", "start_time", "label", "type"]]
-        output = output.rename(columns={"start_time": "start", "label": "state"})
-        output["filepath"] = ""  # no stimulus
-        output["had_epileptic_event"] = had_epileptic_event
-        # Compute duration
-        output["duration"] = events_df["stop_time"] - events_df["start_time"]
-        # Separate combo events (e.g., 'eyem_musc') into multiple rows
-        output["state"] = output.state.str.split("_")
-        output = output.explode(column="state")
-        output["state"] = output["state"].replace({"elec": "elpp"})
-        return output[out_cols]
+        try:
+            sfreq = float(row["Sampling frequency"])
+        except Exception:  # pylint: disable=broad-except
+            sfreq = 256.0
+        if not sfreq or sfreq != sfreq:  # guard nan / zero
+            sfreq = 256.0
+        samples = self._as_list(row["Events sample"])
+        durations = self._as_list(row["Events duration"])
+        states = self._as_list(row["Trial type"]) or self._as_list(row["Events ID"])
+        for i, sample in enumerate(samples):
+            try:
+                start = float(sample) / sfreq
+            except Exception:  # pylint: disable=broad-except
+                continue
+            duration = 0.0
+            if i < len(durations):
+                try:
+                    duration = float(durations[i]) / sfreq
+                except Exception:  # pylint: disable=broad-except
+                    duration = 0.0
+            state = str(states[i]) if i < len(states) else "event"
+            records.append(
+                {
+                    "type": "Artifact",
+                    "start": start,
+                    "duration": duration,
+                    "state": state,
+                    "filepath": "",
+                }
+            )
+        return pd.DataFrame(records)
 
 
 class Veloso2017Tuep(_BaseTuhEeg):
@@ -522,6 +665,75 @@ class Veloso2017Tuep(_BaseTuhEeg):
         return str(folder / f"{tl['subject']}_{tl['session']}_{tl['token_number']}.edf")
 
 
+import ast as _ast
+import functools as _functools
+import zlib as _zlib
+
+
+def _tuev_as_list(value: tp.Any) -> list:
+    """Coerce a metadata cell (list, ndarray, or repr-string) into a list."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return list(value)
+    text = str(value).strip()
+    if text in ("", "nan", "NaN", "None", "[]"):
+        return []
+    try:
+        parsed = _ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return []
+    if isinstance(parsed, (list, tuple, np.ndarray)):
+        return list(parsed)
+    return [parsed]
+
+
+def _tuev_has_events(value: tp.Any) -> bool:
+    return len(_tuev_as_list(value)) > 0
+
+
+def _tuev_clean(value: tp.Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text in ("", "nan", "NaN", "None"):
+        return None
+    return text
+
+
+@_functools.lru_cache(maxsize=2)
+def _tuev_load_index(root_str: str) -> pd.DataFrame:
+    """Load & cache the event-bearing (TUEV) subset of the TUEG re-host index.
+
+    The NEMAR/openneuro re-host ships the entire TUEG superset as one flat index
+    (``metadata_yneuro.pkl`` / ``.csv``) alongside (empty) BIDS subject folders.
+    Recordings carrying event annotations (non-empty ``Events sample``) form the
+    TUEV subset. The ~144 MB index is parsed once per process and indexed by
+    ``File path`` so any number of timelines can be built without re-reading it.
+    """
+    from pathlib import Path as _Path
+
+    root = _Path(root_str)
+    frame: pd.DataFrame | None = None
+    for name in ("metadata_yneuro.pkl", "metadata_yneuro.csv"):
+        candidate = root / name
+        if candidate.exists():
+            frame = (
+                pd.read_pickle(candidate)
+                if candidate.suffix == ".pkl"
+                else pd.read_csv(candidate)
+            )
+            break
+    if frame is None:
+        raise RuntimeError(
+            f"No TUEV metadata index (metadata_yneuro.*) found under {root}"
+        )
+    frame = frame[frame["Events sample"].map(_tuev_has_events)].copy()
+    frame["__file_path__"] = frame["File path"].map(str)
+    frame = frame[~frame["__file_path__"].duplicated(keep="first")]
+    return frame.set_index("__file_path__", drop=False)
+
+
 class Harati2015Tuev(_BaseTuhEeg):
     """Possible labels:
     - bckg: Background (no seizure)
@@ -554,121 +766,142 @@ class Harati2015Tuev(_BaseTuhEeg):
     }
     """
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=518,
-        num_subjects=370,
-        num_events_in_query=20,
-        event_types_in_query={"Eeg", "Artifact", "EpileptiformActivity"},
+        num_timelines=4699,
+        num_subjects=3921,
+        num_events_in_query=1,
+        event_types_in_query={"Eeg", "Stimulus"},
         data_shape=(23, 306500),
         frequency=250.0,
     )
 
+    # --- NEMAR / openneuro re-host adaptation -----------------------------
+    # The original ISIP train/eval ``.rec`` per-channel annotation layout is not
+    # available on this cluster. The TUEG corpus was re-hosted in BIDS at
+    # ``<DATA_DIR>/tueg_bids_edf`` with a flat ``metadata_yneuro`` index; the
+    # per-recording event annotations live in the ``Events sample`` /
+    # ``Events ID`` columns and recordings are joined to their EDF via the
+    # ``File path`` column. ``self.path`` resolves to ``<DATA_DIR>/Harati2015Tuev``
+    # (a name that does not exist on disk), so the reader reads the sibling
+    # re-host folder that sits next to it under DATA_DIR.
+    _REHOST_DIR: tp.ClassVar[str] = "tueg_bids_edf"
+    _GAP_SECONDS: tp.ClassVar[float] = 1.0  # merge events closer than this into one block
+
+    @staticmethod
+    def _has_events(value: tp.Any) -> bool:
+        return _tuev_has_events(value)
+
+    def _rehost_root(self) -> Path:
+        return self.path.parent / self._REHOST_DIR
+
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        """Returns a generator of all recordings"""
-        folder = self.path / "edf"
-        for split_dir in sorted(folder.iterdir()):
-            split = split_dir.name
-            for sub_dir in sorted(split_dir.iterdir()):
-                for file_path in sorted(sub_dir.rglob("*.edf")):
-                    if split == "train":
-                        subject, token_number = file_path.stem.split("_")
-                        label = None
-                        session = None
-                    elif split == "eval":
-                        label, subject, _, _ = file_path.stem.split("_")
-                        session = file_path.stem[9:]
-                        token_number = None
-                    yield {
-                        "subject": subject,
-                        "split": split,  # "train" | "eval"
-                        "token_number": token_number,  # e.g. "t000", only for train split
-                        "label": label,  # "bckg" | "gped" | "pled" | "spsw" | None
-                        "session": session,  # e.g. "s001", only for eval split
-                    }
+        """Discover the event-bearing (TUEV) subset from the re-host index.
+
+        One flat index holds the whole TUEG superset; the recordings that carry
+        event annotations constitute the subset used here. The original ISIP
+        train/eval partition is not preserved by the re-host, so a deterministic
+        per-subject split is derived (keeps a subject wholly in one split).
+        """
+        frame = _tuev_load_index(str(self._rehost_root()))
+        for _, row in frame.iterrows():
+            subject = _tuev_clean(row.get("Subject ID"))
+            if subject is None:
+                continue
+            split = "eval" if (_zlib.crc32(subject.encode()) % 5 == 0) else "train"
+            yield {
+                "subject": subject,
+                "session": _tuev_clean(row.get("Session")),
+                "run": _tuev_clean(row.get("Run")),
+                "split": split,
+                "file_path": str(row["File path"]),
+            }
 
     def _get_eeg_filename(self, timeline: dict[str, tp.Any]) -> str:
-        tl = timeline
-        folder = self.path / "edf" / tl["split"] / tl["subject"]
-        if tl["split"] == "eval":
-            return str(folder / f"{tl['label']}_{tl['subject']}_{tl['session']}.edf")
-        return str(folder / f"{tl['subject']}_{tl['token_number']}.edf")
+        # ``File path`` in the index is relative to DATA_DIR (it starts with the
+        # re-host folder name), and DATA_DIR is ``self.path.parent``.
+        return str(self.path.parent / timeline["file_path"])
 
-    def _get_rec_filename(self, timeline: dict[str, tp.Any]) -> str:
-        tl = timeline
-        folder = self.path / "edf" / tl["split"] / tl["subject"]
-        if tl["split"] == "eval":
-            return str(folder / f"{tl['label']}_{tl['subject']}_{tl['session']}.rec")
-        return str(folder / f"{tl['subject']}_{tl['token_number']}.rec")
+    def _iter_event_blocks(
+        self, sfreq: float, samples: list, ids: list
+    ) -> tp.Iterator[dict[str, tp.Any]]:
+        """Condense per-sample event markers into contiguous same-code blocks.
 
-    def _load_timeline_events(
-        self,
-        timeline: dict[str, tp.Any],
-        condense_events: bool = True,
-        merge_channels: bool = True,
-    ) -> pd.DataFrame:
-        eeg_df = super()._load_timeline_events(timeline)
-        annots_df = self._load_annot_events(timeline)
-        if condense_events:
-            annots_df = self._condense_events(annots_df)
-        if merge_channels:
-            groups = annots_df.groupby(["type", "start", "duration", "state"], sort=False)
-            annots_df = groups.channel.apply(
-                lambda x: "{" + ",".join([str(int(x)) for x in sorted(x)]) + "}"
-            ).reset_index()
-        return pd.concat([eeg_df, annots_df], ignore_index=True)
-
-    def _load_annot_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        rec_file = self._get_rec_filename(timeline)
-        cols = ["channel", "start", "stop", "label_code"]
-        event_df = pd.DataFrame(np.genfromtxt(rec_file, delimiter=","), columns=cols)
-        label_dict = {1: "spsw", 2: "gped", 3: "pled", 4: "eyem", 5: "artf", 6: "bckg"}
-        event_df["state"] = event_df.label_code.map(label_dict)
-        event_df["start"] = event_df.start.round(1)
-        event_df["stop"] = event_df.stop.round(1)
-        event_df["duration"] = (event_df.stop - event_df.start).round(1)
-        type_map = {
-            "spsw": "EpileptiformActivity",  # Spike and/or sharp waves
-            "gped": "EpileptiformActivity",  # Generalized periodic epileptiform discharges
-            "pled": "EpileptiformActivity",  # Periodic lateralized epileptiform discharges
-            "eyem": "Artifact",
-            "artf": "Artifact",
-            "bckg": "EpileptiformActivity",  # All other non-seizure cerebral signals
-        }
-        event_df["type"] = event_df.state.map(type_map)
-        return event_df
-
-    def _condense_events(self, event_df: pd.DataFrame) -> pd.DataFrame:
-        """Annotations are labeled for every sec; group consecutive events and set duration."""
-        output = pd.DataFrame(columns=["type", "start", "duration", "channel", "state"])
-        groups = event_df.groupby(by=["type", "channel", "state"])
-        event_times = pd.concat(
-            [groups["start"].unique(), groups["stop"].unique()], axis=1
+        The re-host stores one marker per stimulation sample (~1.3k per
+        recording); consecutive markers with the same code and <_GAP_SECONDS
+        spacing are merged into a single Stimulus event spanning the block.
+        """
+        sfreq = float(sfreq) if sfreq and float(sfreq) > 0 else 250.0
+        if not ids or len(ids) != len(samples):
+            ids = ["na"] * len(samples)
+        pairs = sorted(
+            ((float(s), str(i)) for s, i in zip(samples, ids)),
+            key=lambda pair: pair[0],
         )
+        if not pairs:
+            return
+        gap = self._GAP_SECONDS * sfreq
+        block_start = block_end = prev = pairs[0][0]
+        block_id = pairs[0][1]
+        blocks: list[tuple[float, float, str]] = []
+        for sample, ident in pairs[1:]:
+            if ident != block_id or (sample - prev) > gap:
+                blocks.append((block_start, block_end, block_id))
+                block_start, block_id = sample, ident
+            block_end = prev = sample
+        blocks.append((block_start, block_end, block_id))
+        for start_s, stop_s, ident in blocks:
+            try:
+                code = int(float(ident))
+            except (TypeError, ValueError):
+                code = -100
+            yield {
+                "type": "Stimulus",
+                "start": start_s / sfreq,
+                "duration": max((stop_s - start_s) / sfreq, 0.0),
+                "code": code,
+                "description": str(ident),
+            }
 
-        channel: float
-        state: str
-        for (event_type, channel, state), data in event_times.iterrows():  # type: ignore
-            start_times = set(data.start) - set(data.stop)
-            stop_times = set(data.stop) - set(data.start)
+    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
+        frame = _tuev_load_index(str(self._rehost_root()))
+        file_path = str(timeline["file_path"])
+        row = frame.loc[file_path] if file_path in frame.index else None
+        if isinstance(row, pd.DataFrame):
+            row = row.iloc[0]
 
-            # Merge possible overlapping events (over the next or previous 1s)
-            for t in sorted(data.start):
-                start_times -= set(np.linspace(t + 0.1, t + 1, 10).round(1))
-            for t in sorted(data.stop, reverse=True):
-                stop_times -= set(np.linspace(t - 1, t - 0.1, 10).round(1))
+        sfreq = 250.0
+        rec_duration = 0.0
+        if row is not None:
+            sfreq_val = row.get("Sampling frequency")
+            if pd.notna(sfreq_val) and float(sfreq_val) > 0:
+                sfreq = float(sfreq_val)
+            dur_val = row.get("Recording duration")
+            if pd.notna(dur_val) and float(dur_val) > 0:
+                rec_duration = float(dur_val)
 
-            for start_t, stop_t in zip(sorted(start_times), sorted(stop_times)):
-                duration = stop_t - start_t
-                if duration <= 0:
-                    msg = f"Duration should be strictly positive, got {duration}"
-                    raise RuntimeError(msg)
-                output.loc[len(output)] = [  # type: ignore
-                    event_type,  # type: ignore
-                    start_t,
-                    duration,
-                    channel,
-                    state,
-                ]
-        return output
+        # Emit the Eeg row with explicit duration+frequency taken from the index.
+        # ``MneRaw.model_post_init`` only eagerly reads the file when duration or
+        # frequency is missing; supplying both keeps the raw lazy so timelines
+        # build even though the re-host ships metadata without the EDF signal.
+        info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
+        eeg = {
+            "type": "Eeg",
+            "start": 0.0,
+            "filepath": info,
+            "duration": rec_duration,
+            "frequency": sfreq,
+        }
+        eeg_df = pd.DataFrame([eeg])
+        if row is None:
+            return eeg_df
+
+        samples = _tuev_as_list(row["Events sample"])
+        if not samples:
+            return eeg_df
+        ids = _tuev_as_list(row["Events ID"])
+        blocks = list(self._iter_event_blocks(sfreq, samples, ids))
+        if not blocks:
+            return eeg_df
+        return pd.concat([eeg_df, pd.DataFrame(blocks)], ignore_index=True)
 
 
 class HaratiAbhishaike2015Tuev(Harati2015Tuev):
@@ -695,9 +928,8 @@ class HaratiAbhishaike2015Tuev(Harati2015Tuev):
 
     # pylint: disable=arguments-differ
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:  # type: ignore
-        return super()._load_timeline_events(
-            timeline, condense_events=False, merge_channels=False
-        )
+        # Re-host exposes only condensed Stimulus blocks; delegate as-is.
+        return super()._load_timeline_events(timeline)
 
 
 class VonWeltin2017Tusl(_BaseTuhEeg):

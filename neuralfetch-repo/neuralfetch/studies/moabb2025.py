@@ -3859,6 +3859,92 @@ class Stieger2021Continuous(_BaseMoabb):
         frequency=1000.0,
     )
 
+    def _download(self) -> None:
+        """Build ``timelines.csv`` from the locally downloaded NEMAR
+        (nm000339) BIDS re-host instead of the slow Figshare ``.mat`` mirror.
+
+        The recordings are BIDS-organised as
+        ``<datasets>/Stieger2021Continuous/download/sub-*/ses-*/eeg/
+        sub-*_ses-*_task-imagery_run-*_eeg.bdf`` and are discovered on disk
+        (via ``mne_bids.find_matching_paths`` with a glob fallback), so no
+        re-download is required.  The file is (re)written on every call so
+        that sessions still streaming to disk are picked up on later runs.
+        """
+        import os as _os
+        import re as _re
+
+        timeline_path = Path(self.path) / "timelines.csv"
+
+        candidates: list[Path] = []
+        env_root = _os.environ.get("STIEGER_NEMAR_ROOT")
+        if env_root:
+            candidates.append(Path(env_root))
+        # self.path == <datasets>/moabb/Stieger2021Continuous
+        candidates.append(self.path.parents[1] / "Stieger2021Continuous" / "download")
+        candidates.append(self.path.parents[1] / "Stieger2021Continuous")
+        nemar_root = next((p for p in candidates if p.exists()), candidates[-1])
+
+        rows: list[dict[str, tp.Any]] = []
+        try:
+            from mne_bids import find_matching_paths
+
+            for bp in find_matching_paths(
+                nemar_root, datatypes="eeg", suffixes="eeg", extensions=[".bdf"]
+            ):
+                rows.append(
+                    dict(
+                        subject=int(bp.subject),
+                        session=str(bp.session),
+                        run=str(bp.run),
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Stieger2021Continuous: find_matching_paths failed for %s (%s); "
+                "using glob fallback",
+                nemar_root,
+                exc,
+            )
+            rows = []
+
+        if not rows:
+            pat = _re.compile(
+                r"sub-([0-9]+)_ses-([A-Za-z0-9]+)_task-[A-Za-z0-9]+_run-([A-Za-z0-9]+)_eeg\.bdf$"
+            )
+            for f in Path(nemar_root).rglob("*_eeg.bdf"):
+                m = pat.search(f.name)
+                if m:
+                    rows.append(
+                        dict(
+                            subject=int(m.group(1)),
+                            session=str(m.group(2)),
+                            run=str(m.group(3)),
+                        )
+                    )
+
+        timelines = (
+            pd.DataFrame(rows, columns=["subject", "session", "run"])
+            .drop_duplicates()
+            .sort_values(["subject", "session", "run"])
+            .reset_index(drop=True)
+        )
+        assert not timelines.empty, (
+            f"No NEMAR '*_eeg.bdf' recordings found under {nemar_root}; "
+            "cannot build timelines.csv for Stieger2021Continuous."
+        )
+        timeline_path.parent.mkdir(parents=True, exist_ok=True)
+        timelines.to_csv(timeline_path, index=False)
+        expected = getattr(type(self)._info, "num_timelines", None)
+        logger.info(
+            "Stieger2021Continuous: wrote %d timelines (%d subjects) to %s "
+            "from NEMAR BIDS %s (expected complete=%s).",
+            len(timelines),
+            timelines["subject"].nunique(),
+            timeline_path,
+            nemar_root,
+            expected,
+        )
+
     @classmethod
     def _get_dataset(cls) -> type[MoabbBaseDataset]:
         return find_dataset_in_moabb(cls.aliases[0], {"fix_bads": False})

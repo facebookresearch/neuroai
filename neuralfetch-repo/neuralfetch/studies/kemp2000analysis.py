@@ -94,15 +94,27 @@ class Kemp2000Analysis(study.Study):
         download_url = "https://physionet.org/files/sleep-edfx/1.0.0/sleep-cassette/"
         subprocess.run((f"wget -r -N -c -np -P {folder} {download_url}"), shell=True)
         """
-        sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_1, recording=[1], path=self.path
-        )
-        sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_2, recording=[2], path=self.path
+        # Data are pre-downloaded to ``<path>/download/sleep-cassette`` (Sleep-EDF
+        # Cassette: SC4*E0-PSG.edf paired with SC4*E?-Hypnogram.edf). Read those
+        # directly instead of fetching from PhysioNet, which is unavailable from
+        # the compute nodes.
+        cassette = self.path / "download" / "sleep-cassette"
+        psg = list(cassette.glob("SC4*-PSG.edf")) if cassette.exists() else []
+        if psg:
+            logger.info(
+                "Kemp2000Analysis: using %d pre-downloaded PSG recordings in %s",
+                len(psg),
+                cassette,
+            )
+            return
+        raise RuntimeError(
+            f"Expected pre-downloaded Sleep-EDF cassette EDFs in {cassette}; "
+            "none found. Populate that folder (SC4*-PSG.edf + SC4*-Hypnogram.edf) "
+            "before running."
         )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        folder = self.path / "physionet-sleep-data"
+        folder = self.path / "download" / "sleep-cassette"
         for subject in self.SUBJECTS:
             subject_str = f"{subject:02}"
             for session in [1, 2]:
@@ -131,7 +143,7 @@ class Kemp2000Analysis(study.Study):
                 )
 
     def _get_filenames(self, timeline: dict[str, tp.Any]) -> tuple[Path, Path | None]:
-        study_path = self.path / "physionet-sleep-data"
+        study_path = self.path / "download" / "sleep-cassette"
         eeg_file = (
             study_path
             / f"SC4{timeline['subject']}{timeline['session']}{timeline['suffix']}-PSG.edf"
