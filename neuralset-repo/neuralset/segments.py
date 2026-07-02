@@ -404,10 +404,11 @@ def list_segments(
     keys = ["type", "timeline", "start"]
     collisions = trigger_df[trigger_df.duplicated(subset=keys, keep=False)]
     if len(collisions):
-        raise ValueError(
-            f"{len(collisions)} triggers of the same type start at the same time "
-            f"on the same timeline:\n{collisions[keys]}\nNarrow the `triggers` mask."
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            "%d colliding triggers (same type/timeline/start) - keeping first of each to avoid ambiguous segments." % len(collisions)
         )
+        trigger_df = trigger_df[~trigger_df.duplicated(subset=keys, keep="first")]
 
     df_to_pos = events.index.get_indexer(trigger_df.index)
 

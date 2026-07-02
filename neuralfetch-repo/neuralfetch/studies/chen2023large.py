@@ -5,18 +5,33 @@
 # LICENSE file in the root directory of this source tree.
 
 import typing as tp
-from functools import cached_property
-from pathlib import Path
 
 import mne
 import pandas as pd
 from pandas.api.types import CategoricalDtype
-from scipy.io import loadmat
+from mne_bids import BIDSPath, read_raw_bids
 
 from neuralfetch import download
 from neuralset.events import study
 
 from .tuh_eeg import _fix_ch_name
+
+# Emotion categories (ordered) used to derive the integer ``code`` target for
+# the emotion classification task. Matches the ordering in the original study.
+_EMOTION_CATEGORIES = CategoricalDtype(
+    categories=[
+        "anger",
+        "fear",
+        "disgust",
+        "sadness",
+        "neutral",
+        "amusement",
+        "tenderness",
+        "inspiration",
+        "joy",
+    ],
+    ordered=True,
+)
 
 
 class Chen2023Large(study.Study):
@@ -84,7 +99,6 @@ class Chen2023Large(study.Study):
     description: tp.ClassVar[str] = """
         EEG recordings for 123 participants while viewing 28 video clips targeting nine categories of emotion
     """
-    requirements: tp.ClassVar[tuple[str, ...]] = ("python-calamine",)
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=123,
         num_subjects=123,
@@ -94,55 +108,67 @@ class Chen2023Large(study.Study):
         frequency=1000,
     )
 
+    # NEMAR re-host of FACED/THU_EP (BIDS). The reader discovers the on-disk
+    # BIDS layout directly, so the events live in the BIDS ``events.tsv`` sidecar
+    # rather than the Synapse ``evt.bdf`` + ``Stimuli_info.xlsx`` scheme.
+    _BIDS_ID: tp.ClassVar[str] = "nm000112"
+
+    @property
+    def _bids_root(self):
+        return self.path / "download" / self._BIDS_ID
+
     def _download(self) -> None:
         """Data can also be downloaded manually after login at:
         https://www.synapse.org/Synapse:syn50614194
+
+        Repointed to the NEMAR re-host (nm000112) so the BIDS lands at the same
+        root the reader discovers.
         """
-        download.Synapse(
-            study="Chen2023Large",
-            study_id="syn50614194",
-            dset_dir=self.path,
-        ).download()
+        try:
+            import nemar
+
+            nemar.download(
+                dataset=self._BIDS_ID,
+                target_dir=self.path / "download",
+                downloader="python",
+            )
+        except Exception:  # pragma: no cover - fallback to original Synapse source
+            download.Synapse(
+                study="Chen2023Large",
+                study_id="syn50614194",
+                dset_dir=self.path,
+            ).download()
+
+    def _get_bids_path(self, timeline: dict[str, tp.Any]) -> BIDSPath:
+        """Returns the BIDS path for a timeline."""
+        return BIDSPath(
+            subject=timeline["subject"],
+            task=timeline["task"],
+            root=self._bids_root,
+            datatype="eeg",
+        )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        for subj_ind in range(123):
-            yield dict(subject=f"sub{subj_ind:03}")
+        # NEMAR nm000112 BIDS layout is sub-XXX/eeg/sub-XXX_task-watchingVideoClips_*
+        # (no session, no run) -- discover timelines from disk instead of assuming
+        # the Synapse Data/subNNN/{data,evt}.bdf scheme.
+        from mne_bids import find_matching_paths
+
+        for bp in find_matching_paths(
+            self._bids_root, datatypes="eeg", suffixes="eeg", extensions=[".bdf"]
+        ):
+            ev = bp.copy().update(suffix="events", extension=".tsv")
+            if ev.fpath.exists():
+                yield dict(subject=bp.subject, task=bp.task)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        duration = self._load_raw(timeline).duration
-        info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
-        eeg_df = pd.DataFrame(
-            [
-                dict(
-                    type="Eeg",
-                    start=0.0,
-                    filepath=info,
-                    duration=duration,
-                ),
-            ]
-        )
         stim_df = self._load_stimulus_events(timeline)
-        return pd.concat([eeg_df, stim_df]).reset_index(drop=True)
+        info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
+        eeg = dict(type="Eeg", filepath=info, start=0.0)
+        return pd.concat([pd.DataFrame([eeg]), stim_df], ignore_index=True)
 
-    def _get_filename(self, filetype: str, timeline: dict[str, tp.Any]) -> Path:
-        file_dir = self.path / "download"
-        match filetype:
-            case "eeg":
-                file_dir = file_dir / "Data" / timeline["subject"]
-                file_path = "data.bdf"
-            case "events":
-                file_dir = file_dir / "Data" / timeline["subject"]
-                file_path = "evt.bdf"
-            case "stimuli_info":
-                file_path = "Stimuli_info.xlsx"
-            case "ratings":
-                file_dir = file_dir / "Data" / timeline["subject"]
-                file_path = "After_remarks.mat"
-        return file_dir / file_path
-
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        eeg_file = self._get_filename("eeg", timeline)
-        raw = mne.io.read_raw_bdf(eeg_file)
+    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.BaseRaw:
+        raw = read_raw_bids(self._get_bids_path(timeline), verbose=False)
         raw = raw.rename_channels(_fix_ch_name)
         raw.set_montage("standard_1020", on_missing="ignore")
         if "HEOL" in raw.ch_names:
@@ -158,104 +184,48 @@ class Chen2023Large(study.Study):
         return raw
 
     def _load_stimulus_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        annots = mne.read_annotations(self._get_filename("events", timeline))
-        annots_df = annots.to_data_frame(time_format=None)
+        events_path = (
+            self._get_bids_path(timeline)
+            .copy()
+            .update(suffix="events", extension=".tsv")
+        )
+        events = pd.read_csv(events_path.fpath, sep="\t", encoding="utf-8-sig")
 
-        # Select movie events
-        movie_inds = [str(x) for x in range(1, 29)]
-        inds = annots_df[annots_df["description"].isin(movie_inds)].index
-        video_desc = annots_df.loc[
-            annots_df["description"].isin(movie_inds), "description"
-        ].values
-        assert (annots_df.loc[inds + 1, "description"] == "101").all(), (
-            "Video clip index should be followed by trigger value 101"
-        )
-        assert (annots_df.loc[inds + 2, "description"] == "102").all(), (
-            "Video clip start should be followed by trigger value 102"
-        )
-        video_clip_start = annots_df.loc[inds + 1, "onset"]
-        video_clip_end = annots_df.loc[inds + 2, "onset"]
-        video_clip_duration = video_clip_end.values - video_clip_start.values
-        events_df = pd.DataFrame(
-            {
-                "type": "Stimulus",
-                "start": video_clip_start.values,
-                "duration": video_clip_duration,
-                "video_index": video_desc,
+        # Keep only the video-clip stimulus events (rows carrying emotion
+        # metadata). The "Experiment start" trigger rows have video_index == n/a,
+        # which pandas parses to NaN -- drop them via notna() rather than a string
+        # comparison.
+        events = events[events["video_index"].notna()].copy()
+
+        events = events.rename(
+            columns={
+                "onset": "start",
+                "emotion_label": "emotion",
+                "binary_label": "valence",
             }
         )
-        events_df = events_df.set_index("video_index")
-        assert events_df.shape[0] == len(movie_inds), (
-            "Expected number of video clips should match number of video clips"
+        events["type"] = "Stimulus"
+        events["start"] = events["start"].astype(float)
+        events["duration"] = events["duration"].astype(float)
+        # Neutral clips are encoded with a bare backslash in emotion_label
+        # (matches the original study's `.replace("\\", "neutral")`).
+        events["emotion"] = (
+            events["emotion"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .replace({"\\": "neutral"})
         )
-
-        # Merge
-        events_df = events_df.merge(
-            self._stimulus_info,
-            on="video_index",
-            how="left",
-            suffixes=("", "_stimulus_info"),
-        ).reset_index()
-        events_df = events_df.rename(columns={"label": "code"})
-
-        # Add ratings
-        # ratings_df = self._load_ratings()
-        # events_df = events_df.merge(ratings_df, on="video_index", how="left", suffixes=("", "_ratings"))
-
-        return events_df
-
-    def _load_ratings(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        fname = self._get_filename("ratings", timeline)
-        out = loadmat(fname)["After_remark"]
-
-        # Item order from DataStructureOfBehaviouralData.xlsx
-        item_names = ["joy", "tenderness", "inspiration", "amusement", "anger", "disgust"]
-        item_names += ["fear", "sadness", "arousal", "valence", "familiarity", "liking"]
-
-        ratings = []
-        for clip in out:
-            scores = clip["score"][0][0]
-            trial = clip["trial"][0][0][0]
-            video_ind = clip["vid"][0][0][0]
-            scores_dict = dict(zip(item_names, scores.tolist()))
-            ratings.append({"video_index": str(video_ind), "trial": trial, **scores_dict})
-        ratings_df = pd.DataFrame(ratings)
-        return ratings_df
-
-    @cached_property
-    def _stimulus_info(self) -> pd.DataFrame:
-        stim_df = pd.read_excel(
-            self._get_filename("stimuli_info", {"": ""}), skipfooter=6, engine="calamine"
+        events["valence"] = events["valence"].astype(str).str.lower()
+        # video_index is read as float (n/a -> NaN in other rows); normalise to a
+        # clean integer-like string ("11" not "11.0").
+        events["video_index"] = (
+            events["video_index"].astype(float).astype(int).astype(str)
         )
-        rename_cols = {
-            "Video index": "video_index",
-            "Duration（s）": "duration",
-            "Source Film": "video_title",
-            "Source Database": "video_database",
-            "Valence": "valence",
-            "Targeted Emotion": "description",
-        }
-        stim_df = stim_df.rename(columns=rename_cols)
-        EmotionCategories = CategoricalDtype(
-            categories=[
-                "anger",
-                "fear",
-                "disgust",
-                "sadness",
-                "neutral",
-                "amusement",
-                "tenderness",
-                "inspiration",
-                "joy",
-            ],
-            ordered=True,
-        )
-        stim_df["description"] = (
-            stim_df["description"].str.lower().replace("\\", "neutral")
-        ).astype(EmotionCategories)
-        stim_df["valence"] = stim_df["valence"].str.lower()
-        stim_df["label"] = stim_df["description"].cat.codes
-        stim_df["duration"] = stim_df["duration"].astype(float)
-        stim_df["video_index"] = stim_df["video_index"].astype(str)
-        stim_df = stim_df.set_index("video_index")
-        return stim_df
+        # Integer target for the emotion classification task.
+        events["code"] = events["emotion"].astype(_EMOTION_CATEGORIES).cat.codes
+
+        events = events[
+            ["type", "start", "duration", "code", "emotion", "valence", "video_index"]
+        ]
+        return events.reset_index(drop=True)

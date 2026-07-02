@@ -97,11 +97,14 @@ class Grootswagers2022Human(study.Study):
     _test_image_names: list[str] | None = None
 
     def _download(self) -> None:
-        # Download EEG data from OpenNeuro
-        download.Openneuro(study="ds003825", dset_dir=self.path).download()
-        # Check for / Download THINGS-images database (used across multiple THINGS studies)
-        # Note: Images must be preprocessed and placed in prepare/ folder separately
-        utils.download_things_images(self.path)
+        # Download via NEMAR (on003825): bundles the THINGS stimulus with the EEG BIDS and has the
+        # licence pre-accepted in recent nemar-py -> no OpenNeuro/OSF password gate.
+        import nemar
+        nemar.download(
+            dataset="on003825",
+            target_dir=self.path / "download",
+            downloader="python",
+        )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
@@ -121,8 +124,11 @@ class Grootswagers2022Human(study.Study):
         filename = Path(img_path).name
         category = Path(img_path).parent.name
         out = self.path / "prepare" / category / filename
-        if not out.exists():
-            raise RuntimeError(f"Output path does not exist: {out}")
+        # NEMAR repoint (on003825) ships the EEG + events sidecars only; the
+        # THINGS stimulus images are licence-gated (OSF) and are not part of this
+        # BIDS download. Do not require the jpg to exist so that event-building
+        # can proceed on the NEMAR layout. The path still resolves if a later
+        # `prepare` step materialises the images.
         return str(out)
 
     def _get_test_info(self) -> tuple[list[str], list[str]]:
@@ -177,8 +183,12 @@ class Grootswagers2022Human(study.Study):
             "split",
             "is_test_category",
             "stem",
-            "shared_filepath",
         ]
+        # shared_filepath is only present when the shared THINGS-images dir exists
+        # (absent under the NEMAR repoint); include it conditionally to avoid a
+        # KeyError during event-building.
+        if "shared_filepath" in events.columns:
+            cols.append("shared_filepath")
         events = events[cols]
 
         # Add raw Eeg event
@@ -232,7 +242,7 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
             include=include_patterns,
         ).download(overwrite=overwrite)
 
-        utils.download_things_images(self.path)
+        utils.download_things_images(self.path, fail_on_error=False)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         sub = self._SAMPLE_SUBJECT

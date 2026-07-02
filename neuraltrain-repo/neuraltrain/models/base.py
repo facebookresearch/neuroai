@@ -82,6 +82,8 @@ class BaseBrainDecodeModel(BaseModelConfig):
             )
         kwargs = self.kwargs | kwargs
         if self.from_pretrained_name is not None:
+            # air-gapped A100: weights pre-cached on login via hf download -> cache-only load
+            kwargs.setdefault("local_files_only", True)
             return self._MODEL_CLASS.from_pretrained(self.from_pretrained_name, **kwargs)
         return self._MODEL_CLASS(**kwargs)  # type: ignore
 

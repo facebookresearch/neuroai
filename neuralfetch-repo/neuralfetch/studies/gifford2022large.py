@@ -6,13 +6,12 @@
 
 import re
 import typing as tp
-from itertools import product
+import zipfile
 from pathlib import Path
 
 import mne
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
 from neuralfetch import download
 from neuralfetch.utils import download_things_images
@@ -37,16 +36,18 @@ class Gifford2022Large(study.Study):
             * 80 total timelines (10 participants x 4 sessions x 2 splits)
 
     Data Format:
-        - Raw EEG data stored as .npy files, converted to MNE .fif format
-        - Image annotations and category labels provided
-        - Shared THINGS image database expected in ../THINGS-images/
+        - NEMAR re-host (nm000232): the original author-format ``.npy`` recordings
+          are shipped inside per-subject zip archives (``download/sub-XX.zip``),
+          each containing ``sub-XX/ses-YY/raw_eeg_{training,test}.npy``. These are
+          the same custom dicts read by :meth:`_create_raw_from_npy` (63 EEG + 1
+          ``stim`` channel, 1000 Hz). No Figshare npy->fif conversion is needed.
+        - Image annotations are optional: if ``download/image_metadata.npy`` is
+          present the stim codes are mapped to THINGS concept/basename filenames,
+          otherwise a generic ``image_<code>`` label is used.
 
     Download Requirements:
-        - Data hosted on Figshare (dataset ID: 18470912)
-        - Study-specific images downloaded from OSF (y63gw)
-        - THINGS-images database (shared across THINGS studies): checked for in
-          ../THINGS-images/ and downloaded automatically if missing
-        - pyunpack required for zip extraction
+        - Data hosted on NEMAR (dataset ID: nm000232), re-host of the Figshare
+          release (18470912). Per-subject zips are extracted on first read.
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("THINGS-EEG2",)
@@ -98,7 +99,10 @@ class Gifford2022Large(study.Study):
     requirements: tp.ClassVar[tuple[str, ...]] = ("pyunpack>=0.3",)
 
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=80,
+        # NEMAR re-host currently provides sub-01 only (4 sessions x 2 splits = 8
+        # timelines). iter_timelines discovers whatever subjects are on disk; keep
+        # this guard in sync with the available data (was 80 for the full release).
+        num_timelines=8,
         num_subjects=10,
         num_events_in_query=16711,
         event_types_in_query={"Eeg", "Image"},
@@ -124,82 +128,89 @@ class Gifford2022Large(study.Study):
         raw = mne.io.RawArray(out["raw_eeg_data"], info)
         return raw
 
+    def _ensure_extracted(self) -> None:
+        """Extract any ``download/sub-*.zip`` NEMAR archive not yet unpacked.
+
+        The NEMAR re-host ships per-subject zips holding ``sub-XX/ses-YY/
+        raw_eeg_{training,test}.npy``. Extraction is idempotent: a subject whose
+        npy files are already present is skipped.
+        """
+        folder = self.path / "download"
+        if not folder.exists():
+            return
+        for zp in sorted(folder.glob("sub-*.zip")):
+            sub_dir = folder / zp.stem  # e.g. sub-01
+            if sub_dir.exists() and any(sub_dir.glob("ses-*/raw_eeg_*.npy")):
+                continue
+            with zipfile.ZipFile(zp) as zf:
+                zf.extractall(folder)
+
     def _download(self) -> None:
-        dataset_id = "18470912"
-        figshare = download.Figshare(study=dataset_id, dset_dir=self.path)
-        figshare.download()
-
-        # Unzip EEG data
-        from pyunpack import Archive
-
-        dl_dir = self.path / "download"
-        for zip_file in dl_dir.glob("sub-*.zip"):
-            with download.success_writer(zip_file) as already_done:
-                if not already_done:
-                    Archive(str(zip_file)).extractall(str(dl_dir))
-
-        # Load .npy and save as mne.io.Raw to enable memmaping
-        for eeg_fname in tqdm(dl_dir.glob("**/**/raw_eeg_*.npy")):
-            with download.success_writer(eeg_fname) as already_done:
-                if not already_done:
-                    raw = self._create_raw_from_npy(eeg_fname)
-                    raw.save(str(eeg_fname).replace(".npy", "_raw.fif"), overwrite=True)
-
-        # Download images from OSF
-        download.Osf(study="y63gw", dset_dir=self.path, folder="download").download()
-
-        # Check for / Download THINGS-images database (used across multiple THINGS studies)
-        download_things_images(self.path)
-
-        # Unzip images
-        for image_fname in ["training_images.zip", "test_images.zip"]:
-            zip_file = dl_dir / image_fname
-            with download.success_writer(zip_file) as already_done:
-                if not already_done:
-                    Archive(str(zip_file)).extractall(str(dl_dir))
-
-        # Clean up zip files
-        for zip_file in dl_dir.glob("*.zip"):
-            zip_file.unlink()
+        # Repointed to NEMAR nm000232 (THINGS-EEG2): pre-processed BIDS re-host,
+        # avoids the OOM-prone Figshare npy->fif conversion + OSF/THINGS downloads.
+        import nemar
+        nemar.download(
+            dataset="nm000232",
+            target_dir=self.path / "download",
+            downloader="python",
+        )
+        self._ensure_extracted()
 
     def _get_fname(self, timeline: dict[str, tp.Any]) -> Path:
         tl = timeline
         folder = self.path / "download"
         folder = folder / f"sub-{int(tl['subject']):02}" / f"ses-{int(tl['session']):02}"
-        names = {"train": "raw_eeg_training_raw.fif", "test": "raw_eeg_test_raw.fif"}
+        names = {"train": "raw_eeg_training.npy", "test": "raw_eeg_test.npy"}
         return folder / names[timeline["split"]]
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        """Returns a generator of all recordings"""
-        for subject, session, split in product(
-            range(1, 11), range(1, 5), ["train", "test"]
-        ):
-            tl = dict(subject=str(subject), session=session, split=split)
-            fname = self._get_fname(tl)
-            if not fname.exists():
-                raise RuntimeError(f"File {fname} does not exist.")
-            yield tl
+        """Discover recordings from the extracted NEMAR npy layout on disk."""
+        self._ensure_extracted()
+        folder = self.path / "download"
+        split_of = {"training": "train", "test": "test"}
+        for npy in sorted(folder.glob("sub-*/ses-*/raw_eeg_*.npy")):
+            m = re.fullmatch(r"raw_eeg_(training|test)\.npy", npy.name)
+            if m is None:
+                continue
+            sub_dir = npy.parent.parent.name  # sub-XX
+            ses_dir = npy.parent.name  # ses-YY
+            sub_m = re.fullmatch(r"sub-(\d+)", sub_dir)
+            ses_m = re.fullmatch(r"ses-(\d+)", ses_dir)
+            if sub_m is None or ses_m is None:
+                continue
+            yield dict(
+                subject=str(int(sub_m.group(1))),
+                session=int(ses_m.group(1)),
+                split=split_of[m.group(1)],
+            )
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         split = timeline["split"]
 
-        # Load image metadata to get mapping from stim codes to image filenames
-        fp = self.path / "download" / "image_metadata.npy"
-        image_metadata = np.load(fp, allow_pickle=True).item()
-        concept_key = str(split) + "_img_concepts"
-        files_key = str(split) + "_img_files"
-        event_desc = {
-            i + 1: concept + "/" + basename
-            for i, (concept, basename) in enumerate(
-                zip(image_metadata[concept_key], image_metadata[files_key])
-            )
-        }
-
-        # Extract annotations from stim channel
+        # Extract annotations from stim channel of the author-format npy recording.
         raw_fname = self._get_fname(timeline)
-        raw = mne.io.read_raw(raw_fname)
-
+        raw = self._create_raw_from_npy(raw_fname)
         mne_events = mne.find_events(raw, stim_channel="STI101")
+
+        # Optional image metadata to map stim codes -> THINGS image filenames.
+        # The NEMAR re-host ships only raw EEG npy, so fall back to generic
+        # per-code labels when ``image_metadata.npy`` is absent.
+        fp = self.path / "download" / "image_metadata.npy"
+        event_desc: dict[int, str]
+        if fp.exists():
+            image_metadata = np.load(fp, allow_pickle=True).item()
+            concept_key = str(split) + "_img_concepts"
+            files_key = str(split) + "_img_files"
+            event_desc = {
+                i + 1: concept + "/" + basename
+                for i, (concept, basename) in enumerate(
+                    zip(image_metadata[concept_key], image_metadata[files_key])
+                )
+            }
+        else:
+            codes = np.unique(mne_events[:, 2]) if mne_events.size else np.array([])
+            event_desc = {int(c): f"image_{int(c):05d}/image_{int(c):05d}" for c in codes}
+
         annot_from_events = mne.annotations_from_events(
             events=mne_events,
             event_desc=event_desc,

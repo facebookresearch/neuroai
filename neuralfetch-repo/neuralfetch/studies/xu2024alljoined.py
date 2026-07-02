@@ -99,7 +99,21 @@ class Xu2024Alljoined(study.Study):
             folder, suffix = "raw", "_epo.fif"
         elif kind == "h5":
             folder, suffix = "05_125", ".h5"
-        return Path(path) / folder / f"subj{int(subject):02}_session{session}{suffix}"
+        base = Path(path)
+        fname = f"subj{int(subject):02}_session{session}{suffix}"
+        # OSF download nests contents under the folder name ("xu2024"); resolve
+        # against the actual file (nested or flat) so a transient directory-stat
+        # miss cannot hide an existing recording (avoids spurious empty
+        # iter_timelines -> "No timeline found").
+        nested = base / "xu2024" / folder / fname
+        flat = base / folder / fname
+        if nested.exists():
+            return nested
+        if flat.exists():
+            return flat
+        # Neither present yet: prefer the nested layout when the OSF subfolder
+        # exists, otherwise the flat one.
+        return nested if (base / "xu2024").is_dir() else flat
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings.

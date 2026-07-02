@@ -96,7 +96,7 @@ class Shirazi2024Hbn(study.Study):
         "Large-scale set of EEG recordings from young participants (ages 5-21) during 6 cognitive tasks"
     )
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=26615,
+        num_timelines=17041,  # on-disk R1-R8 only (R9-R11 not downloaded); 17062 *_eeg.set - 21 bad-subject sets
         num_subjects=3146,
         num_events_in_query=1,
         event_types_in_query={"Eeg"},

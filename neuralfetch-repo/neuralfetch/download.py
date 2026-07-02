@@ -1108,14 +1108,12 @@ class Openneuro(BaseDownload):
     nworkers: int = 5
 
     def _download(self) -> None:
-        import openneuro as on
-
-        on.download(
-            dataset=self.study,
-            target_dir=self._dl_dir,
-            include=self.include,
-            max_concurrent_downloads=self.nworkers,
-        )
+        import os as _os
+        import shutil, subprocess
+        dest = self._dl_dir; dest.mkdir(parents=True, exist_ok=True)
+        s5 = shutil.which("s5cmd") or _os.path.expanduser("~/bin/s5cmd")
+        subprocess.run([s5, "--no-sign-request", "cp", "-c", "16", "--show-progress",
+             f"s3://openneuro.org/{self.study}/*", f"{dest}/"], check=True)
 
 
 class Osf(BaseDownload):

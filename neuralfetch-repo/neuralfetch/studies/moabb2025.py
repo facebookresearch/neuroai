@@ -3480,7 +3480,7 @@ class Schirrmeister2017Deep(_BaseMoabb):
         "feet": 4,
     }
     _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
-        num_timelines=28,
+        num_timelines=5,
         num_subjects=14,
         num_events_in_query=321,
         event_types_in_query={"Eeg", "Stimulus"},

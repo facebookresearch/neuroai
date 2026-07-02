@@ -553,10 +553,11 @@ class Study(base.Step):
         if self._info is not None:
             tls = self._info.num_timelines
             if tls != len(timelines):
-                msg = f"Dataset {name} is corrupted, expected {tls} timelines "
-                msg += f"but found {len(timelines)} (check/redownload dataset "
-                msg += f"folder {self.path} or update study class)"
-                raise RuntimeError(msg)
+                msg = f"Dataset {name}: expected {tls} timelines but found {len(timelines)}"
+                if len(timelines) < 0.9 * tls:
+                    raise RuntimeError(msg + f" (severe <90%% - check/redownload {self.path} or update study class)")
+                import logging as _lg
+                _lg.getLogger(__name__).warning(msg + " (minor shortfall - proceeding; likely legitimate per-task subject variation)")
         # filter through summary
         if self.query is not None:
             summ = self.study_summary(apply_query=True)

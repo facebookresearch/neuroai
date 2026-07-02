@@ -121,7 +121,7 @@ class Singh2021Timing(study.Study):
         # Alternate source found on Hugging Face, not uploaded by original authors.
         # https://huggingface.co/jalauer/datasets
         hf_org = "jalauer"
-        hf_repo = "Singh2021Timing"
+        hf_repo = "Singh2021"
         hg = download.Huggingface(org=hf_org, study=hf_repo, dset_dir=self.path)
         if hg.get_success_file().exists() and not overwrite:
             return
@@ -134,6 +134,13 @@ class Singh2021Timing(study.Study):
                 sub_id = f"{diagnosis}{subject}"
                 sessions = [1, 2] if sub_id in self._SUBJECT_ALIASES else [1]
                 for session in sessions:
+                    fsub = (
+                        self._SUBJECT_ALIASES.get(sub_id, sub_id)
+                        if session == 2
+                        else sub_id
+                    )
+                    if not (self.path / "download" / "data" / f"{fsub}.vmrk").exists():
+                        continue  # skip subjects absent from the HF re-host
                     yield dict(subject=sub_id, session=session, diagnosis=diagnosis)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:

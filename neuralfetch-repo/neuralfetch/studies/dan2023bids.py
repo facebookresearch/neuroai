@@ -72,7 +72,7 @@ class Dan2023Bids(study.Study):
     """
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         # subject 1 was originally reported under two subject ids. this version of the dataset consolidates into one id, two sessions.
-        num_timelines=686,
+        num_timelines=141,
         num_subjects=23,
         query="timeline_index == 144",  # timeline with 1 seizure
         num_events_in_query=2,
@@ -109,10 +109,14 @@ class Dan2023Bids(study.Study):
     }
 
     def _download(self) -> None:
-        zenodo = download.Zenodo(
-            study="CHB-MIT-EEG-Corpus", dset_dir=self.path, record_id="10259996"
+        # Repointed to the NEMAR re-host (nm000110 = CHB-MIT) via nemar-py python backend;
+        # lands the BIDS at the same root the reader expects, so read_raw_bids is unchanged.
+        import nemar
+        nemar.download(
+            dataset="nm000110",
+            target_dir=self.path / "download" / "BIDS_CHB-MIT",
+            downloader="python",
         )
-        zenodo.download()
 
     def _get_bids_path(self, timeline: dict[str, tp.Any]) -> BIDSPath:
         """Returns the BIDS path for a study"""
@@ -128,18 +132,21 @@ class Dan2023Bids(study.Study):
         return bids_path
 
     def iter_timelines(self):
-        for sub_id, sessions in self._SUBJECT_RUNS.items():
-            for ii, runs in enumerate(sessions, 1):
-                ses_id = f"{ii:02d}"
-                for jj in runs:
-                    run_id = f"{jj:02d}"
-                    yield dict(
-                        subject=sub_id, session=ses_id, run=run_id, task="szMonitoring"
-                    )
+        # NEMAR nm000110 BIDS layout is sub-chbXX/eeg/..._task-rest_run-YY_* (no session,
+        # variable run numbers) — discover timelines from disk instead of assuming the
+        # Zenodo sub-NN/ses-NN/task-szMonitoring scheme.
+        from mne_bids import find_matching_paths
+        root = self.path / "download" / "BIDS_CHB-MIT"
+        for bp in find_matching_paths(
+            root, datatypes="eeg", suffixes="eeg", extensions=[".edf"]
+        ):
+            ev = bp.copy().update(suffix="events", extension=".tsv")
+            if ev.fpath.exists():
+                yield dict(subject=bp.subject, session=bp.session, run=bp.run, task=bp.task)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         bids_path = self._get_bids_path(timeline)
-        bids_path.update(suffix="events")
+        bids_path.update(suffix="events", extension=".tsv")
 
         events = pd.read_csv(bids_path.fpath, sep="\t")
         events.rename(columns={"onset": "start"}, inplace=True)

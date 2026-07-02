@@ -194,6 +194,9 @@ class Xu2025Alljoined(study.Study):
                 / f"{int(x):05d}.jpg"
             )
         )
+        # Some recordings contain duplicate stimulus annotations at the same onset,
+        # producing ambiguous/colliding segments; keep the first per onset.
+        events_df = events_df.drop_duplicates(subset=["start"], keep="first").reset_index(drop=True)
         # add raw event
         info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
         eeg = dict(type="Eeg", filepath=info, frequency=frequency, start=0)

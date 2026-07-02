@@ -16,7 +16,9 @@ infra:
   cluster: !!python/name:neuralbench.config_manager.CLUSTER
   folder: !!python/name:neuralbench.config_manager.SAVE_DIR
   slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
-  timeout_min: 1440
+  slurm_account: tst@a100
+  slurm_qos: qos_gpu_a100-t3
+  timeout_min: 1195
   gpus_per_node: 1
   cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
   job_name: !!python/name:neuralbench.config_manager.PROJECT_NAME
@@ -28,7 +30,7 @@ trainer_config:
   mode: min
   patience: 5
   fast_dev_run: false
-  n_epochs: 40
+  n_epochs: 1
   precision: "32-true"
   gradient_clip_val: 1.0
   limit_train_batches: null
