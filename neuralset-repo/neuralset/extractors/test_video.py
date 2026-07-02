@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import PIL.Image
 import pytest
 import torch
 
@@ -92,6 +93,50 @@ def test_video_image(video_event: etypes.Video) -> None:
     movie = video_event.read()
     vi = _VideoImage(video=movie, time=12345.12345)
     assert vi.filepath.endswith("random_video_6s.mp4:12345.123")
+
+
+def test_huggingface_video_static_image_clip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    filepath = tmp_path / "image.png"
+    frame = np.arange(4 * 5 * 3, dtype=np.uint8).reshape(4, 5, 3)
+    PIL.Image.fromarray(frame).save(filepath)
+    event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
+    clips = []
+
+    def predict_hidden_states(
+        self: vid.HuggingFaceVideo, clip: np.ndarray
+    ) -> torch.Tensor:
+        clips.append(clip)
+        return torch.arange(24, dtype=torch.float32).reshape(1, 3, 2, 4)
+
+    monkeypatch.setattr(
+        vid.hf.HuggingFaceMixin,
+        "_download_huggingface_snapshot",
+        lambda self: None,
+    )
+    monkeypatch.setattr(
+        vid.HuggingFaceVideo,
+        "_warn_if_config_num_frames_mismatch",
+        lambda self: None,
+    )
+    monkeypatch.setattr(
+        vid.HuggingFaceVideo, "_predict_hidden_states", predict_hidden_states
+    )
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
+    extractor = vid.HuggingFaceVideo(
+        event_types="Image",
+        infra=infra,
+        num_frames=4,
+        device="cpu",
+    )
+
+    out = extractor(event, start=1.0, duration=0.5)
+
+    assert out.shape == (4,)
+    assert len(clips) == 1
+    assert clips[0].shape == (4, 4, 5, 3)
+    assert all(np.array_equal(clip_frame, frame) for clip_frame in clips[0])
 
 
 def test_video(video_event: etypes.Video, tmp_path: Path) -> None:

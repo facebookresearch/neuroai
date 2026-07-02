@@ -16,6 +16,7 @@ from exca import MapInfra
 from tqdm import tqdm
 
 from neuralset import base as nsbase
+from neuralset.events import EventTypesHelper
 from neuralset.events import etypes as evts
 
 from . import base as extractor_base
@@ -27,6 +28,12 @@ logger = logging.getLogger(__name__)
 # logging.getLogger("neuralset").setLevel(logging.DEBUG)
 
 _VideoImage = image_extractors._VideoImage
+
+
+def _huggingface_video_event_uid(event: evts.Image | evts.Video) -> str:
+    if isinstance(event, evts.Video):
+        return event._splittable_event_uid()
+    return str(event.study_relative_path())
 
 
 def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
@@ -66,6 +73,8 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     Videos are divided into clips of `clip_duration` seconds at the specified
     frequency. Each clip is processed by the video model, and features are
     aggregated over layers/tokens using the HuggingFace extractor options.
+    When `event_types="Image"`, each image is repeated into a static
+    `num_frames`-frame clip and returned as a static embedding.
 
     Parameters
     ----------
@@ -82,7 +91,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         Number of frames to pass to the video model per clip.
     """
 
-    event_types: tp.Literal["Video"] = "Video"
+    event_types: tp.Literal["Image", "Video"] = "Video"
     SUPPORTED_MODELS: tp.ClassVar[tuple[str, ...]] = (
         "vjepa2",
         "videomae",
@@ -93,6 +102,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     requirements: tp.ClassVar[tuple[str, ...]] = (
         "torchvision>=0.15.2",
         "julius>=0.2.7",
+        "pillow>=9.2.0",
     )
     model_name: str = "MCG-NJU/videomae-base"
     hf_config: HuggingFaceVideoConfig = HuggingFaceVideoConfig()
@@ -142,27 +152,62 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             self
         ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        if self.event_types == "Image" and self.frequency == 0:
+            self._event_types_helper = EventTypesHelper(self.event_types)
+            hf.HuggingFaceMixin.model_post_init(self, log__)
+            return
+        super().model_post_init(log__)
+        if self.event_types == "Image" and self.frequency != "native":
+            msg = "HuggingFaceVideo requires frequency=0 or 'native' for Image events."
+            raise ValueError(msg)
+
     def _get_timed_arrays(
-        self, events: list[evts.Video], start: float, duration: float
+        self,
+        events: list[evts.Image | evts.Video],
+        start: float,
+        duration: float,
     ) -> tp.Iterable[nsbase.TimedArray]:
-        for event, ta in zip(events, self._get_data(events)):
-            sub = ta.with_start(event.start).overlap(start=start, duration=duration)
+        if self.event_types == "Image":
+            image_events = tp.cast(list[evts.Image], events)
+            image_data = tp.cast(tp.Iterator[np.ndarray], self._get_data(image_events))
+            for image_event, data in zip(image_events, image_data):
+                data = np.asarray(data)
+                if self.cache_n_layers is not None:
+                    data = self._aggregate_layers(data)
+                yield nsbase.TimedArray(
+                    frequency=0,
+                    duration=image_event.duration,
+                    start=image_event.start,
+                    data=data,
+                )
+            return
+        video_events = tp.cast(list[evts.Video], events)
+        video_data = tp.cast(tp.Iterator[nsbase.TimedArray], self._get_data(video_events))
+        for video_event, ta in zip(video_events, video_data):
+            sub = ta.with_start(video_event.start).overlap(start=start, duration=duration)
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub
 
     @infra.apply(
-        item_uid=lambda e: e._splittable_event_uid(),
+        item_uid=_huggingface_video_event_uid,
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
     )
-    def _get_data(self, events: list[evts.Video]) -> tp.Iterator[nsbase.TimedArray]:
-        # read all videos of the events
+    def _get_data(
+        self, events: tp.Sequence[evts.Image | evts.Video]
+    ) -> tp.Iterator[np.ndarray | nsbase.TimedArray]:
+        # read all media events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
         self._warn_if_config_num_frames_mismatch()
-        freq = events[0].frequency if self.frequency == "native" else self.frequency
+        if self.event_types == "Image":
+            yield from self._get_image_data(tp.cast(list[evts.Image], events))
+            return
+        video_events = tp.cast(list[evts.Video], events)
+        freq = video_events[0].frequency if self.frequency == "native" else self.frequency
         T = 1 / freq if self.clip_duration is None else self.clip_duration
         subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
-        for event in events:
+        for event in video_events:
             video = event.read()
 
             freq = self.frequency if self.frequency != "native" else event.frequency
@@ -182,20 +227,9 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             for k, t in tqdm(enumerate(times), total=len(times), desc="Encoding video"):
                 ims = [_VideoImage(video=video, time=max(0, t - t2)) for t2 in subtimes]
                 pil_imgs = [i.read() for i in ims]
-                # resize if images are too big
-                if pil_imgs and self.max_imsize is not None:
-                    factor = max(pil_imgs[0].size) / self.max_imsize
-                    if factor > 1:
-                        size = tuple(int(s / factor) for s in pil_imgs[0].size)
-                        pil_imgs = [pi.resize(size) for pi in pil_imgs]
+                pil_imgs = self._resize_pil_images(pil_imgs)
                 data = np.array([np.array(pi) for pi in pil_imgs])
-                t_embd = self._predict_hidden_states(data)
-                if t_embd.shape[0] != 1:
-                    raise RuntimeError(f"Found several batches: {t_embd.shape}")
-                t_embd = t_embd[0]  # aggregate_tokens works on non-batched-data
-                embd = self._aggregate_tokens(t_embd).cpu().numpy()
-                if self.cache_n_layers is None:
-                    embd = self._aggregate_layers(embd)
+                embd = self._embed_clip(data)
                 if not output.size:
                     output = np.zeros((len(times),) + embd.shape)
                     logger.debug("Created Tensor with size %s", output.shape)
@@ -209,6 +243,33 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
                 start=nsbase._UNSET_START,
                 duration=event.duration,
             )
+
+    def _get_image_data(self, events: list[evts.Image]) -> tp.Iterator[np.ndarray]:
+        for event in events:
+            pil_img = event.read()
+            pil_imgs = [pil_img.copy() for _ in range(self.num_frames)]
+            pil_imgs = self._resize_pil_images(pil_imgs)
+            data = np.array([np.array(pi) for pi in pil_imgs])
+            yield self._embed_clip(data)
+
+    def _resize_pil_images(self, pil_imgs: list[tp.Any]) -> list[tp.Any]:
+        # resize if images are too big
+        if pil_imgs and self.max_imsize is not None:
+            factor = max(pil_imgs[0].size) / self.max_imsize
+            if factor > 1:
+                size = tuple(int(s / factor) for s in pil_imgs[0].size)
+                pil_imgs = [pi.resize(size) for pi in pil_imgs]
+        return pil_imgs
+
+    def _embed_clip(self, data: np.ndarray) -> np.ndarray:
+        t_embd = self._predict_hidden_states(data)
+        if t_embd.shape[0] != 1:
+            raise RuntimeError(f"Found several batches: {t_embd.shape}")
+        t_embd = t_embd[0]  # aggregate_tokens works on non-batched-data
+        embd = self._aggregate_tokens(t_embd).cpu().numpy()
+        if self.cache_n_layers is None:
+            embd = self._aggregate_layers(embd)
+        return embd.astype(np.float32)
 
     def _predict_hidden_states(self, images: np.ndarray) -> torch.Tensor:
         kwargs: dict[str, tp.Any] = {
