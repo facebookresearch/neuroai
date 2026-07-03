@@ -104,7 +104,12 @@ def _capture_assembled_experiments(
     captured: dict[str, tp.Any] = {}
 
     class _FakeAggregator:
-        def __init__(self, experiments: list[ConfDict], debug: bool) -> None:
+        def __init__(
+            self,
+            experiments: list[ConfDict],
+            debug: bool,
+            experiments_per_job: int | tp.Literal["all"] = 1,
+        ) -> None:
             captured["experiments"] = experiments
 
         def prepare(self) -> None:
@@ -174,4 +179,5 @@ def test_run_benchmark_cli_help_smoke(
     assert exc.value.code == 0
     out = capsys.readouterr().out
     assert "available datasets per task:" in out
+    assert "--experiments-per-job" in out
     assert "eeg" in out

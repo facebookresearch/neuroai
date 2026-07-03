@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 import neuralset as ns
 
+from .packing import submit_packed
 from .plots.benchmark import plot_all_results
 from .plots.tables import print_skip_table
 
@@ -96,6 +97,7 @@ class BenchmarkAggregator(ns.BaseModel):
     max_workers: int = 256
     collect_max_workers: int = 32
     debug: bool = False
+    experiments_per_job: tp.Annotated[int, Field(ge=1)] | tp.Literal["all"] = 1
 
     output_dir: str = Field(default_factory=_default_output_dir)
 
@@ -144,6 +146,20 @@ class BenchmarkAggregator(ns.BaseModel):
         if self.debug:
             for experiment in self.experiments:
                 experiment.run()
+        elif self.experiments_per_job != 1:
+            dispatched = submit_packed(
+                self.experiments,
+                experiments_per_job=self.experiments_per_job,
+            )
+            if not dispatched:
+                LOGGER.info(
+                    "No packed job submitted; all runnable experiments are cached."
+                )
+                return
+            LOGGER.info(
+                "Dispatched %d pending experiment(s) via one Parallel sweep.",
+                dispatched,
+            )
         else:
             tmp = self.experiments[0].infra.clone_obj()
             with tmp.infra.job_array(max_workers=self.max_workers) as tasks:

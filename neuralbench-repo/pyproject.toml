@@ -16,7 +16,7 @@ dependencies = [
   "braindecode>=1.5.2",
   "neuralset",
   "neuraltrain",
-  "exca",
+  "exca>=0.5.27",  # exca.steps.helpers.Parallel (job packing)
   "lightning>=2.0.8",
   "pyriemann>=0.6",
   "seaborn",
