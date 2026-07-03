@@ -227,21 +227,33 @@ def test_openai_clip_layer(
     else:
         assert out.shape == (768,)
 
-def test_bug_dinov2(cat_event: etypes.Image) -> None:
+@pytest.mark.parametrize("device", ['cpu', 'cuda'])
+@pytest.mark.parametrize('layers', ['all', 1, [0,1]])
+@pytest.mark.parametrize('layer_aggregation', [None, 'mean'])
+def test_bug_dinov2(cat_event: etypes.Image, device: str, layers: tp.Union[str, int, list], layer_aggregation: tp.Optional[str]) -> None:
     # Test: AttributeError when applying .cpu() to numpy array
     # Happens with layers='all' and layer_aggregation=None
+    if device == 'cuda' and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    
     extractor = ns.extractors.HuggingFaceImage(
         model_name="facebook/dinov2-base",
-        device="cpu",
-        layers="all",
-        layer_aggregation=None,
+        device=device,
+        layers=layers,
+        layer_aggregation=layer_aggregation,
     )
     latent = next(iter(extractor._get_data([cat_event])))
     assert isinstance(latent, np.ndarray)
-    # layer_aggregation=None + token_aggregation='mean' -> (n_layers, embed_dim)
-    assert latent.ndim == 2
-    n_layers, embed_dim = latent.shape
-    assert n_layers > 1, "Expected all layers to be returned"
+
+    # When layer_aggregation is 'mean', the output is 1D (embed_dim,)
+    # When layer_aggregation is None, the output is 2D (n_layers, embed_dim)
+    if layer_aggregation == 'mean':
+        assert latent.ndim == 1, f"Expected 1D array with layer_aggregation='mean', got shape {latent.shape}"
+        embed_dim = latent.shape[0]
+    else:
+        assert latent.ndim == 2, f"Expected 2D array with layer_aggregation=None, got shape {latent.shape}"
+        n_layers, embed_dim = latent.shape
+    
     assert embed_dim == 768  
     assert np.isfinite(latent).all()
 
