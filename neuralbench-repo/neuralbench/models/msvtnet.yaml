@@ -1,0 +1,3 @@
+brain_model_config:
+  =replace=: true
+  name: MSVTNet
