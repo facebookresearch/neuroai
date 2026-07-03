@@ -406,6 +406,17 @@ def _make_gifti(folder: Path, name: str, n_vertices: int = 2, n_times: int = 10)
     return fp
 
 
+def _make_cifti(folder: Path, name: str, n_nodes: int = 5, n_times: int = 10) -> Path:
+    fp = folder / name
+    series = nibabel.cifti2.SeriesAxis(start=0, step=1, size=n_times)
+    brain = nibabel.cifti2.BrainModelAxis.from_mask(
+        np.ones(n_nodes, dtype=bool), name="CIFTI_STRUCTURE_CORTEX_LEFT"
+    )
+    data = np.random.rand(n_times, n_nodes).astype(np.float32)
+    nibabel.save(nibabel.Cifti2Image(data, header=(series, brain)), fp)
+    return fp
+
+
 def make_fmri_event(
     folder: Path,
     *,
@@ -452,6 +463,26 @@ def test_fmri_surface_read(tmp_path: Path) -> None:
         tmp_path, surface=True, space="fsaverage", n_vertices=n_v, n_times=n_t
     )
     assert event.read().get_fdata().shape == (n_v * 2, n_t)
+    assert event.read_mask() is None
+
+
+def test_fmri_cifti_read(tmp_path: Path) -> None:
+    n_nodes, n_t = 5, 8
+    fp = _make_cifti(
+        tmp_path,
+        "sub-01_task-rest_space-fsLR_den-91k_bold.dtseries.nii",
+        n_nodes=n_nodes,
+        n_times=n_t,
+    )
+    event = etypes.Fmri(
+        start=0,
+        timeline="t",
+        filepath=fp,
+        subject="s1",
+        frequency=1.0,
+        space="fsLR",
+    )
+    assert event.read().get_fdata().shape == (n_nodes, n_t)
     assert event.read_mask() is None
 
 
