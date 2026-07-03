@@ -146,12 +146,23 @@ class Shirazi2024Hbn(study.Study):
                     continue
                 eeg_dir = sub_dir / "eeg"
                 for filename in sorted(eeg_dir.glob("*.set")):
-                    if "run-" in filename.stem:
-                        subject, task, run, _ = filename.stem.split("_")
-                    else:
-                        subject, task, _ = filename.stem.split("_")
-                        run = None
-                    yield dict(release=release, subject=subject, task=task, run=run)
+                    try:
+                        if "run-" in filename.stem:
+                            subject, task, run, _ = filename.stem.split("_")
+                        else:
+                            subject, task, _ = filename.stem.split("_")
+                            run = None
+                    except ValueError:
+                        continue
+                    tl = dict(release=release, subject=subject, task=task, run=run)
+                    # skip timelines whose reconstructed EEG file is absent
+                    # (partial / entity-mismatched HBN release downloads, e.g. R8)
+                    if not (
+                        self._get_filename("eeg", tl).exists()
+                        and self._get_filename("task_info", tl).exists()
+                    ):
+                        continue
+                    yield tl
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         tl = timeline

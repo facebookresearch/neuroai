@@ -184,6 +184,9 @@ class Gifford2022Large(study.Study):
                 split=split_of[m.group(1)],
             )
 
+    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
+        return self._create_raw_from_npy(self._get_fname(timeline))
+
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         split = timeline["split"]
 
@@ -253,6 +256,6 @@ class Gifford2022Large(study.Study):
             )
 
         # add raw event from method
-        eeg = {"filepath": str(raw_fname), "type": "Eeg", "start": 0}
+        eeg = {"filepath": study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json(), "type": "Eeg", "start": 0}
         events = pd.concat([pd.DataFrame([eeg]), events])
         return events

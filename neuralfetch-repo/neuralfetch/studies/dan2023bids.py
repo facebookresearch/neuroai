@@ -150,8 +150,8 @@ class Dan2023Bids(study.Study):
 
         events = pd.read_csv(bids_path.fpath, sep="\t")
         events.rename(columns={"onset": "start"}, inplace=True)
-        events["state"] = events["eventType"].map(
-            lambda x: "seiz" if x.startswith("sz") else x
+        events["state"] = events["trial_type"].map(
+            lambda x: "seiz" if str(x).startswith("sz") or x == "seizure" else x
         )
         events["type"] = "Seizure"
         events = events[["type", "start", "duration", "state"]]
@@ -168,7 +168,7 @@ class Dan2023Bids(study.Study):
 
     def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
         # EEG uses a double banana bipolar montage
-        raw = read_raw_bids(self._get_bids_path(timeline), verbose=False)
+        raw = read_raw_bids(self._get_bids_path(timeline), verbose=False, on_ch_mismatch="warn")
         mne.rename_channels(
             raw.info, mapping=lambda x: x.replace("FP", "Fp").replace("Z", "z")
         )
