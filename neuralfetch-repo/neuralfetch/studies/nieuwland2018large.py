@@ -788,9 +788,9 @@ class _Birm(BaseSite):
             ]
             for fname in files:
                 assert (self.path_download / fname).exists()
-                os.link(
-                    str(self.path_download / fname), str(self.path_preprocessed / fname)
-                )
+                _dest = self.path_preprocessed / fname
+                if not _dest.exists():
+                    os.link(str(self.path_download / fname), str(_dest))
 
     def _list_logfiles(self, subject):
         files = []
@@ -978,6 +978,7 @@ class _Stir(BaseSite):
 class _York(BaseSite):
     # TODO zipfile REQUIREMENTS
     def _prepare(self, subject: str) -> None:
+        self.path_preprocessed.mkdir(parents=True, exist_ok=True)
         vmrk_file = self.path_preprocessed / f"YORK{subject}.vmrk"
         vhdr_file = self.path_preprocessed / f"YORK{subject}.vhdr"
         eeg_file = self.path_preprocessed / f"YORK{subject}.eeg"
@@ -1002,6 +1003,9 @@ class _York(BaseSite):
 
     def iter(self) -> tp.Iterator[_Recording]:
         for subject in range(1, 42):
+            if not (self.path_download / f"YORK{subject}.eeg").exists():
+                continue
+            self._prepare(subject)
             yield _Recording(site=self, subject=subject)
 
     def _load_raw(self, subject: str) -> mne.io.RawArray:
