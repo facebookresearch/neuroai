@@ -4,10 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- `neuralset`: fixed `Mne2013Sample`/`Fake2025Meg` re-downloading the MNE sample dataset on `run()` after `download()` by funneling all paths through a single root; the download progress bar now also shows when `run()` triggers the fetch. The study subfolder is now resolved once in `model_post_init` instead of mutating `self.path` in `download()`, so calling `download()` after `run()` no longer crashes on the frozen instance (#153).
-- `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind the `NSD_ACCEPT_LICENCE` env var.
-- `neuralbench`: added a `CLUSTER` key to `~/.neuralbench/config.json` to force fully local execution (`null`) without `--debug`, keep the default SLURM auto-detection (`"auto"`), or always submit to SLURM (`"slurm"`); honored by `--prepare`.
-- `neuralbench`: a blank `WANDB_HOST` now genuinely disables Weights & Biases logging (previously `wandb.login` was still invoked).
+- `neuralset`: `Study.version` is now a top-level field; `infra_timelines` → `timelines.infra` (Step syntax, defaults to `ProcessPool`). Requires exca ≥ 0.5.27. (#194)
+- `neuralset`: fixed `Mne2013Sample`/`Fake2025Meg` re-downloading MNE sample data on `run()` after `download()` (#157).
+- `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind `NSD_ACCEPT_LICENCE` (#105).
+- `neuralbench`: added `CLUSTER` key to `~/.neuralbench/config.json` (`null` = local, `"auto"` = SLURM auto-detect, `"slurm"` = always SLURM); honored by `--prepare` (#118).
+- `neuralbench`: blank `WANDB_HOST` now disables W&B logging (previously `wandb.login` was still called) (#118).
 
 ## [0.2.1] - 2026-05-13
 
