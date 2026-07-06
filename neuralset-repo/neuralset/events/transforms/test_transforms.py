@@ -917,7 +917,6 @@ def test_configure_event_loader(test_data_path: Path) -> None:
     study_events = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
-        infra_timelines={"cluster": None},  # type: ignore[arg-type]
     ).run()
     sl_transform = _transf.ConfigureEventLoader(
         event_types="Fmri",

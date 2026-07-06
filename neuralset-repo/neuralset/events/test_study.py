@@ -110,8 +110,7 @@ def test_loader_on_external_study(tmp_path: Path) -> None:
 
 
 def test_study_download(tmp_path: Path) -> None:
-    infra: tp.Any = {"cluster": None}
-    study = FakeData2025(path=tmp_path, infra_timelines=infra)
+    study = FakeData2025(path=tmp_path)
     study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
     study.download()
     assert study.path.exists()
@@ -122,8 +121,7 @@ def test_study_download(tmp_path: Path) -> None:
 @pytest.mark.parametrize("with_name", [False, True])
 def test_download_appends_study_name(tmp_path: Path, with_name: bool) -> None:
     path = tmp_path / "FakeData2025" if with_name else tmp_path
-    infra: tp.Any = {"cluster": None}
-    study = FakeData2025(path=path, infra_timelines=infra)
+    study = FakeData2025(path=path)
     study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
     study.download()
     assert study.path == tmp_path / "FakeData2025"
@@ -133,8 +131,8 @@ def test_download_appends_study_name(tmp_path: Path, with_name: bool) -> None:
 def test_download_after_run_does_not_crash_when_frozen(tmp_path: Path) -> None:
     """run() freezes the model via exca; a later download() must still resolve
     its path without raising "instance was frozen" (issue #153, run->download)."""
-    infra: tp.Any = {"cluster": None}
-    study = FakeData2025(path=tmp_path, infra_timelines=infra)
+    timelines: tp.Any = {"infra": None}
+    study = FakeData2025(path=tmp_path, timelines=timelines)
     study.run()  # caches timelines and freezes the instance
     study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
     study.download()  # previously raised RuntimeError: ... instance was frozen
@@ -148,9 +146,9 @@ def test_study_export() -> None:
 
 
 def test_fake_fmri_study_load(tmp_path: Path) -> None:
-    # Processpool ``infra_timelines`` pickles the cycle-prone graph
-    # that drives ``__setstate__`` mid-cycle — not reached by simply
-    # submitting a fresh Step to a worker.
+    # The process-pool study infra pickles the cycle-prone graph that drives
+    # ``__setstate__`` mid-cycle — not reached by simply submitting a fresh
+    # Step to a worker.
     infra: tp.Any = {"folder": tmp_path}
     study = ns.Study(name="Fake2025Fmri", path=ns.CACHE_FOLDER, infra=infra)
     events = study.run()
@@ -219,7 +217,6 @@ def test_xp(tmp_path: Path) -> None:
         study={  # type: ignore[arg-type]
             "name": "Mne2013Sample",
             "path": ns.CACHE_FOLDER,
-            "infra_timelines": {"cluster": None},
             "infra": {"backend": "Cached", "folder": tmp_path / "study"},
         },
     )
@@ -241,11 +238,6 @@ class FakeData2025(base.Study):
     # study level
     myparam: int = 12
     # class level
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        # sequential: no need to spawn processes for test data
-        self.infra_timelines.cluster = None
 
     # for testing special loader param
     _add_offset: float = 0
@@ -296,8 +288,7 @@ def test_dict_to_kv(d: dict[str, tp.Any], expected: str) -> None:
 
 def test_timeline_string_pandas_query(tmp_path: Path) -> None:
     """Timeline strings must be usable in pd.DataFrame.query() without escaping."""
-    infra: tp.Any = {"folder": tmp_path, "cluster": None}
-    study = FakeData2025(path=tmp_path / "data", infra_timelines=infra)
+    study = FakeData2025(path=tmp_path / "data")
     df = study.run()
     assert df.timeline.nunique() == 4
     tl = df.timeline.iloc[0]
@@ -334,33 +325,29 @@ def test_study_build(tmp_path: Path) -> None:
     assert not study.requirements
 
 
-def test_study_caching(tmp_path: Path) -> None:
-    """Per-timeline caching, query filtering, infra.folder propagation."""
-    # infra.folder propagates to infra_timelines.folder when unset
-    infra: tp.Any = {"backend": "Cached", "folder": tmp_path, "mode": "force"}
-    study = FakeData2025(path=tmp_path / "data", infra=infra)
-    assert study.infra_timelines.folder == tmp_path
-    assert study.infra_timelines.mode == "force"
-    # retry mode propagates as cached
-    assert study.infra is not None
-    infra_retry = study.infra.model_copy(update={"mode": "retry"}, deep=True)
-    study_retry = FakeData2025(path=tmp_path / "data", infra=infra_retry)
-    assert study_retry.infra_timelines.mode == "cached"
-    # explicit folder: build and check cache files
-    infra_timelines: tp.Any = {"folder": tmp_path, "cluster": None}
-    study = FakeData2025(path=tmp_path / "data", infra_timelines=infra_timelines)
+def test_study_caching(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    loaded: list[dict[str, tp.Any]] = []
+    original = FakeData2025._load_timeline_events
+
+    def _counting(self: FakeData2025, timeline: dict[str, tp.Any]) -> pd.DataFrame:
+        loaded.append(timeline)
+        return original(self, timeline)
+
+    monkeypatch.setattr(FakeData2025, "_load_timeline_events", _counting)
+    timelines: tp.Any = {"infra": {"backend": "Cached", "folder": tmp_path}}
+    study = FakeData2025(path=tmp_path / "data", timelines=timelines)
     study.run()
-    folder = study.infra_timelines.uid_folder()
-    assert folder is not None
-    fps = list((folder / "data").glob("*.parquet"))
-    assert len(fps) == 4
-    # query filters timelines but does not create new cache files
-    study = FakeData2025(
-        path=tmp_path / "data", infra_timelines=infra_timelines, query="run==1"
-    )
-    df = study.run()
-    assert len(df) == 4
-    assert len(list((folder / "data").glob("*.parquet"))) == 4
+    assert len(loaded) == 4  # one load per timeline
+    loaded.clear()
+    queried = FakeData2025(path=tmp_path / "data", timelines=timelines, query="run==1")
+    df = queried.run()
+    assert len(df) == 4  # 2 selected timelines x 2 events
+    assert not loaded  # query never re-loads
+    # clear_cache must wipe the per-timeline cache, not just the gathered result
+    loaded.clear()
+    study.lookup().clear_cache()
+    study.run()
+    assert len(loaded) == 4  # cleared -> every timeline reloads
 
 
 class _SimpleStudy(base.Study):
@@ -389,8 +376,7 @@ class _SimpleStudy(base.Study):
 
 
 def _build_simple(tmp_path: Path, **overrides: tp.Any) -> pd.DataFrame:
-    infra: tp.Any = {"folder": tmp_path, "cluster": None}
-    study = _SimpleStudy(path=tmp_path / "data", infra_timelines=infra)
+    study = _SimpleStudy(path=tmp_path / "data")
     for k, v in overrides.items():
         setattr(study, k, v)
     return study.run()
@@ -483,7 +469,6 @@ def test_bad_transform(tmp_path: Path):
         {
             "name": "FakeData2025",
             "path": tmp_path,
-            "infra_timelines": {"cluster": None},
         },
         {"name": "BadEnhancer"},
     ]
@@ -521,25 +506,16 @@ def test_study_discovery(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_concat_studies(tmp_path: Path) -> None:
-    step: tp.Any = {
-        "name": "FakeData2025",
-        "path": tmp_path / "data",
-        "infra_timelines": {"cluster": None},
-    }
-    chain = ns.Chain(steps=[step])
-    df = chain.run()
-    assert len(df) == 8
-    chain = ns.Chain(steps=[step, step])
-    df = chain.run()
-    assert len(df) == 16
-
-
 def test_intermediary_study_cache(tmp_path: Path) -> None:
     infra: tp.Any = {"backend": "Cached", "folder": tmp_path}
     steps: list[tp.Any] = [
         # cache after study as it can be slow
-        {"name": "Fake2025Meg", "path": ns.CACHE_FOLDER, "infra": infra},
+        {
+            "name": "Fake2025Meg",
+            "path": ns.CACHE_FOLDER,
+            "infra": infra,
+            "timelines": {"infra": {"backend": "Cached"}},
+        },
         #  Cache after chunking - useful if chunking is slow
         {
             "name": "ChunkEvents",
@@ -561,14 +537,11 @@ def test_intermediary_study_cache(tmp_path: Path) -> None:
     assert isinstance(df, pd.DataFrame)  # cached
     assert hasattr(df, "stop")  # validated
     chain_caches = set(extract_cache_folders(tmp_path))
-    expected = [
-        "name=Fake2025Meg,infra_timelines.version=v3-66b17a23",
-        "max_duration=5,name=ChunkEvents,event_type_to_chunk=Audio-7702b0cc",
-        "name=QueryEvents,query=type-in-Audio,-Word,-Meg-c3b10366",
-    ]
-    for k in range(len(expected) - 1):  # concatenate as each cache is a subfolder
-        expected[k + 1] = expected[k] + "/" + expected[k + 1]
-    assert chain_caches == set(expected)
+    study = "version=v3,name=Fake2025Meg-ff4b4eb4"
+    chunk = f"{study}/max_duration=5,name=ChunkEvents,event_type_to_chunk=Audio-7702b0cc"
+    query = f"{chunk}/name=QueryEvents,query=type-in-Audio,-Word,-Meg-c3b10366"
+    loader = f"{study}/name=TimelineLoader-99bb1625"  # per-timeline loader cache
+    assert chain_caches == {study, chunk, query, loader}
 
 
 def test_validate_events_in_steps(tmp_path: Path) -> None:
@@ -605,8 +578,7 @@ def test_sub_chain(tmp_path) -> None:
 
 def test_no_full_scan_on_unpickle(tmp_path: Path) -> None:
     """Unpickling a Study must not trigger a full package scan (name='')."""
-    infra: tp.Any = {"cluster": None}
-    study = FakeData2025(path=tmp_path / "data", infra_timelines=infra)
+    study = FakeData2025(path=tmp_path / "data")
     data = cloudpickle.dumps(study)
     scan_calls: list[str] = []
     real_scan = base._scan_package_for_studies

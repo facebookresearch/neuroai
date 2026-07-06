@@ -28,9 +28,6 @@ from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
 from neuralset.extractors.neuro import FmriTimedArray, _overlap
 
-# avoid processpool which requires permissions unavailable in sandboxes
-_NO_CLUSTER: tp.Any = {"cluster": None}
-
 
 @pytest.mark.parametrize("cls", (ns.extractors.MegExtractor, ns.extractors.FmriExtractor))
 def test_neuro_pkl(cls: tp.Type[ns.extractors.BaseExtractor]) -> None:
@@ -56,13 +53,12 @@ def make_meg_event(filepath, start=0.0):
 
 def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     # load study to create nii.gz files
-    infra: tp.Any = {"folder": tmp_path / "cache", **_NO_CLUSTER}
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     fmri_data = test_data_path / "Test2023Fmri"
     study = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=infra,
     ).run()
 
     timeline = 'Test2023Fmri:{"subject":"0"}'
@@ -168,12 +164,11 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("kind", ["Fmri", "Meg"])
 def test_extractor_cached_start(test_data_path: Path, tmp_path: Path, kind: str) -> None:
-    infra: tp.Any = {"folder": tmp_path / "cache", **_NO_CLUSTER}
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     study = ns.Study(
         name=f"Test2023{kind}",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query(f'type=="{kind}"').iloc[:1]
     start, duration = event["start"].item(), event["duration"].item()
@@ -192,7 +187,6 @@ def test_fmri_resample(test_data_path: Path, frequency: float) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query('type=="Fmri"').iloc[:1]
     orig_frequency = event.frequency.item()
@@ -231,7 +225,6 @@ def test_meg(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     # check caching infra
@@ -301,7 +294,6 @@ def test_meg(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     extractor.prepare(study)
     images = study.query('type=="Image"')
@@ -350,7 +342,6 @@ def test_meg_filter(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -396,7 +387,6 @@ def test_meg_notch_filter(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -427,7 +417,6 @@ def test_meg_baseline(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -477,7 +466,6 @@ def test_meg_offset(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
     event = make_meg_event(fif, start=0)
@@ -493,7 +481,6 @@ def test_fnirs(test_data_path: Path) -> None:
         name="Test2024Fnirs",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     sfreq = 10.0
@@ -564,9 +551,7 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
 
     for cond in (meg, fmri):
         study = str(cond["study"])
-        events = ns.Study(
-            name=study, path=test_data_path, infra_timelines=_NO_CLUSTER
-        ).run()
+        events = ns.Study(name=study, path=test_data_path).run()
         sel = events.type == cond["stim"]
         dset = ns.segments.list_segments(
             events, triggers=sel, start=0.0, duration=cond["duration"]
@@ -630,9 +615,7 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_meg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     cache = tmp_path / "cache"
     extractor = ns.extractors.MegExtractor(
         frequency=100.0,
@@ -655,9 +638,7 @@ def test_meg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_eeg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     extractor = ns.extractors.EegExtractor(
         frequency=100.0,
@@ -708,9 +689,7 @@ def test_base_meg(tmp_path: Path) -> None:
 @pytest.mark.parametrize("apply_proj", (True, False))
 def test_epoch_correct(apply_proj: bool) -> None:
     # download the first time
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     NUM = 12
 
     # Define segments
@@ -774,7 +753,6 @@ def test_channel_positions_meg(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     meg.prepare(events)
 
@@ -806,7 +784,6 @@ def test_channel_positions_eeg(test_data_path: Path, n_spatial_dims, normalize) 
         name="Test2024Eeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     eeg.prepare(events)
 
@@ -837,7 +814,6 @@ def test_channel_positions_wrong_event_type(test_data_path: Path) -> None:
         name="Test2024Eeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     eeg.prepare(events)
 
@@ -868,7 +844,6 @@ def test_unique_channels_ieeg(
         name="Test2025Ieeg",
         path=test_data_path,
         query="subject_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     if channel_order == "unique":
@@ -890,7 +865,6 @@ def test_batch_size_unique_channels_ieeg(
         name="Test2025Ieeg",
         path=test_data_path,
         query="subject_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     ieeg = ns.extractors.IeegExtractor(channel_order=channel_order)
@@ -921,7 +895,6 @@ def test_channel_positions_ieeg(test_data_path: Path) -> None:
         name="Test2025Ieeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     ieeg.prepare(events)
 
@@ -1184,7 +1157,6 @@ def test_meg_borders(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     extractor = ns.extractors.MegExtractor(infra=dict(folder=cache_path))  # type: ignore
@@ -1216,7 +1188,6 @@ def test_scaled_meg(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     event = etypes.Meg.from_dict(events.query('type=="Meg"').iloc[0])
@@ -1244,9 +1215,7 @@ def test_scaled_meg(
 
 
 def test_first_samp() -> None:
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     assert meg_event.start > 0
     # first samp is ~6k at 150Hz, so start is at about 42s
@@ -1256,9 +1225,7 @@ def test_first_samp() -> None:
 
 
 def test_fast_event() -> None:
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     assert meg_event.start > 0
     extractor = ns.extractors.MegExtractor(frequency=150)
@@ -1267,9 +1234,7 @@ def test_fast_event() -> None:
 
 
 def test_border_baseline(test_data_path: Path) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     extractor = ns.extractors.MegExtractor(frequency=150, baseline=(0, 0.6))
     _ = extractor(meg_event, meg_event.stop - 0.5, 1)  # baseline should not bug
@@ -1313,9 +1278,7 @@ all_meg_channels = {
     ],
 )
 def test_meg_picks(test_data_path: Path, picks, expected: set[str]) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     extractor = ns.extractors.MegExtractor(frequency=150, picks=picks)
     ta = next(iter(extractor._get_data([meg_event])))  # type: ignore
@@ -1328,7 +1291,6 @@ def test_meg_method_on_infra(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     infra: tp.Any = {"cluster": "local", "folder": tmp_path}
     extractor = ns.extractors.MegExtractor(frequency=150, baseline=(0, 0.6), infra=infra)
@@ -1340,7 +1302,7 @@ def test_fmri_cluster_local(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines={"folder": tmp_path, **_NO_CLUSTER},  # type: ignore
+        timelines={"infra": {"backend": "Cached", "folder": tmp_path}},  # type: ignore
     ).run()
     fmri_event = extract_events(study, types=etypes.Fmri)[0]
     assert isinstance(fmri_event, etypes.Fmri)
@@ -1417,7 +1379,6 @@ def test_ieeg(test_data_path: Path) -> None:
         name="Test2025Ieeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     sfreq = 2048.0
@@ -1525,9 +1486,7 @@ def test_overlap() -> None:
 
 
 def test_drop_bad_channels(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     # Check bad channels present
     extractor = ns.extractors.EegExtractor(
@@ -1556,9 +1515,7 @@ def test_drop_bad_channels(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_pick_channel_names(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     # Check that picks allows list of channel names
     extractor = ns.extractors.EegExtractor(
@@ -1591,7 +1548,6 @@ def test_fake_meg_study() -> None:
         name="Fake2025Meg",
         path=ns.CACHE_FOLDER,
         query="subject_index < 1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     assert set(events.type) == {
@@ -1611,7 +1567,6 @@ def test_fake_fmri_study() -> None:
         name="Fake2025Fmri",
         path=ns.CACHE_FOLDER,
         query="timeline_index < 1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     try:
@@ -1759,7 +1714,6 @@ def test_fmri_smoothing(test_data_path: Path) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query('type=="Fmri"').iloc[:1]
 

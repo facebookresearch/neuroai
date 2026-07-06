@@ -13,10 +13,9 @@ import warnings
 from pathlib import Path
 
 import exca
-import exca.steps
 import pandas as pd
 import pydantic
-import ujson
+from exca.steps import backends, patterns
 
 from neuralset import base
 
@@ -251,7 +250,19 @@ def _dict_to_kv(d: dict[str, tp.Any]) -> str:
     return ",".join(f"{k}={v}" for k, v in sorted(d.items()))
 
 
-class Study(base.Step):
+class TimelineLoader(base.Step):
+    """Per-timeline caching body for :class:`Study` (one cache entry per timeline)."""
+
+    CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"  # preserves str dtypes
+
+    # Study.model_post_init reverts this to None when no cache folder resolves
+    infra: backends.Backend | None = backends.ProcessPool(keep_in_ram=True)
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        return events
+
+
+class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     """Interface to an external dataset: loads :term:`events <event>` from raw recordings.
 
     Subclass ``Study`` to create an interface to a new dataset. Override
@@ -265,10 +276,12 @@ class Study(base.Step):
         ``path`` (e.g. ``path="/data"``): each study automatically
         resolves its own subfolder (e.g. ``/data/MyStudy``), so you
         only need to configure one path for your entire data store.
-    infra_timelines : MapInfra
-        Caching/compute backend for per-timeline event loading. Uses
-        multiprocessing by default (``cluster="processpool"``); set
-        ``cluster=None`` to disable (slower, but easier to debug).
+    timelines : TimelineLoader
+        Per-timeline loader; ``timelines.infra`` sets how loads are dispatched and
+        cached (default: a process pool). Disable the pool via ``infra=None``
+        (inline, uncached) or ``infra.derive("Cached")`` (cached, in-process).
+    version : str
+        Cache-busting key kept in the uid; bump when loading logic changes.
     query : Query or None
         Optional filter applied after loading (e.g. ``"timeline_index < 5"``).
 
@@ -297,11 +310,15 @@ class Study(base.Step):
     CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"
 
     path: Path
-    infra_timelines: exca.MapInfra = exca.MapInfra(cluster="processpool")
+    timelines: TimelineLoader = TimelineLoader()
+    version: str = ""
     query: base.Query | None = None
 
     # internal
     _cls_string: str = ""  # cache
+    _timelines: list[dict[str, tp.Any]] | None = (
+        None  # iter_timelines() memo; dropped at pickle
+    )
 
     # Class level info
     _info: tp.ClassVar[None | StudyInfo] = None  # for easy testing
@@ -354,6 +371,48 @@ class Study(base.Step):
             _resolve_study(name)
         return super().__new__(cls, **kwargs)  # type: ignore[return-value]
 
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _migrate_infra_timelines(cls, data: tp.Any) -> tp.Any:
+        # deprecated: most submitit knobs don't map cleanly to steps-backends.
+        if not isinstance(data, dict) or "infra_timelines" not in data:
+            return data
+        data = dict(data)
+        legacy = data.pop("infra_timelines")
+        if isinstance(legacy, exca.MapInfra):
+            # set fields only: defaults would falsely trip the error below
+            legacy = {k: getattr(legacy, k) for k in legacy.model_fields_set}
+        if isinstance(legacy, dict) and legacy == {"cluster": None}:
+            warnings.warn(
+                "infra_timelines={'cluster': None} is deprecated; pass "
+                "timelines={'infra': {'backend': 'Cached'}} (cached) or "
+                "timelines={'infra': None} (uncached) instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            # cluster=None was inline but cached: Cached with a folder, else None.
+            infra = data.get("infra")
+            if isinstance(infra, backends.Backend):
+                folder = infra.folder
+            elif isinstance(infra, dict):
+                folder = infra.get("folder")
+            else:
+                folder = None
+            downgrade = {"backend": "Cached"} if folder is not None else None
+            data.setdefault("timelines", {"infra": downgrade})
+            return data
+        raise ValueError(
+            f"infra_timelines={legacy!r} was removed; configure the per-timeline "
+            "loader via timelines={'infra': {...}}, e.g.\n"
+            "  infra_timelines={'cluster': 'slurm', 'folder': F, 'slurm_partition': P}"
+            "  # old\n"
+            "  timelines={'infra': {'backend': 'Slurm', 'folder': F, 'partition': P}}"
+            "  # new\n"
+            "cluster->backend: None->Cached (or infra=None to skip caching), "
+            "processpool->ProcessPool, slurm->Slurm, auto->Auto; "
+            "slurm_partition->partition."
+        )
+
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         raise NotImplementedError
         # # example:
@@ -404,7 +463,7 @@ class Study(base.Step):
         """Descriptor for the study instance parametrization"""
         cls_kwargs: tp.Any = self.model_dump(serialize_as_any=True, exclude_defaults=True)
         # Exclude standard fields from class kwargs
-        for p in ["infra", "infra_timelines", "path", "name", "query"]:
+        for p in ["infra", "timelines", "version", "path", "name", "query"]:
             cls_kwargs.pop(p, None)
         if cls_kwargs:
             # should the class parameter be part of the timeline? or does
@@ -425,7 +484,8 @@ class Study(base.Step):
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
-        return super()._exclude_from_cls_uid() + ["path"]
+        # path locates data; timelines is a no-op caching body (load is in take)
+        return super()._exclude_from_cls_uid() + ["path", "timelines"]
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -435,23 +495,15 @@ class Study(base.Step):
                 "or pass name= to dispatch: Study(name='MyStudy2024', path=...)"
             )
         name = self.__class__.__name__
-        # Settle the study subfolder once, here at construction, before exca can
-        # freeze the instance: prefer an existing ``<path>/<name>`` (or lowercase)
-        # folder, otherwise append ``<name>``. ``download()`` then never reassigns
-        # ``self.path`` — which would crash on a frozen post-``run()`` instance
-        # (issue #153, run -> download order).
+        # frozen post-run() -> download() can't reassign self.path; settle it here (#153)
         self.path = _identify_study_subfolder(self.path, name)
         if self.path.name.lower() != name.lower():
             self.path = self.path / name
         STUDY_PATHS[self.__class__.__name__] = self.path  # record for path lookup
-        # Auto-propagate cache folder and mode so users only need to set it once
-        if self.infra is not None:
-            if self.infra.folder is not None and self.infra_timelines.folder is None:
-                self.infra_timelines.folder = self.infra.folder
-            if "mode" in self.infra.model_fields_set:
-                if "mode" not in self.infra_timelines.model_fields_set:
-                    mode = self.infra.mode
-                    self.infra_timelines.mode = "cached" if mode == "retry" else mode
+
+        if "infra" not in self.timelines.model_fields_set:
+            if self.infra is None or self.infra.folder is None:
+                self.timelines.infra = None  # a backend needs a folder
 
     def __init_subclass__(cls, **kwargs: tp.Any) -> None:
         name = cls.__name__
@@ -465,11 +517,13 @@ class Study(base.Step):
                     f"cannot re-register to {cls.__module__}.{cls.__qualname__}"
                 )
             STUDIES[name] = cls
-        if hasattr(cls, "version"):
-            msg = (
-                f"{name}.version must be specified through {name}.infra_timelines.version"
-            )
-            raise RuntimeError(msg)
+
+    def __getstate__(self) -> dict[str, tp.Any]:
+        out = super().__getstate__()
+        private = out.get("__pydantic_private__")
+        if private is not None:
+            private["_timelines"] = None  # workers re-scan; don't ship the memo
+        return out
 
     def __setstate__(self, state: dict[str, tp.Any]) -> None:
         super().__setstate__(state)
@@ -479,95 +533,98 @@ class Study(base.Step):
         if "path" in self.__dict__:
             STUDY_PATHS[self.__class__.__name__] = self.path
 
-    @infra_timelines.apply(
-        item_uid=lambda x: ujson.dumps(x, sort_keys=True),
-        exclude_from_cache_uid=("query",),
-        cache_type="ValidatedParquet",  # preserves str dtypes (CSV doesn't)
-    )
-    def _load_timelines(
-        self, timelines: tp.Iterable[dict[str, tp.Any]]
-    ) -> tp.Iterator[pd.DataFrame]:
-        """Loads raw timelines and cache them"""
+    def _load_one(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
+        """Load and standardize one timeline's events."""
         cls_name = self.__class__.__name__
-        for timeline in timelines:
-            if "subject" not in timeline:
-                raise RuntimeError("timeline dict must contain 'subject' key")
-            out = self._load_timeline_events(timeline)
-            # Core columns are always overwritten
-            out.loc[:, "subject"] = f"{cls_name}/{timeline['subject']}"
-            out.loc[:, "timeline"] = self._to_timeline_string(timeline)
-            out.loc[:, "study"] = cls_name
-            # Extra columns from timeline dict: conflict-check then set
-            extra: dict[str, str] = {}
-            for key, value in timeline.items():
-                if key not in ("subject", "path", "timeline"):
-                    extra[key] = str(value)
-            for entity in utils.BIDS_ENTITIES:
-                if entity != "subject":
-                    extra.setdefault(entity, utils.BIDS_ENTITY_DEFAULT)
-            for col, value in extra.items():
-                if col not in out.columns:
-                    out.loc[:, col] = value
-                elif (out[col].astype(str) == value).all():
-                    warnings.warn(
-                        f"Column '{col}' from timeline dict already exists "
-                        f"in the events dataframe with matching values. "
-                        f"Remove it from _load_timeline_events to avoid "
-                        f"future errors.",
-                        FutureWarning,
-                    )
-                elif (
-                    col in utils.BIDS_ENTITIES
-                    and (out[col].astype(str) == utils.BIDS_ENTITY_DEFAULT).all()
-                ):
-                    out.loc[:, col] = value
-                else:
-                    raise ValueError(
-                        f"Column '{col}' from timeline dict already exists "
-                        f"in the events dataframe with different values."
-                    )
-            out = utils.standardize_events(out)
-            yield out
+        if "subject" not in timeline:
+            raise RuntimeError("timeline dict must contain 'subject' key")
+        out = self._load_timeline_events(timeline)
+        # Core columns are always overwritten
+        out.loc[:, "subject"] = f"{cls_name}/{timeline['subject']}"
+        out.loc[:, "timeline"] = self._to_timeline_string(timeline)
+        out.loc[:, "study"] = cls_name
+        # Extra columns from timeline dict: conflict-check then set
+        extra: dict[str, str] = {}
+        for key, value in timeline.items():
+            if key not in ("subject", "path", "timeline"):
+                extra[key] = str(value)
+        for entity in utils.BIDS_ENTITIES:
+            if entity != "subject":
+                extra.setdefault(entity, utils.BIDS_ENTITY_DEFAULT)
+        for col, value in extra.items():
+            if col not in out.columns:
+                out.loc[:, col] = value
+            elif (out[col].astype(str) == value).all():
+                warnings.warn(
+                    f"Column '{col}' from timeline dict already exists "
+                    f"in the events dataframe with matching values. "
+                    f"Remove it from _load_timeline_events to avoid "
+                    f"future errors.",
+                    FutureWarning,
+                )
+            elif (
+                col in utils.BIDS_ENTITIES
+                and (out[col].astype(str) == utils.BIDS_ENTITY_DEFAULT).all()
+            ):
+                out.loc[:, col] = value
+            else:
+                raise ValueError(
+                    f"Column '{col}' from timeline dict already exists "
+                    f"in the events dataframe with different values."
+                )
+        return utils.standardize_events(out)
 
-    def _run(self, events: pd.DataFrame | None = None) -> pd.DataFrame:
-        """Load study data and optionally concatenate with existing events."""
-        if events is not None:  # special case, concatenate
-            df = self._run()
-            return pd.concat([events, df], ignore_index=True).reset_index(drop=True)
+    def _branch_excludes(self) -> list[str]:
+        # query only selects which timelines run; the input is empty (a source).
+        # Neither defines a timeline.
+        return ["query", self._INPUT]
+
+    def _all_timelines(self) -> list[dict[str, tp.Any]]:
+        if self._timelines is not None:
+            return self._timelines
         name = self.__class__.__name__
-        timelines = []
-        # iterate 1 by 1 to provide explicit msg to different kinds of bugs
+        tls: list[dict[str, tp.Any]] = []
+        # accumulate (not list(...)) so the except can tell a first-item failure
         try:
             for tl in self.iter_timelines():
-                timelines.append(tl)
+                tls.append(tl)
         except Exception as e:
-            # for a bug on the first timeline with no folder, raise with more info,
-            if not timelines and not self.path.exists():
+            if not tls and not self.path.exists():  # almost surely not downloaded
                 msg = f"For {name}, you may need to run study.download() first "
                 msg += f"as {self.path} does not exist."
                 raise RuntimeError(msg) from e
             raise
-        if not timelines:
+        if not tls:
             raise RuntimeError(f"No timeline found for {name} in {self.path}")
-        # verify number of timelines in info
-        if self._info is not None:
-            tls = self._info.num_timelines
-            if tls != len(timelines):
-                msg = f"Dataset {name} is corrupted, expected {tls} timelines "
-                msg += f"but found {len(timelines)} (check/redownload dataset "
-                msg += f"folder {self.path} or update study class)"
-                raise RuntimeError(msg)
-        # filter through summary
-        if self.query is not None:
-            summ = self.study_summary(apply_query=True)
-            timelines = [timelines[k] for k in summ.index]
-        if not timelines:
+        if self._info is not None and self._info.num_timelines != len(tls):
+            msg = f"Dataset {name} is corrupted, expected {self._info.num_timelines} "
+            msg += f"timelines but found {len(tls)} (check/redownload dataset "
+            msg += f"folder {self.path} or update study class)"
+            raise RuntimeError(msg)
+        self._timelines = tls
+        return tls
+
+    def branches(self, item: tp.Any) -> list[dict[str, tp.Any]]:
+        """Query-selected timeline dicts to load, one per branch (``item`` is unused)."""
+        name = self.__class__.__name__
+        tls = self._all_timelines()
+        if self.query is None:
+            return tls
+        # study_summary reads the same memoized tls, so its index maps back to tls[k]
+        summ = self.study_summary(apply_query=True)
+        selected = [tls[k] for k in summ.index]
+        if not selected:
             msg = f"Did not find any timeline for {name}.query={self.query} "
             msg += f"with summary:\n{self.study_summary(apply_query=False)}"
             raise RuntimeError(msg)
-        # load and concatenate
-        timelines_events = list(self._load_timelines(timelines))
-        out = pd.concat(timelines_events).reset_index(drop=True)
+        return selected
+
+    def take(self, item: tp.Any, branch: dict[str, tp.Any]) -> pd.DataFrame:
+        return self._load_one(branch)
+
+    def gather(self, results: list[patterns.BranchResult]) -> pd.DataFrame:
+        """Concatenated per-timeline events."""
+        out = pd.concat([r.result for r in results]).reset_index(drop=True)
         return utils.standardize_events(out, auto_fill=False)
 
     def build(self) -> pd.DataFrame:
@@ -581,7 +638,7 @@ class Study(base.Step):
         Parameter
         ---------
         apply_query: bool
-            if False returns the full the summary, otherwise filter it
+            if False returns the full summary, otherwise filter it
             according to the query
 
         Virtual query columns
@@ -599,10 +656,8 @@ class Study(base.Step):
             (used for querying at most :code:`n` timelines per subjects)
         """
         name = self.__class__.__name__
-        tls = list(self.iter_timelines())
+        tls = self._all_timelines()
         out = pd.DataFrame(tls)
-        if out.empty:
-            raise RuntimeError(f"No timeline found for {self!r}")
         out["subject"] = out["subject"].apply(lambda x: f"{name}/{x}")
         out.loc[:, "timeline"] = [self._to_timeline_string(tl) for tl in tls]
         out = out.sort_values("subject", kind="stable")

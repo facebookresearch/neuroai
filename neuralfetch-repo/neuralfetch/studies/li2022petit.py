@@ -104,7 +104,7 @@ class Li2022Petit(study.Study):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        self.infra_timelines.version = "v3"
+        self.version = "v3"
 
     def _download(self) -> None:
         """

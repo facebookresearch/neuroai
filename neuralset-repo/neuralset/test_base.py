@@ -104,7 +104,6 @@ def test_data(test_data_path: Path) -> None:
     events = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
-        infra_timelines={"cluster": None},
     ).run()
 
     # Build a list of segments time-locked to specific events

@@ -15,10 +15,6 @@ import pytest
 from . import config_manager
 from .data import Data
 
-# Bypass multiprocessing in the test sandbox; ``Test2024Eeg`` is tiny enough
-# that in-process execution is fast.
-_NO_CLUSTER: tp.Any = {"cluster": None}
-
 
 @pytest.fixture
 def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
@@ -75,7 +71,6 @@ def build_data(
             study={
                 "name": "Test2024Eeg",
                 "path": test2024eeg_path,
-                "infra_timelines": _NO_CLUSTER,
             },
             neuro={"name": "MneRaw", "event_types": "Eeg"},
             target={

@@ -60,6 +60,7 @@ from pathlib import Path
 import mne
 import numpy as np
 import pandas as pd
+from exca.steps import backends
 from scipy.io import loadmat
 
 from neuralfetch.download import temp_mne_data
@@ -192,14 +193,12 @@ class _BaseMoabb(studies.Study):
         # It will transform /path -> /path/StudyName
         super().model_post_init(log__)
 
-        # Disable the processpool for MOABB datasets: some (e.g. ERP CORE)
+        # Force inline timeline loading for MOABB datasets: some (e.g. ERP CORE)
         # load via mne_bids which uses file locks that exhaust NFS NLM limits
         # when too many workers run in parallel (ENOLCK).  Timeline events are
         # cached on disk by exca, so sequential loading only costs on first run.
-        if self.infra_timelines.cluster == "processpool":
-            self.infra_timelines = self.infra_timelines.model_copy(
-                update={"cluster": None}
-            )
+        if isinstance(self.timelines.infra, backends.ProcessPool):
+            self.timelines.infra = self.timelines.infra.derive("Cached")
 
         # Now insert 'moabb' before the study name
         # self.path is now /path/StudyName, we want /path/moabb/StudyName

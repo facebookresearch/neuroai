@@ -68,7 +68,6 @@ def compute_study_info(name: str, folder: str | Path) -> dict[str, tp.Any]:
     query = info.query if info is not None else default_query
     if query != default_query:
         study = ns.Study(name=name, path=folder, query=query)
-    study.infra_timelines.cluster = None  # avoid process pool startup
     cls._info = None  # bypass num_timelines check during loading
     try:
         summary = study.study_summary(apply_query=False)
