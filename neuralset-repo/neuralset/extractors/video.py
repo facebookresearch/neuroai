@@ -184,13 +184,17 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
                     start=event.start,
                     data=data,
                 )
-                continue
-            sub = data.with_start(event.start).overlap(  # type: ignore[union-attr]
-                start=start, duration=duration
-            )
-            if self.cache_n_layers is not None:
-                sub.data = self._aggregate_layers(sub.data)
-            yield sub
+            elif event.type == "Video":
+                sub = data.with_start(event.start).overlap(  # type: ignore[union-attr]
+                    start=start, duration=duration
+                )
+                if self.cache_n_layers is not None:
+                    sub.data = self._aggregate_layers(sub.data)
+                yield sub
+            else:
+                raise ValueError(
+                    f"Incorrect event type for video extractor: {event.type}"
+                )
 
     @infra.apply(
         item_uid=_huggingface_video_event_uid,
@@ -207,41 +211,49 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         for event in events:
             if event.type == "Image":
                 yield self._get_image_data(event)  # type: ignore[arg-type]
-                continue
-            video = event.read()
+            elif event.type == "Video":
+                video = event.read()
 
-            expect_frames = nsbase.Frequency(self.frequency).to_ind(event.duration)
-            logger.debug(
-                "Loaded Video (duration %ss at %sfps, shape %s):\n%s",
-                video.duration,
-                video.fps,
-                tuple(video.size),
-                event.filepath,
-            )
-            # time at end of sample:
-            times = np.linspace(0, video.duration, expect_frames + 1)[1:]
-            # samples the frames in-between the main frequency
-            output = np.array([])
-            # pylint: disable=protected-access
-            for k, t in tqdm(enumerate(times), total=len(times), desc="Encoding video"):
-                ims = [_VideoImage(video=video, time=max(0, t - t2)) for t2 in subtimes]
-                pil_imgs = [i.read() for i in ims]
-                pil_imgs = self._resize_pil_images(pil_imgs)
-                data = np.array([np.array(pi) for pi in pil_imgs])
-                embd = self._embed_clip(data)
-                if not output.size:
-                    output = np.zeros((len(times),) + embd.shape)
-                    logger.debug("Created Tensor with size %s", output.shape)
-                output[k] = embd
-            video.close()
-            # set first (time) dim to last
-            output = output.transpose(list(range(1, output.ndim)) + [0])
-            yield nsbase.TimedArray(
-                data=output.astype(np.float32),
-                frequency=self.frequency,
-                start=nsbase._UNSET_START,
-                duration=event.duration,
-            )
+                expect_frames = nsbase.Frequency(self.frequency).to_ind(event.duration)
+                logger.debug(
+                    "Loaded Video (duration %ss at %sfps, shape %s):\n%s",
+                    video.duration,
+                    video.fps,
+                    tuple(video.size),
+                    event.filepath,
+                )
+                # time at end of sample:
+                times = np.linspace(0, video.duration, expect_frames + 1)[1:]
+                # samples the frames in-between the main frequency
+                output = np.array([])
+                # pylint: disable=protected-access
+                for k, t in tqdm(
+                    enumerate(times), total=len(times), desc="Encoding video"
+                ):
+                    ims = [
+                        _VideoImage(video=video, time=max(0, t - t2)) for t2 in subtimes
+                    ]
+                    pil_imgs = [i.read() for i in ims]
+                    pil_imgs = self._resize_pil_images(pil_imgs)
+                    data = np.array([np.array(pi) for pi in pil_imgs])
+                    embd = self._embed_clip(data)
+                    if not output.size:
+                        output = np.zeros((len(times),) + embd.shape)
+                        logger.debug("Created Tensor with size %s", output.shape)
+                    output[k] = embd
+                video.close()
+                # set first (time) dim to last
+                output = output.transpose(list(range(1, output.ndim)) + [0])
+                yield nsbase.TimedArray(
+                    data=output.astype(np.float32),
+                    frequency=self.frequency,
+                    start=nsbase._UNSET_START,
+                    duration=event.duration,
+                )
+            else:
+                raise ValueError(
+                    f"Incorrect event type for video extractor: {event.type}"
+                )
 
     def _get_image_data(self, event: evts.Image) -> np.ndarray:
         pil_img = event.read()
