@@ -95,7 +95,19 @@ def test_video_image(video_event: etypes.Video) -> None:
     assert vi.filepath.endswith("random_video_6s.mp4:12345.123")
 
 
-def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "event_types,frequency,expected_shape",
+    [
+        ("Image", 0.0, (768,)),
+        (("Image", "Video"), 0.5, (768, 1)),
+    ],
+)
+def test_huggingface_video_static_image_clip(
+    tmp_path: Path,
+    event_types: tp.Any,
+    frequency: float,
+    expected_shape: tuple[int, ...],
+) -> None:
     if "IN_GITHUB_ACTION" in os.environ:
         pytest.skip("Run locally; image events use the full video model path.")
     filepath = tmp_path / "image.png"
@@ -104,7 +116,8 @@ def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
     event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
     infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     extractor = vid.HuggingFaceVideo(
-        event_types="Image",
+        event_types=event_types,
+        frequency=frequency,
         infra=infra,
         max_imsize=64,
         num_frames=16,
@@ -114,7 +127,7 @@ def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
     out = extractor(event, start=1.0, duration=0.5)
 
     assert isinstance(out, torch.Tensor)
-    assert out.shape == (768,)
+    assert out.shape == expected_shape
     assert torch.isfinite(out).all()
 
 
