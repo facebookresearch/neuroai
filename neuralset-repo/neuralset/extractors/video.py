@@ -31,7 +31,7 @@ _VideoImage = image_extractors._VideoImage
 
 def _huggingface_video_event_uid(event: evts.Image | evts.Video) -> str:
     if event.type == "Video":
-        return tp.cast(evts.Video, event)._splittable_event_uid()
+        return event._splittable_event_uid()  # type: ignore[union-attr]
     elif event.type == "Image":
         return str(event.study_relative_path())
     else:
@@ -175,20 +175,19 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, data in zip(events, self._get_data(events)):
             if event.type == "Image":
-                image_event = tp.cast(evts.Image, event)
                 data = np.asarray(data)
                 if self.cache_n_layers is not None:
                     data = self._aggregate_layers(data)
                 yield nsbase.TimedArray(
                     frequency=0,
-                    duration=image_event.duration,
-                    start=image_event.start,
+                    duration=event.duration,
+                    start=event.start,
                     data=data,
                 )
                 continue
-            video_event = tp.cast(evts.Video, event)
-            ta = tp.cast(nsbase.TimedArray, data)
-            sub = ta.with_start(video_event.start).overlap(start=start, duration=duration)
+            sub = data.with_start(event.start).overlap(  # type: ignore[union-attr]
+                start=start, duration=duration
+            )
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub
@@ -203,21 +202,15 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         # read all media events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
         self._warn_if_config_num_frames_mismatch()
-        video_events = [event for event in events if event.type == "Video"]
-        subtimes: list[float] = []
-        if video_events:
-            freq = self.frequency
-            T = 1 / freq if self.clip_duration is None else self.clip_duration
-            subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
+        T = 1 / self.frequency if self.clip_duration is None else self.clip_duration
+        subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
         for event in events:
             if event.type == "Image":
-                yield self._get_image_data(tp.cast(evts.Image, event))
+                yield self._get_image_data(event)  # type: ignore[arg-type]
                 continue
-            event = tp.cast(evts.Video, event)
             video = event.read()
 
-            freq = self.frequency
-            expect_frames = nsbase.Frequency(freq).to_ind(event.duration)
+            expect_frames = nsbase.Frequency(self.frequency).to_ind(event.duration)
             logger.debug(
                 "Loaded Video (duration %ss at %sfps, shape %s):\n%s",
                 video.duration,
@@ -245,7 +238,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             output = output.transpose(list(range(1, output.ndim)) + [0])
             yield nsbase.TimedArray(
                 data=output.astype(np.float32),
-                frequency=freq,
+                frequency=self.frequency,
                 start=nsbase._UNSET_START,
                 duration=event.duration,
             )
