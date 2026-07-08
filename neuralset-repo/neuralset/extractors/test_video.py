@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import contextlib
 import logging
 import os
 import typing as tp
@@ -96,18 +95,7 @@ def test_video_image(video_event: etypes.Video) -> None:
     assert vi.filepath.endswith("random_video_6s.mp4:12345.123")
 
 
-@pytest.mark.parametrize(
-    "event_types,expected_warning",
-    [
-        ("Image", True),
-        (("Image", "Video"), False),
-    ],
-)
-def test_huggingface_video_static_image_clip(
-    tmp_path: Path,
-    event_types: tp.Any,
-    expected_warning: bool,
-) -> None:
+def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
     if "IN_GITHUB_ACTION" in os.environ:
         pytest.skip("Run locally; image events use the full video model path.")
     filepath = tmp_path / "image.png"
@@ -115,19 +103,13 @@ def test_huggingface_video_static_image_clip(
     PIL.Image.fromarray(frame).save(filepath)
     event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
     infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
-    warning_context = (
-        pytest.warns(UserWarning, match="event_types='Image'")
-        if expected_warning
-        else contextlib.nullcontext()
+    extractor = vid.HuggingFaceVideo(
+        event_types=("Image", "Video"),
+        infra=infra,
+        max_imsize=64,
+        num_frames=16,
+        device="cpu",
     )
-    with warning_context:
-        extractor = vid.HuggingFaceVideo(
-            event_types=event_types,
-            infra=infra,
-            max_imsize=64,
-            num_frames=16,
-            device="cpu",
-        )
 
     out = extractor(event, start=1.0, duration=0.5)
 

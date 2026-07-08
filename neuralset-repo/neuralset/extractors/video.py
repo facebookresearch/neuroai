@@ -32,7 +32,10 @@ _VideoImage = image_extractors._VideoImage
 def _huggingface_video_event_uid(event: evts.Image | evts.Video) -> str:
     if event.type == "Video":
         return tp.cast(evts.Video, event)._splittable_event_uid()
-    return str(event.study_relative_path())
+    elif event.type == "Image":
+        return str(event.study_relative_path())
+    else:
+        raise ValueError(f"Incorrect event type for video extractor: {event.type}")
 
 
 def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
