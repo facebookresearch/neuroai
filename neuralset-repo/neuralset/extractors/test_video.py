@@ -96,16 +96,15 @@ def test_video_image(video_event: etypes.Video) -> None:
 
 
 @pytest.mark.parametrize(
-    "event_types,frequency,expected_shape",
+    "kwargs,expected_shape",
     [
-        ("Image", 0.0, (768,)),
-        (("Image", "Video"), 0.5, (768, 1)),
+        ({"event_types": "Image", "frequency": "native"}, (768,)),
+        ({"event_types": ("Image", "Video")}, (768, 1)),
     ],
 )
 def test_huggingface_video_static_image_clip(
     tmp_path: Path,
-    event_types: tp.Any,
-    frequency: float,
+    kwargs: dict[str, tp.Any],
     expected_shape: tuple[int, ...],
 ) -> None:
     if "IN_GITHUB_ACTION" in os.environ:
@@ -116,12 +115,11 @@ def test_huggingface_video_static_image_clip(
     event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
     infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     extractor = vid.HuggingFaceVideo(
-        event_types=event_types,
-        frequency=frequency,
         infra=infra,
         max_imsize=64,
         num_frames=16,
         device="cpu",
+        **kwargs,
     )
 
     out = extractor(event, start=1.0, duration=0.5)

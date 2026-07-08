@@ -16,7 +16,6 @@ from exca import MapInfra
 from tqdm import tqdm
 
 from neuralset import base as nsbase
-from neuralset.events import EventTypesHelper
 from neuralset.events import etypes as evts
 
 from . import base as extractor_base
@@ -108,6 +107,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     )
     model_name: str = "MCG-NJU/videomae-base"
     hf_config: HuggingFaceVideoConfig = HuggingFaceVideoConfig()
+    frequency: float | tp.Literal["native"] = 1.0
     clip_duration: float | None = None
     max_imsize: int | None = None
     num_frames: int
@@ -153,33 +153,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         return extractor_base.BaseExtractor._exclude_from_cache_uid(
             self
         ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        if self._uses_only_image_events() and self.frequency == 0:
-            self._event_types_helper = EventTypesHelper(self.event_types)
-            hf.HuggingFaceMixin.model_post_init(self, log__)
-            return
-        super().model_post_init(log__)
-        if self._supports_image_events() and not self._supports_video_events():
-            if self.frequency == "native":
-                return
-            msg = "HuggingFaceVideo requires frequency=0 or 'native' for Image events."
-            raise ValueError(msg)
-
-    def _supports_image_events(self) -> bool:
-        event_types = (
-            (self.event_types,) if isinstance(self.event_types, str) else self.event_types
-        )
-        return "Image" in event_types
-
-    def _supports_video_events(self) -> bool:
-        event_types = (
-            (self.event_types,) if isinstance(self.event_types, str) else self.event_types
-        )
-        return "Video" in event_types
-
-    def _uses_only_image_events(self) -> bool:
-        return self._supports_image_events() and not self._supports_video_events()
 
     def _get_timed_arrays(
         self,
