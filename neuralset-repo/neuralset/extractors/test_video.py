@@ -101,7 +101,7 @@ def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
     filepath = tmp_path / "image.png"
     frame = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
     PIL.Image.fromarray(frame).save(filepath)
-    event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
+    event = etypes.Image(start=1.0, duration=3.0, filepath=filepath, timeline="foo")
     infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     extractor = vid.HuggingFaceVideo(
         event_types=("Image", "Video"),
@@ -111,10 +111,10 @@ def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
         device="cpu",
     )
 
-    out = extractor(event, start=1.0, duration=0.5)
+    out = extractor(event, start=1.0, duration=3.0)
 
     assert isinstance(out, torch.Tensor)
-    assert out.shape == (768, 1)
+    assert out.shape == (768, 3)
     assert torch.isfinite(out).all()
 
 

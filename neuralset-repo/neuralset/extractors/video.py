@@ -164,9 +164,14 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         duration: float,
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
-            sub = ta
-            if sub.frequency:
-                sub = sub.with_start(event.start).overlap(start=start, duration=duration)
+            if event.type == "Video":
+                sub = ta.with_start(event.start).overlap(start=start, duration=duration)
+            elif event.type == "Image":
+                sub = ta
+            else:
+                raise ValueError(
+                    f"Incorrect event type for video extractor: {event.type}"
+                )
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub
