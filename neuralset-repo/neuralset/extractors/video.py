@@ -157,37 +157,16 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             self
         ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
 
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        if self.event_types == "Image":
-            warnings.warn(
-                "HuggingFaceVideo with event_types='Image' applies a video model "
-                "to repeated static image frames. Consider HuggingFaceImage for "
-                "image-only features.",
-                stacklevel=2,
-            )
-
     def _get_timed_arrays(
         self,
         events: list[evts.Image | evts.Video],
         start: float,
         duration: float,
     ) -> tp.Iterable[nsbase.TimedArray]:
-        for event, data in zip(events, self._get_data(events)):
-            if event.type == "Image":
-                data = np.asarray(data)
-                if self.cache_n_layers is not None:
-                    data = self._aggregate_layers(data)
-                yield nsbase.TimedArray(
-                    frequency=0,
-                    duration=event.duration,
-                    start=event.start,
-                    data=data,
-                )
-                continue
-            sub = data.with_start(event.start).overlap(  # type: ignore[union-attr]
-                start=start, duration=duration
-            )
+        for event, ta in zip(events, self._get_data(events)):
+            sub = ta
+            if sub.frequency:
+                sub = sub.with_start(event.start).overlap(start=start, duration=duration)
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub
@@ -198,7 +177,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     )
     def _get_data(
         self, events: tp.Sequence[evts.Image | evts.Video]
-    ) -> tp.Iterator[np.ndarray | nsbase.TimedArray]:
+    ) -> tp.Iterator[nsbase.TimedArray]:
         # read all media events
         logging.getLogger("neuralset").setLevel(logging.DEBUG)
         self._warn_if_config_num_frames_mismatch()
@@ -206,7 +185,12 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
         for event in events:
             if event.type == "Image":
-                yield self._get_image_data(event)  # type: ignore[arg-type]
+                yield nsbase.TimedArray(
+                    data=self._get_image_data(event),  # type: ignore[arg-type]
+                    frequency=0,
+                    start=event.start,
+                    duration=event.duration,
+                )
                 continue
             video = event.read()
 
