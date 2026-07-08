@@ -107,7 +107,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     )
     model_name: str = "MCG-NJU/videomae-base"
     hf_config: HuggingFaceVideoConfig = HuggingFaceVideoConfig()
-    frequency: float | tp.Literal["native"] = 1.0
+    frequency: float = 1.0
     clip_duration: float | None = None
     max_imsize: int | None = None
     num_frames: int
@@ -154,6 +154,16 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             self
         ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if self.event_types == "Image":
+            warnings.warn(
+                "HuggingFaceVideo with event_types='Image' applies a video model "
+                "to repeated static image frames. Consider HuggingFaceImage for "
+                "image-only features.",
+                stacklevel=2,
+            )
+
     def _get_timed_arrays(
         self,
         events: list[evts.Image | evts.Video],
@@ -193,11 +203,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         video_events = [event for event in events if event.type == "Video"]
         subtimes: list[float] = []
         if video_events:
-            freq = (
-                video_events[0].frequency
-                if self.frequency == "native"
-                else self.frequency
-            )
+            freq = self.frequency
             T = 1 / freq if self.clip_duration is None else self.clip_duration
             subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]
         for event in events:
@@ -207,7 +213,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
             event = tp.cast(evts.Video, event)
             video = event.read()
 
-            freq = self.frequency if self.frequency != "native" else event.frequency
+            freq = self.frequency
             expect_frames = nsbase.Frequency(freq).to_ind(event.duration)
             logger.debug(
                 "Loaded Video (duration %ss at %sfps, shape %s):\n%s",

@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import contextlib
 import logging
 import os
 import typing as tp
@@ -96,16 +97,16 @@ def test_video_image(video_event: etypes.Video) -> None:
 
 
 @pytest.mark.parametrize(
-    "kwargs,expected_shape",
+    "event_types,expected_warning",
     [
-        ({"event_types": "Image", "frequency": "native"}, (768,)),
-        ({"event_types": ("Image", "Video")}, (768, 1)),
+        ("Image", True),
+        (("Image", "Video"), False),
     ],
 )
 def test_huggingface_video_static_image_clip(
     tmp_path: Path,
-    kwargs: dict[str, tp.Any],
-    expected_shape: tuple[int, ...],
+    event_types: tp.Any,
+    expected_warning: bool,
 ) -> None:
     if "IN_GITHUB_ACTION" in os.environ:
         pytest.skip("Run locally; image events use the full video model path.")
@@ -114,18 +115,24 @@ def test_huggingface_video_static_image_clip(
     PIL.Image.fromarray(frame).save(filepath)
     event = etypes.Image(start=1.0, duration=0.5, filepath=filepath, timeline="foo")
     infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
-    extractor = vid.HuggingFaceVideo(
-        infra=infra,
-        max_imsize=64,
-        num_frames=16,
-        device="cpu",
-        **kwargs,
+    warning_context = (
+        pytest.warns(UserWarning, match="event_types='Image'")
+        if expected_warning
+        else contextlib.nullcontext()
     )
+    with warning_context:
+        extractor = vid.HuggingFaceVideo(
+            event_types=event_types,
+            infra=infra,
+            max_imsize=64,
+            num_frames=16,
+            device="cpu",
+        )
 
     out = extractor(event, start=1.0, duration=0.5)
 
     assert isinstance(out, torch.Tensor)
-    assert out.shape == expected_shape
+    assert out.shape == (768, 1)
     assert torch.isfinite(out).all()
 
 
