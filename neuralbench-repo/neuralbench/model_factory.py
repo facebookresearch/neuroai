@@ -203,6 +203,10 @@ def build_brain_model(
         if leaf is not None and hasattr(leaf, "n_classes")
         else feat.shape[-1]
     )
+    input_channel_names: list[str] | None = None
+    neuro_extractor = getattr(train_loader.dataset, "extractors", {}).get("neuro")
+    if neuro_extractor is not None and hasattr(neuro_extractor, "_channels"):
+        input_channel_names = list(neuro_extractor._channels.keys())
 
     # 1) Build the brain model
     if isinstance(brain_model_config, BaseBrainDecodeModel):
@@ -277,10 +281,21 @@ def build_brain_model(
             y_train=y_fit_np,
         )
     else:
-        brain_model = brain_model_config.build(
-            n_in_channels=n_in_channels,
-            n_outputs=(None if downstream_model_wrapper is not None else n_outputs),
-        )
+        build_kwargs: dict[str, tp.Any] = {
+            "n_in_channels": n_in_channels,
+            "n_outputs": (None if downstream_model_wrapper is not None else n_outputs),
+        }
+        if getattr(brain_model_config, "ch_names_required", False):
+            assert input_channel_names is not None, (
+                f"{type(brain_model_config).__name__} requires channel names, "
+                "but the neuro extractor did not expose them."
+            )
+            assert len(input_channel_names) == n_in_channels, (
+                f"Expected {n_in_channels} channels, but got "
+                f"{len(input_channel_names)} channel names."
+            )
+            build_kwargs["ch_names"] = input_channel_names
+        brain_model = brain_model_config.build(**build_kwargs)
 
     # 2) Initialize lazy layers
     dummy_batch, input_name = build_dummy_batch(
@@ -295,10 +310,6 @@ def build_brain_model(
     # 4) Wrap for downstream task
     if downstream_model_wrapper is not None:
         LOGGER.info("Wrapping brain model for downstream task...")
-        input_channel_names: list[str] | None = None
-        neuro_extractor = getattr(train_loader.dataset, "extractors", {}).get("neuro")
-        if neuro_extractor is not None and hasattr(neuro_extractor, "_channels"):
-            input_channel_names = list(neuro_extractor._channels.keys())
         brain_model = downstream_model_wrapper.build(
             brain_model,
             dummy_batch,
