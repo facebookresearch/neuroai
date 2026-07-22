@@ -43,7 +43,6 @@ def _extract_sentences(events) -> list[ev.Sentence]:
     words_df = events.loc[events.type.isin(wtypes.names), :]
     sentences = []
     words: list[tp.Any] = []
-    eps = 1e-6
     for k, word in enumerate(words_df.itertuples(index=False)):
         if words and words[-1].timeline == word.timeline:
             if word.start < words[-1].start:
@@ -68,11 +67,8 @@ def _extract_sentences(events) -> list[ev.Sentence]:
                     language = ""
                 sentences.append(
                     ev.Sentence(
-                        start=w0.start - eps,
-                        duration=words[-1].start
-                        + words[-1].duration
-                        - w0.start
-                        + 2 * eps,
+                        start=w0.start,
+                        duration=words[-1].start + words[-1].duration - w0.start,
                         timeline=w0.timeline,
                         text=text,
                         language=language,

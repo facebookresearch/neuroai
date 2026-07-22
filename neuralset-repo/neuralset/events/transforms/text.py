@@ -133,11 +133,14 @@ class AddSentenceToWords(EventsTransform):
     ----------
     max_unmatched_ratio : float
         Maximum ratio of words without a character-positioned match.
+    tolerance : float
+        Tolerance (in seconds) for Text event start and end times.
     override_sentences : bool, default=False
         Whether to replace existing Sentence rows if they are already present.
     """
 
     max_unmatched_ratio: float = 0.0  # raises if did not match enough words
+    tolerance: float = 0.0
     override_sentences: bool = False
 
     @classmethod
@@ -181,13 +184,13 @@ class AddSentenceToWords(EventsTransform):
         events["sentence"] = ""
         events["text_char"] = np.nan
 
-        sentences: list[dict[str, tp.Any]] = []
         for context in contexts.itertuples():
             # find words that are enclosed in this context (requires unique timeline)
             encl = _segs.find_enclosed(
                 events,
                 start=float(context.start),  # type: ignore[arg-type]
                 duration=float(context.duration),  # type: ignore[arg-type]
+                tolerance=self.tolerance,
             )
             sub = events.loc[encl]
             sel = sub[sub.type.isin(wtypes.names)].index
@@ -205,9 +208,9 @@ class AddSentenceToWords(EventsTransform):
                 index=sel,
             )
             events.loc[sel, info.columns] = info
-            # create sentence events; standardize_events backfills BIDS/study
-            # from sibling rows in the same timeline.
-            sentences.extend(s.to_dict() for s in _extract_sentences(events))
+        # create sentence events; standardize_events backfills BIDS/study
+        # from sibling rows in the same timeline.
+        sentences = [s.to_dict() for s in _extract_sentences(events)]
         sentences = [s for s in sentences if s["text"] != MISSING_SENTENCE]
         sentence_df = pd.DataFrame(sentences)
         events = pd.concat([events, sentence_df], ignore_index=True)

@@ -20,6 +20,7 @@ from neuralset import events as _ev
 from ..events import Event
 from ..events.utils import extract_events
 from . import base
+from .hf import HuggingFaceMixin
 from .image import HuggingFaceImage
 from .text import HuggingFaceText
 
@@ -315,7 +316,7 @@ class HuggingFacePCA(ExtractorPCA):
 
         # Note: all the PCA has to be done on prepare (in the main thread)
         # because it cannot be split and distributed onto many machines
-        if not isinstance(self.extractor, base.HuggingFaceMixin):  # for typing
+        if not isinstance(self.extractor, HuggingFaceMixin):  # for typing
             raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
         events = list(pca_events.values())
         basefolder = self.extractor.infra.folder
@@ -356,7 +357,7 @@ class HuggingFacePCA(ExtractorPCA):
     ) -> tp.Iterable[base.TimedArray]:
         uids = [self._to_uid(e) for e in events]
         feat = self.extractor
-        if not isinstance(feat, base.HuggingFaceMixin):  # for typing
+        if not isinstance(feat, HuggingFaceMixin):  # for typing
             raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
         for event, d in zip(events, self._get_data(uids)):
             if feat.cache_n_layers is not None:
@@ -377,15 +378,19 @@ class CroppedExtractor(base.BaseStatic):  # can be static or not
         The offset (in seconds) from the start of the event to begin the crop.
     duration: PositiveFloat | None
         The duration (in seconds) of the crop. If None, the crop extends to the end of the event.
-    frequency: Literal["native"]
-        The frequency of the cropped extractor. Must be "native". Never used
+    frequency: float | Literal["native"]
+        Mirrors the wrapped extractor's frequency (set in ``model_post_init``).
+        Defaults to "native"; may be a float for static extractors. Never used
     """
 
     event_types: str | tuple[str, ...] = "Event"
     extractor: base.BaseExtractor
     offset: float = 0
     duration: pydantic.PositiveFloat | None = None
-    frequency: tp.Literal["native"] = "native"  # type: ignore
+    # Mirrors the wrapped extractor's frequency in ``model_post_init`` (can be
+    # a float for static extractors), so the annotation must permit floats too
+    # for the dump/validate round-trip in ``infra.clone_obj`` to succeed.
+    frequency: float | tp.Literal["native"] = "native"  # type: ignore
 
     def model_post_init(self, log__: tp.Any) -> None:
         self.event_types = self.extractor.event_types

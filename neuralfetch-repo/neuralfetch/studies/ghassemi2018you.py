@@ -161,17 +161,22 @@ class Ghassemi2018You(study.Study):
         frequency=200.0,
         query='subject == "Ghassemi2018You/tr03-0005"',  # Skip test subjs
     )
+    _PHYSIONET_STUDY: tp.ClassVar[str] = "challenge-2018"
+    _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
     def _download(self) -> None:
         physionet = download.Physionet(
-            study="challenge-2018",
+            study=self._PHYSIONET_STUDY,
             dset_dir=self.path,
-            version="1.0.0",
+            version=self._PHYSIONET_VERSION,
         )
         physionet.download()
 
+    def _download_root(self) -> Path:
+        return self.path / "download" / self._PHYSIONET_STUDY / self._PHYSIONET_VERSION
+
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        folder = self.path / "download"
+        folder = self._download_root()
         for split in ["training", "test"]:
             split_dir = folder / split
             for file_path in sorted(split_dir.rglob("*.mat")):
@@ -204,7 +209,7 @@ class Ghassemi2018You(study.Study):
         return output
 
     def _get_filepath(self, filetype: str, timeline: dict[str, tp.Any]) -> Path:
-        folder = self.path / "download"
+        folder = self._download_root()
         file_dir = folder / timeline["split_dir"] / timeline["subject"]
         match filetype:
             case "eeg":

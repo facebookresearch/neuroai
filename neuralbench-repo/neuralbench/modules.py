@@ -16,6 +16,7 @@ runtime wrapper they produce (``DownstreamWrapperModel``).
 import inspect
 import logging
 import typing as tp
+import weakref
 
 import pydantic
 import torch
@@ -23,6 +24,8 @@ from torch import nn
 
 from neuraltrain.models.common import ChannelMerger, Mlp
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
+
+from .utils import detect_batch_dim, run_probe_hook
 
 LOGGER = logging.getLogger(__name__)
 
@@ -382,12 +385,26 @@ class DownstreamWrapper(pydantic.BaseModel):
         ``"first"`` selects only the first timestep/token;
         an ``int`` splits into n groups, averages each group, then concatenates;
         ``None`` performs no aggregation.
+        When ``probe_layer`` is set, the captured activation is canonicalised to
+        batch-first before aggregation (see ``probe_batch_dim``), so these
+        semantics are identical for intermediate and final outputs.
     probe_config : Mlp | "linear" | None, optional
         Configuration for the probe layer added on top.
         ``None`` uses identity (no additional layer), e.g. if the model already
         has a linear layer of the right output size.
         ``"linear"`` adds a single linear layer.
         An ``Mlp`` instance adds a multi-layer perceptron with specified configuration.
+    probe_layer : str | None, optional
+        Dotted submodule name (from ``model.named_modules()``) where a forward
+        hook taps activations for probing.  ``None`` (default) probes the final
+        model output.  Requires ``model_output_key=None`` (intermediate captures
+        are tensors, not dicts).
+    probe_batch_dim : int | "auto", optional
+        Axis of the probed activation that indexes the batch.  ``"auto"``
+        (default) detects it by running the dummy forward at two batch sizes and
+        finding the axis that scales with the batch.  Set explicitly (e.g. ``1``
+        for sequence-first ``(T, B, D)`` transformer outputs) to skip detection
+        or resolve an ambiguous layout.  Only used when ``probe_layer`` is set.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -399,6 +416,8 @@ class DownstreamWrapper(pydantic.BaseModel):
     strict_matching: bool = True
     aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
     probe_config: Mlp | tp.Literal["linear"] | None = "linear"
+    probe_layer: str | None = None
+    probe_batch_dim: int | tp.Literal["auto"] = "auto"
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -415,6 +434,19 @@ class DownstreamWrapper(pydantic.BaseModel):
         if self.layers_to_freeze is not None and self.layers_to_unfreeze is not None:
             raise ValueError(
                 "Only one of layers_to_freeze and layers_to_unfreeze can be specified at once."
+            )
+
+        if self.probe_layer is not None and self.model_output_key is not None:
+            raise ValueError(
+                f"probe_layer={self.probe_layer!r} requires model_output_key=None "
+                f"(intermediate captures are tensors, not dicts); "
+                f"got {self.model_output_key!r}."
+            )
+
+        if self.probe_batch_dim != "auto" and self.probe_layer is None:
+            raise ValueError(
+                "probe_batch_dim only applies when probe_layer is set; "
+                f"got probe_batch_dim={self.probe_batch_dim} with probe_layer=None."
             )
 
     def build(
@@ -458,9 +490,15 @@ class DownstreamWrapper(pydantic.BaseModel):
                 else:
                     x_adapted = channel_adapter(x)
                 model_batch = {input_key: x_adapted}
+            else:
+                model_batch = dummy_batch
+            probe_batch_dim = 0
+            if self.probe_layer is None:
                 orig_output = model(**model_batch)
             else:
-                orig_output = model(**dummy_batch)
+                orig_output, probe_batch_dim = self._capture_probe_output(
+                    model, model_batch
+                )
             if self.model_output_key is not None:
                 orig_output = orig_output[self.model_output_key]
             model.train()
@@ -478,6 +516,8 @@ class DownstreamWrapper(pydantic.BaseModel):
             strict_matching=self.strict_matching,
             aggregation=self.aggregation,
             probe_config=self.probe_config,
+            probe_layer=self.probe_layer,
+            probe_batch_dim=probe_batch_dim,
         )
 
         # Sanity check (wrapper handles preprocessing internally)
@@ -485,6 +525,41 @@ class DownstreamWrapper(pydantic.BaseModel):
         assert wrapper_output.shape[-1] == n_outputs
 
         return wrapper_model
+
+    def _capture_probe_output(
+        self, model: nn.Module, model_batch: dict[str, torch.Tensor | None]
+    ) -> tuple[torch.Tensor, int]:
+        """Capture the activation tapped at ``probe_layer``, canonicalised to batch-first.
+
+        Runs a dummy forward with a temporary hook on the probed submodule,
+        finds the batch axis (via ``probe_batch_dim`` or auto-detection), and
+        returns ``(activation_moved_to_batch_first, detected_batch_dim)``.
+        Raises if the submodule is unreachable or returns a non-tensor.
+        """
+        assert self.probe_layer is not None  # guaranteed by the caller
+        # model_output_key=None is enforced in model_post_init.
+        try:
+            submodule = model.get_submodule(self.probe_layer)
+        except AttributeError as exc:
+            valid = [n for n, _ in model.named_modules() if n]
+            raise AttributeError(
+                f"probe_layer={self.probe_layer!r} not in "
+                f"{type(model).__name__} ({len(valid)} submodules; "
+                f"e.g. {valid[:3]})"
+            ) from exc
+
+        capture = run_probe_hook(model, submodule, model_batch, self.probe_layer)
+        if self.probe_batch_dim == "auto":
+            batch_dim = detect_batch_dim(model, submodule, model_batch, self.probe_layer)
+        else:
+            batch_dim = self.probe_batch_dim
+            if not 0 <= batch_dim < capture.ndim:
+                raise ValueError(
+                    f"probe_batch_dim={batch_dim} is out of range for "
+                    f"probe_layer={self.probe_layer!r} capture of shape "
+                    f"{tuple(capture.shape)}."
+                )
+        return capture.movedim(batch_dim, 0), batch_dim
 
 
 class DownstreamWrapperModel(nn.Module):
@@ -508,6 +583,8 @@ class DownstreamWrapperModel(nn.Module):
         strict_matching: bool = True,
         aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten",
         probe_config: Mlp | tp.Literal["linear"] | None = None,
+        probe_layer: str | None = None,
+        probe_batch_dim: int = 0,
     ):
         super().__init__()
 
@@ -526,6 +603,33 @@ class DownstreamWrapperModel(nn.Module):
         self._apply_freeze(layers_to_freeze, layers_to_unfreeze, strict_matching)
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
         self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
+
+        # The hook lives on ``self.wrapped_model`` (a submodule of ``self``), so
+        # a strong closure over ``self`` would form a self -> wrapped_model ->
+        # submodule -> hook -> self reference cycle that keeps this wrapper (and
+        # its captured GPU activations) alive past its useful life. A weakref
+        # lets the hook no-op once the wrapper is collected, and
+        # ``weakref.finalize`` deterministically detaches the hook on GC so a
+        # shared backbone doesn't accumulate stale hooks across CV folds.
+        # Single-slot buffer (overwrite, not append): keeps only the last fire
+        # so a submodule that runs many times costs O(1) memory.
+        self._probed_activation: list[torch.Tensor] = []
+        self._probe_handle: torch.utils.hooks.RemovableHandle | None = None
+        # Captured activations are moved to batch-first before aggregation, so
+        # the aggregation semantics match the non-probe path.
+        self._probe_batch_dim = probe_batch_dim
+        if probe_layer is not None:
+            self_ref = weakref.ref(self)
+
+            def _capture(_m, _i, out, _ref=self_ref):
+                s = _ref()
+                if s is not None:
+                    s._probed_activation[:] = [out]
+
+            self._probe_handle = self.wrapped_model.get_submodule(
+                probe_layer
+            ).register_forward_hook(_capture)
+            weakref.finalize(self, self._probe_handle.remove)
 
     def _apply_freeze(
         self,
@@ -651,7 +755,21 @@ class DownstreamWrapperModel(nn.Module):
         if not self._inner_accepts_var_kwargs:
             kwargs = {k: v for k, v in kwargs.items() if k in self._inner_param_names}
 
+        # Clear before the forward so an activation captured by a previous
+        # (possibly failed) call cannot leak into this one; clear again after
+        # reading so we don't hold the autograd graph between steps.
+        self._probed_activation.clear()
         out = self.wrapped_model(*args, **kwargs)
+        if self._probe_handle is not None:
+            if not self._probed_activation:
+                raise RuntimeError(
+                    "probe_layer hook did not fire during forward; the configured "
+                    "submodule was not executed by this forward pass."
+                )
+            out = self._probed_activation[-1]
+            self._probed_activation.clear()
+            if self._probe_batch_dim != 0:
+                out = out.movedim(self._probe_batch_dim, 0)
         if self.model_output_key is not None:
             out = out[self.model_output_key]
         out = self.aggregation(out)

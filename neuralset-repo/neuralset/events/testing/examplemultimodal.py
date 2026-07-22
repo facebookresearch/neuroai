@@ -243,13 +243,13 @@ class ExampleMultiModal(study.Study):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        self.infra_timelines.cluster = None  # purely sequential
+        # purely sequential and uncached (None => inline loader, no caching).
         # Events embed absolute filepaths under `self.path`. Study's cache
         # UID excludes `path` (it varies per machine), so a cache populated
         # under one path keeps returning stale filepaths after the user
         # moves the studies folder. The dataset is tiny (~2 MB) and cheap
         # to regenerate; skip the events cache so the demo stays robust.
-        self.infra_timelines.folder = None
+        self.timelines.infra = None
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         for s in (1, 2):

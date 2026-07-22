@@ -64,7 +64,6 @@ def test_dataset() -> None:
         batch = ds[600_000:]
 
 
-@pytest.mark.sandbox_skip
 def test_load_all_order() -> None:
     data = [
         dict(timeline=str(k), start=k, duration=0.1, type="Stimulus", code=k)

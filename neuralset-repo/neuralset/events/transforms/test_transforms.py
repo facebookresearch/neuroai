@@ -302,6 +302,23 @@ def test_sentence_to_word_standard() -> None:
     # TODO paragraphs
 
 
+def test_add_sentence_to_words_multiple_text_contexts() -> None:
+    common = dict(timeline="foo", language="english")
+    events = [
+        dict(type="Text", start=-0.1, duration=2, text="he runs.", **common),
+        dict(type="Text", start=2.0, duration=2, text="she eats", **common),
+        dict(type="Word", start=0.0, duration=0.1, text="he", **common),
+        dict(type="Word", start=0.5, duration=0.1, text="runs", **common),
+        dict(type="Word", start=2.5, duration=0.1, text="she", **common),
+        dict(type="Word", start=3.0, duration=0.1, text="eats", **common),
+    ]
+    df = ns.events.standardize_events(pd.DataFrame(events))
+    out = _transf.AddSentenceToWords()(df)
+    sentences = out.loc[out.type == "Sentence", "text"]
+    assert len(sentences) == 2
+    assert set(sentences) == {"he runs.", "she eats"}
+
+
 def test_sentence_to_word_missing_word(caplog: pytest.LogCaptureFixture) -> None:
     text = "le petit prince"
     words = ("le", "pince")
@@ -492,6 +509,25 @@ def test_ensure_texts() -> None:
     multi = _transf.EnsureTexts(punctuation=None)(both)
     assert len(multi[multi.type == "Text"]) == 2
     assert set(multi[multi.type == "Text"].timeline) == {"foo", "bar"}
+
+
+def test_ensure_texts_encloses_words() -> None:
+    df = pd.DataFrame(
+        dict(
+            type="Word",
+            text=["it", "is"],
+            start=[39.298, 3463.038],
+            duration=0.49,
+            timeline="test",
+        )
+    )
+    result = _transf.EnsureTexts(punctuation=None)(df)
+    text = result.loc[result.type == "Text"].iloc[0]
+    encl = ns.segments.find_enclosed(
+        result, start=float(text.start), duration=float(text.duration), tolerance=1e-6
+    )
+    words = result.index[result.type == "Word"]
+    assert words.isin(encl).all()
 
 
 @pytest.mark.skipif("CI" in os.environ, reason="DL punctuation model not in CI")
@@ -881,7 +917,6 @@ def test_configure_event_loader(test_data_path: Path) -> None:
     study_events = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
-        infra_timelines={"cluster": None},  # type: ignore[arg-type]
     ).run()
     sl_transform = _transf.ConfigureEventLoader(
         event_types="Fmri",

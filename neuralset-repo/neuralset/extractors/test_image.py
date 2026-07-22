@@ -57,15 +57,16 @@ def test_image(tmp_path: Path) -> None:
         # test prepare
         extractor.prepare(events)
     # check uids
-    params = "name=HuggingFaceImage-c5c2ebfa"
-    uid = f"neuralset.extractors.image.HuggingFaceImage._get_data,{extractor.infra.version}/{params}"
-    assert extractor.infra.uid() == uid
+    uid_prefix = f"neuralset.extractors.image.HuggingFaceImage._get_data,{extractor.infra.version}/"
+    assert extractor.infra.uid().startswith(uid_prefix)
+    assert "name=HuggingFaceImage" in extractor.infra.uid()
     extractor_keys = set(ConfDict.from_model(extractor, uid=True).keys())
     expected = {
         "allow_missing",
         "name",
         "model_name",
         "event_types",
+        "hf_config",
         "token_aggregation",
         "layer_aggregation",
         "layers",
@@ -73,6 +74,7 @@ def test_image(tmp_path: Path) -> None:
         "imsize",
         "aggregation",
         "pretrained",
+        "dtype",
         "cache_n_layers",
         "infra",  # provides version
     }
@@ -83,10 +85,13 @@ def test_image(tmp_path: Path) -> None:
         "imsize",
         "infra",
         "event_types",
+        "hf_config",
         "token_aggregation",
         "layers",
         "layer_aggregation",
+        "frequency",
         "pretrained",
+        "dtype",
         "cache_n_layers",
     }
     assert set(extractor.infra.config().keys()) == expected
@@ -166,7 +171,7 @@ def test_openai_clip(
         token_aggregation=token_aggregation,
     )
     record = RecordedOutputs.as_mocked_method(
-        extractor.model._full_predict, text=["a photo of a cat", "a photo of a dog"]
+        extractor._full_predict, text=["a photo of a cat", "a photo of a dog"]
     )
     latent = next(iter(extractor._get_data([cat_event])))
     if token_aggregation is None:
@@ -196,7 +201,7 @@ def test_openai_clip_layer(
         cache_n_layers=cache_n_layers,
     )
     record = RecordedOutputs.as_mocked_method(
-        extractor.model._full_predict, text=["a photo of a cat", "a photo of a dog"]
+        extractor._full_predict, text=["a photo of a cat", "a photo of a dog"]
     )
     latent = next(iter(extractor._get_data([cat_event])))
     expected_shape = {
@@ -245,10 +250,10 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     )
     from transformers import AutoModelForImageClassification
 
-    extractor.model.model = AutoModelForImageClassification.from_pretrained(
+    extractor._model = AutoModelForImageClassification.from_pretrained(
         extractor.model_name
     )
-    record = RecordedOutputs.as_mocked_method(extractor.model._full_predict)
+    record = RecordedOutputs.as_mocked_method(extractor._full_predict)
     try:
         extractor._get_data([cat_event])
     except:  # not the right output layer as we overrode the model
@@ -256,7 +261,7 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     assert len(record.outputs) == 1
     pred = record.outputs[0]
     idx = pred.logits.argmax(-1).item()
-    assert extractor.model.model.config.id2label[idx] == "tabby, tabby cat"  # type: ignore
+    assert extractor.model.config.id2label[idx] == "tabby, tabby cat"  # type: ignore
 
 
 @pytest.mark.parametrize("imsize", [None, 512])

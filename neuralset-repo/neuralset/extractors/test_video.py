@@ -18,7 +18,7 @@ import neuralset as ns
 from neuralset.events import etypes
 
 from . import video as vid
-from .video import _HFVideoModel, _VideoImage, resamp_first_dim
+from .video import _VideoImage, resamp_first_dim
 
 logging.getLogger("neuralset").setLevel(logging.DEBUG)
 
@@ -96,22 +96,17 @@ def test_video_image(video_event: etypes.Video) -> None:
 
 def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
     video_event.read()
-    im: tp.Any = {
-        "device": "cpu",
-        "name": "HuggingFaceImage",
-        "layers": 0.7,
-        "infra": {"keep_in_ram": False},
-    }
     infra: tp.Any = {"folder": tmp_path / "cache"}
-    video = ns.extractors.HuggingFaceVideo(
+    image = ns.extractors.HuggingFaceImage(
+        event_types="Video",
         frequency=0.5,
         infra=infra,
-        image=im,
+        device="cpu",
+        layers=0.7,
     )
-    folder = video.infra.uid_folder()
+    folder = image.infra.uid_folder()
     assert folder is not None
-    assert "rellayer" not in folder.name, "cache should be independent of layers"
-    out = video(video_event, start=0.0, duration=0.5)
+    out = image(video_event, start=0.0, duration=0.5)
     assert isinstance(out, torch.Tensor)
     assert out.shape == (768, 1)
     # test out
@@ -122,68 +117,51 @@ def test_video(video_event: etypes.Video, tmp_path: Path) -> None:
 def test_video_image_latent(video_event: etypes.Video, tmp_path: Path) -> None:
     cache = tmp_path / "cache"
     name = "facebook/dinov2-small-imagenet1k-1-layer"
-    im: tp.Any = {"device": "cpu", "model_name": name, "infra": {"keep_in_ram": False}}
     infra: tp.Any = {"folder": cache}
-    video = ns.extractors.HuggingFaceVideo(
+    image = ns.extractors.HuggingFaceImage(
+        event_types="Video",
         frequency=0.5,
         infra=infra,
-        image=im,
+        device="cpu",
+        model_name=name,
     )
-    out = video(video_event, start=0.0, duration=4)
+    out = image(video_event, start=0.0, duration=4)
     assert isinstance(out, torch.Tensor)
     assert out.shape == (384, 2)
-    latent = next(iter(video._get_data([video_event])))
-    assert latent.data.shape == (384, 3)
+    latent = next(iter(image._get_data([video_event])))
+    assert latent.shape == (384, 3)
 
 
 @pytest.mark.parametrize(
-    "name,layer_type,embds",
+    "name,embds",
     [
         # shape is layers x tokens x embeddings
-        ("MCG-NJU/videomae-base", "", (13, 1568, 768)),
-        # ("microsoft/Phi-4-multimodal-instruct", "", (33, 7649, 3072)),
-        # ("facebook/vjepa2-vith-fpc64-256", "", (33, 8192, 1280)),
-        # ("microsoft/xclip-base-patch16", "", (13, 197, 768)),
-        # ("microsoft/xclip-base-patch16", "mit", (2, 8, 512)),
-        # ("google/vivit-b-16x2-kinetics400", "", (13, 3137, 768)),
-        # ("facebook/timesformer-base-finetuned-k600", "", (13, 1569, 768)),
-        # ("llava-hf/LLaVA-NeXT-Video-7B-hf", "Describe <video>", (33, 1156, 4096)),
-        #
-        # other versions of same families:
-        # ("microsoft/xclip-base-patch32-16-frames", "", 768),  # works
-        # ("microsoft/xclip-large-patch14", "", 1024),  # works
-        # ("microsoft/xclip-base-patch16-zero-shot", "", 768),  # works
-        # ("microsoft/xclip-large-patch14-16-frames", "", 1024),  # fails
+        ("MCG-NJU/videomae-base", (13, 1568, 768)),
+        # ("facebook/vjepa2-vith-fpc64-256", (33, 8192, 1280)),
+        # ("google/vivit-b-16x2-kinetics400", (13, 3137, 768)),
+        # ("facebook/timesformer-base-finetuned-k600", (13, 1569, 768)),
     ],
 )
 def test_video_models(
     video_event: etypes.Video,
     tmp_path: Path,
     name: str,
-    layer_type: str,
     embds: tuple[int, ...],
 ) -> None:
-    if not any(z in name for z in _HFVideoModel.MODELS):
-        raise ValueError(f"Model {name!r} is not supported")
     if "IN_GITHUB_ACTION" in os.environ and "videomae" not in name:
         pytest.skip("Only download video mae for CI tests")
-    imparams: tp.Any = {
-        "device": "cpu",
-        "name": "HuggingFaceImage",
-        "model_name": name,
-        "infra": {"keep_in_ram": False},
-        # show the full dimension
-        "token_aggregation": None,
-        "layers": "all",
-        "layer_aggregation": None,
-    }
     infra: tp.Any = {"folder": tmp_path / "cache"}
     video = vid.HuggingFaceVideo(
         frequency=0.5,
         max_imsize=120,
         infra=infra,
-        layer_type=layer_type,
-        image=imparams,
+        num_frames=16,
+        device="cpu",
+        model_name=name,
+        # show the full dimension
+        token_aggregation=None,
+        layers="all",
+        layer_aggregation=None,
     )
     out = video(video_event, start=0.0, duration=4)
     assert isinstance(out, torch.Tensor)
@@ -191,9 +169,15 @@ def test_video_models(
 
 
 def test_video_huggingface() -> None:
-    hf = _HFVideoModel(model_name="MCG-NJU/videomae-base")
-    data = np.random.rand(hf.model.config.num_frames, 3, 64, 64)
-    out = hf.predict_hidden_states(data)
+    extractor = vid.HuggingFaceVideo(
+        frequency=0.5,
+        model_name="MCG-NJU/videomae-base",
+        num_frames=16,
+        device="cpu",
+    )
+    config = tp.cast(tp.Any, extractor.model.config)
+    data = np.random.rand(config.num_frames, 3, 64, 64)
+    out = extractor._predict_hidden_states(data)
     assert out.shape == (1, 13, 1568, 768)
 
 

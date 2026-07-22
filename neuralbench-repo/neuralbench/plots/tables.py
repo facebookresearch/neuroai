@@ -57,6 +57,71 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _disambiguate_model_variants(df: pd.DataFrame) -> pd.DataFrame:
+    """Suffix ``model_name`` with the config variant when one is needed.
+
+    Distinct configs that share a ``brain_model_name`` (e.g. multiple downstream
+    wrappers, probe layers, checkpoints, or model hyperparameters on the same
+    backbone) would otherwise collapse into a single ``model_name`` and be
+    averaged together as if they were seeds.  For each model that carries more
+    than one ``model_variant``, the suffix lists only the ``key=value``
+    components that actually differ across its variants -- so labels stay
+    minimal (shared components, including the opaque ``cfg`` hash, are dropped)
+    and the canonical one-config-per-model case is left unchanged.
+    """
+    if "model_variant" not in df.columns:
+        return df
+    variant = df["model_variant"].fillna("")
+
+    def _components(tag: str) -> set[str]:
+        return {part for part in tag.split(";") if part}
+
+    labels = df["model_name"].copy()
+    for base, idx in df.groupby("model_name").groups.items():
+        tags = variant.loc[idx]
+        if tags.nunique() <= 1:
+            continue  # single config -> keep the clean display name
+        shared = set.intersection(*(_components(t) for t in tags))
+        for i in idx:
+            distinguishing = sorted(_components(variant.loc[i]) - shared)
+            if distinguishing:
+                labels.loc[i] = f"{base} [{';'.join(distinguishing)}]"
+    df["model_name"] = labels
+    return df
+
+
+def _check_no_collisions(df: pd.DataFrame) -> None:
+    """Fail loudly if distinct experiments share one ``(model, ..., seed)`` cell.
+
+    Aggregation averages ``metric_value`` over seeds per
+    ``(model_name, task, dataset, metric)``; two rows that match on those *and*
+    ``seed`` are not seed replicates but distinct configs collapsing into one
+    cell, which would silently corrupt the reported mean/std.  After
+    :func:`_disambiguate_model_variants` this should only trigger for a config
+    axis not captured by ``brain_model_name`` / ``model_variant`` (e.g. a grid
+    sweep field) or a genuine duplicate.
+    """
+    key = [
+        c
+        for c in ("model_name", "task_name", "dataset_name", "metric_name", "seed")
+        if c in df.columns
+    ]
+    dup = df.duplicated(subset=key, keep=False)
+    if not dup.any():
+        return
+    cols = key + (["model_variant"] if "model_variant" in df.columns else [])
+    offenders = df.loc[dup, cols].sort_values(key)
+    raise ValueError(
+        "Distinct experiments collapse into the same aggregation cell "
+        f"(grouping key {key}); their results would be silently averaged.\n"
+        "This happens when configs differ in an axis not reflected in "
+        "brain_model_name or model_variant (e.g. a grid field). Give them "
+        "distinct brain_model_name values or extend the model_variant "
+        "signature in aggregator._experiment_variant.\n"
+        f"Colliding rows:\n{offenders.to_string(index=False)}"
+    )
+
+
 def build_results_df(
     results: list[dict[str, tp.Any]],
     loss_to_metric_mapping: dict[str, str],
@@ -67,6 +132,7 @@ def build_results_df(
     df["model_name"] = df["brain_model_name"].map(
         lambda name: MODEL_DISPLAY_NAMES.get(name, name)
     )
+    df = _disambiguate_model_variants(df)
     df["loss_name"] = df.loss.apply(pd.Series).name
     df["metric_name"] = df.loss_name.map(loss_to_metric_mapping)
     unmapped = df.loc[df["metric_name"].isna(), "loss_name"].unique().tolist()
@@ -79,6 +145,7 @@ def build_results_df(
     df["metric_value"] = df.apply(lambda x: x[x["metric_name"]], axis=1)
     _SCALE_TO_PERCENT = {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
     df.loc[df.metric_name.isin(_SCALE_TO_PERCENT), "metric_value"] *= 100.0
+    _check_no_collisions(df)
     return df
 
 

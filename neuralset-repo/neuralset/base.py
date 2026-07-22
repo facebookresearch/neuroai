@@ -11,6 +11,7 @@ import logging
 import pprint
 import typing as tp
 from pathlib import Path
+from urllib.parse import urlparse
 
 import exca
 import exca.steps
@@ -18,6 +19,7 @@ import numpy as np
 import pydantic
 import yaml
 from exca.cachedict import DumpContext
+from packaging.requirements import Requirement
 
 PathLike = str | Path
 
@@ -151,10 +153,24 @@ class _Module(BaseModel):
         }
         missing = []
         for req in cls.requirements:
-            name = req.split(">")[0].split("<")[0].split("=")[0].split("[")[0]
+            if "://" in req:
+                # VCS URLs are not valid PEP 508 requirements, so parse by hand:
+                # prefer the #egg= fragment, else fall back to the last path segment.
+                parsed = urlparse(req.split("+", 1)[-1])
+                name = parsed.path.rsplit("/", 1)[-1].split("@")[0].removesuffix(".git")
+                for part in parsed.fragment.split("&"):
+                    if part.startswith("egg="):
+                        name = part.split("=", 1)[-1]
+                        break
+            else:
+                name = Requirement(req).name
             spec_name = import_names.get(name, name.replace("-", "_"))
-            if importlib.util.find_spec(spec_name) is None:
-                missing.append(name)
+            try:
+                found = importlib.util.find_spec(spec_name) is not None
+            except (ModuleNotFoundError, ValueError):
+                found = False
+            if not found:
+                missing.append(req)
         if missing:
             raise ModuleNotFoundError(
                 f"{cls.__name__} requires packages that are not installed.\n"
@@ -549,9 +565,9 @@ class Step(exca.steps.Step, _Module, discriminator_key="name"):
         if (
             self.CACHE_TYPE is not None
             and self.infra is not None
-            and self.infra.cache_type is None
+            and self.infra.cache_type is None  # type: ignore[attr-defined]
         ):
-            self.infra.cache_type = self.CACHE_TYPE
+            self.infra.cache_type = self.CACHE_TYPE  # type: ignore[attr-defined]
 
     @pydantic.model_validator(mode="wrap")
     @classmethod
@@ -608,13 +624,13 @@ class Chain(exca.steps.Chain, Step):
         if hasattr(exca.steps.Step, "CACHE_TYPE"):
             return  # cache propagation handled by exca itself (>=0.5.23)
         # Chain output matches last step: use its cache format (instance > class default).
-        if self.infra is not None and self.infra.cache_type is None:
+        if self.infra is not None and self.infra.cache_type is None:  # type: ignore[attr-defined]
             seq = (
                 list(self.steps.values()) if isinstance(self.steps, dict) else self.steps
             )
             if seq:
                 last = seq[-1]
-                if last.infra is not None and last.infra.cache_type is not None:
-                    self.infra.cache_type = last.infra.cache_type
+                if last.infra is not None and last.infra.cache_type is not None:  # type: ignore[attr-defined]
+                    self.infra.cache_type = last.infra.cache_type  # type: ignore[attr-defined]
                 else:
-                    self.infra.cache_type = last.CACHE_TYPE
+                    self.infra.cache_type = last.CACHE_TYPE  # type: ignore[attr-defined]

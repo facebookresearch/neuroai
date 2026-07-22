@@ -459,7 +459,7 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
         )
 
 
-class Segmenter(base.BaseModel):
+class Segmenter(base.Step):
     """Build a :class:`SegmentDataset` from an events DataFrame and extractors.
 
     Parameters
@@ -529,6 +529,9 @@ class Segmenter(base.BaseModel):
         super().model_post_init(log__)
         if self.trigger_query is None and self.stride is None:
             raise ValueError("At least one of trigger_query or stride must be provided.")
+
+    def _run(self, events: pd.DataFrame) -> SegmentDataset:
+        return self.apply(events)
 
     def apply(self, events: pd.DataFrame) -> SegmentDataset:
         # Segment the events based on stride and/or triggers

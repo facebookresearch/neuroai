@@ -4,7 +4,7 @@
   <img src="assets/hero.png" alt="NeuralBench: open, reproducible benchmarking of NeuroAI models on EEG, MEG, and fMRI -- 36 EEG tasks, 94 EEG datasets (9.5k+ subjects, 13.6k+ hours of recording), and 14 models" width="100%">
 </p>
 
-`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, and **fMRI** -- with more tasks and devices to come.
+`neuralbench` is a unified framework to benchmark **NeuroAI models**. It is designed for evaluating pretrained or randomly initialized models on a diverse suite of downstream tasks for brain modeling -- not for pretraining itself. It supports multiple neuroimaging devices -- **EEG**, **MEG**, **fMRI**, and **EMG** -- with more tasks and devices to come.
 
 **Examples**:
 ```console
@@ -41,7 +41,7 @@ neuralbench eeg audiovisual_stimulus --prepare    # 2. Prepare cache (preprocess
 neuralbench eeg audiovisual_stimulus              # 3. Run the full grid
 ```
 
-Steps 2 and 3 dispatch to SLURM when it is auto-detected on your machine; step 3 additionally requires `SLURM_PARTITION` to be set in your neuralbench config. Pass `--debug` to either step to force local execution. Step 2 is mostly useful for larger datasets that benefit from parallel preprocessing with SLURM, and is not strictly necessary for `audiovisual_stimulus`. Add `--debug` to any command for a fast local sanity-check run with a subsampled dataset and a limited number of epochs:
+Steps 2 and 3 dispatch to SLURM when it is auto-detected on your machine; step 3 additionally requires `SLURM_PARTITION` to be set in your neuralbench config. Pass `--debug` to either step to force local execution. To run the full config locally (no SLURM, full epochs and batches), set `"CLUSTER": null` in `~/.neuralbench/config.json` (the default `"auto"` uses SLURM when available; `"slurm"` always submits). Step 2 is mostly useful for larger datasets that benefit from parallel preprocessing with SLURM, and is not strictly necessary for `audiovisual_stimulus`. Add `--debug` to any command for a fast local sanity-check run with a subsampled dataset and a limited number of epochs:
 
 ```console
 neuralbench eeg audiovisual_stimulus --debug      # Local validation run
@@ -61,10 +61,11 @@ Results can be visualized on `Weights & Biases`, or aggregated locally using `--
 > [!TIP]
 > See the full [quickstart tutorial](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/quickstart/01_run_first_task.html) for a walkthrough of the CLI, config system, and model selection.
 
-The same workflow applies to **MEG** and **fMRI** tasks -- just swap the device and task name:
+The same workflow applies to **MEG**, **fMRI**, and **EMG** tasks -- just swap the device and task name:
 ```console
 neuralbench meg typing --debug          # MEG keystroke classification in debug mode
 neuralbench fmri image --debug          # fMRI image retrieval in debug mode
+neuralbench emg typing -m emg2qwerty --debug   # EMG → keystroke CTC decoding (emg2qwerty)
 ```
 
 ## Running the full EEG benchmark

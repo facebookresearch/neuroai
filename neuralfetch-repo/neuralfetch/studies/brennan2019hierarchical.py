@@ -87,7 +87,7 @@ class Brennan2019Hierarchical(study.Study):
         frequency=500.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dl_dir = self.path / "download"
 
         # Deep Blue Data guest collection + record-scoped path for Brennan2019
@@ -98,33 +98,56 @@ class Brennan2019Hierarchical(study.Study):
             collection_id="cc387c09-b0e5-422b-a384-0d96e7ffdc73",
         ).download()
 
-        with success_writer(dl_dir / "success_extract") as already_done:
+        # Bumped from "success_extract": the v1 marker predates proc.zip
+        # extraction, so existing caches must re-extract to get the .mat files.
+        with success_writer(dl_dir / "success_extract_v2") as already_done:
             if not already_done:
-                print(f"Extracting `brennan2019` audio to {dl_dir}/audio...")
-                with zipfile.ZipFile(str(dl_dir / "audio.zip"), "r") as zip_:
-                    zip_.extractall(str(dl_dir))
+                # audio.zip -> audio/*.wav, proc.zip -> timelock-preprocessing/*.mat
+                for archive in ("audio.zip", "proc.zip"):
+                    print(f"Extracting `brennan2019` {archive} to {dl_dir}...")
+                    with zipfile.ZipFile(str(dl_dir / archive), "r") as zip_:
+                        members = [
+                            m for m in zip_.namelist() if not m.startswith("__MACOSX")
+                        ]
+                        zip_.extractall(str(dl_dir), members=members)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
-        # S49 excluded: no corresponding timelock-preprocessing .mat file
-        all_subjects = {f"S{i:02d}" for i in range(1, 49)}
-        # FIXME retrieve bad subjects?
-        # S02: bad trl?
-        bads = {"S02", "S24", "S26", "S27", "S30", "S32", "S34", "S35", "S36"}
-        for subject in sorted(all_subjects - bads):
+        # 49 subjects were recorded (S01-S49); 33 remain after the exclusions below.
+        all_subjects = {f"S{i:02d}" for i in range(1, 50)}
+        # No timelock-preprocessing .mat file ships for these subjects.
+        no_proc = {"S28", "S29", "S31", "S33", "S46", "S47", "S49"}
+        # Excluded for data quality (bad trials / rejected channels).
+        bad_quality = {"S02", "S24", "S26", "S27", "S30", "S32", "S34", "S35", "S36"}
+        for subject in sorted(all_subjects - no_proc - bad_quality):
             yield dict(subject=subject)
 
     def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
         dl_dir = self.path / "download"
         vhdr_file = dl_dir / f"{timeline['subject']}.vhdr"
-        raw = mne.io.read_raw_brainvision(vhdr_file, eog=["VEOG"], misc=["Aux5"])
-        raw.set_montage(mne.channels.make_standard_montage("easycap-M10"))
+        raw = mne.io.read_raw_brainvision(vhdr_file)
+        montage = mne.channels.make_standard_montage("easycap-M10")
+        montage_chs = set(montage.ch_names)
+        # The auxiliary (non-scalp) channel is named inconsistently across the
+        # v2 release -- "Aux5" for some subjects, "AUD" for others -- alongside
+        # the "VEOG" EOG channel. Type every channel absent from the montage so
+        # set_montage positions only the scalp electrodes.
+        non_scalp = {
+            ch: ("eog" if "EOG" in ch.upper() else "misc")
+            for ch in raw.ch_names
+            if ch not in montage_chs
+        }
+        # on_unit_change="ignore": aux channels go from V (EEG) to NA (misc),
+        # which is expected here and would otherwise warn once per subject.
+        raw.set_channel_types(non_scalp, on_unit_change="ignore")
+        raw.set_montage(montage)
         subject_id = timeline["subject"]
         raw.info["subject_info"] = dict(his_id=subject_id, id=int(subject_id[1:]))
         if raw.info["sfreq"] != SFREQ:
             raise RuntimeError(f"Expected sfreq {SFREQ}, got {raw.info['sfreq']}")
-        if len(raw.ch_names) != 62:
-            raise RuntimeError(f"Expected 62 channels, got {len(raw.ch_names)}")
+        n_eeg = len(mne.pick_types(raw.info, eeg=True))
+        if n_eeg != 60:
+            raise RuntimeError(f"Expected 60 EEG channels, got {n_eeg}")
         return raw
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:

@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -44,8 +45,6 @@ def test_add_sentences() -> None:
 
 def test_download_things_images_missing_password_raises(tmp_path: Path) -> None:
     """download_things_images raises RuntimeError when images absent and no password."""
-    import os
-
     from neuralfetch.utils import download_things_images
 
     old_val = os.environ.pop("NEURALFETCH_THINGS_PASSWORD", None)

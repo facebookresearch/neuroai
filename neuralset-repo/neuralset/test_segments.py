@@ -55,6 +55,23 @@ def test_segment() -> None:
     assert set(s._to_extractor()) == {"events", "start", "duration", "trigger"}
 
 
+def test_trigger_overlap() -> None:
+    # Two same-type triggers starting at the same time on the same timeline
+    # (e.g. two Fmri events differing only by metadata) are ambiguous and raise.
+    events = standardize_events(
+        pd.DataFrame(
+            [
+                dict(type="Word", start=10.0, duration=0.5, text="Hello", timeline="x"),
+                dict(type="Word", start=10.0, duration=0.5, text="world", timeline="x"),
+            ]
+        )
+    )
+    triggers = events.type == "Word"
+
+    with pytest.raises(ValueError, match="same time"):
+        list_segments(events, triggers=triggers, duration=1.0)
+
+
 @pytest.mark.parametrize("reloaded", (True, False))
 def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) -> None:
     #  |-----A----|
@@ -128,9 +145,13 @@ def test_find_intersect(reloaded: bool, tmp_path: Path, validated: bool = True) 
         actual = seg.find_overlap(events, events.text == "f")
         assert "".join(events.loc[actual].text) == "f"
 
-        expected_list = "d", "da", "dacb", "dacb", "e", "f"
+        expected_list = "d", "da", "dacb", "e", "f"
+        # exclude "c": it shares start/timeline with "b" and would be an
+        # ambiguous trigger overlap (same type, time and timeline).
         actual_segments = seg.list_segments(
-            events, pd.Series(True, index=events.index), duration=0.1
+            events,
+            events.text != "c",
+            duration=0.1,
         )
         for act, exp in zip(actual_segments, expected_list):
             sub = events.loc[[e._index for e in act.ns_events]]

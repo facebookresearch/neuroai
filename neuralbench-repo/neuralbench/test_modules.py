@@ -36,6 +36,109 @@ def test_downstream_wrapper():
     assert out.shape == (B, Fp)
 
 
+# ---------------------------------------------------------------------------
+# DownstreamWrapper probe_layer
+# ---------------------------------------------------------------------------
+
+
+def test_downstream_wrapper_probe_layer():
+    B, F, Fp = 8, 10, 3
+    model = nn.Sequential(nn.Linear(F, 16), nn.Linear(16, 4))
+    dummy_batch = {"input": torch.Tensor(B, F)}
+    wrapped = DownstreamWrapper(probe_layer="0").build(model, dummy_batch, Fp)
+
+    # Probe is sized from layer "0"'s output (16) — not the final layer (4).
+    assert wrapped.probe.in_features == 16
+    out = wrapped(**dummy_batch)
+    assert out.shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_invalid():
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    with pytest.raises(AttributeError, match="not in Sequential"):
+        DownstreamWrapper(probe_layer="no_such_layer").build(
+            model, {"input": torch.Tensor(2, 10)}, 3
+        )
+
+
+def test_downstream_wrapper_probe_layer_requires_no_output_key():
+    with pytest.raises(ValueError, match="model_output_key"):
+        DownstreamWrapper(probe_layer="0", model_output_key="logits")
+
+
+def test_downstream_wrapper_probe_batch_dim_requires_probe_layer():
+    with pytest.raises(ValueError, match="probe_batch_dim only applies"):
+        DownstreamWrapper(probe_batch_dim=1)
+
+
+def test_downstream_wrapper_probe_layer_rejects_tuple_capture():
+    # nn.RNN returns (output, h_n); probing it must raise.
+    model = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        DownstreamWrapper(probe_layer="").build(
+            model, {"input": torch.Tensor(2, 5, 10)}, 3
+        )
+
+
+class _SeqFirstEnc(nn.Module):
+    """Emits sequence-first (T, B, D), like a ``batch_first=False`` transformer."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x).transpose(0, 1)  # (B, T, F) -> (T, B, D)
+
+
+class _SeqFirstProbeNet(nn.Module):
+    """Probed submodule ``enc`` emits sequence-first (T, B, D)."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.enc = _SeqFirstEnc(n_in, emb)
+        self.head = nn.Linear(emb, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(x).mean(0))
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "flatten", "first"])
+def test_downstream_wrapper_probe_layer_seq_first(aggregation):
+    # A sequence-first (T, B, D) capture is auto-detected and moved to
+    # batch-first, so the standard aggregations apply with no special-casing.
+    B, T, F, D, Fp = 8, 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(probe_layer="enc", aggregation=aggregation).build(
+        model, {"x": torch.Tensor(B, T, F)}, Fp
+    )
+    expected_in = {"mean": D, "flatten": T * D, "first": D}[aggregation]
+    assert wrapped.probe.in_features == expected_in
+    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_batch_seq_collision():
+    # Two-pass detection resolves the batch axis even when batch == seq length.
+    n, F, D, Fp = 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(probe_layer="enc", aggregation="mean").build(
+        model, {"x": torch.Tensor(n, n, F)}, Fp
+    )
+    assert wrapped.probe.in_features == D
+    assert wrapped(x=torch.Tensor(n, n, F)).shape == (n, Fp)
+
+
+def test_downstream_wrapper_probe_layer_batch_dim_override():
+    # Explicit probe_batch_dim=1 skips auto-detection for the (T, B, D) capture.
+    B, T, F, D, Fp = 8, 5, 10, 6, 3
+    model = _SeqFirstProbeNet(F, D)
+    wrapped = DownstreamWrapper(
+        probe_layer="enc", aggregation="mean", probe_batch_dim=1
+    ).build(model, {"x": torch.Tensor(B, T, F)}, Fp)
+    assert wrapped.probe.in_features == D
+    assert wrapped(x=torch.Tensor(B, T, F)).shape == (B, Fp)
+
+
 class LinearOutDict(nn.Module):
     """Linear layer whose forward returns ``{"key1": Wx, "key2": 2 * Wx}``.
 

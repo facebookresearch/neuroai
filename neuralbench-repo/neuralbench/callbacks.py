@@ -18,6 +18,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 import torchmetrics
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import Callback
 from matplotlib.figure import Figure
 from sklearn.metrics import ConfusionMatrixDisplay
@@ -362,6 +363,137 @@ class TestFullRetrievalMetrics(Callback):
         return out
 
 
+class WindowPredictionCollector(Callback):
+    """Stream raw per-window test predictions and targets to disk.
+
+    For every window in the test set, the ``(y_pred, y_true)`` returned by
+    ``test_step`` is written **incrementally** (one chunk per batch) to an
+    exca :class:`~exca.cachedict.CacheDict` under ``folder``, alongside light
+    per-window metadata (recording ``timeline``, ``batch_idx``,
+    ``dataloader_idx`` and, when available, the encoded ``subject_id`` and a
+    retrieval ``group`` label). Arrays go through exca's memmap handler (one
+    shared binary file, appended per batch) and the metadata table is stored as
+    CSV, so peak RAM stays proportional to a single batch rather than the whole
+    test set.
+
+    This is task-agnostic: ``y_pred``/``y_true`` are stored with their native
+    shape (class logits, regression vectors, retrieval embeddings, CTC
+    log-probs, ...), so no per-task aggregation happens here.
+
+    Writing only happens on global rank zero. In neuralbench the test loop is
+    single-device by construction (``Experiment._test`` runs on global rank zero
+    with ``devices=1`` after the training process group is torn down), so the
+    saved predictions cover the *full* test set even after multi-GPU training;
+    the rank-zero guard is defensive against a hypothetical distributed tester.
+
+    Parameters
+    ----------
+    folder:
+        Destination directory for the prediction artifacts. The folder is
+        cleared at the start of each test epoch.
+    group_field:
+        Trigger attribute used as the retrieval ``group`` label (the stimulus
+        identity, e.g. word ``text``). Falls back to ``category`` then
+        ``filepath`` when absent; the column is omitted if no window exposes
+        any of them.
+    """
+
+    _Y_PRED_PREFIX: tp.ClassVar[str] = "y_pred_"
+    _Y_TRUE_PREFIX: tp.ClassVar[str] = "y_true_"
+    _METADATA_KEY: tp.ClassVar[str] = "metadata"
+
+    def __init__(self, folder: Path | str, group_field: str = "text") -> None:
+        self._folder = Path(folder)
+        self._group_field = group_field
+        self._reset()
+
+    def _reset(self) -> None:
+        self._cache: CacheDict | None = None
+        self._writer: tp.Any = None
+        self._n_chunks = 0
+        self._metadata: dict[str, list[tp.Any]] = defaultdict(list)
+        self._has_subject = True
+        self._has_group = True
+
+    def _segment_group(self, segment: tp.Any) -> tp.Any:
+        """Best-effort retrieval ``group`` label for a window's segment."""
+        trigger = getattr(segment, "trigger", None)
+        if trigger is None:
+            return None
+        for attr in (self._group_field, "category", "filepath"):
+            if hasattr(trigger, attr):
+                return getattr(trigger, attr)
+        return None
+
+    def on_test_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        self._reset()
+        if not trainer.is_global_zero:
+            return
+        self._cache = CacheDict(folder=self._folder)
+        self._cache.clear()  # avoid CacheDict's no-overwrite error on re-runs
+        self._writer = self._cache.write()
+        self._writer.__enter__()
+
+    def on_test_batch_end(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs,
+        batch,
+        batch_idx,
+        dataloader_idx=0,
+    ) -> None:
+        if self._cache is None:
+            return  # non-zero rank: nothing to persist
+
+        y_pred, y_true = outputs
+        chunk = f"{self._n_chunks:08d}"
+        self._cache[f"{self._Y_PRED_PREFIX}{chunk}"] = y_pred.detach().cpu().numpy()
+        self._cache[f"{self._Y_TRUE_PREFIX}{chunk}"] = y_true.detach().cpu().numpy()
+        self._n_chunks += 1
+
+        n_windows = len(batch.segments)
+        self._metadata["timeline"].extend(seg.timeline for seg in batch.segments)
+        self._metadata["batch_idx"].extend([batch_idx] * n_windows)
+        self._metadata["dataloader_idx"].extend([dataloader_idx] * n_windows)
+
+        subject = batch.data.get("subject_id")
+        if subject is None:
+            self._has_subject = False
+        else:
+            self._metadata["subject_id"].extend(
+                subject.detach().cpu().reshape(-1).tolist()
+            )
+
+        groups = [self._segment_group(seg) for seg in batch.segments]
+        if any(g is None for g in groups):
+            self._has_group = False
+        else:
+            self._metadata["group"].extend(groups)
+
+    def on_test_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if self._cache is None:
+            return
+        try:
+            if self._n_chunks:
+                n_windows = len(self._metadata["timeline"])
+                columns = ["timeline", "batch_idx", "dataloader_idx"]
+                if self._has_subject and len(self._metadata["subject_id"]) == n_windows:
+                    columns.append("subject_id")
+                if self._has_group and len(self._metadata["group"]) == n_windows:
+                    columns.append("group")
+                self._cache[self._METADATA_KEY] = pd.DataFrame(
+                    {col: self._metadata[col] for col in columns}
+                )
+        finally:
+            self._writer.__exit__(None, None, None)
+            self._writer = None
+
+
 class RecordingLevelEval(Callback):
     """Callback to evaluate average prediction over each recording (timeline)."""
 
@@ -432,7 +564,7 @@ class RecordingLevelEval(Callback):
                 lambda counts: counts[i] / sum(counts) if sum(counts) > 0 else 0.0
             )
 
-        # Create prediction tensor with shape (n_recordings, num_classes)
+        # Per-recording probabilities, shape (n_recordings, num_classes).
         pred_columns = [f"y_pred{i}" for i in range(self.num_classes)]
         y_pred_probs = torch.from_numpy(outputs_df[pred_columns].values)
         # Convert y_true to int64 explicitly to avoid object dtype issues
