@@ -67,6 +67,15 @@ class Xu2025Alljoined(study.Study):
     licence: tp.ClassVar[str] = "CC-BY-NC-SA-4.0"
     description: tp.ClassVar[str] = "20 participants watching static images in EEG."
 
+    _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
+        num_timelines=1520,
+        num_subjects=20,
+        num_events_in_query=1072,
+        event_types_in_query={"Eeg", "Image"},
+        data_shape=(32, 76032),
+        frequency=256.0,
+    )
+
     def _download(self, overwrite=False) -> None:
         accept = os.environ.get("ALLJOINED_ACCEPT_LICENCE", "").lower() in (
             "1",
