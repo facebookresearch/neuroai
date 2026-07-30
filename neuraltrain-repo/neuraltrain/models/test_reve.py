@@ -149,17 +149,24 @@ requires_pretrained = pytest.mark.skipif(
 @requires_pretrained
 def test_build_pretrained():
     """Build returns a wrapper in both classification and encoder-only modes."""
-    chs_info = [{"ch_name": n} for n in BANK_CH_NAMES]
     cfg = NtReve(from_pretrained_name=PRETRAINED_NAME)
 
     model_cls = cfg.build(
-        n_chans=len(BANK_CH_NAMES), n_times=400, n_outputs=2, chs_info=chs_info
+        n_spatial_locations=len(BANK_CH_NAMES),
+        n_temporal_samples=400,
+        n_outputs=2,
+        chs_info=[{"ch_name": n} for n in BANK_CH_NAMES],
     )
     assert isinstance(model_cls, _ReveWrapper)
     assert model_cls.encoder_only is False
     assert model_cls.channel_indices is None
 
-    model_enc = cfg.build(n_chans=len(BANK_CH_NAMES), n_times=400, chs_info=chs_info)
+    model_enc = cfg.build(
+        n_spatial_locations=len(BANK_CH_NAMES),
+        n_temporal_samples=400,
+        n_outputs=None,
+        chs_info=[{"ch_name": n} for n in BANK_CH_NAMES],
+    )
     assert isinstance(model_enc, _ReveWrapper)
     assert model_enc.encoder_only is True
 
@@ -175,9 +182,14 @@ def test_build_drops_unknown_channels():
     """Channels not in the position bank are dropped and channel_indices is set."""
     known = ["Fp1", "C3"]
     unknown = ["BOGUS_CH"]
-    chs_info = [{"ch_name": n} for n in known + unknown]
+    ch_names = known + unknown
     cfg = NtReve(from_pretrained_name=PRETRAINED_NAME)
-    model = cfg.build(n_chans=len(chs_info), n_times=400, chs_info=chs_info)
+    model = cfg.build(
+        n_spatial_locations=len(ch_names),
+        n_temporal_samples=400,
+        n_outputs=None,
+        chs_info=[{"ch_name": n} for n in ch_names],
+    )
 
     assert isinstance(model, _ReveWrapper)
     assert model.channel_indices is not None

@@ -10,13 +10,13 @@ from math import prod
 import torch
 from torch import nn
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 from .common import ChannelMerger, SubjectLayers
 
 logger = logging.getLogger(__name__)
 
 
-class SimplerConv(BaseModelConfig):
+class SimplerConv(BaseBrainModelConfig):
     """Convolutional encoder inspired by BENDR / wav2vec 2.0.
 
     Parameters
@@ -52,8 +52,8 @@ class SimplerConv(BaseModelConfig):
     output_nonlin: bool = True
     dropout: float = 0.0
 
-    def build(self, n_in_channels: int, n_outputs: int | None = None) -> nn.Module:
-        return SimplerConvModel(n_in_channels, n_outputs, config=self)
+    def build(self, n_spatial_locations: int, n_outputs: int | None) -> nn.Module:
+        return SimplerConvModel(n_spatial_locations, n_outputs, config=self)
 
 
 class SimplerConvModel(nn.Module):

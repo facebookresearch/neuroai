@@ -194,9 +194,13 @@ class Experiment(pydantic.BaseModel):
 
     def _build_brain_module(self, train_loader: DataLoader) -> BrainModule:
         batch = next(iter(train_loader))
-        n_chans = batch.data["input"].shape[1]
+        n_chans, n_times = batch.data["input"].shape[1:]
         n_classes = train_loader.dataset.triggers.code.nunique()
-        brain_model = self.brain_model_config.build(n_chans=n_chans, n_outputs=n_classes)
+        brain_model = self.brain_model_config.build(
+            n_spatial_locations=n_chans,
+            n_temporal_samples=n_times,
+            n_outputs=n_classes,
+        )
         return BrainModule(
             model=brain_model,
             loss=self.loss.build(),

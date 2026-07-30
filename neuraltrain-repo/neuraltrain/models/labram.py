@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .base import BaseBrainDecodeModel
+from .base import BaseBrainDecodeModel, RequiredBuildField
 from .common import (
     INVALID_POS_VALUE,
     apply_temporal_adjustment,
@@ -177,8 +177,7 @@ class NtLabram(BaseBrainDecodeModel):
     """
 
     _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.Labram"
-    chs_info_required: tp.ClassVar[bool] = True
-    needs_n_times: tp.ClassVar[bool] = True
+    required_fields: tp.ClassVar[list[RequiredBuildField]] = ["ch_names", "n_times"]
     channel_mapping: dict[str, str] | None = None
 
     def _build_channel_remapping(
@@ -350,11 +349,11 @@ class NtLabram(BaseBrainDecodeModel):
 
     def build(
         self,
-        n_chans: int | None = None,
-        n_times: int | None = None,
+        n_spatial_locations: int,
+        n_temporal_samples: int,
         n_outputs: int | None = None,
         chs_info: list[dict[str, tp.Any]] | None = None,
-        **kwargs: tp.Any,
+        frequency: float | None = None,
     ) -> nn.Module:
         # Precompute channel remapping
         ch_name_to_labram: dict[str, str] = {}
@@ -370,19 +369,18 @@ class NtLabram(BaseBrainDecodeModel):
         truncate_right = 0
 
         if self.from_pretrained_name is not None:
-            model = super().build(**kwargs)
-            if n_times is not None:
-                pad_right, truncate_right = self._adapt_pretrained_dimensions(
-                    model, n_times
-                )
+            model = self._construct()
+            pad_right, truncate_right = self._adapt_pretrained_dimensions(
+                model, n_temporal_samples
+            )
         else:
-            if n_chans is not None:
-                kwargs["n_chans"] = n_chans
-            if n_times is not None:
-                kwargs["n_times"] = n_times
+            construct_kwargs: dict[str, tp.Any] = {
+                "n_chans": n_spatial_locations,
+                "n_times": n_temporal_samples,
+            }
             if n_outputs is not None:
-                kwargs["n_outputs"] = n_outputs
-            model = super().build(**kwargs)
+                construct_kwargs["n_outputs"] = n_outputs
+            model = self._construct(**construct_kwargs)
 
         if chs_info is not None:
             model = _LabramChannelWrapper(

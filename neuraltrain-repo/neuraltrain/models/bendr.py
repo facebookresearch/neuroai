@@ -162,22 +162,26 @@ class NtBendr(BaseBrainDecodeModel):
 
     def build(
         self,
-        n_chans: int | None = None,
-        n_times: int | None = None,
+        n_spatial_locations: int,
+        n_temporal_samples: int,
         n_outputs: int | None = None,
-        **kwargs: tp.Any,
+        chs_info: list[dict[str, tp.Any]] | None = None,
+        frequency: float | None = None,
     ) -> nn.Module:
+        construct_kwargs = self._bd_shape_kwargs(
+            n_spatial_locations=n_spatial_locations,
+            n_temporal_samples=n_temporal_samples,
+            n_outputs=n_outputs,
+            chs_info=chs_info,
+            frequency=frequency,
+        )
         # The wrapper prepends an amplitude channel internally, so the
         # underlying BENDR encoder always receives 20 channels.  The upstream
         # channel adapter is responsible for producing the 19 EEG channels;
-        # here we hard-set n_chans=20 for the inner BENDR regardless of
-        # whatever was passed in (the adapter target + our amp channel
+        # here we hard-set n_chans=20 for the inner BENDR regardless of the
+        # dataset channel count (the adapter target + our amp channel
         # combine into 20).
-        kwargs["n_chans"] = BENDR_N_EEG_CHANNELS + 1
-        if n_times is not None:
-            kwargs["n_times"] = n_times
-        if n_outputs is not None:
-            kwargs["n_outputs"] = n_outputs
+        construct_kwargs["n_chans"] = BENDR_N_EEG_CHANNELS + 1
 
-        model = super().build(**kwargs)
+        model = self._construct(**construct_kwargs)
         return _BendrAllTokensWrapper(model, amplitude_range=self.amplitude_range)

@@ -27,7 +27,9 @@ def test_fmri_mlp(n_blocks: int, subject_layers_config: dict | None) -> None:
         "subject_layers_config": subject_layers_config,
         "n_repetition_times": n_times,
     }
-    model = FmriMlp(**config_kwargs).build(n_voxels, out_dim)  # type: ignore
+    model = FmriMlp(**config_kwargs).build(  # type: ignore
+        n_spatial_locations=n_voxels, n_outputs=out_dim
+    )
     assert isinstance(model, FmriMlpModel)
 
     out = model(fmri, subject_ids=subject_ids)
@@ -65,7 +67,9 @@ def test_fmri_mlp_time_agg(
             "mse": {"hidden_sizes": []},
         },
     }
-    model = FmriMlp(**config_kwargs).build(n_voxels, out_dim)  # type: ignore
+    model = FmriMlp(**config_kwargs).build(  # type: ignore
+        n_spatial_locations=n_voxels, n_outputs=out_dim
+    )
     assert isinstance(model, FmriMlpModel)
     out = model(fmri, subject_ids=subject_ids)
     assert out["clip"].shape == (batch_size, out_dim * 2)
@@ -94,7 +98,9 @@ def test_fmri_linear(time_agg, use_output_head_config) -> None:
             else None
         ),
     }
-    model = FmriLinear(**config_kwargs).build(n_voxels, out_dim)
+    model = FmriLinear(**config_kwargs).build(
+        n_spatial_locations=n_voxels, n_outputs=out_dim
+    )
     assert isinstance(model, FmriLinearModel)
     out = model(fake_fmri)
     if use_output_head_config:

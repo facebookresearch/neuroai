@@ -7,10 +7,10 @@
 data:
   study:
     source:
-      name: Levy2025BrainMeg
+      name: Levy2026NoninvasiveMeg
     remove_bad_subjects:
       name: QueryEvents
-      query: "~subject.isin(['Levy2025BrainMeg/S23', 'Levy2025BrainMeg/S11122024', 'Levy2025BrainMeg/S12122024', 'Levy2025BrainMeg/S26112024', 'Levy2025BrainMeg/S27112024', 'Levy2025BrainMeg/S28112024'])"
+      query: "~subject.isin(['Levy2026NoninvasiveMeg/S23', 'Levy2026NoninvasiveMeg/S11122024', 'Levy2026NoninvasiveMeg/S12122024', 'Levy2026NoninvasiveMeg/S26112024', 'Levy2026NoninvasiveMeg/S27112024', 'Levy2026NoninvasiveMeg/S28112024'])"
     filter_trial_id:
       name: QueryEvents
       query: "~trial_id.isin([0.0, 1.0])"

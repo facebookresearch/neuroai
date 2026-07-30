@@ -3,7 +3,7 @@ Typing decoding
 
 | **Name**: typing
 | **Category**: cognitive decoding
-| **Dataset**: :py:class:`~neuralset.studies.Levy2025BrainEeg`
+| **Dataset**: :py:class:`~neuralset.studies.Levy2026NoninvasiveEeg`
 | **Objective** :bdg-info:`Multiclass classification`
 | **Split**: Leave-sentences-out
 
@@ -23,7 +23,7 @@ Usage
 Description
 ~~~~~~~~~~~
 
-The typing decoding task involves decoding the characters that were typed on a computer keyboard while EEG recordings was recorded [Levy2025eeg]_. In this task, we use the private Levy2025BrainEeg dataset [Levy2025BrainEeg]_, which contains EEG data recorded while subjects typed back sentences that were shown on a screen.
+The typing decoding task involves decoding the characters that were typed on a computer keyboard while EEG recordings was recorded [Levy2026eeg]_. In this task, we use the public Levy2026NoninvasiveEeg dataset [Levy2026NoninvasiveEeg]_, which contains EEG data recorded while subjects typed back sentences that were shown on a screen.
 
 Dataset Notes
 ~~~~~~~~~~~~~
@@ -33,5 +33,5 @@ Dataset Notes
 References
 ~~~~~~~~~~
 
-.. [Levy2025eeg] Lévy, Jarod, et al. "Brain-to-text decoding: A non-invasive approach via typing." arXiv preprint arXiv:2502.17480 (2025).
-.. [Levy2025BrainEeg] TODO
+.. [Levy2026eeg] Lévy, Jarod, et al. "Noninvasive decoding of typed sentences from human brain activity." Nature Neuroscience (2026).
+.. [Levy2026NoninvasiveEeg] TODO

@@ -341,7 +341,7 @@ DEVICE_FM_MODELS: dict[str, list[str]] = {
 #   the tangent-space dimension is C(C+1)/2 ≈ 37k-47k features; OAS shrinkage
 #   and the default ``max_fit_samples=20_000`` cap keep the linear head
 #   feasible.  Xdawn (per-class ERP filter, explodes on 29-way multiclass) and
-#   CoSpectra (sfreq-tuned narrowband spectral features) remain excluded.
+#   CoSpectra (frequency-tuned narrowband spectral features) remain excluded.
 # - fMRI has no classical pyriemann / covariance analogue that transfers
 #   meaningfully from a channel basis to a voxel basis, so only the constant
 #   predictors are kept.

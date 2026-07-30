@@ -22,8 +22,8 @@ def fake_eeg():
 
 @pytest.mark.parametrize("use_default_config", [True, False])
 def test_simpler_conv(fake_eeg, use_default_config):
-    batch_size, n_in_channels, n_times = fake_eeg.shape
-    channel_positions = torch.rand((batch_size, n_in_channels, 2))
+    batch_size, n_channels, n_times = fake_eeg.shape
+    channel_positions = torch.rand((batch_size, n_channels, 2))
 
     config_kwargs = {}
     if not use_default_config:
@@ -48,7 +48,11 @@ def test_simpler_conv(fake_eeg, use_default_config):
         }
 
     n_outputs = 512
-    model = SimplerConv(**config_kwargs).build(n_in_channels, n_outputs=n_outputs)
+    # SimplerConv.build takes context-named params; the encoder does not
+    # consume n_temporal_samples.
+    model = SimplerConv(**config_kwargs).build(
+        n_spatial_locations=n_channels, n_outputs=n_outputs
+    )
     assert isinstance(model, SimplerConvModel)
     if not use_default_config:
         assert isinstance(model.merger, ChannelMergerModel)

@@ -188,7 +188,10 @@ def _build_simpleconv_time_agg() -> "torch.nn.Module":
         time_agg_out="linear",
         output_head_config=Mlp(hidden_sizes=[-1]),
     )
-    model = config.build(n_in_channels=_REPR_N_CHANS, n_outputs=_REPR_N_OUTPUTS)
+    model = config.build(
+        n_spatial_locations=_REPR_N_CHANS,
+        n_outputs=_REPR_N_OUTPUTS,
+    )
     # Materialise lazy layers via a forward pass.
     with torch.no_grad():
         model.eval()

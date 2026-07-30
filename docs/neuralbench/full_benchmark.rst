@@ -81,12 +81,6 @@ depend on these datasets will be skipped with a warning during
      - Read and accept the GNU General Public License v3 terms at
        http://doc.ml.tu-berlin.de/hBCI, then export the environment
        variable ``MOABB_ACCEPT_LICENCE=1`` to allow downloading.
-   * - ``eeg/typing``, ``meg/typing``
-     - ``Levy2025BrainEeg``, ``Levy2025BrainMeg`` (formerly
-       ``Pinet2024Eeg``/``Pinet2024Meg``)
-     - Not yet available for public download. The release timeline is
-       tracked alongside the upcoming dataset paper; until then these
-       tasks remain a documented known limitation.
    * - ``eeg/speech``
      - Brennan2019 (``Brennan2019Hierarchical``) on Deep Blue Data
      - Auto-download via ``urlretrieve`` against
