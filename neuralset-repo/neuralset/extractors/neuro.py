@@ -691,13 +691,17 @@ class IeegExtractor(MneRaw):
 
 
 class SpikesExtractor(BaseExtractor):
-    """Feature extractor for spike data stored in HDF5/NWB files.
+    """Feature extractor for spike data in HDF5/NWB or pre-binned MNE format.
 
-    Reads spike times from HDF5 files and creates a dense binned array
-    of shape (n_units, n_time_bins) at the specified frequency.
+    Supports two input formats returned by :meth:`~neuralset.events.etypes.Spikes.read`:
+
+    - **NWB/HDF5** (``h5py.File``): spike times are binned into a dense array
+      of shape ``(n_units, n_time_bins)`` at the target frequency.
+    - **MNE** (``mne.io.RawArray``): pre-binned continuous data; resampled with
+      :meth:`mne.io.Raw.resample` when ``raw.info["sfreq"]`` differs from ``frequency``.
 
     The preprocessing steps, if specified, are ordered as follows:
-    1. Spike binning at target frequency
+    1. Spike binning or resampling to target frequency
     2. Scaling
     3. Baseline correction (applied on segments)
     4. Clamp (applied on segments)
@@ -705,8 +709,8 @@ class SpikesExtractor(BaseExtractor):
     Parameters
     ----------
     frequency : "native" or float, default="native"
-        Target sampling frequency for spike binning. If ``"native"``, uses the
-        frequency declared in the Spikes event.
+        Target sampling frequency (Hz). If ``"native"``, uses the frequency
+        declared in the Spikes event (NWB) or ``raw.info["sfreq"]`` (MNE).
     offset : float, default=0.0
         Time offset (in seconds) applied to the segment window.
     baseline : tuple of float, optional
@@ -825,12 +829,20 @@ class SpikesExtractor(BaseExtractor):
             else float(self.frequency)
         )
 
-        nwb_file = event.read()
-        try:
-            data, ch_names = self._bin_spikes(nwb_file, sfreq)
-        finally:
-            if isinstance(nwb_file, h5py.File):
-                nwb_file.close()
+        h5py_or_raw = event.read()
+        if isinstance(h5py_or_raw, h5py.File):
+            data, ch_names = self._bin_spikes(h5py_or_raw, sfreq)
+            h5py_or_raw.close()
+        elif isinstance(h5py_or_raw, mne.io.RawArray):
+            raw = h5py_or_raw
+            loaded_sfreq = float(raw.info["sfreq"])
+            ch_names = raw.ch_names
+            if loaded_sfreq != sfreq:
+                raw.load_data()
+                raw = raw.resample(sfreq, verbose=False)
+            data = raw.get_data()
+        else:
+            raise ValueError(f"Unsupported spike data type: {type(h5py_or_raw)}")
 
         if self.scaler is not None:
             scaler_cls = getattr(sklearn.preprocessing, self.scaler)()
