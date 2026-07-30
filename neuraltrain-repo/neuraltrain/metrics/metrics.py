@@ -610,7 +610,7 @@ class ImageSimilarity(torchmetrics.Metric):
         self,
         ground_truth: np.ndarray | torch.Tensor,
         predictions: np.ndarray | torch.Tensor,
-    ) -> tp.Tuple[np.ndarray, np.ndarray]:
+    ) -> tp.Tuple[float, float]:
         if isinstance(ground_truth, torch.Tensor):
             ground_truth = ground_truth.cpu()
         if isinstance(predictions, torch.Tensor):

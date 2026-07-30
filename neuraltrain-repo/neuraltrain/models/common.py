@@ -74,14 +74,19 @@ class BahdanauAttention(nn.Module):
            jointly learning to align and translate." arXiv preprint arXiv:1409.0473 (2014).
     """
 
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, use_queries: bool = False):
         super().__init__()
+        self.use_queries = use_queries
+        self.Wa: nn.Module
+        self.Ua: nn.Module
         if input_size is None:
             self.Wa = nn.LazyLinear(hidden_size)
-            self.Ua = nn.LazyLinear(hidden_size)
+            if use_queries:
+                self.Ua = nn.LazyLinear(hidden_size)
         else:
             self.Wa = nn.Linear(input_size, hidden_size)
-            self.Ua = nn.Linear(input_size, hidden_size)
+            if use_queries:
+                self.Ua = nn.Linear(input_size, hidden_size)
         self.Va = nn.Linear(hidden_size, 1)
 
     def forward(self, keys, queries=None):
@@ -94,6 +99,11 @@ class BahdanauAttention(nn.Module):
             Optional query tensor of shape (batch_size, n_features, n_times).
             If None, only keys are used.
         """
+        if queries is not None and not self.use_queries:
+            raise ValueError(
+                "queries were passed but this BahdanauAttention was built with "
+                "use_queries=False, so the query projection (Ua) does not exist."
+            )
         keys = keys.transpose(2, 1)  # (B, F, T) -> (B, T, F)
         sum_ = self.Wa(keys)
         if queries is not None:
