@@ -1352,6 +1352,36 @@ def test_glasser_projector(monkeypatch: pytest.MonkeyPatch) -> None:
     np.testing.assert_array_equal(zero_projector.apply_after_cache(data), expected)
 
 
+def test_cifti_roi_projector(monkeypatch: pytest.MonkeyPatch) -> None:
+    CRP = ns.extractors.neuro.CiftiRoiProjector
+    n_nodes = ns.extractors.neuro.HCP_CIFTI_91K_SIZE
+    # Synthetic merged cortical + subcortical index map (avoids needing hcp_utils).
+    monkeypatch.setattr(
+        CRP,
+        "_cifti_nodes",
+        classmethod(
+            lambda cls: {
+                "V1": np.array([0, 1, 2]),
+                "thalamus": np.array([100, 101, 102, 103]),
+                "thalamus_left": np.array([100, 101]),
+                "thalamus_right": np.array([102, 103]),
+            }
+        ),
+    )
+    data = np.arange(n_nodes * 2).reshape(n_nodes, 2)
+
+    # 1) cortical + subcortical mix (boolean mask returns rows in ascending order)
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"V1", "thalamus_left"}).apply_after_cache(data),
+        data[[0, 1, 2, 100, 101], :],
+    )
+    # 2) bare name selects both hemispheres
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"thalamus"}).apply_after_cache(data),
+        data[[100, 101, 102, 103], :],
+    )
+
+
 def test_fmri_mesh_from_2d() -> None:
     n_voxels = 40962 * 2  # fsaverage6
     n_times = 10
