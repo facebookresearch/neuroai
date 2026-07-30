@@ -62,7 +62,7 @@ import tempfile
 from pathlib import Path
 
 tmp = Path(tempfile.mkdtemp())
-study = MyDemoStudy2026(path=tmp, infra_timelines={"cluster": None})
+study = MyDemoStudy2026(path=tmp, timelines={"infra": None})
 study.download()
 events = study.run()
 
@@ -141,7 +141,7 @@ class AdvancedDemoStudy2026(studies.Study):
 # ``SpecialLoader`` handle.
 
 tmp = Path(tempfile.mkdtemp())
-advanced = AdvancedDemoStudy2026(path=tmp, infra_timelines={"cluster": None})
+advanced = AdvancedDemoStudy2026(path=tmp, timelines={"infra": None})
 events = advanced.run()
 
 print(f"Timelines: {events['timeline'].nunique()}")

@@ -108,9 +108,9 @@ See the :doc:`tutorials <auto_examples/walkthrough/index>` for how they fit toge
 
    infra
       Parameter controlling **disk caching and cluster execution**.  Its
-      type varies by component: ``Backend`` on :term:`Steps <Step>` and
-      :term:`Chains <Chain>` (whole-step caching), ``MapInfra`` on
-      :term:`extractors <Extractor>` and ``Study.infra_timelines``
+      type varies by component: ``Backend`` on :term:`Steps <Step>`,
+      :term:`Chains <Chain>`, and ``Study.timelines.infra``;
+      ``MapInfra`` on :term:`extractors <Extractor>`
       (per-item caching and batch dispatch), ``TaskInfra`` on
       NeuralTrain experiments (full computation and job arrays).
       · :doc:`Caching & Cluster Execution <caching_and_cluster>`

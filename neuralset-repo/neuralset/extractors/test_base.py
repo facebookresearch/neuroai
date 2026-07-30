@@ -44,8 +44,8 @@ def test_features_model() -> None:
         cfg.to_yaml()
         == """extractors:
 - name: Pulse
-- frequency: 12.0
-  name: MegExtractor
+- name: MegExtractor
+  frequency: 12.0
 - name: ExternExtractor
 """
     )

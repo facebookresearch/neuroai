@@ -131,16 +131,15 @@ supports Slurm job arrays for parameter sweeps.
 In NeuralSet
 ------------
 
-Studies — Backend + MapInfra
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Studies — Backend layers
+^^^^^^^^^^^^^^^^^^^^^^^^
 
-:term:`Studies <Study>` combine both types.  ``infra`` (``Backend``)
-caches the merged events DataFrame, while ``infra_timelines``
-(``MapInfra``) caches each timeline independently and defaults to
-``cluster="processpool"`` for parallel I/O.
+:term:`Studies <Study>` use ``Backend`` in two places.  ``infra`` caches
+the merged events DataFrame, while ``timelines.infra`` caches each
+timeline independently and defaults to a process pool for parallel I/O.
 
 Setting ``infra.folder`` automatically propagates to
-``infra_timelines.folder``, so a single ``infra`` is usually enough:
+``timelines.infra.folder``, so a single ``infra`` is usually enough:
 
 .. code-block:: python
 
@@ -162,7 +161,7 @@ tracebacks instead of ``BrokenProcessPool`` errors:
    study = ns.Study(
        name="Allen2022MassiveSample",
        path=ns.CACHE_FOLDER,
-       infra_timelines={"cluster": None},
+       timelines={"infra": None},
    )
 
 Transforms and Chains — Backend
@@ -350,8 +349,8 @@ Quick reference
      - ``Backend``
      - ``{"backend": "Cached", "folder": "/cache"}``
    * - Study timelines
-     - ``MapInfra``
-     - ``{"cluster": "processpool"}`` *(default)*
+     - ``Backend``
+     - ``{"backend": "ProcessPool"}`` *(default)*
    * - :term:`Extractor`
      - ``MapInfra``
      - ``{"folder": "/cache", "cluster": "slurm", "gpus_per_node": 1}``
