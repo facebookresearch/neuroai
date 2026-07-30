@@ -435,7 +435,7 @@ class MneRaw(BaseExtractor):
         freq = ta.frequency
         ch_names = ta.ch_names
 
-        ta = ta.with_start(event.start)
+        ta = ta.copy(start=event.start)
         tdata = ta.overlap(start=window_start, duration=window_stop - window_start)
         # exca caches return ContiguousMemmap which needs
         # materializing to operate upon:
@@ -691,13 +691,17 @@ class IeegExtractor(MneRaw):
 
 
 class SpikesExtractor(BaseExtractor):
-    """Feature extractor for spike data stored in HDF5/NWB files.
+    """Feature extractor for spike data in HDF5/NWB or pre-binned MNE format.
 
-    Reads spike times from HDF5 files and creates a dense binned array
-    of shape (n_units, n_time_bins) at the specified frequency.
+    Supports two input formats returned by :meth:`~neuralset.events.etypes.Spikes.read`:
+
+    - **NWB/HDF5** (``h5py.File``): spike times are binned into a dense array
+      of shape ``(n_units, n_time_bins)`` at the target frequency.
+    - **MNE** (``mne.io.RawArray``): pre-binned continuous data; resampled with
+      :meth:`mne.io.Raw.resample` when ``raw.info["sfreq"]`` differs from ``frequency``.
 
     The preprocessing steps, if specified, are ordered as follows:
-    1. Spike binning at target frequency
+    1. Spike binning or resampling to target frequency
     2. Scaling
     3. Baseline correction (applied on segments)
     4. Clamp (applied on segments)
@@ -705,8 +709,8 @@ class SpikesExtractor(BaseExtractor):
     Parameters
     ----------
     frequency : "native" or float, default="native"
-        Target sampling frequency for spike binning. If ``"native"``, uses the
-        frequency declared in the Spikes event.
+        Target sampling frequency (Hz). If ``"native"``, uses the frequency
+        declared in the Spikes event (NWB) or ``raw.info["sfreq"]`` (MNE).
     offset : float, default=0.0
         Time offset (in seconds) applied to the segment window.
     baseline : tuple of float, optional
@@ -825,12 +829,20 @@ class SpikesExtractor(BaseExtractor):
             else float(self.frequency)
         )
 
-        nwb_file = event.read()
-        try:
-            data, ch_names = self._bin_spikes(nwb_file, sfreq)
-        finally:
-            if isinstance(nwb_file, h5py.File):
-                nwb_file.close()
+        h5py_or_raw = event.read()
+        if isinstance(h5py_or_raw, h5py.File):
+            data, ch_names = self._bin_spikes(h5py_or_raw, sfreq)
+            h5py_or_raw.close()
+        elif isinstance(h5py_or_raw, mne.io.RawArray):
+            raw = h5py_or_raw
+            loaded_sfreq = float(raw.info["sfreq"])
+            ch_names = raw.ch_names
+            if loaded_sfreq != sfreq:
+                raw.load_data()
+                raw = raw.resample(sfreq, verbose=False)
+            data = raw.get_data()
+        else:
+            raise ValueError(f"Unsupported spike data type: {type(h5py_or_raw)}")
 
         if self.scaler is not None:
             scaler_cls = getattr(sklearn.preprocessing, self.scaler)()
@@ -870,7 +882,7 @@ class SpikesExtractor(BaseExtractor):
         assert ta.header is not None
         ch_names = ta.header["ch_names"].split(",")
 
-        ta = ta.with_start(event.start)
+        ta = ta.copy(start=event.start)
         tdata = ta.overlap(start=window_start, duration=window_stop - window_start)
         tdata.data = np.asarray(tdata.data)
         if self.scale_factor is not None:
@@ -1893,7 +1905,7 @@ class FmriExtractor(BaseExtractor):
             if isinstance(self.projection, SurfaceProjector):
                 header["space"] = self.projection.mesh
         else:
-            data = rec.get_fdata()
+            data = rec.get_fdata(dtype=np.float32)
             if space_dims == 3:
                 header["affine"] = np.array(rec.affine, dtype=np.float64)
 
@@ -1930,7 +1942,8 @@ class FmriExtractor(BaseExtractor):
         if self.padding == "auto" and self._padding is None:
             raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
         for event, ta in zip(events, self._get_data(events)):
-            out = ta.with_start(event.start - self.offset)
+            out = ta.copy(start=event.start - self.offset)
+            out = out.overlap(start, duration)  # memmap cropping before loading data
             if self.projection is not None:
                 out.data = self.projection.apply_after_cache(out.data)
             if self._padding is not None:

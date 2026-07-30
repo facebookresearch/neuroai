@@ -280,7 +280,7 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
                     start=base._UNSET_START,
                     duration=event.duration,
                 )
-                sub = tarray.with_start(event.start).overlap(
+                sub = tarray.copy(start=event.start).overlap(
                     start=start, duration=duration
                 )
                 if self.cache_n_layers is not None:
