@@ -435,7 +435,7 @@ class MneRaw(BaseExtractor):
         freq = ta.frequency
         ch_names = ta.ch_names
 
-        ta = ta.with_start(event.start)
+        ta = ta.copy(start=event.start)
         tdata = ta.overlap(start=window_start, duration=window_stop - window_start)
         # exca caches return ContiguousMemmap which needs
         # materializing to operate upon:
@@ -870,7 +870,7 @@ class SpikesExtractor(BaseExtractor):
         assert ta.header is not None
         ch_names = ta.header["ch_names"].split(",")
 
-        ta = ta.with_start(event.start)
+        ta = ta.copy(start=event.start)
         tdata = ta.overlap(start=window_start, duration=window_stop - window_start)
         tdata.data = np.asarray(tdata.data)
         if self.scale_factor is not None:
@@ -1893,7 +1893,7 @@ class FmriExtractor(BaseExtractor):
             if isinstance(self.projection, SurfaceProjector):
                 header["space"] = self.projection.mesh
         else:
-            data = rec.get_fdata()
+            data = rec.get_fdata(dtype=np.float32)
             if space_dims == 3:
                 header["affine"] = np.array(rec.affine, dtype=np.float64)
 
@@ -1930,7 +1930,8 @@ class FmriExtractor(BaseExtractor):
         if self.padding == "auto" and self._padding is None:
             raise RuntimeError("Fmri.prepare needs to be called to compute auto padding")
         for event, ta in zip(events, self._get_data(events)):
-            out = ta.with_start(event.start - self.offset)
+            out = ta.copy(start=event.start - self.offset)
+            out = out.overlap(start, duration)  # memmap cropping before loading data
             if self.projection is not None:
                 out.data = self.projection.apply_after_cache(out.data)
             if self._padding is not None:

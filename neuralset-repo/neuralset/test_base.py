@@ -354,9 +354,24 @@ def test_timed_array_iadd_contiguous_memmap(tmp_path: Path) -> None:
         tmp_path, base.TimedArray(data=data, start=0, frequency=1)
     )
     assert isinstance(mm.data, contiguous.ContiguousMemmap)
-    target = mm.with_start(0)
+    target = mm.copy(start=0)
     target += mm
     np.testing.assert_array_equal(target.data, 2 * data)
+
+
+def test_timed_array_copy_checks_aggregation_counts() -> None:
+    source = base.TimedArray(
+        data=np.ones((1, 3)), frequency=1, start=1, aggregation="mean"
+    )
+    copied = source.copy(start=0)
+    assert not copied.start
+    two = base.TimedArray(data=2 * np.ones((1, 3)), frequency=1, start=0)
+
+    copied += two
+    np.testing.assert_array_equal(copied.data, 1.5 * np.ones((1, 3)))
+
+    with pytest.raises(RuntimeError, match="aggregated contribution counts"):
+        copied.copy(start=0)
 
 
 def test_mne_timed_array_roundtrip(tmp_path: Path) -> None:
@@ -388,8 +403,8 @@ def test_unset_start() -> None:
         data=data, frequency=5.0, start=base._UNSET_START, duration=2.0, header=meta
     )
     assert unset.start == base._UNSET_START
-    # with_start resolves the sentinel and shares data/header
-    resolved = unset.with_start(1.5)
+    # copy(start=) resolves the sentinel and shares data/header
+    resolved = unset.copy(start=1.5)
     assert resolved.start == 1.5
     assert resolved.data is unset.data
     assert resolved.header is unset.header
