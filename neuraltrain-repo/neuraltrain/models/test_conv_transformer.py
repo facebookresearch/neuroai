@@ -22,8 +22,8 @@ def fake_eeg():
 
 
 def test_conv_transformer_with_simpler_conv(fake_eeg):
-    batch_size, n_in_channels, n_times = fake_eeg.shape
-    channel_positions = torch.rand((batch_size, n_in_channels, 2))
+    batch_size, n_channels, n_times = fake_eeg.shape
+    channel_positions = torch.rand((batch_size, n_channels, 2))
 
     dim = 512
     model = ConvTransformer(
@@ -43,7 +43,7 @@ def test_conv_transformer_with_simpler_conv(fake_eeg):
         ),
         conv_pos_emb_kernel_size=5,
         transformer_config=None,
-    ).build(n_in_channels=n_in_channels, n_outputs=dim)
+    ).build(n_spatial_locations=n_channels, n_outputs=dim)
     assert isinstance(model, ConvTransformerModel)
     assert isinstance(model.encoder, SimplerConvModel)
 
@@ -56,7 +56,7 @@ def test_conv_transformer_with_simpler_conv(fake_eeg):
 
 
 def test_conv_transformer_with_simple_conv(fake_eeg):
-    batch_size, n_in_channels, n_times = fake_eeg.shape
+    batch_size, n_channels, n_times = fake_eeg.shape
 
     dim, output_layer_dim = 512, 4
     model = ConvTransformer(
@@ -77,7 +77,7 @@ def test_conv_transformer_with_simple_conv(fake_eeg):
             depth=1,
         ),
         output_layer_dim=output_layer_dim,
-    ).build(n_in_channels=n_in_channels)
+    ).build(n_spatial_locations=n_channels, n_outputs=None)
     assert isinstance(model, ConvTransformerModel)
     assert isinstance(model.encoder, SimpleConvModel)
 
@@ -90,7 +90,7 @@ def test_conv_transformer_with_simple_conv(fake_eeg):
 
 @pytest.mark.parametrize("output_layer_dim", [None, 0, 4])
 def test_conv_transformer_output_layer(fake_eeg, output_layer_dim: int | None):
-    batch_size, n_in_channels, n_times = fake_eeg.shape
+    batch_size, n_channels, n_times = fake_eeg.shape
 
     dim = 512
     model = ConvTransformer(
@@ -104,7 +104,7 @@ def test_conv_transformer_output_layer(fake_eeg, output_layer_dim: int | None):
             depth=1,
         ),
         output_layer_dim=output_layer_dim,
-    ).build(n_in_channels=n_in_channels)
+    ).build(n_spatial_locations=n_channels, n_outputs=None)
     assert isinstance(model, ConvTransformerModel)
     assert isinstance(model.encoder, SimpleConvModel)
 
@@ -125,7 +125,7 @@ def test_conv_transformer_output_layer(fake_eeg, output_layer_dim: int | None):
 
 
 def test_conv_transformer_with_neuro_device_tokens(fake_eeg):
-    batch_size, n_in_channels, n_times = fake_eeg.shape
+    batch_size, n_channels, n_times = fake_eeg.shape
 
     neuro_device_types = ["Eeg", "Meg"]
     dim, output_layer_dim = 512, 4
@@ -141,7 +141,7 @@ def test_conv_transformer_with_neuro_device_tokens(fake_eeg):
             "depth": 1,
         },
         output_layer_dim=output_layer_dim,
-    ).build(n_in_channels=n_in_channels)
+    ).build(n_spatial_locations=n_channels, n_outputs=None)
     assert isinstance(model, ConvTransformerModel)
     assert isinstance(model.encoder, SimpleConvModel)
     assert model.neuro_device_emb.weight.shape == (len(neuro_device_types), dim)
@@ -170,8 +170,8 @@ def test_conv_transformer_with_neuro_device_tokens(fake_eeg):
 def test_conv_transformer_with_conformer(fake_eeg):
     from torchaudio.models import Conformer
 
-    batch_size, n_in_channels, n_times = fake_eeg.shape
-    channel_positions = torch.rand((batch_size, n_in_channels, 2))
+    batch_size, n_channels, n_times = fake_eeg.shape
+    channel_positions = torch.rand((batch_size, n_channels, 2))
 
     dim = 512
     model = ConvTransformer(
@@ -192,7 +192,7 @@ def test_conv_transformer_with_conformer(fake_eeg):
             "use_group_norm": True,
             "convolution_first": False,
         },
-    ).build(n_in_channels=n_in_channels, n_outputs=dim)
+    ).build(n_spatial_locations=n_channels, n_outputs=dim)
     assert isinstance(model, ConvTransformerModel)
     assert isinstance(model.transformer, Conformer)
 

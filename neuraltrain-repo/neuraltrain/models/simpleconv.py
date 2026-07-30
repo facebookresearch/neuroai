@@ -13,7 +13,7 @@ from functools import partial
 import torch
 from torch import nn
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 from .common import (
     BahdanauAttention,
     ChannelMerger,
@@ -131,7 +131,7 @@ class ConvSequence(nn.Module):
         return x
 
 
-class SimpleConv(BaseModelConfig):
+class SimpleConv(BaseBrainModelConfig):
     """1-D convolutional encoder, adapted from brainmagick.
 
     Parameters
@@ -254,8 +254,9 @@ class SimpleConv(BaseModelConfig):
     backbone_out_channels: int | None = None  # If provided, the output of the
     # backbone (i.e. layer before the output heads) will have this dimensionality
 
-    def build(self, n_in_channels: int, n_outputs: int) -> "SimpleConvModel":
-        return SimpleConvModel(n_in_channels, n_outputs, config=self)
+    def build(self, n_spatial_locations: int, n_outputs: int | None) -> "SimpleConvModel":
+        assert n_outputs is not None, "SimpleConv requires n_outputs"
+        return SimpleConvModel(n_spatial_locations, n_outputs, config=self)
 
 
 class SimpleConvModel(nn.Module):
@@ -445,8 +446,11 @@ class SimpleConvTimeAgg(SimpleConv):
     # Output head(s)
     output_head_config: Mlp | dict[str, Mlp] | None = None
 
-    def build(self, n_in_channels: int, n_outputs: int) -> "SimpleConvTimeAggModel":
-        return SimpleConvTimeAggModel(n_in_channels, n_outputs, config=self)
+    def build(
+        self, n_spatial_locations: int, n_outputs: int | None
+    ) -> "SimpleConvTimeAggModel":
+        assert n_outputs is not None, "SimpleConvTimeAgg requires n_outputs"
+        return SimpleConvTimeAggModel(n_spatial_locations, n_outputs, config=self)
 
 
 class SimpleConvTimeAggModel(SimpleConvModel):

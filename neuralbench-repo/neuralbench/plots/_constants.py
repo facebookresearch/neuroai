@@ -38,7 +38,7 @@ _NON_REGISTRY_DISPLAY_NAMES: dict[str, str] = {
     "Chance": "Chance",
     "SimpleConv": "SimpleConv",
     "NtLuna": "LUNA (base)",
-    # Classical sklearn / pyriemann baselines (see neuralbench.sklearn_baseline).
+    # Classical sklearn / pyriemann baselines (see neuralbench.baselines).
     # ``feature_based`` is a synthetic label assigned by
     # :func:`neuralbench.plots.tables._collapse_feature_based_baselines` which
     # keeps only the task-appropriate pipeline (per
