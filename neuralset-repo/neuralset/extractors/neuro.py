@@ -4,9 +4,11 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import hashlib
 import inspect
 import logging
 import typing as tp
+import warnings
 from collections import defaultdict
 from difflib import get_close_matches
 from itertools import compress
@@ -27,7 +29,7 @@ from tqdm import tqdm
 import neuralset as ns
 from neuralset import base, utils
 from neuralset.base import TimedArray
-from neuralset.events import etypes
+from neuralset.events import etypes, eventquery
 
 from .base import BaseExtractor, BaseStatic
 
@@ -1382,15 +1384,26 @@ class _RoiSubsetProjector(BaseFmriProjector):
     wording.
     """
 
-    selected_rois: tp.AbstractSet[str] = pydantic.Field(frozen=True)
-    mode: tp.Literal["drop", "zero"] = "drop"
-    _masks: dict[int, np.ndarray] = pydantic.PrivateAttr(default_factory=dict)
+    selected_rois: set[str]
+    mode: tp.Literal["drop", "zero", "mean"] = "drop"
+    subset_size: int | None = None
+    subset_seed: int = 0
+    _selected: dict[int, dict[str, np.ndarray]] = pydantic.PrivateAttr(
+        default_factory=dict
+    )
     _roi_noun: tp.ClassVar[str] = "ROIs"
 
     def model_post_init(self, __context: tp.Any) -> None:
         super().model_post_init(__context)
         if not self.selected_rois:
             raise ValueError("selected_rois cannot be empty")
+        if self.subset_size is not None and self.subset_size <= 0:
+            raise ValueError("subset_size must be a positive integer")
+
+    @property
+    def ordered_rois(self) -> list[str]:
+        """Selected ROI names in output-row order."""
+        return sorted(self.selected_rois)
 
     def _roi_nodes(self, n_nodes: int) -> dict[str, np.ndarray]:
         raise NotImplementedError
@@ -1408,18 +1421,48 @@ class _RoiSubsetProjector(BaseFmriProjector):
         msg += f" Available {self._roi_noun}: {', '.join(available_sorted)}"
         return msg
 
-    def _get_mask(self, n_nodes: int) -> np.ndarray:
-        if n_nodes not in self._masks:
+    def _selected_nodes(self, n_nodes: int) -> dict[str, np.ndarray]:
+        """Validated ``{selected roi -> node indices}`` for an input size."""
+        if n_nodes not in self._selected:
             roi_nodes = self._roi_nodes(n_nodes)
-            wanted = self.selected_rois
-            unknown = wanted - roi_nodes.keys()
+            unknown = self.selected_rois - roi_nodes.keys()
             if unknown:
                 raise ValueError(self._unknown_rois_error(unknown, set(roi_nodes)))
-            mask = np.zeros(n_nodes, dtype=bool)
-            for roi in wanted:
-                mask[roi_nodes[roi]] = True
-            self._masks[n_nodes] = mask
-        return self._masks[n_nodes]
+            selected = {roi: roi_nodes[roi] for roi in self.ordered_rois}
+            if self.subset_size is not None:
+                too_small = {
+                    roi: len(nodes)
+                    for roi, nodes in selected.items()
+                    if len(nodes) < self.subset_size
+                }
+                if too_small:
+                    sizes = ", ".join(
+                        f"{roi}={size}" for roi, size in sorted(too_small.items())
+                    )
+                    raise ValueError(
+                        f"subset_size={self.subset_size} exceeds selected ROI sizes: "
+                        f"{sizes}"
+                    )
+                selected = {
+                    roi: self._rng_for_roi(roi).choice(
+                        nodes, size=self.subset_size, replace=False
+                    )
+                    for roi, nodes in selected.items()
+                }
+            self._selected[n_nodes] = selected
+        return self._selected[n_nodes]
+
+    def _rng_for_roi(self, roi: str) -> np.random.Generator:
+        """Seed sampling per ROI so its subset is independent of other selected ROIs."""
+        key = f"{self.subset_seed}\0{roi}".encode()
+        seed = int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "little")
+        return np.random.default_rng(seed)
+
+    def _get_mask(self, n_nodes: int) -> np.ndarray:
+        mask = np.zeros(n_nodes, dtype=bool)
+        for idx in self._selected_nodes(n_nodes).values():
+            mask[idx] = True
+        return mask
 
     def apply_after_cache(self, data: np.ndarray) -> np.ndarray:
         if data.ndim != 2:
@@ -1427,6 +1470,11 @@ class _RoiSubsetProjector(BaseFmriProjector):
                 f"{type(self).__name__} expects 2D (nodes, time) data, got {data.ndim}D"
             )
         data = np.asarray(data)
+        if self.mode == "mean":
+            nodes = self._selected_nodes(data.shape[0])
+            return np.stack(
+                [data[nodes[roi], :].mean(axis=0) for roi in self.ordered_rois]
+            )
         mask = self._get_mask(data.shape[0])
         if self.mode == "drop":
             return data[mask, :]
@@ -1435,7 +1483,7 @@ class _RoiSubsetProjector(BaseFmriProjector):
         return out
 
     def after_cache_fields(self) -> list[str]:
-        return ["selected_rois", "mode"]
+        return ["selected_rois", "mode", "subset_size", "subset_seed"]
 
     def apply(self, rec: tp.Any, **kwargs: tp.Any) -> np.ndarray:
         return rec.get_fdata()
@@ -1492,6 +1540,23 @@ DYNAMIC_ROIS: frozenset[str] = frozenset(
 )
 
 
+def _with_bare_roi_names(
+    hemi_nodes: dict[str, np.ndarray],
+) -> dict[str, np.ndarray]:
+    """Add a bare (both-hemisphere) alias for every ``..._left``/``..._right`` name.
+
+    Given a per-hemisphere ``name -> node indices`` map following the
+    ``_left``/``_right`` naming convention, return it augmented so that e.g.
+    ``"V1_left"`` and ``"V1_right"`` also yield a bare ``"V1"`` covering both.
+    Hemisphere-less names (e.g. ``"brainstem"``) are passed through unchanged.
+    """
+    bare: defaultdict[str, list[np.ndarray]] = defaultdict(list)
+    for name, idx in hemi_nodes.items():
+        if name.endswith(("_left", "_right")):
+            bare[name.rsplit("_", 1)[0]].append(idx)
+    return hemi_nodes | {b: np.sort(np.concatenate(a)) for b, a in bare.items()}
+
+
 class GlasserProjector(_RoiSubsetProjector):
     """Subset HCP grayordinates or fsaverage vertices to Glasser ROIs.
 
@@ -1513,14 +1578,22 @@ class GlasserProjector(_RoiSubsetProjector):
     selected_rois : set[str]
         ROI names to keep. Use :meth:`available_rois` to list valid names, or
         pass the :data:`DYNAMIC_ROIS` preset (41 visual areas).
-        Names have no ``L_``/``R_`` prefix; both hemispheres are always selected.
-    mode : "drop" | "zero"
+        A bare name (``"V1"``) selects both hemispheres; append ``_left``/
+        ``_right`` (``"V1_left"``) to select a single hemisphere.
+    mode : "drop" | "zero" | "mean"
         ``"drop"`` returns only selected vertices/grayordinates. ``"zero"``
-        keeps the input shape and sets non-selected rows to zero.
+        keeps the input shape and sets non-selected rows to zero. ``"mean"``
+        collapses each selected ROI to its mean, returning one row per ROI
+        (``(n_rois, time)``), ordered by ROI name (see :attr:`ordered_rois`).
+    subset_size : int | None
+        If set, randomly sample this many nodes from each selected ROI.
+    subset_seed : int
+        Random seed for subset sampling.
 
     Examples
     --------
     >>> GlasserProjector(selected_rois={"V1", "V2", "V3", "V4"})
+    >>> GlasserProjector(selected_rois={"V1", "MT_left"})
     >>> GlasserProjector(selected_rois=DYNAMIC_ROIS)
     >>> GlasserProjector.available_rois()
 
@@ -1537,10 +1610,12 @@ class GlasserProjector(_RoiSubsetProjector):
 
     @classmethod
     def available_rois(cls) -> list[str]:
-        """Return available unprefixed ROI names.
+        """Return accepted Glasser ROI names.
 
-        Returns the full HCP MMP1.0 cortical atlas, using ``hcp_utils`` when
-        available and falling back to the MNE HCP-MMP annotation.
+        Returns the full HCP MMP1.0 cortical atlas, including bare bilateral
+        names and ``_left``/``_right`` hemisphere-specific names. Uses
+        ``hcp_utils`` when available and falls back to the MNE HCP-MMP
+        annotation.
         """
         try:
             import hcp_utils  # noqa: F401  # availability probe; _cifti_roi_nodes re-imports
@@ -1559,24 +1634,30 @@ class GlasserProjector(_RoiSubsetProjector):
         return name[2:] if name.startswith(("L_", "R_")) else name
 
     @classmethod
+    def _hemi_roi_name(cls, label: str) -> str:
+        """``L_V1[_ROI-lh]`` -> ``"V1_left"``; ``R_V1[...]`` -> ``"V1_right"``."""
+        hemi = "left" if label.startswith("L_") else "right"
+        return f"{cls._roi_name(label)}_{hemi}"
+
+    @classmethod
     def _fsaverage_roi_vertices(cls) -> dict[str, np.ndarray]:
-        """Map each unprefixed ROI name to its fsaverage7 global vertex indices.
+        """Map each ROI name (bare and ``_left``/``_right``) to fsaverage7 global
+        vertex indices.
 
         Right-hemisphere vertices are offset by ``n_vertices`` so the indices
         address the stacked ``(2 * n_vertices, time)`` surface. The MNE
         background/unknown label (``???``) is excluded.
         """
         n_vertices = FSAVERAGE_SIZES["fsaverage7"]
-        roi_vertices: defaultdict[str, list[int]] = defaultdict(list)
+        hemi_nodes: dict[str, np.ndarray] = {}
         for label in cls._read_mne_hcp_labels():
-            roi = cls._roi_name(label.name)
-            if roi == "???":
+            if cls._roi_name(label.name) == "???":
                 continue
             vertices = np.asarray(label.vertices, dtype=int)
             if label.hemi == "rh":
                 vertices = vertices + n_vertices
-            roi_vertices[roi].extend(vertices.tolist())
-        return {roi: np.asarray(v, dtype=int) for roi, v in roi_vertices.items()}
+            hemi_nodes[cls._hemi_roi_name(label.name)] = vertices
+        return _with_bare_roi_names(hemi_nodes)
 
     @classmethod
     def _read_mne_hcp_labels(cls) -> list[tp.Any]:
@@ -1605,14 +1686,17 @@ class GlasserProjector(_RoiSubsetProjector):
     def _cifti_roi_nodes(cls) -> dict[str, np.ndarray]:
         import hcp_utils as hcp
 
-        keys_by_roi: defaultdict[str, list[int]] = defaultdict(list)
+        keys_by_name: defaultdict[str, list[int]] = defaultdict(list)
         for key, label in hcp.mmp.labels.items():
+            # hcp.mmp.labels also includes background/subcortical labels;
+            # keep only cortical HCP-MMP parcels here.
             if label.startswith(("R_", "L_")):
-                keys_by_roi[cls._roi_name(label)].append(key)
-        return {
-            roi: np.nonzero(np.isin(hcp.mmp.map_all, keys))[0]
-            for roi, keys in keys_by_roi.items()
+                keys_by_name[cls._hemi_roi_name(label)].append(key)
+        hemi_nodes = {
+            name: np.nonzero(np.isin(hcp.mmp.map_all, keys))[0]
+            for name, keys in keys_by_name.items()
         }
+        return _with_bare_roi_names(hemi_nodes)
 
     def _roi_nodes(self, n_nodes: int) -> dict[str, np.ndarray]:
         if n_nodes == 2 * FSAVERAGE_SIZES["fsaverage7"]:
@@ -1638,14 +1722,20 @@ class CiftiRoiProjector(_RoiSubsetProjector):
     Parameters
     ----------
     selected_rois : set[str]
-        Any mix of Glasser cortical ROI names (e.g. ``"V1"``, both hemispheres)
-        and subcortical structure names -- bare (``"thalamus"`` = both
-        hemispheres) or hemisphere-suffixed (``"thalamus_left"``), except
-        ``"brainstem"``.  See :meth:`available_rois`, or pass the
-        :data:`DYNAMIC_ROIS` cortical preset (41 visual areas).
-    mode : "drop" | "zero"
+        Any mix of Glasser cortical ROI names and subcortical structure names.
+        Both accept a bare name (``"V1"``/``"thalamus"`` = both hemispheres)
+        or a ``_left``/``_right`` suffix (``"V1_left"``, ``"thalamus_left"``); the
+        hemisphere-less ``"brainstem"`` is bare only.  See :meth:`available_rois`,
+        or pass the :data:`DYNAMIC_ROIS` cortical preset (41 visual areas).
+    mode : "drop" | "zero" | "mean"
         ``"drop"`` returns only selected nodes; ``"zero"`` keeps the input shape
-        and zeroes non-selected rows.
+        and zeroes non-selected rows; ``"mean"`` collapses each selected ROI to
+        its mean, returning one row per ROI (``(n_rois, time)``), ordered by ROI
+        name (see :attr:`ordered_rois`).
+    subset_size : int | None
+        If set, randomly sample this many nodes from each selected ROI.
+    subset_seed : int
+        Random seed for subset sampling.
 
     Examples
     --------
@@ -1666,19 +1756,15 @@ class CiftiRoiProjector(_RoiSubsetProjector):
 
         skip = {"cortex_left", "cortex_right", "cortex", "subcortical", "all"}
         all_idx = np.arange(HCP_CIFTI_91K_SIZE)
-        nodes = dict(GlasserProjector._cifti_roi_nodes())
-        bare: defaultdict[str, list[int]] = defaultdict(list)
-        for key, selector in hcp.struct.items():
-            if key in skip or key.startswith("cortex"):
-                continue
-            idx = all_idx[selector]  # selector may be a slice or an index array
-            name = key.lower()  # e.g. "brainStem" -> "brainstem"
-            nodes[name] = idx
-            if name.endswith(("_left", "_right")):
-                bare[name.rsplit("_", 1)[0]].extend(idx.tolist())
-        for bare_name, idxs in bare.items():
-            nodes[bare_name] = np.asarray(sorted(idxs), dtype=int)
-        return nodes
+        subcortical = {
+            key.lower(): all_idx[selector]  # e.g. "brainStem" -> "brainstem"
+            for key, selector in hcp.struct.items()
+            if key not in skip and not key.startswith("cortex")
+        }
+        return {
+            **GlasserProjector._cifti_roi_nodes(),
+            **_with_bare_roi_names(subcortical),
+        }
 
     def _roi_nodes(self, n_nodes: int) -> dict[str, np.ndarray]:
         if n_nodes != HCP_CIFTI_91K_SIZE:
@@ -1736,13 +1822,23 @@ class FmriExtractor(BaseExtractor):
         Target sampling frequency.
     padding : int | ``"auto"`` | None
         Pad 1-D+T data to a uniform voxel count across subjects.
-    from_space : str | ``"auto"`` | None
-        Input space to load.  ``None`` (default) passes through when only
-        one space is present, raises when multiple are found.
-        ``"auto"`` uses a projection-aware heuristic.
-        An explicit string selects that space.
-    from_preproc : str | tuple[str, ...] | None
-        Filter events by preprocessing pipeline.
+    query : Query | None
+        Per-event predicate selecting which fMRI variant(s) to load, evaluated
+        directly on ``Fmri`` event objects. This is a deliberate subset of the
+        pandas ``QueryEvents`` dialect: it supports ``space``, ``preproc``, and
+        ``study`` string conditions with ``==``, ``!=``, ``in``, and ``not in``
+        combined with ``and``/``or``/``not``. Referenced names are validated at
+        construction, so typos fail fast — including in short-circuited
+        branches. For richer filters, use a
+        ``QueryEvents`` transform upstream.
+    from_space, from_preproc
+        Deprecated compatibility aliases for older configs. Prefer ``query``;
+        legacy selector fields remain in cache UIDs so old configs can keep
+        using their existing cache namespace while they migrate.
+        ``from_space="auto"`` additionally re-enables the deprecated
+        projection-aware space selection (SurfaceProjector prefers fsaverage,
+        GlasserProjector prefers fsLR, others prefer MNI); it has no ``query``
+        equivalent and will be removed in a future release.
     fwhm : float | None
         Full width at half maximum (in mm) for isotropic spatial smoothing
         via ``nilearn.image.smooth_img``. Applied after masking and before
@@ -1756,6 +1852,8 @@ class FmriExtractor(BaseExtractor):
     cleaning: FmriCleaner | None = FmriCleaner()
     frequency: tp.Literal["native"] | float = "native"
     padding: int | tp.Literal["auto"] | None = None
+    query: base.Query | None = None
+    _QUERY_FIELDS: tp.ClassVar[frozenset[str]] = frozenset({"space", "preproc", "study"})
     from_space: str | None = None
     from_preproc: str | tuple[str, ...] | None = None
     fwhm: float | None = None
@@ -1765,9 +1863,16 @@ class FmriExtractor(BaseExtractor):
         version="2",
     )
     _padding: int | None = None
+    _query_predicate: tp.Callable[[etypes.Event], bool] | None = pydantic.PrivateAttr(
+        default=None
+    )
+    _effective_query: str | None = pydantic.PrivateAttr(default=None)
+    _effective_auto_space: bool = pydantic.PrivateAttr(default=False)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
+        self._migrate_legacy_selectors()
+        self._get_query_predicate()
         if isinstance(self.padding, int):
             self._padding = self.padding
         if not self.projection and self.infra.folder is not None:
@@ -1778,103 +1883,125 @@ class FmriExtractor(BaseExtractor):
             )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = super()._exclude_from_cache_uid() + ["offset", "padding"]
+        excluded = super()._exclude_from_cache_uid() + [
+            "offset",
+            "padding",
+            "query",
+        ]
         if self.projection is not None:
             excluded += [f"projection.{f}" for f in self.projection.after_cache_fields()]
         return excluded
 
-    def _auto_filter_fmri_events(
-        self, fmri_events: list[etypes.Fmri]
-    ) -> list[etypes.Fmri]:
-        """Filter fMRI events by ``from_preproc``, ``from_space``, and ``projection``.
-
-        1. **Preproc filter** -- drop events not matching ``self.from_preproc``
-           (skipped when ``None``).
-        2. **Space selection**:
-
-           - Explicit string (e.g. ``"MNI152NLin2009cAsym"``) -- keep only
-             that space; raises if no events match.
-           - ``"auto"`` -- projection-aware heuristic: ``SurfaceProjector``
-             prefers fsaverage meshes, other projectors prefer MNI spaces.
-             Requires ``self.projection`` to be set.
-           - ``None`` (default) -- pass through if one space, raise if
-             multiple.
-        """
-        from_preproc = self.from_preproc
-        from_space = self.from_space
-        if isinstance(from_preproc, str):
-            from_preproc = (from_preproc,)
-        if from_preproc is not None:
-            available_preprocs = {e.preproc for e in fmri_events}
-            missing = set(from_preproc) - available_preprocs
-            if missing:
-                raise ValueError(
-                    f"from_preproc={missing} not found. Available: {available_preprocs}"
-                )
-            fmri_events = [e for e in fmri_events if e.preproc in from_preproc]
-        preproc_ctx = (
-            f" (after from_preproc={self.from_preproc!r} filter)"
-            if from_preproc is not None
-            else ""
-        )
-        spaces = {e.space for e in fmri_events}
-        if len(spaces) > 1 and from_space is None:
-            logger.warning(
-                "Multiple fMRI spaces found: %s. If you trigger list_segments "
-                "on Fmri events, each space produces a separate segment. "
-                "Filter with from_space or a QueryEvents transform "
-                "before segmentation to avoid duplicates.",
-                spaces,
+    def _migrate_legacy_selectors(self) -> None:
+        self._effective_query = self.query
+        if self.from_space is None and self.from_preproc is None:
+            return
+        if self.query is not None:
+            raise ValueError(
+                "Use either query or the deprecated from_space/from_preproc, not both"
             )
-        if isinstance(from_space, str) and from_space != "auto":
-            filtered = [e for e in fmri_events if e.space == from_space]
-            if not filtered:
-                raise ValueError(
-                    f"from_space={from_space!r} matched no events. "
-                    f"Available spaces: {spaces}{preproc_ctx}"
-                )
-            return filtered
+        parts = []
+        if self.from_preproc is not None:
+            preprocs = (
+                (self.from_preproc,)
+                if isinstance(self.from_preproc, str)
+                else self.from_preproc
+            )
+            if not preprocs:
+                raise ValueError("from_preproc must not be empty")
+            parts.append(
+                f"preproc == {preprocs[0]!r}"
+                if len(preprocs) == 1
+                else f"preproc in {list(preprocs)!r}"
+            )
+        if self.from_space == "auto":
+            self._effective_auto_space = True
+        elif self.from_space is not None:
+            parts.append(f"space == {self.from_space!r}")
+        if parts:
+            self._effective_query = " and ".join(parts)
+        if self._effective_auto_space:
+            warnings.warn(
+                "FmriExtractor auto space selection (from_space='auto') is "
+                "deprecated and will be removed in a future release; set query to "
+                "select an explicit space instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+        if parts:
+            warnings.warn(
+                "FmriExtractor.from_space/from_preproc are deprecated; "
+                "use query instead.",
+                FutureWarning,
+                stacklevel=2,
+            )
+
+    def _get_query_predicate(self) -> tp.Callable[[etypes.Event], bool] | None:
+        if self._effective_query is None:
+            self._query_predicate = None
+            return None
+        if self._query_predicate is None:
+            self._query_predicate = eventquery.compile_event_query(
+                self._effective_query, fields=self._QUERY_FIELDS
+            )
+        return self._query_predicate
+
+    def _filter_fmri_events(self, fmri_events: list[etypes.Fmri]) -> list[etypes.Fmri]:
+        """Apply ``query``, then deprecated ``from_space='auto'`` space selection."""
+        candidates = fmri_events
+        available_spaces = {e.space for e in candidates}
+        available_preprocs = {e.preproc for e in candidates}
+        predicate = self._get_query_predicate()
+        if predicate is not None:
+            fmri_events = [e for e in fmri_events if predicate(e)]
+        if candidates and not fmri_events:
+            query_ctx = f"query={self._effective_query!r} matched no fMRI events. "
+            raise ValueError(
+                f"{query_ctx}Available spaces: {available_spaces}; "
+                f"available preprocs: {available_preprocs}"
+            )
+        spaces = {e.space for e in fmri_events}
         if len(spaces) <= 1:
             return fmri_events
-        if from_space is None:
+        if not self._effective_auto_space:
             raise ValueError(
-                f"Multiple spaces found ({spaces}), set from_space explicitly "
-                "or use from_space='auto'"
+                f"Multiple spaces found ({spaces}), set FmriExtractor.query "
+                "to select a single space explicitly"
             )
-        # from_space == "auto": projection-aware heuristic
+        # deprecated from_space='auto': projection-aware heuristic
         if self.projection is None:
             raise ValueError(
                 f"from_space='auto' requires a projection to choose among "
-                f"{spaces}. Set from_space to an explicit space name, or "
-                "configure a projection."
+                f"{spaces}. Set query to select an explicit space, or configure "
+                "a projection."
             )
         fs = "fsaverage"
         if isinstance(
             self.projection, SurfaceProjector
         ) and self.projection.mesh.startswith(fs):
-            candidates = [f"{fs}{n}" for n in range(3, 8)] + [fs]
+            candidate_spaces = [f"{fs}{n}" for n in range(3, 8)] + [fs]
         elif isinstance(self.projection, GlasserProjector):
-            candidates = [
+            candidate_spaces = [
                 "fsLR",
                 "fsaverage",
                 "fsaverage7",
             ]
         elif isinstance(self.projection, CiftiRoiProjector):
             # CIFTI-only: subcortical structures exist only in grayordinate space.
-            candidates = ["fsLR"]
+            candidate_spaces = ["fsLR"]
         else:
-            candidates = ["MNI152NLin2009cAsym"] + [s for s in spaces if "MNI" in s]
-        best = next((c for c in candidates if c in spaces), None)
+            candidate_spaces = ["MNI152NLin2009cAsym"] + [s for s in spaces if "MNI" in s]
+        best = next((c for c in candidate_spaces if c in spaces), None)
         if best is None:
             raise ValueError(
                 f"No matching space for projection={self.projection!r} among "
-                f"{spaces}. Set from_space to an explicit space name."
+                f"{spaces}. Set query to select an explicit space."
             )
         return [e for e in fmri_events if e.space == best]
 
     def prepare(self, obj: DataframeOrEventsOrSegments) -> None:
         all_events: list[etypes.Fmri] = self._event_types_helper.extract(obj)  # type: ignore[assignment]
-        events = self._auto_filter_fmri_events(all_events)
+        events = self._filter_fmri_events(all_events)
         if self.padding == "auto":
             # for padding, we first need everything to be preprocessed
             # but we need on an object without padding since missing_default filling
@@ -1936,8 +2063,8 @@ class FmriExtractor(BaseExtractor):
         start: float,
         duration: float,
     ) -> list[etypes.Event]:
-        """Filter Fmri events by preproc/space, then delegate aggregation to base."""
-        fmri_events = self._auto_filter_fmri_events(
+        """Filter Fmri events by query/space, then delegate aggregation to base."""
+        fmri_events = self._filter_fmri_events(
             self._event_types_helper.extract(events),  # type: ignore[arg-type]
         )
         return super()._get_relevant_events(
