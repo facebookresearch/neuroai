@@ -598,15 +598,13 @@ def _remove_incomplete_segments(
     # Identify problematic segments
     invalid_indices: set[int] = set()
     for event_type, extracts in event_types.items():
-        required = any(not f.allow_missing for f in extracts)
-        # safe to skip slow scan
-        if not drop_incomplete and not required:
-            continue
-
         # Find segments that don't have this event type
         invalids = find_incomplete_segments(segments, [event_type])
 
         if invalids:
+            # Checks whether the extractor authorize missing event
+            required = any([not f.allow_missing for f in extracts])
+
             # Raise error if extractor requires this event type
             msg = f"{len(invalids)} segments are missing events of type {event_type.__name__}."
             if not drop_incomplete and required:

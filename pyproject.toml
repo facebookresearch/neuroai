@@ -71,5 +71,4 @@ ignore-multiline-regex = 'bibtex[^\n]*= """[\s\S]*?"""|codespell:ignore-begin[\s
 # toi, rouge: French words ("you", "red") used in accent-insensitive matching tests
 # fo: test timeline identifier string
 # lond: London site code in Nieuwland2018 filenames
-# notin: Python AST class ast.NotIn
-ignore-words-list = 'fro,toi,rouge,fo,lond,notin'
+ignore-words-list = 'fro,toi,rouge,fo,lond'
