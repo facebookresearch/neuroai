@@ -7,7 +7,7 @@
 data:
   study:
     source:
-      name: Levy2026NoninvasiveEeg
+      name: Levy2025BrainEeg
     filter_trial_id:
       name: QueryEvents
       query: "~trial_id.isin([0.0, 1.0])"
