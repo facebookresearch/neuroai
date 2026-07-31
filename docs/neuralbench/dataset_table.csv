@@ -32,9 +32,9 @@ Sleep arousal,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Ghassemi201
 Sleep stage,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kemp2000Analysis`,30.0,2,Classification,5,196220,116493,911,36440,78,Ghassemi2018You; Alvarez2022Haaglanden
 Speech,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Brennan2019Hierarchical`,3.0,60,Retrieval,4096,70257,46827,366,14640,33,
 Ssvep,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Wang2017Benchmark`,4.0,64,Classification,40,8160,4800,38,1520,34,Kalunga2016Online; Lee2019EegSsvep; Nakanishi2015Comparison; Oikonomou2016ComparativeA; Oikonomou2016ComparativeB; Oikonomou2016ComparativeC; Wang2017Benchmark
-Typing,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Levy2026NoninvasiveEeg`,1.0,61,Classification,29,146551,87650,685,27400,20,
+Typing,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Levy2025BrainEeg`,1.0,61,Classification,29,146551,87650,685,27400,20,
 Video,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Liu2024Eeg2video`,2.0,62,Retrieval,1408,29400,17640,138,5520,20,
 Word,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Nieuwland2018Large`,3.0,74,Retrieval,1024,529730,425399,3324,132960,222,
 Image,:bdg-success:`event`,MEG,:py:class:`~neuralset.studies.Hebart2023ThingsMeg`,1.0,300,Retrieval,1536,98592,71201,557,22280,4,
-Typing,:bdg-success:`event`,MEG,:py:class:`~neuralset.studies.Levy2026NoninvasiveMeg`,1.0,306,Classification,29,193051,119479,934,37360,23,
+Typing,:bdg-success:`event`,MEG,:py:class:`~neuralset.studies.Levy2025BrainMeg`,1.0,306,Classification,29,193051,119479,934,37360,23,
 Image,:bdg-success:`event`,fMRI,:py:class:`~neuralset.studies.Allen2022Nsd`,7.0,,Retrieval,1536,213000,153559,1200,48000,8,Chang2019Bold5000; Hebart2023ThingsBold
