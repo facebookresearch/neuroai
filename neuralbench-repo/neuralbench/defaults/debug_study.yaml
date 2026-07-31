@@ -19,6 +19,8 @@ Chen2023Large: "subject_index < 5"
 Hebart2023ThingsBold: "timeline_index < 6"
 Hebart2023ThingsMeg: "timeline_index < 6"
 Dan2023Bids: "subject_index < 5"
+Duan2026OmniIeeg: "timeline_index < 4"
+Duan2026OmniIeegHfo: "timeline_index < 100"
 Fuglsang2017Noise: "subject_index == 0"
 # All Ghassemi-backed tasks (sleep_stage, sleep_arousal, sleep_onset) filter to
 # the labeled "train" split. Test-split record IDs sort before training-split IDs
