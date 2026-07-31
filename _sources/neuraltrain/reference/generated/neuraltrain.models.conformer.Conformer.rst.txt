@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.conformer.Conformer
+======================================
+
+.. currentmodule:: neuraltrain.models.conformer
+
+.. autopydantic_model:: Conformer
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

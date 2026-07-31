@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.SonarEmbedding
+========================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: SonarEmbedding
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.optimizers.base.BaseTorchLRScheduler
+================================================
+
+.. currentmodule:: neuraltrain.optimizers.base
+
+.. autopydantic_model:: BaseTorchLRScheduler
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

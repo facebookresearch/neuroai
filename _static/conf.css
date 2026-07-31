@@ -1,0 +1,34 @@
+/* ---- sphinx-gallery: hide the auto-generated
+   "Note: Go to the end to download the full example code." admonition
+   at the top of every example. The working download buttons in the
+   footer live under `.sphx-glr-footer`, not this class. ---- */
+.sphx-glr-download-link-note {
+    display: none;
+}
+
+/* ---- sphinx-gallery card hover ---- */
+.sphx-glr-thumbcontainer {
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sphx-glr-thumbcontainer:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* ---- Backreference galleries ---- */
+.sphx-glr-thumbcontainer.tooltipster {
+    margin: 1rem;
+}
+
+.sphx-glr-signature-examples {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--color-background-border);
+}
+
+.sphx-glr-signature-examples h2 {
+    color: var(--color-brand-primary);
+}

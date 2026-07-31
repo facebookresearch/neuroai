@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.base.LabelEncoder
+======================================
+
+.. currentmodule:: neuralset.extractors.base
+
+.. autopydantic_model:: LabelEncoder
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

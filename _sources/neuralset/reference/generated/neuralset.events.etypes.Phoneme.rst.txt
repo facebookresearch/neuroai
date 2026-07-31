@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Phoneme
+===============================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Phoneme
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

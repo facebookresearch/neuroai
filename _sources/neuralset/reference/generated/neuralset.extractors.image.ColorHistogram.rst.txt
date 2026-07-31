@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.image.ColorHistogram
+=========================================
+
+.. currentmodule:: neuralset.extractors.image
+
+.. autopydantic_model:: ColorHistogram
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

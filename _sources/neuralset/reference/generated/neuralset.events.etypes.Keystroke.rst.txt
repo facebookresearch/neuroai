@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Keystroke
+=================================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Keystroke
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
