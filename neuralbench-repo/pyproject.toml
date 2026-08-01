@@ -22,7 +22,7 @@ dependencies = [
   "seaborn",
   "torchinfo",
   # Pinning torch version to ensure support for CUDA capability sm_60
-  "torch==2.6",
+  "torch==2.13.0",
   "torchaudio==2.6",
   "torchvision==0.21",
 ]
