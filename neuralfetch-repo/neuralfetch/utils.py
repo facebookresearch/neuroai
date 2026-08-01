@@ -57,8 +57,10 @@ def compute_study_info(name: str, folder: str | Path) -> dict[str, tp.Any]:
     """Load study *name* from *folder* and return a dict of actual ``StudyInfo`` values.
 
     Always computes num_timelines, num_subjects, num_events_in_query, and
-    event_types_in_query.  Attempts to read one Fmri/MneRaw event for
-    data_shape, frequency, and fmri_spaces (skipped on failure).
+    event_types_in_query.  Includes query when the study declares a non-default
+    one, so that the counts computed from it stay paired with it.  Attempts to
+    read one Fmri/MneRaw event for data_shape, frequency, and fmri_spaces
+    (skipped on failure).
     """
     folder = Path(folder)
     default_query = "timeline_index < 1"
@@ -80,6 +82,10 @@ def compute_study_info(name: str, folder: str | Path) -> dict[str, tp.Any]:
         num_events_in_query=len(events),
         event_types_in_query=set(events["type"].unique()),
     )
+    if query != default_query:
+        # Only report a diverging query: emitting the default everywhere would
+        # churn every study file without adding information.
+        actual["query"] = query
     # Read first Fmri/MneRaw event for data_shape / frequency.
     types = ev.etypes.EventTypesHelper(["Fmri", "MneRaw"]).names
     matching = events.loc[events.type.isin(types)]
@@ -158,9 +164,7 @@ def _repr_val(val: tp.Any) -> str:
 def format_study_info(actual: dict[str, tp.Any]) -> str:
     """Return a formatted ``StudyInfo(...)`` string from computed values."""
     parts = [
-        f"{f}={_repr_val(actual[f])}"
-        for f in base.StudyInfo.model_fields
-        if f != "query" and f in actual
+        f"{f}={_repr_val(actual[f])}" for f in base.StudyInfo.model_fields if f in actual
     ]
     code = f"StudyInfo({', '.join(parts)})"
     result = subprocess.run(
