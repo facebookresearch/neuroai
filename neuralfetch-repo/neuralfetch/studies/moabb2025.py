@@ -1015,6 +1015,81 @@ class Crell2024Handwritten(_BaseMoabb):
     )
 
 
+class Dong2023Large(_BaseMoabb):
+    """Subset of MOABB: Dong2023"""
+
+    aliases: tp.ClassVar[tuple[str, ...]] = ("Dong2023",)
+    bibtex: tp.ClassVar[str] = """
+        @article{dong2023large,
+          title={A large database towards user-friendly SSVEP-based BCI},
+          volume={9},
+          number={4},
+          journal={Brain Science Advances},
+          publisher={Tsinghua University Press},
+          author={Dong, Yue and Tian, Sen},
+          year={2023},
+          pages={297-309},
+          DOI={10.26599/BSA.2023.9050020},
+          url={https://doi.org/10.26599/BSA.2023.9050020}
+        }
+    """
+    url: tp.ClassVar[str] = "https://zenodo.org/records/18847318"
+    licence: tp.ClassVar[str] = "CC-BY-NC-4.0"
+    description: tp.ClassVar[str] = (
+        "EEG recordings (8-ch) in 59 healthy adolescents (aged 10-16) while fixating on flickering targets in a 40-class joint frequency-phase modulation (JFPM) SSVEP speller."
+    )
+    event_id: tp.ClassVar[dict[str, int]] = {
+        "8": 1,
+        "8.2": 2,
+        "8.4": 3,
+        "8.6": 4,
+        "8.8": 5,
+        "9": 6,
+        "9.2": 7,
+        "9.4": 8,
+        "9.6": 9,
+        "9.8": 10,
+        "10": 11,
+        "10.2": 12,
+        "10.4": 13,
+        "10.6": 14,
+        "10.8": 15,
+        "11": 16,
+        "11.2": 17,
+        "11.4": 18,
+        "11.6": 19,
+        "11.8": 20,
+        "12": 21,
+        "12.2": 22,
+        "12.4": 23,
+        "12.6": 24,
+        "12.8": 25,
+        "13": 26,
+        "13.2": 27,
+        "13.4": 28,
+        "13.6": 29,
+        "13.8": 30,
+        "14": 31,
+        "14.2": 32,
+        "14.4": 33,
+        "14.6": 34,
+        "14.8": 35,
+        "15": 36,
+        "15.2": 37,
+        "15.4": 38,
+        "15.6": 39,
+        "15.8": 40,
+    }
+    _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
+        num_timelines=59,
+        num_subjects=59,
+        num_events_in_query=161,
+        event_types_in_query={"Eeg", "Stimulus"},
+        data_shape=(8, 216000),
+        frequency=250.0,
+    )
+
+
 class Dornhege2004Boosting(_BaseMoabb):
     """Subset of MOABB: BNCI2003_004"""
 
@@ -1312,6 +1387,79 @@ class Guger2009How(_BaseMoabb):
         event_types_in_query={"Eeg", "Stimulus"},
         data_shape=(8, 65282),
         frequency=256.0,
+    )
+
+
+class Han2024Enhancing(_BaseMoabb):
+    """Subset of MOABB: Han2024Fatigue
+
+    Two SSVEP frequency paradigms (low: 8-15.5 Hz, high: 25.5-33 Hz) recorded
+    in two sessions: session ``0`` = alert/training blocks, session ``1`` =
+    fatigued blocks.  The cross-session split (train on alert, test on
+    fatigued) is a deliberate domain-shift benchmark.
+    """
+
+    aliases: tp.ClassVar[tuple[str, ...]] = ("Han2024Fatigue",)
+    bibtex: tp.ClassVar[str] = """
+        @article{han2024enhancing,
+          title={Enhancing SSVEP-BCI Performance Under Fatigue State Using Dynamic Stopping Strategy},
+          volume={32},
+          ISSN={1558-0210},
+          journal={IEEE Transactions on Neural Systems and Rehabilitation Engineering},
+          publisher={Institute of Electrical and Electronics Engineers (IEEE)},
+          author={Han, Yuheng and Ke, Yufeng and Wang, Ruiyan and Wang, Tao and Ming, Dong},
+          year={2024},
+          pages={1407-1415},
+          DOI={10.1109/TNSRE.2024.3380635},
+          url={https://doi.org/10.1109/TNSRE.2024.3380635}
+        }
+    """
+    url: tp.ClassVar[str] = "https://doi.org/10.5281/zenodo.10507229"
+    licence: tp.ClassVar[str] = "CC-BY-4.0"
+    description: tp.ClassVar[str] = (
+        "EEG recordings (64-ch) in 24 healthy participants while fixating on SSVEP targets across low- (8-15.5 Hz) and high-frequency (25.5-33 Hz) paradigms in alert and fatigued sessions."
+    )
+    event_id: tp.ClassVar[dict[str, int]] = {
+        "8": 1,
+        "8.5": 2,
+        "9": 3,
+        "9.5": 4,
+        "10": 5,
+        "10.5": 6,
+        "11": 7,
+        "11.5": 8,
+        "12": 9,
+        "12.5": 10,
+        "13": 11,
+        "13.5": 12,
+        "14": 13,
+        "14.5": 14,
+        "15": 15,
+        "15.5": 16,
+        "25.5": 17,
+        "26": 18,
+        "26.5": 19,
+        "27": 20,
+        "27.5": 21,
+        "28": 22,
+        "28.5": 23,
+        "29": 24,
+        "29.5": 25,
+        "30": 26,
+        "30.5": 27,
+        "31": 28,
+        "31.5": 29,
+        "32": 30,
+        "32.5": 31,
+        "33": 32,
+    }
+    _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
+        num_timelines=48,
+        num_subjects=24,
+        num_events_in_query=193,
+        event_types_in_query={"Eeg", "Stimulus"},
+        data_shape=(64, 595200),
+        frequency=1000.0,
     )
 
 
@@ -1996,6 +2144,124 @@ class Kappenman2021ErpN400(_BaseMoabb):
         num_events_in_query=121,
         event_types_in_query={"Eeg", "Stimulus"},
         data_shape=(30, 585728),
+        frequency=1024.0,
+    )
+
+
+class Kaya2018Large(_BaseMoabb):
+    """Subset of MOABB: Kaya2018
+
+    Classical (CLA) motor imagery with three cued states: left-hand and
+    right-hand imagery plus a passive/rest state.  Each CLA recording file
+    becomes a separate session; subjects have between 1 and 3 sessions.
+    """
+
+    aliases: tp.ClassVar[tuple[str, ...]] = ("Kaya2018",)
+    bibtex: tp.ClassVar[str] = """
+        @article{kaya2018large,
+          title={A large electroencephalographic motor imagery dataset for electroencephalographic brain computer interfaces},
+          volume={5},
+          ISSN={2052-4463},
+          journal={Scientific Data},
+          publisher={Springer Science and Business Media LLC},
+          author={Kaya, Murat and Binli, Mustafa Kemal and Ozbay, Erkan and Yanar, Hilmi and Mishchenko, Yuriy},
+          year={2018},
+          pages={180211},
+          DOI={10.1038/sdata.2018.211},
+          url={https://doi.org/10.1038/sdata.2018.211}
+        }
+    """
+    url: tp.ClassVar[str] = "https://doi.org/10.6084/m9.figshare.c.3917698"
+    licence: tp.ClassVar[str] = "CC-BY-4.0"
+    description: tp.ClassVar[str] = (
+        "EEG recordings (19-ch) in 7 healthy participants performing classical (CLA) left-hand, right-hand, and passive motor-imagery tasks."
+    )
+    event_id: tp.ClassVar[dict[str, int]] = {
+        "left_hand": 1,
+        "right_hand": 2,
+        "passive": 3,
+    }
+    _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
+        num_timelines=17,
+        num_subjects=7,
+        num_events_in_query=961,
+        event_types_in_query={"Eeg", "Stimulus"},
+        data_shape=(19, 671600),
+        frequency=200.0,
+    )
+
+
+class Kim2025Beta(_BaseMoabb):
+    """Subset of MOABB: Kim2025BetaRange"""
+
+    aliases: tp.ClassVar[tuple[str, ...]] = ("Kim2025BetaRange",)
+    bibtex: tp.ClassVar[str] = """
+        @article{kim2025beta,
+          title={A 40-class SSVEP speller dataset: beta range stimulation for low-fatigue BCI applications},
+          volume={12},
+          ISSN={2052-4463},
+          journal={Scientific Data},
+          publisher={Springer Science and Business Media LLC},
+          author={Kim, Heegyu and Won, Kyungho and Ahn, Minkyu and Jun, Sung Chan},
+          year={2025},
+          pages={1751},
+          DOI={10.1038/s41597-025-06032-2},
+          url={https://doi.org/10.1038/s41597-025-06032-2}
+        }
+    """
+    url: tp.ClassVar[str] = "https://doi.org/10.6084/m9.figshare.28806815"
+    licence: tp.ClassVar[str] = "CC-BY-4.0"
+    description: tp.ClassVar[str] = (
+        "EEG recordings (31-ch) in 40 healthy participants while fixating on beta-range (14-21.8 Hz) flickering targets in a 40-class SSVEP speller."
+    )
+    event_id: tp.ClassVar[dict[str, int]] = {
+        "14": 1,
+        "15": 2,
+        "16": 3,
+        "17": 4,
+        "18": 5,
+        "19": 6,
+        "20": 7,
+        "21": 8,
+        "14.2": 9,
+        "15.2": 10,
+        "16.2": 11,
+        "17.2": 12,
+        "18.2": 13,
+        "19.2": 14,
+        "20.2": 15,
+        "21.2": 16,
+        "14.4": 17,
+        "15.4": 18,
+        "16.4": 19,
+        "17.4": 20,
+        "18.4": 21,
+        "19.4": 22,
+        "20.4": 23,
+        "21.4": 24,
+        "14.6": 25,
+        "15.6": 26,
+        "16.6": 27,
+        "17.6": 28,
+        "18.6": 29,
+        "19.6": 30,
+        "20.6": 31,
+        "21.6": 32,
+        "14.8": 33,
+        "15.8": 34,
+        "16.8": 35,
+        "17.8": 36,
+        "18.8": 37,
+        "19.8": 38,
+        "20.8": 39,
+        "21.8": 40,
+    }
+    _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
+        num_timelines=240,
+        num_subjects=40,
+        num_events_in_query=41,
+        event_types_in_query={"Eeg", "Stimulus"},
+        data_shape=(31, 290720),
         frequency=1024.0,
     )
 
