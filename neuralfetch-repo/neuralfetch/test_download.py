@@ -6,7 +6,10 @@
 
 """Offline tests for download backends — no network access required."""
 
+import asyncio
 import os
+import sys
+import types
 import typing as tp
 from pathlib import Path
 from unittest.mock import patch
@@ -316,3 +319,71 @@ def test_nsd_data_access_agreement(tmp_path: Path, study_name: str) -> None:
             url = mock_browser.call_args[0][0]
             assert "__other_option__" in url
             assert "Researcher" in url
+
+
+def _fake_openneuro_module() -> types.ModuleType:
+    """Stand-in ``openneuro`` module mirroring openneuro-py's event-loop branch.
+
+    Under a running loop it fires the transfer via ``create_task`` and returns
+    immediately (the Jupyter footgun); with no loop it blocks via ``asyncio.run``.
+    """
+
+    def download(  # noqa: ANN001, ANN201
+        *, dataset, target_dir, include=None, max_concurrent_downloads=5
+    ):
+        target = Path(target_dir)
+
+        async def _coro() -> None:
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "participants.tsv").write_text("ok")
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_coro())  # running loop: scheduled, never awaited
+        except RuntimeError:
+            asyncio.run(_coro())  # no running loop: blocks until written
+
+    mod = types.ModuleType("openneuro")
+    mod.download = download  # type: ignore[attr-defined]
+    return mod
+
+
+def test_openneuro_download_blocks_under_running_loop(tmp_path: Path) -> None:
+    """``Openneuro._download`` completes synchronously even under a running loop.
+
+    In a notebook a loop is already running, so openneuro-py's bare ``download``
+    would fire-and-forget and return before any file lands. The worker-thread
+    wrapper must force openneuro's blocking branch so the directory is populated
+    by the time ``_download`` returns.
+    """
+    client = download.Openneuro(folder="", study="ds999999", dset_dir=tmp_path / "study")
+    marker = client._dl_dir / "participants.tsv"
+
+    async def _in_notebook() -> bool:
+        # Mimics a synchronous notebook cell executing under the kernel's loop.
+        client._download()
+        return marker.exists()
+
+    with patch.dict(sys.modules, {"openneuro": _fake_openneuro_module()}):
+        completed = asyncio.run(_in_notebook())
+
+    assert completed, (
+        "openneuro download did not finish before _download() returned under a "
+        "running event loop — the worker-thread wrapper is not blocking"
+    )
+
+
+def test_openneuro_download_propagates_worker_errors(tmp_path: Path) -> None:
+    """An error inside the worker thread is re-raised on the caller."""
+    client = download.Openneuro(folder="", study="ds999999", dset_dir=tmp_path / "study")
+
+    def _boom(**kwargs: tp.Any) -> None:
+        raise RuntimeError("download failed")
+
+    fake = types.ModuleType("openneuro")
+    fake.download = _boom  # type: ignore[attr-defined]
+    with (
+        patch.dict(sys.modules, {"openneuro": fake}),
+        pytest.raises(RuntimeError, match="download failed"),
+    ):
+        client._download()

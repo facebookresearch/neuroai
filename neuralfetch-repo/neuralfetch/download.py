@@ -1144,14 +1144,29 @@ class Openneuro(BaseDownload):
     nworkers: int = 5
 
     def _download(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
         import openneuro as on
 
-        on.download(
-            dataset=self.study,
-            target_dir=self._dl_dir,
-            include=self.include,
-            max_concurrent_downloads=self.nworkers,
-        )
+        # openneuro-py's ``download`` only blocks when no event loop is running
+        # (it falls back to ``asyncio.run``). Under an already-running loop --
+        # e.g. inside Jupyter/Colab -- it schedules the transfer with
+        # ``loop.create_task`` and returns *before any file is written*, so the
+        # caller wrongly sees a finished download over an empty directory and
+        # ``study.run()`` races a half-downloaded tree. A coroutine cannot be
+        # awaited synchronously from within its own loop's thread, so drive
+        # ``download`` on a separate thread -- which has no running loop, taking
+        # openneuro's blocking branch. ``result()`` waits for completion and
+        # re-raises any error on the caller, restoring the synchronous contract
+        # the other backends already honor.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(
+                on.download,
+                dataset=self.study,
+                target_dir=self._dl_dir,
+                include=self.include,
+                max_concurrent_downloads=self.nworkers,
+            ).result()
 
 
 class Osf(BaseDownload):
