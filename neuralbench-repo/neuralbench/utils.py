@@ -375,6 +375,20 @@ def make_weighted_sampler(
     return sampler
 
 
+def _assign_bins(
+    targets: torch.Tensor,
+    bin_edges: tp.Sequence[float],
+) -> torch.Tensor:
+    """Bin ``targets`` into ``[0, len(bin_edges) - 2]`` using ``[lo, hi)`` edges.
+
+    Matches ``BinnedMAE``'s convention (``right=True``), so edge-valued targets
+    land in the same bin the metric scores them in.  Out-of-range targets are
+    not masked here; callers apply their own ``[bin_edges[0], bin_edges[-1]]`` mask.
+    """
+    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
+    return torch.bucketize(targets, inner_edges, right=True)
+
+
 def _compute_regression_bin_weights(
     targets: torch.Tensor,
     bin_edges: tp.Sequence[float],
@@ -417,9 +431,8 @@ def _compute_regression_bin_weights(
             f"bin_edges must have length >= 2, got {len(bin_edges)}: {list(bin_edges)}"
         )
 
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
     n_bins = len(bin_edges) - 1
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
 
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).to(dtype=torch.float32)
@@ -462,8 +475,7 @@ def make_regression_bin_sampler(
     weights = _compute_regression_bin_weights(targets, bin_edges)
 
     n_bins = len(bin_edges) - 1
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).tolist()
     bin_labels = [
