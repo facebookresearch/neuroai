@@ -41,28 +41,30 @@ Quick install
 
 .. code-block:: bash
 
-   pip install neuralfetch
+   pip install "neuralfetch[quickstart]"
 
 Installing NeuralFetch automatically registers all curated studies in
-NeuralSet's catalog — no extra imports needed.
+NeuralSet's catalog — no extra imports needed. The ``quickstart`` extra pulls
+in the download backends (e.g. ``openneuro-py``) used by the studies below;
+without it, ``study.download()`` raises ``ModuleNotFoundError``.
 
 .. code-block:: python
 
    import neuralset as ns
 
-   study = ns.Study(name="Gwilliams2022Neural", path="/data")  # MEG + speech, from OSF
+   study = ns.Study(name="Bel2026PetitListenSample", path="/data")  # MEG + speech, from OpenNeuro
    study.download()
    events = study.run()
-   events[["type", "start", "duration", "subject", "text"]].head()
+   events[["type", "start", "duration", "text"]].head()
 
 .. code-block:: text
 
-   type   start  duration              subject          text
-   Meg      0.0     396.0  Gwilliams2022Neural/A0001           NaN
-   Audio    0.0      42.3  Gwilliams2022Neural/A0001           NaN
-   Word     1.52     0.22  Gwilliams2022Neural/A0001         there
-   Word     1.74     0.18  Gwilliams2022Neural/A0001           was
-   Word     1.92     0.08  Gwilliams2022Neural/A0001             a
+   type   start  duration   text
+   Meg      0.0     0.0      NaN
+   Audio    0.0    42.3      NaN
+   Word     1.52    0.22   there
+   Word     1.74    0.18     was
+   Word     1.92    0.08       a
 
 ----
 
