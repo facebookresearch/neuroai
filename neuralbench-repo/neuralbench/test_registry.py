@@ -21,7 +21,10 @@ these tests guard the end-to-end wiring:
 
 from __future__ import annotations
 
+from importlib import metadata
+
 import pandas as pd
+from packaging.requirements import Requirement
 
 from neuralbench.plots.tables import _collapse_feature_based_baselines
 from neuralbench.registry import (
@@ -31,6 +34,17 @@ from neuralbench.registry import (
     _expand_models,
     _task_aware_baseline,
 )
+
+
+def test_datasets_extra_metadata_includes_neuralfetch() -> None:
+    """The built datasets extra must install the NeuralFetch Study catalog."""
+    requirements = [Requirement(item) for item in metadata.requires("neuralbench") or []]
+    neuralfetch = [item for item in requirements if item.name == "neuralfetch"]
+    assert len(neuralfetch) == 1
+    marker = neuralfetch[0].marker
+    assert marker is not None
+    assert marker.evaluate({"extra": "datasets"})
+    assert not marker.evaluate({"extra": ""})
 
 
 def test_device_baseline_models_meg_has_riemannian_pipelines() -> None:

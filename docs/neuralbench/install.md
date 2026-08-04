@@ -41,12 +41,23 @@ pre-commit install
 
 ## Optional dependencies
 
-Extra dependency groups are available for dataset downloading and
-model loading:
+Extra dependency groups are available for dataset downloads and model loading.
+
+For a released package, run:
 
 ```bash
-pip install 'neuralbench-repo/.[datasets,models]'
+pip install 'neuralbench[datasets,models]'
 ```
+
+For an editable monorepo checkout, run:
+
+```bash
+pip install -e 'neuralbench-repo/.[datasets,models]'
+```
+
+The `datasets` extra installs NeuralFetch. NeuralFetch registers the Study
+classes that benchmark configurations use. Some studies need additional
+backend-specific dependencies.
 
 ## First-run configuration
 
