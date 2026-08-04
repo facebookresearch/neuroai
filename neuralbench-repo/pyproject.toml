@@ -33,6 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
     datasets = [
+        "neuralfetch",
         # Download
         "boto3",
         "botocore",
