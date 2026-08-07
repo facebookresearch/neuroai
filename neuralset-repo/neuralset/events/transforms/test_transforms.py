@@ -449,6 +449,31 @@ def test_gap_punctuated_word_offset() -> None:
     assert info[2].get("text_char") == 11
 
 
+def test_contraction_before_homograph() -> None:
+    """Contractions split by spaCy must not steal the following homograph."""
+    text = "take my advice: examine him carefully. don't do it before us."
+    words = [
+        "take",
+        "my",
+        "advice",
+        "examine",
+        "him",
+        "carefully",
+        "don't",
+        "do",
+        "it",
+        "before",
+        "us",
+    ]
+    info = _tutils.TextWordMatcher(text, language="english").match(words)
+    assert info[6]["text_char"] == text.index("don't")
+    assert info[6]["sentence"] == "don't do it before us."
+    assert info[6]["sentence_char"] == 0
+    assert info[7]["text_char"] == text.index("do", text.index("don't") + 1)
+    assert info[7]["sentence_char"] == 6
+    assert all(i for i in info)
+
+
 def test_duplicate_full_pipeline(recwarn: pytest.WarningsRecorder) -> None:
     # try full pipeline as one transform:
     df = _make_test_dataframe(duplicate=2)
