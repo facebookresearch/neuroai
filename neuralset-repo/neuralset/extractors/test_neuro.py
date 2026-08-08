@@ -102,6 +102,7 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     val = next(iter((feature2.infra.cache_dict._ram_data.values())))
     assert isinstance(val, FmriTimedArray)
     assert val.header["space"] == "fsaverage5"
+    assert val.header["preproc"] == "custom"
     assert "affine" not in val.header
     with pytest.raises(ValueError, match="No affine"):
         val.to_native()
@@ -1323,33 +1324,104 @@ class _PseudoNifti:  # hack used in nastase
 
 
 def test_glasser_projector(monkeypatch: pytest.MonkeyPatch) -> None:
-    n_vertices = ns.extractors.neuro.FSAVERAGE_SIZES["fsaverage7"]
+    GP = ns.extractors.neuro.GlasserProjector
+    n = ns.extractors.neuro.FSAVERAGE_SIZES["fsaverage7"]
     labels = [
-        SimpleNamespace(name="R_A1_ROI-rh", vertices=np.array([6, 7]), hemi="rh"),
         SimpleNamespace(name="L_V1_ROI-lh", vertices=np.array([2, 3]), hemi="lh"),
+        SimpleNamespace(name="R_V1_ROI-rh", vertices=np.array([6, 7]), hemi="rh"),
+        SimpleNamespace(name="R_A1_ROI-rh", vertices=np.array([8, 9]), hemi="rh"),
     ]
-    monkeypatch.setattr(
-        ns.extractors.neuro.GlasserProjector,
-        "_read_mne_hcp_labels",
-        staticmethod(lambda: labels),
-    )
+    monkeypatch.setattr(GP, "_read_mne_hcp_labels", staticmethod(lambda: labels))
+    data = np.arange(2 * n * 2).reshape(2 * n, 2)
 
-    data = np.arange(2 * n_vertices * 2).reshape(2 * n_vertices, 2)
-    projector = ns.extractors.neuro.GlasserProjector(selected_rois={"A1"})
-
-    expected_rows = [n_vertices + 6, n_vertices + 7]
+    # right-hemisphere vertices are offset by n; a bare name selects both hemispheres
     np.testing.assert_array_equal(
-        projector.apply_after_cache(data),
-        data[expected_rows, :],
+        GP(selected_rois={"V1_left"}).apply_after_cache(data), data[[2, 3], :]
+    )
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1_right"}).apply_after_cache(data),
+        data[[n + 6, n + 7], :],
+    )
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1"}).apply_after_cache(data),
+        data[[2, 3, n + 6, n + 7], :],
     )
 
-    zero_projector = ns.extractors.neuro.GlasserProjector(
-        selected_rois={"A1"},
-        mode="zero",
-    )
+    # mode="zero" keeps the input shape and zeroes unselected rows
     expected = np.zeros_like(data)
-    expected[expected_rows, :] = data[expected_rows, :]
-    np.testing.assert_array_equal(zero_projector.apply_after_cache(data), expected)
+    expected[[n + 8, n + 9], :] = data[[n + 8, n + 9], :]
+    np.testing.assert_array_equal(
+        GP(selected_rois={"A1"}, mode="zero").apply_after_cache(data), expected
+    )
+
+    # mode="mean"
+    v1_rows = [2, 3, n + 6, n + 7]
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1"}, mode="mean").apply_after_cache(data),
+        data[v1_rows, :].mean(axis=0)[None, :],
+    )
+    # row order
+    proj = GP(selected_rois={"V1", "A1"}, mode="mean")
+    assert proj.ordered_rois == ["A1", "V1"]
+    out = proj.apply_after_cache(data)
+    assert out.shape == (2, data.shape[1])
+    np.testing.assert_array_equal(out[0], data[[n + 8, n + 9], :].mean(axis=0))
+    np.testing.assert_array_equal(out[1], data[v1_rows, :].mean(axis=0))
+
+    # subset
+    drop = GP(selected_rois={"V1"}, subset_size=2, subset_seed=0).apply_after_cache(data)
+    assert drop.shape == (2, data.shape[1])
+    assert set(drop[:, 0] // 2) <= set(v1_rows)
+    v1_only = GP(selected_rois={"V1"}, mode="mean", subset_size=2, subset_seed=42)
+    with_a1 = GP(selected_rois={"A1", "V1"}, mode="mean", subset_size=2, subset_seed=42)
+    np.testing.assert_array_equal(
+        v1_only.apply_after_cache(data)[0],
+        with_a1.apply_after_cache(data)[1],
+    )
+    with pytest.raises(ValueError, match="subset_size=3"):
+        GP(selected_rois={"A1"}, subset_size=3).apply_after_cache(data)
+
+
+def test_cifti_roi_projector(monkeypatch: pytest.MonkeyPatch) -> None:
+    CRP = ns.extractors.neuro.CiftiRoiProjector
+    n_nodes = ns.extractors.neuro.HCP_CIFTI_91K_SIZE
+    # Synthetic merged cortical + subcortical index map (avoids needing hcp_utils).
+    monkeypatch.setattr(
+        CRP,
+        "_cifti_nodes",
+        classmethod(
+            lambda cls: {
+                "V1": np.array([0, 1, 2]),
+                "thalamus": np.array([100, 101, 102, 103]),
+                "thalamus_left": np.array([100, 101]),
+                "thalamus_right": np.array([102, 103]),
+            }
+        ),
+    )
+    data = np.arange(n_nodes * 2).reshape(n_nodes, 2)
+
+    # 1) cortical + subcortical mix (boolean mask returns rows in ascending order)
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"V1", "thalamus_left"}).apply_after_cache(data),
+        data[[0, 1, 2, 100, 101], :],
+    )
+    # 2) bare name selects both hemispheres
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"thalamus"}).apply_after_cache(data),
+        data[[100, 101, 102, 103], :],
+    )
+    # 3) mode="mean"
+    proj = CRP(selected_rois={"thalamus", "thalamus_left"}, mode="mean")
+    assert proj.ordered_rois == ["thalamus", "thalamus_left"]
+    out = proj.apply_after_cache(data)
+    assert out.shape == (2, data.shape[1])
+    np.testing.assert_array_equal(out[0], data[[100, 101, 102, 103], :].mean(axis=0))
+    np.testing.assert_array_equal(out[1], data[[100, 101], :].mean(axis=0))
+    # 4) subset
+    out = CRP(selected_rois={"thalamus"}, mode="mean", subset_size=2).apply_after_cache(
+        data
+    )
+    assert out.shape == (1, data.shape[1])
 
 
 def test_fmri_mesh_from_2d() -> None:
@@ -1634,79 +1706,40 @@ def test_hrf() -> None:
 
 
 def test_fmri_space_selection(tmp_path: Path) -> None:
-    """Verify space selection: None raises, 'auto' uses heuristic, explicit picks."""
+    """Verify query-based space/preproc selection (no auto selection).
+
+    Query *semantics* are covered in test_eventquery; here we only check that
+    FmriExtractor wires the query in, guards ambiguity, and reports no matches.
+    """
     _mk = test_etypes.make_fmri_event
     mni = "MNI152NLin2009cAsym"
-    events = [
+    t1w, mni_ev, fsavg = (
         _mk(tmp_path, space="T1w"),
         _mk(tmp_path, space=mni),
         _mk(tmp_path, space="fsaverage"),
-    ]
+    )
+    events = [t1w, mni_ev, fsavg]
+    window: tp.Any = dict(start=0.0, duration=1.0)  # dummy -- we test space filtering
 
-    # from_space="auto" + SurfaceProjector → prefers fsaverage
-    _surf5: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
-    feat = ns.extractors.FmriExtractor(projection=_surf5, from_space="auto")
-    window: tp.Any = dict(start=0.0, duration=1.0)  # dummy — we test space filtering
-    relevant = feat._get_relevant_events(events, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None
-    assert ta.header["space"] == "fsaverage5"
+    feat = ns.extractors.FmriExtractor(query=f'space == "{mni}"')
+    assert feat._get_relevant_events(events, trigger=None, **window) == [mni_ev]
 
-    # explicit from_space overrides
-    feat = ns.extractors.FmriExtractor(from_space=mni)
-    relevant = feat._get_relevant_events(events, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["space"] == mni
-
-    # single space + from_space=None → passes through
     feat = ns.extractors.FmriExtractor()
     single = [_mk(tmp_path, space="T1w")]
-    relevant = feat._get_relevant_events(single, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["space"] == "T1w"
+    assert feat._get_relevant_events(single, trigger=None, **window) == single
 
-    # multiple spaces + from_space=None → raises
     feat = ns.extractors.FmriExtractor()
     with pytest.raises(ValueError, match="Multiple spaces"):
         feat._get_relevant_events(events, trigger=None, **window)
 
-    # multiple spaces + from_space=None + projection → also raises (no silent auto)
+    _surf5: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
     feat = ns.extractors.FmriExtractor(projection=_surf5)
     with pytest.raises(ValueError, match="Multiple spaces"):
         feat._get_relevant_events(events, trigger=None, **window)
 
-    # from_preproc filters
-    mixed = [
-        _mk(tmp_path, space="T1w", preproc="deepprep"),
-        _mk(tmp_path, space="T1w", preproc="fmriprep"),
-    ]
-    feat = ns.extractors.FmriExtractor(from_preproc="deepprep")
-    relevant = feat._get_relevant_events(mixed, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["preproc"] == "deepprep"
-
-    # validation: unknown from_preproc / from_space
-    feat = ns.extractors.FmriExtractor(from_preproc="nonexistent")
-    with pytest.raises(ValueError, match="from_preproc"):
-        feat.prepare(mixed)
-    feat = ns.extractors.FmriExtractor(from_space="nonexistent")
-    with pytest.raises(ValueError, match="from_space"):
-        feat.prepare(mixed)
-
-    # valid individually but bad combination
-    cross = [
-        _mk(tmp_path, space="T1w", preproc="deepprep"),
-        _mk(tmp_path, space="MNI152NLin2009cAsym", preproc="fmriprep"),
-    ]
-    feat = ns.extractors.FmriExtractor(
-        from_preproc="deepprep", from_space="MNI152NLin2009cAsym"
-    )
-    with pytest.raises(ValueError, match="after from_preproc"):
-        feat.prepare(cross)
+    feat = ns.extractors.FmriExtractor(query='space == "nonexistent"')
+    with pytest.raises(ValueError, match="Available spaces:.*available preprocs:"):
+        feat.prepare(events)
 
 
 def test_fmri_smoothing(test_data_path: Path) -> None:

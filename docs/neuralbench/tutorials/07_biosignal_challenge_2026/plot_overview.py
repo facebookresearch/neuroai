@@ -148,7 +148,7 @@ official competition data is not yet released.
 #
 # - `NeuralBench <https://facebookresearch.github.io/neuroai/>`_
 #   (this package): unified benchmark suite.
-# - `NeuralSet <https://kingjr.github.io/files/neuralset.pdf>`_: data
+# - `NeuralSet <https://arxiv.org/abs/2605.03169>`_: data
 #   loading, study registry, event system.
 # - `Braindecode <https://github.com/braindecode/braindecode>`_ and
 #   `MOABB <https://github.com/NeuroTechX/moabb>`_: deep-learning EEG

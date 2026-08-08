@@ -26,14 +26,17 @@ from .meta import (
     TimeAggregatedExtractor,
 )
 from .neuro import (
+    DYNAMIC_ROIS,
     AtlasProjector,
     BaseFmriProjector,
     ChannelPositions,
+    CiftiRoiProjector,
     EegExtractor,
     EmgExtractor,
     FmriCleaner,
     FmriExtractor,
     FnirsExtractor,
+    GlasserProjector,
     HrfConvolve,
     IeegExtractor,
     MaskProjector,
