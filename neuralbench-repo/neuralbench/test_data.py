@@ -24,7 +24,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from .data import Data
+from .data import Data, get_default_dataloaders
 
 
 def _train_indices(loaders: dict[str, DataLoader]) -> list[int]:
@@ -156,3 +156,26 @@ def test_per_split_loader_generators_have_distinct_seeds(
         f"Expected three distinct sub-seeds, got "
         f"train={train_seed}, val={val_seed}, test={test_seed}"
     )
+
+
+def test_get_default_dataloaders_merges_and_overrides(monkeypatch):
+    cfg = None
+    expected_loaders = {"train": object(), "val": object(), "test": object()}
+
+    def fake_prepare(self):
+        nonlocal cfg
+        cfg = self
+        return expected_loaders
+
+    monkeypatch.setattr(Data, "prepare", fake_prepare)
+    loaders = get_default_dataloaders(
+        "eeg",
+        "audiovisual_stimulus",
+        batch_size=8,
+        **{"neuro.frequency": 60.0},
+    )
+    assert loaders is expected_loaders
+    assert cfg.trigger_event_type == "Stimulus"  # task config wins over base
+    assert cfg.target.event_field == "description"  # task =replace= target
+    assert cfg.batch_size == 8  # base default -> kwarg override
+    assert cfg.neuro.frequency == 60.0  # dotted override (base default 120.0)

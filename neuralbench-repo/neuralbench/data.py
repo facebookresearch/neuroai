@@ -9,13 +9,16 @@ import typing as tp
 
 import numpy as np
 import torch
+from exca import ConfDict
 from pydantic import field_validator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
 
+from .config_manager import _ensure_initialized
 from .extractors import SleepOnsetTargetExtractor  # noqa: F401
+from .registry import DEFAULTS_DIR, _resolve_task_dir, load_yaml_config
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
     AddSleepOnsetTargets,
@@ -287,3 +290,17 @@ class Data(ns.BaseModel):
             )
 
         return loaders
+
+
+def get_default_dataloaders(
+    device: str, task: str, **overrides: tp.Any
+) -> dict[str, DataLoader]:
+    """Return the train/val/test DataLoaders a ``device``/``task`` benchmark run uses."""
+
+    _ensure_initialized()
+
+    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+    config.update(load_yaml_config(_resolve_task_dir(device, task) / "config.yaml"))
+    data_config = ConfDict(config)["data"]
+    data_config.update(overrides)
+    return Data(**data_config).prepare()
