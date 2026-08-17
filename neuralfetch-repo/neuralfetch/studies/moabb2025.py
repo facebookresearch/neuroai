@@ -867,7 +867,10 @@ class Cattan2019Passive(_BaseMoabb):
         else:
             rec_end = starts.iloc[-1] + 60.0
         durations.iloc[-1] = rec_end - starts.iloc[-1]
-        df.loc[stim.index, "duration"] = durations.values
+        # ``start`` carries the string sentinel "auto" on the Eeg row, so the
+        # column is object dtype and ``durations`` inherits it; pandas 3.0 refuses
+        # to coerce an object array into the float64 ``duration`` column, so cast.
+        df.loc[stim.index, "duration"] = durations.to_numpy(dtype="float64")
         return df
 
 
