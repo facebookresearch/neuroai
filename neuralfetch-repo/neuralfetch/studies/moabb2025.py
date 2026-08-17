@@ -224,75 +224,113 @@ class _BaseMoabb(studies.Study):
         return find_dataset_in_moabb(cls.aliases[0], cls._dataset_kwargs or None)
 
     def _timelines_df(self) -> pd.DataFrame:
-        df = pd.read_csv(Path(self.path) / "timelines.csv", header=0)
+        timeline_path = Path(self.path) / "timelines.csv"
+        if not timeline_path.exists():
+            # ``timelines.csv`` is a lightweight "prepare" artifact derived from
+            # the raw data, not the raw data itself. When the raw has already
+            # been fetched (e.g. downloaded by another user) but the manifest is
+            # missing, rebuild it on demand instead of hard-failing. We only do
+            # this when the download dir has content, so we never trigger a
+            # surprise full fetch here -- an empty/absent download dir still
+            # points the caller at ``download()``.
+            dl_path = Path(self.path) / "download"
+            if dl_path.is_dir() and any(dl_path.iterdir()):
+                logger.info(
+                    "timelines.csv missing for %s; rebuilding from downloaded "
+                    "data at %s",
+                    self.__class__.__name__,
+                    dl_path,
+                )
+                self._build_timelines()
+            else:
+                raise FileNotFoundError(
+                    f"{timeline_path} is missing and no downloaded data was found "
+                    f"at {dl_path}. Run {self.__class__.__name__}().download() first."
+                )
+        df = pd.read_csv(timeline_path, header=0)
         df["subject"] = df["subject"].astype(int)
         df["session"] = df["session"].astype(str)
         df["run"] = df["run"].astype(str)
         return df
 
-    # Populate subclass-level metadata
     def _download(self) -> None:
+        """Fetch the raw MoABB dataset and prepare its timelines manifest.
+
+        Raw fetching and manifest preparation both funnel through moabb's
+        ``get_data`` (which downloads on demand, then reads the local cache), so
+        this simply delegates to :meth:`_build_timelines`.
         """
-        Download MoABB dataset and write timelines as a csv.
+        self._build_timelines()
 
-        (Timelines needed to avoid 'moabb.datasets.studies.get_data()' in self.iter_timelines, which loads ALL raw data.)
+    def _build_timelines(self) -> None:
+        """Prepare step: enumerate subjects/sessions/runs into ``timelines.csv``.
 
+        This is separated from :meth:`_download` so a missing manifest can be
+        rebuilt from already-downloaded data (see :meth:`_timelines_df`) without
+        conflating it with the raw fetch. moabb's ``get_data`` reads the local
+        cache when the data is present and only downloads when it is not, so the
+        manifest is cheap to (re)build once the dataset is on disk.
+
+        (The manifest lets ``iter_timelines`` avoid calling
+        ``moabb.datasets.get_data()`` for every branch, which would load ALL raw
+        data.)
         """
         from moabb.datasets.base import CacheConfig
 
         timeline_path = Path(self.path) / "timelines.csv"
+        if timeline_path.exists():
+            return
 
-        if not timeline_path.exists():
-            dl_path = Path(self.path) / "download"
-            try:
-                dl_path.mkdir(exist_ok=True, parents=True)
-                logger.info(f"Created download directory: {dl_path}")
-                with temp_mne_data(dl_path, clear_dataset_configs=True):
-                    logger.info(f"MNE_DATA set to: {dl_path}")
-                    ds = self._get_dataset()
-                    rows: list[dict[str, tp.Any]] = []
-                    failed_subjects: list[tp.Any] = []
-                    for subject in ds.subject_list:
-                        try:
-                            subj_data = ds.get_data(
-                                subjects=[subject],
-                                cache_config=CacheConfig(path=dl_path),
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"Error reading subject {subject} of "
-                                f"{self.aliases[0]}: {e}"
-                            )
-                            failed_subjects.append(subject)
-                            continue
-                        for session, runs in subj_data[subject].items():
-                            for run in runs:
-                                rows.append(
-                                    dict(
-                                        subject=int(subject),
-                                        session=str(session),
-                                        run=str(run),
-                                    )
-                                )
-                    if failed_subjects:
-                        logger.warning(
-                            f"Failed {len(failed_subjects)} subject(s) for "
-                            f"{self.aliases[0]}: {failed_subjects}"
+        dl_path = Path(self.path) / "download"
+        try:
+            dl_path.mkdir(exist_ok=True, parents=True)
+            logger.info(f"Created download directory: {dl_path}")
+            with temp_mne_data(dl_path, clear_dataset_configs=True):
+                logger.info(f"MNE_DATA set to: {dl_path}")
+                ds = self._get_dataset()
+                rows: list[dict[str, tp.Any]] = []
+                failed_subjects: list[tp.Any] = []
+                for subject in ds.subject_list:
+                    try:
+                        subj_data = ds.get_data(
+                            subjects=[subject],
+                            cache_config=CacheConfig(path=dl_path),
                         )
+                    except Exception as e:
+                        logger.error(
+                            f"Error reading subject {subject} of "
+                            f"{self.aliases[0]}: {e}"
+                        )
+                        failed_subjects.append(subject)
+                        continue
+                    for session, runs in subj_data[subject].items():
+                        for run in runs:
+                            rows.append(
+                                dict(
+                                    subject=int(subject),
+                                    session=str(session),
+                                    run=str(run),
+                                )
+                            )
+                if failed_subjects:
+                    logger.warning(
+                        f"Failed {len(failed_subjects)} subject(s) for "
+                        f"{self.aliases[0]}: {failed_subjects}"
+                    )
 
-                timelines = pd.DataFrame(rows)
-                assert not timelines.empty, (
-                    f"Failed to create timelines.csv at {timeline_path}"
-                )
-                timelines.to_csv(timeline_path, index=False)
-                logger.info(
-                    f"Downloaded dataset to {dl_path} "
-                    f"({len(timelines)} timelines, "
-                    f"{len(failed_subjects)} failed subjects)."
-                )
-            except Exception as error:
-                logger.error(f"Download failed: {error}")
-                raise
+            timelines = pd.DataFrame(rows)
+            assert not timelines.empty, (
+                f"Failed to create timelines.csv at {timeline_path}"
+            )
+            timelines.to_csv(timeline_path, index=False)
+            logger.info(
+                f"Prepared timelines for {dl_path} "
+                f"({len(timelines)} timelines, "
+                f"{len(failed_subjects)} failed subjects)."
+            )
+        except Exception as error:
+            logger.error(f"Timelines preparation failed: {error}")
+            raise
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings."""
