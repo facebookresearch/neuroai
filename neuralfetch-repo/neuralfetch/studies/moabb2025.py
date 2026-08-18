@@ -236,8 +236,7 @@ class _BaseMoabb(studies.Study):
             dl_path = Path(self.path) / "download"
             if dl_path.is_dir() and any(dl_path.iterdir()):
                 logger.info(
-                    "timelines.csv missing for %s; rebuilding from downloaded "
-                    "data at %s",
+                    "timelines.csv missing for %s; rebuilding from downloaded data at %s",
                     self.__class__.__name__,
                     dl_path,
                 )
@@ -298,8 +297,7 @@ class _BaseMoabb(studies.Study):
                         )
                     except Exception as e:
                         logger.error(
-                            f"Error reading subject {subject} of "
-                            f"{self.aliases[0]}: {e}"
+                            f"Error reading subject {subject} of {self.aliases[0]}: {e}"
                         )
                         failed_subjects.append(subject)
                         continue
