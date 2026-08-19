@@ -108,11 +108,11 @@ class Dan2023Bids(study.Study):
         "24": [list(range(0, 22))],
     }
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         zenodo = download.Zenodo(
             study="CHB-MIT-EEG-Corpus", dset_dir=self.path, record_id="10259996"
         )
-        zenodo.download()
+        zenodo.download(overwrite=overwrite)
 
     def _get_bids_path(self, timeline: dict[str, tp.Any]) -> BIDSPath:
         """Returns the BIDS path for a study"""

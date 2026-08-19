@@ -76,7 +76,7 @@ class Xu2025Alljoined(study.Study):
         frequency=256.0,
     )
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         accept = os.environ.get("ALLJOINED_ACCEPT_LICENCE", "").lower() in (
             "1",
             "true",

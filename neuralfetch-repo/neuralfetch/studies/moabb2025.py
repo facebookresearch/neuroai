@@ -252,16 +252,18 @@ class _BaseMoabb(studies.Study):
         df["run"] = df["run"].astype(str)
         return df
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Fetch the raw MoABB dataset and prepare its timelines manifest.
 
         Raw fetching and manifest preparation both funnel through moabb's
         ``get_data`` (which downloads on demand, then reads the local cache), so
-        this simply delegates to :meth:`_build_timelines`.
+        this simply delegates to :meth:`_build_timelines`. With ``overwrite``
+        the manifest is rebuilt from scratch; forcing moabb to re-fetch the raw
+        cache is best-effort and delegated to the upstream client.
         """
-        self._build_timelines()
+        self._build_timelines(overwrite=overwrite)
 
-    def _build_timelines(self) -> None:
+    def _build_timelines(self, overwrite: bool = False) -> None:
         """Prepare step: enumerate subjects/sessions/runs into ``timelines.csv``.
 
         This is separated from :meth:`_download` so a missing manifest can be
@@ -277,7 +279,7 @@ class _BaseMoabb(studies.Study):
         from moabb.datasets.base import CacheConfig
 
         timeline_path = Path(self.path) / "timelines.csv"
-        if timeline_path.exists():
+        if timeline_path.exists() and not overwrite:
             return
 
         dl_path = Path(self.path) / "download"
@@ -3238,10 +3240,10 @@ class Romani2025Brainform(_BaseMoabb):
         labels = [s for s in labels if s not in self._EXCLUDE_SUBJECTS]
         return {i: s for i, s in enumerate(labels)}
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Build timelines.csv by scanning BIDS directory (no mne_bids needed)."""
         timeline_path = Path(self.path) / "timelines.csv"
-        if timeline_path.exists():
+        if timeline_path.exists() and not overwrite:
             return
 
         bids = self._bids_root()

@@ -139,13 +139,13 @@ class _Levy2026Noninvasive(study.Study):
       to the data spreadsheet to correct the event dataframe when doing per subject analysis.
     """
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download the public SpanishBCBL (DECOMEG) release from Hugging Face."""
         download.Huggingface(
             study="SpanishBCBL",
             org="bcbl190626",
             dset_dir=self.path,
-        ).download()
+        ).download(overwrite=overwrite)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         # List all recordings: depends on study structure

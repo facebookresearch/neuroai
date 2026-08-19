@@ -7,6 +7,7 @@
 """Tests for neuralfetch: study discovery and study info validation."""
 
 import importlib.util
+import inspect
 import sys
 from pathlib import Path
 
@@ -16,11 +17,76 @@ import requests
 from scipy.io import loadmat
 
 import neuralset as ns
+from neuralfetch import download as _download_mod
 from neuralfetch import utils
 from neuralfetch.studies.moabb2025 import Reichert2020Impact
 from neuralset.events import study as _study_mod
 
 INFO_STUDIES = [n for n, c in ns.Study.catalog().items() if c._info is not None]
+
+
+def _accepts_overwrite(func: object) -> bool:
+    """True if *func* can be called with an ``overwrite=`` keyword."""
+    params = inspect.signature(func).parameters  # type: ignore[arg-type]
+    if "overwrite" in params:
+        return True
+    return any(p.kind is p.VAR_KEYWORD for p in params.values())
+
+
+def test_all_neuralfetch_studies_accept_overwrite() -> None:
+    """Every neuralfetch study's ``_download`` must accept ``overwrite=``.
+
+    ``Study.download(**kwargs)`` forwards ``overwrite`` verbatim to
+    ``_download``; a study missing the parameter makes ``neuralfetch download
+    <Study>`` raise ``TypeError`` on every invocation (even without the flag,
+    since the CLI always passes ``overwrite=``). This is the anti-regression
+    guard for that contract.
+    """
+    checked = 0
+    failures: list[str] = []
+    for name, cls in sorted(ns.Study.catalog().items()):
+        module = getattr(cls, "__module__", "")
+        if not module.startswith("neuralfetch."):
+            continue
+        checked += 1
+        if not _accepts_overwrite(cls._download):
+            sig = inspect.signature(cls._download)
+            failures.append(f"{name} ({module}): _download{sig}")
+
+    assert checked, "no neuralfetch studies were discovered"
+    assert not failures, (
+        "these neuralfetch studies' _download() cannot accept overwrite=, so "
+        "`neuralfetch download <Study>` would raise TypeError:\n  "
+        + "\n  ".join(failures)
+    )
+
+
+def test_all_download_backends_accept_overwrite() -> None:
+    """Every ``BaseDownload`` backend's ``_download`` must accept ``overwrite=``.
+
+    ``BaseDownload.download(overwrite)`` forwards the flag into ``_download``;
+    a backend missing the parameter would raise ``TypeError`` as soon as it is
+    used with the two-tier overwrite semantics.
+    """
+
+    def _all_subclasses(cls: type) -> set[type]:
+        subs = set(cls.__subclasses__())
+        for sub in list(subs):
+            subs |= _all_subclasses(sub)
+        return subs
+
+    failures: list[str] = []
+    for cls in sorted(
+        _all_subclasses(_download_mod.BaseDownload), key=lambda c: c.__name__
+    ):
+        if not _accepts_overwrite(cls._download):
+            sig = inspect.signature(cls._download)
+            failures.append(f"{cls.__name__}: _download{sig}")
+
+    assert not failures, (
+        "these download backends' _download() cannot accept overwrite=:\n  "
+        + "\n  ".join(failures)
+    )
 
 
 def test_neuralfetch_discovery() -> None:
