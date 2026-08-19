@@ -65,11 +65,18 @@ def ensure_study_symlink(studies_root: Path, link_name: str, target_name: str) -
 
 @contextlib.contextmanager
 def success_writer(
-    fname: str | Path, suffix: str = "_success.txt", success_msg: str = "done"
+    fname: str | Path,
+    suffix: str = "_success.txt",
+    success_msg: str = "done",
+    overwrite: bool = False,
 ):
     """Look for a file ending with ``suffix`` indicating ``fname`` has
     already been processed and create it after the encapsulated block
     succeeds.
+
+    When ``overwrite`` is True an existing marker is reported as absent (the
+    yielded value is False), so callers re-run the guarded work; the marker
+    itself is preserved on disk.
 
     Examples
     --------
@@ -82,9 +89,9 @@ def success_writer(
     ./test.txt
     """
     success_fname = Path(str(Path(fname).with_suffix("")) + suffix)
-    file_exists = success_fname.exists()
-    yield file_exists
-    if not file_exists:
+    marker_exists = success_fname.exists()
+    yield marker_exists and not overwrite
+    if not marker_exists:
         with open(success_fname, "w") as f:
             f.write(success_msg)
 
@@ -392,13 +399,20 @@ class BaseDownload(_Module):
         self._check_requirements()
         print(f"Downloading {Path(self.dset_dir).name} to {self._dl_dir}...")
 
-        self._download()
+        self._download(overwrite=overwrite)
         self.get_success_file().write_text("success")
         print("Done! Consider running giving read/write permissions to everyone:")
         print(f"chmod -R 777 {self._dl_dir}")  # we should do this on FAIR cluster
 
     @abstractmethod
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        """Perform the actual transfer.
+
+        ``overwrite`` requests a *forced* re-transfer: implementations must
+        re-fetch/re-verify files rather than trusting mere on-disk existence
+        (e.g. clear ``skip_existing`` guards, pass ``force_download``), so that
+        a corrupted or partial download is repaired.
+        """
         raise NotImplementedError
 
 
@@ -465,8 +479,12 @@ class S3(BaseDownload):
             return Path(self.output_dir)
         return self._dl_dir
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import boto3
+
+        # ``overwrite`` forces re-transfer of every object, even those already
+        # present locally.
+        skip_existing = self.skip_existing and not overwrite
 
         session_kwargs: dict[str, tp.Any] = {}
         if self.profile:
@@ -491,13 +509,13 @@ class S3(BaseDownload):
         bucket = s3.Bucket(self.bucket)
 
         if self.files_with_destinations:
-            jobs = self._resolve_mapped()
+            jobs = self._resolve_mapped(skip_existing)
         else:
-            jobs = self._resolve_prefix(bucket)
+            jobs = self._resolve_prefix(bucket, skip_existing)
 
         self._download_parallel(bucket, jobs)
 
-    def _resolve_mapped(self) -> list[tuple[str, Path]]:
+    def _resolve_mapped(self, skip_existing: bool) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for s3_key, local_rel in self.files_with_destinations:
             local_path = (
@@ -505,12 +523,12 @@ class S3(BaseDownload):
                 if Path(local_rel).is_absolute()
                 else self._out / local_rel
             )
-            if self.skip_existing and local_path.exists():
+            if skip_existing and local_path.exists():
                 continue
             jobs.append((s3_key, local_path))
         return jobs
 
-    def _resolve_prefix(self, bucket: tp.Any) -> list[tuple[str, Path]]:
+    def _resolve_prefix(self, bucket: tp.Any, skip_existing: bool) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for obj in bucket.objects.filter(Prefix=self.prefix):
             rel = obj.key
@@ -519,7 +537,7 @@ class S3(BaseDownload):
             if not rel:
                 continue
             target = self._out / rel
-            if self.skip_existing and target.exists():
+            if skip_existing and target.exists():
                 continue
             jobs.append((obj.key, target))
         return jobs
@@ -550,11 +568,12 @@ class Dandi(BaseDownload):
     requirements: tp.ClassVar[tuple[str, ...]] = ("dandi",)
     version: str = "draft"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import dandi.download  # type: ignore[import-not-found,import-untyped]
 
         url = f"https://dandiarchive.org/dandiset/{self.study}/{self.version}"
-        dandi.download.download([url], output_dir=str(self._dl_dir), existing="skip")
+        existing = "overwrite" if overwrite else "skip"
+        dandi.download.download([url], output_dir=str(self._dl_dir), existing=existing)
 
 
 class Datalad(BaseDownload):
@@ -608,8 +627,11 @@ class Datalad(BaseDownload):
         cmd = f'datalad get "{cur_path}"{threads_}'
         self._datalad(cmd, self._dl_dir / self.repo_name)
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Downloads data from datalab
+
+        ``datalad get`` is idempotent and self-repairing, so ``overwrite`` needs
+        no special handling here: re-running fetches any missing/broken content.
 
         Since this requires a git connection to handle, make sure that
         git ssh-key is password free
@@ -688,7 +710,9 @@ class Donders(BaseDownload):
         self._user = user
         self._password = password
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # ``overwrite`` is best-effort for the Donders WebDAV mirror: wget
+        # already refetches over the existing tree.
         command = "wget -r -nH -np --cut-dirs=1"
         command += " --no-check-certificate -U Mozilla"
         command += f" --user={self._user} --password={self._password}"
@@ -785,7 +809,7 @@ class Dryad(BaseDownload):
         files_resp = self._api_get(files_href)
         return files_resp.get("_embedded", {}).get("stash:files", [])
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         from urllib.parse import quote
 
         import requests as req
@@ -802,7 +826,7 @@ class Dryad(BaseDownload):
                 )
             except req.exceptions.HTTPError as e:
                 if e.response is not None and e.response.status_code == 405:
-                    self._download_individual_files()
+                    self._download_individual_files(overwrite=overwrite)
                     return
                 raise e
             try:
@@ -814,9 +838,9 @@ class Dryad(BaseDownload):
             if tmp.exists():
                 tmp.unlink()
 
-        self._download_individual_files()
+        self._download_individual_files(overwrite=overwrite)
 
-    def _download_individual_files(self) -> None:
+    def _download_individual_files(self, overwrite: bool = False) -> None:
         """Download each file in the dataset individually."""
         files = self._latest_version_files()
         print(f"Downloading {len(files)} files individually from Dryad...")
@@ -830,7 +854,10 @@ class Dryad(BaseDownload):
             dest = self._dl_dir / name
             is_zip = name.endswith(".zip")
             extracted_dir = self._dl_dir / Path(name).stem if is_zip else None
-            if dest.exists() or (extracted_dir is not None and extracted_dir.exists()):
+            already = dest.exists() or (
+                extracted_dir is not None and extracted_dir.exists()
+            )
+            if already and not overwrite:
                 print(f"  [{i}/{len(files)}] {name} already exists, skipping")
                 continue
             print(f"  [{i}/{len(files)}] Downloading {name}...")
@@ -871,7 +898,9 @@ class Eegdash(BaseDownload):
     requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash>=0.8.2",)
     database: str = "eegdash"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # ``overwrite`` is best-effort: eegdash's client manages its own cache
+        # and refetches missing recordings on demand.
         from eegdash import EEGDashDataset  # type: ignore[import-not-found]
 
         EEGDashDataset(
@@ -896,7 +925,9 @@ class Figshare(BaseDownload):
         in the article URL on figshare.com.
     """
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # Every file is (re)written unconditionally, so a forced re-run under
+        # ``overwrite`` naturally refreshes the whole article.
         import requests
 
         item_ids = [self.study]
@@ -1029,7 +1060,7 @@ class Globus(BaseDownload):
         )
         return app
 
-    def _resolve_walk(self, tc: tp.Any) -> list[tuple[str, Path]]:
+    def _resolve_walk(self, tc: tp.Any, skip_existing: bool) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         root = self.study.rstrip("/") or "/"
         stack: list[str] = [root]
@@ -1047,13 +1078,16 @@ class Globus(BaseDownload):
                 elif etype == "file":
                     rel = full[len(root) :].lstrip("/")
                     local_path = self._dl_dir / rel
-                    if self.skip_existing and local_path.exists():
+                    if skip_existing and local_path.exists():
                         continue
                     jobs.append((full, local_path))
         return jobs
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import globus_sdk
+
+        # ``overwrite`` forces re-transfer of files already on disk.
+        skip_existing = self.skip_existing and not overwrite
 
         app = self._build_app()
         tc = globus_sdk.TransferClient(app=app)
@@ -1072,7 +1106,7 @@ class Globus(BaseDownload):
             ).get_authorization_header()
         }
 
-        jobs = self._resolve_walk(tc)
+        jobs = self._resolve_walk(tc, skip_existing)
 
         if not jobs:
             print(f"Nothing to download for {self.study}")
@@ -1108,13 +1142,14 @@ class Huggingface(BaseDownload):
     requirements: tp.ClassVar[tuple[str, ...]] = ("huggingface_hub",)
     org: str
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         from huggingface_hub import snapshot_download
 
         snapshot_download(
             repo_id=f"{self.org}/{self.study}",
             repo_type="dataset",
             local_dir=self._dl_dir,
+            force_download=overwrite,
         )
         print("\nDownloaded Dataset")
 
@@ -1143,7 +1178,10 @@ class Openneuro(BaseDownload):
     include: list[str] | None = None
     nworkers: int = 5
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # openneuro-py verifies size/hash of files already on disk on every
+        # run and repairs mismatches in place, so a forced ``overwrite`` re-run
+        # needs no extra flag -- re-invoking already re-verifies and repairs.
         import openneuro as on
 
         on.download(
@@ -1174,7 +1212,7 @@ class Osf(BaseDownload):
     storage_inds: list[int] = [0]  # In case of multiple storages, storages to download
     requirements: tp.ClassVar[tuple[str, ...]] = ("osfclient>=0.0.5",)
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import osfclient  # noqa
 
         project = osfclient.OSF().project(self.study)
@@ -1189,7 +1227,7 @@ class Osf(BaseDownload):
 
                 file_ = self._dl_dir / path
 
-                if file_.exists():
+                if file_.exists() and not overwrite:
                     continue
 
                 pbar.set_description(file_.name)
@@ -1209,7 +1247,7 @@ class Physionet(S3):
     bucket: str = "physionet-open"
     version: str
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self.prefix = f"{self.study}/{self.version}"
         self.output_dir = self._dl_dir / self.study / self.version
 
@@ -1217,7 +1255,7 @@ class Physionet(S3):
         # - list only keys under <study>/<version> via `prefix`
         # - S3 strips that prefix from each key before writing
         # - write under download/<study>/<version>/
-        super()._download()
+        super()._download(overwrite=overwrite)
 
 
 synapse_msg = """Requires creating a Synapse account with 2FA.
@@ -1255,7 +1293,9 @@ class Synapse(BaseDownload):
             )
         self._auth_token = token
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # ``overwrite`` is best-effort: syncFromSynapse manages its own local
+        # cache and refetches changed/missing entities on each sync.
         import synapseclient  # type: ignore[import-not-found]
         import synapseutils  # type: ignore[import-not-found]
 
@@ -1310,7 +1350,7 @@ class Zenodo(BaseDownload):
                 f"Please check the record ID or provide dataset_fname/dataset_hash manually."
             ) from e
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # TODO: Consider making the download async for multiple file downloads to occur
         # cf. openneuro-py implementation
 
@@ -1332,7 +1372,7 @@ class Zenodo(BaseDownload):
 
         for filename, file_hash in zipped_files.items():
             dest = self._dl_dir / Path(filename).stem
-            if dest.exists():
+            if dest.exists() and not overwrite:
                 continue
             tmp = self._dl_dir / f"temp_{filename}"
             download_file(
@@ -1345,7 +1385,7 @@ class Zenodo(BaseDownload):
 
         for filename, file_hash in info_files.items():
             dest = self._dl_dir / filename
-            if dest.exists():
+            if dest.exists() and not overwrite:
                 continue
             download_file(
                 f"{base_url}/files/{filename}",

@@ -83,14 +83,14 @@ class Schalk2004Bci2000(study.Study):
         frequency=160,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         #  Option to download through S3
         #  aws s3 sync s3://physionet-open/eegmmidb/1.0.0/ DESTINATION
         folder = self.path / "download"
         temp_folder = self.path / "temp"
         download_url = "https://physionet.org/files/eegmmidb/1.0.0/"
         with download.success_writer(folder) as already_done:
-            if not already_done:
+            if overwrite or not already_done:
                 temp_folder.mkdir(exist_ok=True, parents=True)
                 subprocess.run(
                     (f"wget -r -N -c -np -P {temp_folder} {download_url}"),

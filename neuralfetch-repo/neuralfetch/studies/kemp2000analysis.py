@@ -81,7 +81,7 @@ class Kemp2000Analysis(study.Study):
         x for x in SUBJECTS if x not in [13, 39, 68, 69, 78, 79]
     ]
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """
         Leverages mne.datasets.fetch_dataset method to download.
         - The reported download link: https://physionet.org/physiobank/database/sleep-edfx/sleep-cassette/
@@ -95,10 +95,16 @@ class Kemp2000Analysis(study.Study):
         subprocess.run((f"wget -r -N -c -np -P {folder} {download_url}"), shell=True)
         """
         sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_1, recording=[1], path=self.path
+            subjects=self.SUBJECTS_REC_1,
+            recording=[1],
+            path=self.path,
+            force_update=overwrite,
         )
         sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_2, recording=[2], path=self.path
+            subjects=self.SUBJECTS_REC_2,
+            recording=[2],
+            path=self.path,
+            force_update=overwrite,
         )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

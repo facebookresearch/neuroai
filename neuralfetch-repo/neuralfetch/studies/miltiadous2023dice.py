@@ -85,8 +85,10 @@ class Miltiadous2023Dice(study.Study):
         frequency=500,
     )
 
-    def _download(self, overwrite=False) -> None:
-        download.Openneuro(study="ds004504", dset_dir=self.path).download()
+    def _download(self, overwrite: bool = False) -> None:
+        download.Openneuro(study="ds004504", dset_dir=self.path).download(
+            overwrite=overwrite
+        )
 
     def iter_timelines(self):
         """Returns a generator of all recordings"""
@@ -170,7 +172,7 @@ class Miltiadous2023DiceSample(Miltiadous2023Dice):
         frequency=500,
     )
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download only 3 subjects from the dataset."""
         include_patterns = [
             "dataset_description.json",

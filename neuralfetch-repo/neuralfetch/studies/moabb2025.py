@@ -231,18 +231,21 @@ class _BaseMoabb(studies.Study):
         return df
 
     # Populate subclass-level metadata
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """
         Download MoABB dataset and write timelines as a csv.
 
         (Timelines needed to avoid 'moabb.datasets.studies.get_data()' in self.iter_timelines, which loads ALL raw data.)
 
+        With ``overwrite`` the manifest is rebuilt even if it already exists;
+        forcing moabb to re-fetch the raw cache is best-effort and delegated to
+        the upstream client.
         """
         from moabb.datasets.base import CacheConfig
 
         timeline_path = Path(self.path) / "timelines.csv"
 
-        if not timeline_path.exists():
+        if overwrite or not timeline_path.exists():
             dl_path = Path(self.path) / "download"
             try:
                 dl_path.mkdir(exist_ok=True, parents=True)
@@ -3199,10 +3202,10 @@ class Romani2025Brainform(_BaseMoabb):
         labels = [s for s in labels if s not in self._EXCLUDE_SUBJECTS]
         return {i: s for i, s in enumerate(labels)}
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Build timelines.csv by scanning BIDS directory (no mne_bids needed)."""
         timeline_path = Path(self.path) / "timelines.csv"
-        if timeline_path.exists():
+        if timeline_path.exists() and not overwrite:
             return
 
         bids = self._bids_root()
