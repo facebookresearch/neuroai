@@ -79,8 +79,9 @@ def test_all_download_backends_accept_overwrite() -> None:
     for cls in sorted(
         _all_subclasses(_download_mod.BaseDownload), key=lambda c: c.__name__
     ):
-        if not _accepts_overwrite(cls._download):
-            sig = inspect.signature(cls._download)
+        download_fn = cls._download  # type: ignore[attr-defined]
+        if not _accepts_overwrite(download_fn):
+            sig = inspect.signature(download_fn)
             failures.append(f"{cls.__name__}: _download{sig}")
 
     assert not failures, (
