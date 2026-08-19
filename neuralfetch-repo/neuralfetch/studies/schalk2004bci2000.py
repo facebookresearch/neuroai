@@ -90,17 +90,18 @@ class Schalk2004Bci2000(study.Study):
         temp_folder = self.path / "temp"
         download_url = "https://physionet.org/files/eegmmidb/1.0.0/"
         with download.success_writer(folder) as already_done:
-            if overwrite or not already_done:
-                temp_folder.mkdir(exist_ok=True, parents=True)
-                subprocess.run(
-                    (f"wget -r -N -c -np -P {temp_folder} {download_url}"),
-                    shell=True,
-                    check=False,
-                )
-                download_path = temp_folder / "physionet.org/files/eegmmidb/1.0.0/"
-                download_path.rename(folder)
-                shutil.rmtree(temp_folder)  # cleanup empty folder
-                logger.info(f"Downloaded files to {folder}.")
+            if already_done and not overwrite:
+                return
+            temp_folder.mkdir(exist_ok=True, parents=True)
+            subprocess.run(
+                (f"wget -r -N -c -np -P {temp_folder} {download_url}"),
+                shell=True,
+                check=False,
+            )
+            download_path = temp_folder / "physionet.org/files/eegmmidb/1.0.0/"
+            download_path.rename(folder)
+            shutil.rmtree(temp_folder)  # cleanup empty folder
+            logger.info(f"Downloaded files to {folder}.")
 
     _RUN_CONDITION: tp.ClassVar[dict[str, str]] = {
         "R01": "Rest",
