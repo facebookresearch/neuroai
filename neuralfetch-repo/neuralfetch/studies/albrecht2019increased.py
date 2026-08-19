@@ -76,7 +76,7 @@ class Albrecht2019Increased(study.Study):
         frequency=1000,
     )
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # https://predict.cs.unm.edu/downloads.php d004
         # Unable to use original dataset on PRED+ct.
         # Files shared here rely on Sharepoint and cannot be programmatically downloaded there.

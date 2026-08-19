@@ -81,7 +81,7 @@ class Zyma2019Electroencephalograms(study.Study):
     _PHYSIONET_STUDY: tp.ClassVar[str] = "eegmat"
     _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         physionet = download.Physionet(
             study=self._PHYSIONET_STUDY,
             version=self._PHYSIONET_VERSION,

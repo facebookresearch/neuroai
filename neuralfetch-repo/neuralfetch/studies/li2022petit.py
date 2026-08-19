@@ -106,7 +106,7 @@ class Li2022Petit(study.Study):
         super().model_post_init(log__)
         self.version = "v3"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """
         Data is available here:
         https://openneuro.org/datasets/ds003643/versions/2.0.5/
@@ -117,7 +117,7 @@ class Li2022Petit(study.Study):
         if path.name.lower() != self.__class__.__name__.lower():
             path = path / self.__class__.__name__
         client = download.Openneuro(study=dataset_id, dset_dir=path)
-        client.download()
+        client.download(overwrite=overwrite)
         # TODO when available, automate download of transcripts files
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
@@ -314,7 +314,7 @@ class Li2022PetitSample(Li2022Petit):
         "https://belcorentin.github.io/pi-aiche-dee/lpp_en_text.zip"
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download ultra-minimal dataset: EN057 section 1 only."""
         dataset_id = "ds003643"
         path = self.path
@@ -334,12 +334,12 @@ class Li2022PetitSample(Li2022Petit):
         client = download.Openneuro(
             study=dataset_id, dset_dir=path, include=include_patterns
         )
-        client.download()
+        client.download(overwrite=overwrite)
 
         # Download English transcripts from hosted location
-        self._download_transcripts(path)
+        self._download_transcripts(path, overwrite=overwrite)
 
-    def _download_transcripts(self, path: tp.Any) -> None:
+    def _download_transcripts(self, path: tp.Any, overwrite: bool = False) -> None:
         """Download English transcript files."""
         import requests
 
@@ -347,7 +347,7 @@ class Li2022PetitSample(Li2022Petit):
         transcripts_dir.mkdir(parents=True, exist_ok=True)
         zip_path = transcripts_dir / "lpp_en_text.zip"
 
-        if zip_path.exists():
+        if zip_path.exists() and not overwrite:
             return  # Already downloaded
 
         try:

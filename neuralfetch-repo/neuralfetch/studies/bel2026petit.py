@@ -85,7 +85,7 @@ class _Bel2026PetitBase(study.Study):
         super().model_post_init(log__)
         self.version = "v3"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError(
             "This function is meant to be called on each independent study, Bel2026PetitRead and Bel2026PetitListen,"
             "which have different dataset IDs. See their implementations for details."
@@ -243,10 +243,10 @@ class Bel2026PetitListen(_Bel2026PetitBase):
         frequency=1000.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dataset_id = "ds007523"
         client = download.Openneuro(folder="", study=dataset_id, dset_dir=self.path)
-        client.download()
+        client.download(overwrite=overwrite)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         """Load events from the events.tsv file for the listen task."""
@@ -416,10 +416,10 @@ class Bel2026PetitRead(_Bel2026PetitBase):
         frequency=1000.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dataset_id = "ds007524"
         client = download.Openneuro(folder="", study=dataset_id, dset_dir=self.path)
-        client.download()
+        client.download(overwrite=overwrite)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         """Load events from the events.tsv file for the read task."""
@@ -583,7 +583,7 @@ class Bel2026PetitListenSample(Bel2026PetitListen):
         frequency=1000.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # ds007523 is the full dataset; here we download only subject 26
         dataset_id = "ds007523"
         client = download.Openneuro(
@@ -604,7 +604,7 @@ class Bel2026PetitListenSample(Bel2026PetitListen):
                 "dataset_description.json",
             ],
         )
-        client.download()
+        client.download(overwrite=overwrite)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Yield only subject 26, run 01."""
@@ -654,7 +654,7 @@ class Bel2026PetitReadSample(Bel2026PetitRead):
         frequency=1000.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # ds007524 is the full dataset; here we download only subject 26 run 01
         dataset_id = "ds007524"
         client = download.Openneuro(
@@ -672,7 +672,7 @@ class Bel2026PetitReadSample(Bel2026PetitRead):
                 "dataset_description.json",
             ],
         )
-        client.download()
+        client.download(overwrite=overwrite)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Yield only subject 26, run 01."""

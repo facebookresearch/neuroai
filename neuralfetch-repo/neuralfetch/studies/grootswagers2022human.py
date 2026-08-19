@@ -96,9 +96,11 @@ class Grootswagers2022Human(study.Study):
 
     _test_image_names: list[str] | None = None
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # Download EEG data from OpenNeuro
-        download.Openneuro(study="ds003825", dset_dir=self.path).download()
+        download.Openneuro(study="ds003825", dset_dir=self.path).download(
+            overwrite=overwrite
+        )
         # Check for / Download THINGS-images database (used across multiple THINGS studies)
         # Note: Images must be preprocessed and placed in prepare/ folder separately
         utils.download_things_images(self.path)
@@ -216,7 +218,7 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
         frequency=1000,
     )
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         sub = self._SAMPLE_SUBJECT
         include_patterns = [
             "dataset_description.json",

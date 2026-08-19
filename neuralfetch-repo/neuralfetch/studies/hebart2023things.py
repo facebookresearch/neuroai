@@ -119,7 +119,7 @@ class _Hebart2023Things(study.Study):
             )
         return df
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download the shared THINGS-images database."""
         utils.download_things_images(self.path)
 
@@ -180,9 +180,9 @@ class Hebart2023ThingsMeg(_Hebart2023Things):
         frequency=1200.0,
     )
 
-    def _download(self) -> None:
-        super()._download()  # Download shared THINGS-images database
-        download.Openneuro("ds004212", self.path).download()  # type: ignore
+    def _download(self, overwrite: bool = False) -> None:
+        super()._download(overwrite=overwrite)  # Download shared THINGS-images database
+        download.Openneuro("ds004212", self.path).download(overwrite=overwrite)  # type: ignore
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
@@ -378,18 +378,18 @@ class Hebart2023ThingsBold(_Hebart2023Things):
     SESSION_SUFFIX: tp.ClassVar[str] = "things"
     TR_FMRI_S: tp.ClassVar[float] = 1.5
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
-            if already_done:
+            if already_done and not overwrite:
                 return
-            super()._download()  # Download shared THINGS-images database
+            super()._download(overwrite=overwrite)  # Download shared THINGS-images database
             download.Datalad(
                 study="hebart2023bold",
                 dset_dir=self.path,
                 repo_url="https://github.com/OpenNeuroDatasets/ds004192.git",
                 threads=4,
                 folders=[download.Wildcard(folder="sub-*")],
-            ).download()
+            ).download(overwrite=overwrite)
             self._write_test_categories()
 
     def _write_test_categories(self) -> None:
