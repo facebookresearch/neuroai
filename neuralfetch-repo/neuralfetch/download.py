@@ -1181,10 +1181,17 @@ class Openneuro(BaseDownload):
     nworkers: int = 5
 
     def _download(self, overwrite: bool = False) -> None:
-        # openneuro-py verifies size/hash of files already on disk on every
-        # run and repairs mismatches in place, so a forced ``overwrite`` re-run
-        # needs no extra flag -- re-invoking already re-verifies and repairs.
         import openneuro as on
+
+        # openneuro-py re-verifies the size/hash of every file already on disk
+        # on each run and repairs any mismatch IN PLACE. That in-place mutation
+        # is only wanted for a forced re-download: on a plain resume
+        # (overwrite=False) we must never touch files that are already present.
+        # So once the target holds data, skip the download entirely; only let
+        # openneuro-py write for a fresh (empty) target or when overwrite forces
+        # a re-verify/repair.
+        if not overwrite and self._has_local_data():
+            return
 
         on.download(
             dataset=self.study,
@@ -1192,6 +1199,17 @@ class Openneuro(BaseDownload):
             include=self.include,
             max_concurrent_downloads=self.nworkers,
         )
+
+    def _has_local_data(self) -> bool:
+        """True if the target dir already holds downloaded files.
+
+        Ignores the success marker written by :meth:`download` so a bare marker
+        never counts as data.
+        """
+        if not self._dl_dir.exists():
+            return False
+        marker = self.get_success_file()
+        return any(child != marker for child in self._dl_dir.iterdir())
 
 
 class Osf(BaseDownload):
