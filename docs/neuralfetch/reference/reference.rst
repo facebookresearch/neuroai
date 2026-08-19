@@ -38,3 +38,30 @@ Utilities
    update_source_info
    root_study_folder
 
+
+Command-line interface
+----------------------
+
+The ``neuralfetch`` console script (see :mod:`neuralfetch.cli.main`) exposes
+three subcommands: ``download`` (fetch a registered study's raw dataset),
+``study-info`` (compute or update :class:`~neuralset.events.study.StudyInfo`),
+and ``export-bids`` (export a study to a BIDS directory tree).
+
+.. currentmodule:: neuralfetch.cli.download
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   download_study
+   list_downloadable_studies
+
+.. currentmodule:: neuralfetch.cli.bids_exporter
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   study_to_bids
+   BidsExporter
+

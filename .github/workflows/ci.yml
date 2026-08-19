@@ -104,6 +104,8 @@ jobs:
           python -c "from neuralset import events, segments, extractors; print('neuralset OK')"
           python -c "from neuraltrain import models, metrics; print('neuraltrain OK')"
           python -c "import neuralbench; print('neuralbench OK')"
+          # Verify the neuralfetch console script is installed and wired up
+          neuralfetch --help > /dev/null && echo 'neuralfetch CLI OK'
           # Verify neuralfetch exposes the full Study catalog
           python -c "
           from neuralset.events.study import Study
