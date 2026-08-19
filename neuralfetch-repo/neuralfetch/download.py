@@ -528,7 +528,9 @@ class S3(BaseDownload):
             jobs.append((s3_key, local_path))
         return jobs
 
-    def _resolve_prefix(self, bucket: tp.Any, skip_existing: bool) -> list[tuple[str, Path]]:
+    def _resolve_prefix(
+        self, bucket: tp.Any, skip_existing: bool
+    ) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for obj in bucket.objects.filter(Prefix=self.prefix):
             rel = obj.key

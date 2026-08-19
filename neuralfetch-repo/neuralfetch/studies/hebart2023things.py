@@ -382,7 +382,9 @@ class Hebart2023ThingsBold(_Hebart2023Things):
         with download.success_writer(self.path / "download_all") as already_done:
             if already_done and not overwrite:
                 return
-            super()._download(overwrite=overwrite)  # Download shared THINGS-images database
+            super()._download(
+                overwrite=overwrite
+            )  # Download shared THINGS-images database
             download.Datalad(
                 study="hebart2023bold",
                 dset_dir=self.path,

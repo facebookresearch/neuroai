@@ -19,7 +19,7 @@ class _BaseTest2024Eeg(study.Study):
     ch_types: tp.ClassVar[list[str]]
     sfreq: tp.ClassVar[float]
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

@@ -256,7 +256,7 @@ class ExampleMultiModal(study.Study):
             for r in (1, 2):
                 yield {"subject": f"sub-{s:02d}", "run": r}
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         for tl in self.iter_timelines():
             self._materialize(tl)
 

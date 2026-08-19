@@ -120,9 +120,7 @@ class Chang2019Bold5000(study.Study):
             # Download fMRI data from OpenNeuro
             from neuralfetch.download import Openneuro
 
-            Openneuro(study="ds001499", dset_dir=self.path).download(
-                overwrite=overwrite
-            )
+            Openneuro(study="ds001499", dset_dir=self.path).download(overwrite=overwrite)
 
             # Download stimuli data
             stimuli_zip = self.path / "BOLD5000_Stimuli.zip"
