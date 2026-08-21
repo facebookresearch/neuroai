@@ -35,7 +35,7 @@ quickstart = [
 neuralfetch = "neuralfetch"
 
 [project.scripts]
-neuralfetch = "neuralfetch.cli.main:main"
+neuralfetch = "neuralfetch.commands:main"
 
 [build-system]
 requires = ["setuptools>=64"]

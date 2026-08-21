@@ -4,21 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""neuralfetch CLI.
-
-Subcommands:
-
-* ``download`` - download a registered study's raw dataset.
-* ``study-info`` - compute (or update) StudyInfo for a downloaded study.
-* ``export-bids`` - export a study to a BIDS directory tree.
+"""Export a study to a BIDS directory tree.
 
 Usage::
-
-    neuralfetch download Grootswagers2022Human
-    neuralfetch download --list
-
-    neuralfetch study-info Grootswagers2022Human
-    neuralfetch study-info Grootswagers2022Human --update
 
     neuralfetch export-bids Grootswagers2022Human \\
         --output-dir ~/bids/Grootswagers2022Human \\
@@ -39,126 +27,26 @@ Usage::
         --device Eeg --task thingseeg \\
         --anonymize-daysback 365
 
-Study-info helpers come from :mod:`neuralfetch.utils`; download and export
-logic live in :mod:`neuralfetch.cli.download` and
-:mod:`neuralfetch.cli.bids_exporter`; this module is argparse glue only.
+The export logic lives in :mod:`neuralfetch.utils.bids`; this module is argparse
+glue only.
 """
 
 from __future__ import annotations
 
 import argparse
-import logging
 import typing as tp
 
-from neuralfetch.cli.bids_exporter import MNE_RAW_TYPES, study_to_bids
-from neuralfetch.cli.download import download_study, list_downloadable_studies
-from neuralfetch.utils import compute_study_info, format_study_info, update_source_info
+NAME = "export-bids"
+HELP = "Export a study to a BIDS directory tree."
 
-# ---------------------------------------------------------------------------
-# download
-# ---------------------------------------------------------------------------
-
-
-def _add_download_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "study",
-        nargs="?",
-        default=None,
-        help="Study name (e.g. Grootswagers2022Human).",
-    )
-    parser.add_argument(
-        "--path",
-        default=None,
-        help="Root folder for study data (default: $NEURALSET_STUDY_FOLDER).",
-    )
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Re-download even if the study has already been downloaded.",
-    )
-    parser.add_argument(
-        "--clean",
-        action="store_true",
-        help=(
-            "Delete the study's download/ and prepare/ folders first, then "
-            "re-download from scratch (implies --overwrite; prompts for "
-            "confirmation unless --yes is given)."
-        ),
-    )
-    parser.add_argument(
-        "-y",
-        "--yes",
-        action="store_true",
-        dest="assume_yes",
-        help="Skip the confirmation prompt for --clean.",
-    )
-    parser.add_argument(
-        "--list",
-        action="store_true",
-        dest="list_studies",
-        help="List all registered studies and exit.",
-    )
+# Devices supported by the BIDS exporter (mirrors
+# ``neuralfetch.utils.bids.MNE_RAW_TYPES``). Defined here so registering the
+# subparser does not import mne/exca; runtime validation happens in
+# ``study_to_bids``.
+_DEVICES = ("Eeg", "Emg", "Fnirs", "Ieeg", "Meg")
 
 
-def _run_download(args: argparse.Namespace) -> None:
-    if args.list_studies:
-        for name in list_downloadable_studies():
-            print(f"  {name}")
-        return
-
-    if args.study is None:
-        raise SystemExit("error: study name required (or pass --list)")
-
-    download_study(
-        name=args.study,
-        path=args.path,
-        overwrite=args.overwrite,
-        clean=args.clean,
-        assume_yes=args.assume_yes,
-    )
-
-
-# ---------------------------------------------------------------------------
-# study-info
-# ---------------------------------------------------------------------------
-
-
-def _add_study_info_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "study",
-        help="Study name (e.g. Duan2026OmniIeeg).",
-    )
-    parser.add_argument(
-        "--path",
-        default=None,
-        help="Root folder for study data (default: $NEURALSET_STUDY_FOLDER).",
-    )
-    parser.add_argument(
-        "--update",
-        action="store_true",
-        help="Rewrite the _info ClassVar in the study's source file with the computed values.",
-    )
-
-
-def _run_study_info(args: argparse.Namespace) -> None:
-    from neuralfetch.utils import root_study_folder
-
-    folder = args.path or (root_study_folder() / args.study)
-    if args.update:
-        actual = update_source_info(name=args.study, folder=folder)
-        print(f"Updated _info in source file for {args.study}.")
-    else:
-        actual = compute_study_info(name=args.study, folder=folder)
-
-    print(f"study.{format_study_info(actual)}")
-
-
-# ---------------------------------------------------------------------------
-# export-bids
-# ---------------------------------------------------------------------------
-
-
-def _add_export_bids_arguments(parser: argparse.ArgumentParser) -> None:
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "study",
         help="Study name (e.g. Grootswagers2022Human).",
@@ -172,7 +60,7 @@ def _add_export_bids_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--device",
         required=True,
-        choices=sorted(MNE_RAW_TYPES),
+        choices=_DEVICES,
         help="Neurophysiology recording type (e.g. Eeg, Meg, Ieeg, Emg, Fnirs).",
     )
     parser.add_argument(
@@ -255,11 +143,12 @@ def _add_export_bids_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _run_export_bids(args: argparse.Namespace) -> None:
+def run(args: argparse.Namespace) -> None:
     import exca
 
     import neuralset as ns
     from neuralfetch.utils import root_study_folder
+    from neuralfetch.utils.bids import study_to_bids
 
     folder = args.path or (root_study_folder() / args.study)
 
@@ -295,42 +184,3 @@ def _run_export_bids(args: argparse.Namespace) -> None:
         infra_bids=infra_bids,
     )
     print(f"BIDS export complete: {bids_root}")
-
-
-# ---------------------------------------------------------------------------
-# dispatcher
-# ---------------------------------------------------------------------------
-
-
-def main(argv: list[str] | None = None) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    parser = argparse.ArgumentParser(prog="neuralfetch")
-    subs = parser.add_subparsers(dest="command", required=True)
-
-    p_download = subs.add_parser(
-        "download",
-        help="Download a study dataset.",
-    )
-    _add_download_arguments(p_download)
-    p_download.set_defaults(func=_run_download)
-
-    p_study_info = subs.add_parser(
-        "study-info",
-        help="Compute StudyInfo for a downloaded study.",
-    )
-    _add_study_info_arguments(p_study_info)
-    p_study_info.set_defaults(func=_run_study_info)
-
-    p_export_bids = subs.add_parser(
-        "export-bids",
-        help="Export a study to a BIDS directory tree.",
-    )
-    _add_export_bids_arguments(p_export_bids)
-    p_export_bids.set_defaults(func=_run_export_bids)
-
-    args = parser.parse_args(argv)
-    args.func(args)
-
-
-if __name__ == "__main__":
-    main()

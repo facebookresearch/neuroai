@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Tests for neuralfetch.cli.bids_exporter (BidsExporter / study_to_bids)."""
+"""Tests for neuralfetch.utils.bids (BidsExporter / study_to_bids)."""
 
 from pathlib import Path
 
@@ -113,7 +113,7 @@ def _run_study_to_bids(
     extra_rows: list[dict] | None = None,
 ) -> Path:
     """Call ``study_to_bids`` with a mocked study backed by a real saved FIF file."""
-    from neuralfetch.cli.bids_exporter import study_to_bids
+    from neuralfetch.utils.bids import study_to_bids
 
     raw = _make_fake_raw(device)
     fif_path = tmp_path / "source_fake_raw.fif"
@@ -143,7 +143,7 @@ def _run_study_to_bids(
 
 
 def test_annotation_descriptions() -> None:
-    from neuralfetch.cli.bids_exporter import _annotation_descriptions
+    from neuralfetch.utils.bids import _annotation_descriptions
 
     df = pd.DataFrame(
         [
@@ -171,7 +171,7 @@ def test_annotation_descriptions() -> None:
 
 
 def test_study_to_bids_invalid_device(tmp_path: Path) -> None:
-    from neuralfetch.cli.bids_exporter import study_to_bids
+    from neuralfetch.utils.bids import study_to_bids
 
     study = _make_study(pd.DataFrame(), path=tmp_path)
     with pytest.raises(ValueError, match="not supported"):

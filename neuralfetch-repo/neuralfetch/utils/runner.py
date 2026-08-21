@@ -7,7 +7,7 @@
 """Study download runner.
 
 Download a registered study's raw dataset into the configured study root.
-The CLI wiring lives in :mod:`neuralfetch.cli.main`; this module is
+The CLI wiring lives in :mod:`neuralfetch.commands.download`; this module is
 library-only.
 """
 
@@ -17,7 +17,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from neuralfetch.utils import root_study_folder
+from neuralfetch.utils.study_info import root_study_folder
 from neuralset.events import study
 
 logger = logging.getLogger(__name__)

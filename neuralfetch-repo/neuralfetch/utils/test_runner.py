@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Tests for neuralfetch.cli.download.
+"""Tests for neuralfetch.utils.runner.
 
 The headline test here is :func:`test_all_registered_studies_accept_overwrite`,
 the anti-regression guard for the download CLI: ``neuralfetch download`` always
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from neuralfetch.cli.download import _clean_study_dirs, download_study
+from neuralfetch.utils.runner import _clean_study_dirs, download_study
 from neuralset.events import study
 
 # Studies whose ``_download`` carries a bespoke signature (positional
