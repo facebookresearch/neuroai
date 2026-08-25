@@ -26,7 +26,7 @@ data:
     frequency: native
     infra:
       mode: cached
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       keep_in_ram: true
       slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION

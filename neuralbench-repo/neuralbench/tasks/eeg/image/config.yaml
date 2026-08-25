@@ -24,7 +24,7 @@ data:
     imsize: 518
     aggregation: trigger
     infra:
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       keep_in_ram: false
       timeout_min: 180
       gpus_per_node: 1
