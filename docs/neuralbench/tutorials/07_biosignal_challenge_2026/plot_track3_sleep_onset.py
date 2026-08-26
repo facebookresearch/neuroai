@@ -58,6 +58,9 @@ generalisation: train sleepers and test sleepers are disjoint.
 #
 #    # 4. Full baseline -- task-specific model (EEGNet)
 #    neuralbench eeg sleep_onset -m eegnet
+#
+#    # 5. Full baseline -- foundation model (REVE)
+#    neuralbench eeg sleep_onset -m reve
 
 # %%
 # Where the competition data diverges

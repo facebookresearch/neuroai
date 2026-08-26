@@ -60,6 +60,9 @@ has already provided labelled calibration data. The competition tests
 #    # 4. Full baseline -- task-specific model (EEGNet)
 #    neuralbench eeg motor_imagery -m eegnet
 #
+#    # 5. Full baseline -- foundation model (REVE)
+#    neuralbench eeg motor_imagery -m reve
+#
 # Other MI datasets registered in
 # :doc:`/neuralbench/tasks/eeg/motor_imagery` (MOABB, Dreyer2023,
 # BCI Competition IV, ...) can also be selected with ``--dataset

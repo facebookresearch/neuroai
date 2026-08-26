@@ -13,7 +13,7 @@ and the multi-modal successor to the 2025 EEG Foundation Challenge.
    can experiment with the planned tracks while the proposal is
    under review.
 
-The competition is organised as **4 + 1 tracks**:
+The competition is organised as **four tracks**:
 
 1. **Track 1 -- EEG-to-Image** (cross-stimulus): retrieve a viewed image
    from EEG. Headline metric: **Top-5 retrieval accuracy** (higher is
@@ -28,13 +28,9 @@ The competition is organised as **4 + 1 tracks**:
 4. **Track 4 -- EMG-to-Text** (cross-subject): decode keystroke
    sequences from surface EMG. Headline metric: **character error
    rate** (lower is better).
-5. **Track 5 -- Foundation Transfer** (cross-task, EEG only): submit a
-   *single* EEG encoder; organisers fit linear probes for Tracks 1-3.
-   Headline metric: **mean rank** across the three EEG leaderboards
-   (lower is better).
 
-Tracks 1-4 accept both task-specific models and foundation models.
-Track 5 is restricted to a single shared encoder.
+All four tracks accept both task-specific models and foundation
+models.
 
 This starter kit shows how to reproduce a baseline for each track with
 NeuralBench, using the closest publicly available dataset when the
@@ -49,7 +45,6 @@ official competition data is not yet released.
 # - :doc:`Track 2 -- EEG-to-BCI <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
 # - :doc:`Track 4 -- EMG-to-Text <plot_track4_emg_to_text>`
-# - :doc:`Track 5 -- Foundation Transfer <plot_track5_foundation_transfer>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`
 #
 # Each page follows the same shape:
@@ -94,7 +89,7 @@ official competition data is not yet released.
 #      - 58.58 +/- 0.34
 #      - 143.30 +/- 0.40
 #      - --
-#    * - REVE (FM)
+#    * - REVE (foundation model)
 #      - 84.75 +/- 0.38
 #      - 68.04 +/- 0.73
 #      - 134.89 +/- 2.02
@@ -104,10 +99,6 @@ official competition data is not yet released.
 #      - --
 #      - --
 #      - 25.14 +/- 2.30
-#
-# REVE is also the reference **Track 5** baseline: its three EEG-track
-# numbers come from a single set of encoder weights, so its mean rank
-# on the Tracks 1-3 leaderboards is also its Track 5 score.
 
 # %%
 # Collecting and plotting your results
@@ -120,18 +111,22 @@ official competition data is not yet released.
 #
 # .. code-block:: bash
 #
-#    # 1. Run experiments (cached automatically)
+#    # 1. Run the three EEG tracks (cached automatically)
 #    neuralbench eeg image motor_imagery sleep_onset -m eegnet reve
 #
 #    # 2. Aggregate cached results -- no retraining
 #    neuralbench eeg image motor_imagery sleep_onset -m eegnet reve --plot-cached
 #
-# ``--plot-cached`` produces, under ``<SAVE_DIR>/outputs/``:
+#    # 3. Track 4 lives under another device -- aggregate separately
+#    neuralbench emg typing -m emg2qwerty --plot-cached
+#
+# ``--plot-cached`` aggregates within a single device, so the EMG
+# track is collected by its own invocation. It produces, under
+# ``<SAVE_DIR>/outputs/``:
 #
 # - ``core/core_bar_chart.png`` -- bar chart per task and model.
 # - ``core/core_results_table.csv`` -- raw per-task metrics.
-# - ``core/core_rank_table.csv`` -- ranks per task (the input to the
-#   Track 5 mean-rank score).
+# - ``core/core_rank_table.csv`` -- ranks per task.
 #
 # For programmatic access to the same data, instantiate
 # :class:`~neuralbench.main.BenchmarkAggregator` directly. The
