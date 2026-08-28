@@ -9,7 +9,6 @@ import typing as tp
 
 import numpy as np
 import torch
-from exca import ConfDict
 from pydantic import field_validator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -17,8 +16,9 @@ from tqdm import tqdm
 import neuralset as ns
 
 from .config_manager import _ensure_initialized
+from .experiment_config import merge_task_config
 from .extractors import SleepOnsetTargetExtractor  # noqa: F401
-from .registry import DEFAULTS_DIR, _resolve_task_dir, load_yaml_config
+from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
     AddSleepOnsetTargets,
@@ -293,14 +293,44 @@ class Data(ns.BaseModel):
 
 
 def get_default_dataloaders(
-    device: str, task: str, **overrides: tp.Any
+    device: str, task: str, *, dataset: str | None = None, **overrides: tp.Any
 ) -> dict[str, DataLoader]:
-    """Return the train/val/test DataLoaders a ``device``/``task`` benchmark run uses."""
+    """Return the train/val/test DataLoaders for a task's default data config.
 
+    The dataloaders match those of a benchmark run for the same task, except
+    for model-specific preprocessing: model configs override ``data.neuro``
+    fields (sampling frequency, filters, clamping) to suit each architecture,
+    and those overrides are not applied here.
+
+    Parameters
+    ----------
+    device
+        Brain recording device (``"eeg"``, ``"meg"``, ``"fmri"``, ...).
+    task
+        Single task name, e.g. ``"motor_imagery"``.
+    dataset
+        Dataset variant from the task's ``datasets/`` directory. ``None`` uses
+        the study of the task config.
+    **overrides
+        Overrides for the ``data`` config, as dotted paths, e.g.
+        ``batch_size=8`` or ``**{"neuro.frequency": 60.0}``.
+
+    Returns
+    -------
+    dict with keys ``"train"``, ``"val"``, ``"test"`` mapping to
+    :class:`~torch.utils.data.DataLoader` instances.
+
+    Examples
+    --------
+    Extraction inherits the benchmark infra, which submits SLURM jobs where a
+    cluster is available. To extract in-process instead:
+
+    >>> loaders = get_default_dataloaders(
+    ...     "eeg", "audiovisual_stimulus", **{"neuro.infra.cluster": None}
+    ... )
+    """
     _ensure_initialized()
-
-    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
-    config.update(load_yaml_config(_resolve_task_dir(device, task) / "config.yaml"))
-    data_config = ConfDict(config)["data"]
+    _validate_inputs(device, task, None, None)
+    data_config = merge_task_config(device, task, dataset)["data"]
     data_config.update(overrides)
     return Data(**data_config).prepare()

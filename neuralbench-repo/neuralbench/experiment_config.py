@@ -23,6 +23,7 @@ from exca import ConfDict
 from neuralbench.config_manager import get_config
 from neuralbench.registry import (
     DEBUG_STUDY_QUERIES,
+    DEFAULTS_DIR,
     _resolve_model_config_path,
     _resolve_task_dir,
     load_yaml_config,
@@ -95,6 +96,46 @@ def _download_dataset(config: ConfDict) -> None:
     study_dict = dict(config["data"]["study"]["source"])
     study_dict["path"] = Path(study_dict["path"]) / study_dict["name"]
     ns.Study(**study_dict).download()
+
+
+# ---------------------------------------------------------------------------
+# Config merging
+# ---------------------------------------------------------------------------
+
+
+def merge_task_config(
+    device: str,
+    task_name: str,
+    dataset: str | None = None,
+    base: ConfDict | None = None,
+) -> ConfDict:
+    """Layer a task config, and an optional dataset variant, over the base defaults.
+
+    *base* defaults to ``defaults/config.yaml``; callers pass their own copy of
+    it when it already carries run-level overrides (checkpoint, W&B).
+    """
+    config = (
+        ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+        if base is None
+        else base.copy()
+    )
+    task_config_fname = _resolve_task_dir(device, task_name) / "config.yaml"
+    config.update(load_yaml_config(task_config_fname))
+    if dataset is not None:
+        _merge_dataset_config(config, device, task_name, dataset)
+    return config
+
+
+def _merge_dataset_config(
+    config: ConfDict, device: str, task_name: str, dataset: str
+) -> None:
+    """Layer a task's ``datasets/<dataset>.yaml`` over *config*, in place."""
+    task_dir = _resolve_task_dir(device, task_name)
+    source_defaults = dict(config["data.study.source"])
+    config.update(load_yaml_config(task_dir / "datasets" / f"{dataset}.yaml"))
+    # =replace= may wipe source; restore default path/infra
+    for k, v in source_defaults.items():
+        config["data.study.source"].setdefault(k, v)
 
 
 # ---------------------------------------------------------------------------
@@ -205,10 +246,7 @@ def prepare_task_configs(
     if datasets is None:
         datasets = [None]
 
-    task_dir = _resolve_task_dir(device, task_name)
-    task_config_fname = task_dir / "config.yaml"
-    task_config = load_yaml_config(task_config_fname)
-    config.update(task_config)
+    config = merge_task_config(device, task_name, base=config)
 
     configs = []
     for model_name in models:
@@ -225,12 +263,7 @@ def prepare_task_configs(
             if dataset_name is not None:
                 if not quiet:
                     LOGGER.info("~~~ USING DATASET: %s ~~~", dataset_name)
-                dataset_config_fname = task_dir / "datasets" / f"{dataset_name}.yaml"
-                dataset_config = load_yaml_config(dataset_config_fname)
-                dataset_exp_config.update(dataset_config)
-                # =replace= may wipe source; restore default path/infra
-                for k, v in config["data.study.source"].items():
-                    dataset_exp_config["data.study.source"].setdefault(k, v)
+                _merge_dataset_config(dataset_exp_config, device, task_name, dataset_name)
 
             exp_configs = _prepare_single_task_config(
                 dataset_exp_config,
