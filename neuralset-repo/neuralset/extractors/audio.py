@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 """All the supported audio extractors."""
 
+import logging
 import typing as tp
 import warnings
 from abc import abstractmethod
@@ -24,6 +25,8 @@ from .base import BaseExtractor
 from .hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAudio(BaseExtractor):
@@ -418,6 +421,11 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
             out: tp.Any = outputs.get("hidden_states")
         elif self.layer_type == "convolution":
             out = outputs.get("extract_features")
+            if out is None:
+                logger.warning(
+                    "No extract_features found, using first hidden_states instead"
+                )
+                out = outputs.get("hidden_states")[0]
         else:
             raise ValueError(f"Unknown layer type: {self.layer_type}")
         if isinstance(out, tuple):
