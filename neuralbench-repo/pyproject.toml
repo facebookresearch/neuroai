@@ -18,6 +18,9 @@ dependencies = [
   "neuraltrain",
   "exca",
   "lightning>=2.0.8",
+  "peft>=0.13",
+  # peft imports EncoderDecoderCache (transformers>=4.43) but declares no floor
+  "transformers>=4.43",
   "pyriemann>=0.6",
   "seaborn",
   "torchinfo",

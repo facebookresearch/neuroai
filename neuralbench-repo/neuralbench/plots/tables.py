@@ -13,7 +13,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from neuralbench.plots._constants import MODEL_DISPLAY_NAMES
+from neuralbench.plots._constants import (
+    FM_DISPLAY,
+    MODEL_DISPLAY_NAMES,
+    AdaptationMode,
+)
 from neuralbench.plots._filters import multi_dataset_tasks
 from neuralbench.plots.ranking import compute_task_ranks
 from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
@@ -21,6 +25,9 @@ from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
 # Synthetic ``brain_model_name`` assigned to the task-appropriate sklearn row
 # after collapsing; resolves to ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``.
 _FEATURE_BASED_LABEL = "feature_based"
+
+# the only models run with more than one adaptation strategy
+_FM_DISPLAY_SET: frozenset[str] = frozenset(FM_DISPLAY)
 
 # ---------------------------------------------------------------------------
 # Result aggregation
@@ -122,16 +129,85 @@ def _check_no_collisions(df: pd.DataFrame) -> None:
     )
 
 
+_STRATEGY_ABBREV: dict[str, str] = {
+    "finetune": "FT",
+    "linear_probe": "LP",
+    "attentive_probe": "AP",
+}
+
+
+def eval_mode_suffix(eval_mode: str) -> str:
+    """Display-name suffix for an ``eval_mode`` tag (``"lora_r4"`` -> ``" (LoRA r4)"``).
+
+    Unknown tags get no suffix.
+    """
+    mode = AdaptationMode.parse(eval_mode)
+    if mode.is_lora:
+        abbrev = f"LoRA r{mode.lora_rank}"
+    elif mode.strategy in _STRATEGY_ABBREV:
+        abbrev = _STRATEGY_ABBREV[mode.strategy]
+    else:
+        return ""
+    return f" ({abbrev} {mode.aggregation})" if mode.aggregation else f" ({abbrev})"
+
+
+def _result_is_foundation(row: dict[str, tp.Any]) -> bool:
+    """True when *row* belongs to a foundation model (by display name)."""
+    name = row.get("brain_model_name")
+    if not isinstance(name, str):
+        return False
+    return MODEL_DISPLAY_NAMES.get(name, name) in _FM_DISPLAY_SET
+
+
+def foundation_eval_modes(results: list[dict[str, tp.Any]]) -> list[str]:
+    """Distinct adaptation strategies among FM results, in canonical order."""
+    modes = {
+        str(row.get("eval_mode") or "finetune")
+        for row in results
+        if _result_is_foundation(row)
+    }
+    return sorted(modes, key=lambda m: AdaptationMode.parse(m).sort_key)
+
+
+def filter_results_for_eval_mode(
+    results: list[dict[str, tp.Any]], eval_mode: str
+) -> list[dict[str, tp.Any]]:
+    """Keep FM rows at *eval_mode* plus every non-FM row, as a shared reference."""
+    return [
+        row
+        for row in results
+        if not _result_is_foundation(row)
+        or str(row.get("eval_mode") or "finetune") == eval_mode
+    ]
+
+
 def build_results_df(
     results: list[dict[str, tp.Any]],
     loss_to_metric_mapping: dict[str, str],
+    *,
+    suffix_eval_mode: bool = True,
 ) -> pd.DataFrame:
-    """Transform raw experiment dicts into a plot-ready DataFrame."""
+    """Transform raw experiment dicts into a plot-ready DataFrame.
+
+    With ``suffix_eval_mode`` and several strategies present, foundation-model
+    names carry their strategy (``"REVE (LoRA r32)"``) so each stays a distinct
+    entry; pass ``False`` for frames already holding a single strategy.
+    """
     df = pd.DataFrame(results)
     df = _collapse_feature_based_baselines(df)
     df["model_name"] = df["brain_model_name"].map(
         lambda name: MODEL_DISPLAY_NAMES.get(name, name)
     )
+    # cached results predating eval_mode are all finetunes
+    if "eval_mode" not in df.columns:
+        df["eval_mode"] = "finetune"
+    else:
+        df["eval_mode"] = df["eval_mode"].fillna("finetune")
+    if suffix_eval_mode and df["eval_mode"].nunique() > 1:
+        is_fm = df["model_name"].isin(_FM_DISPLAY_SET)
+        df.loc[is_fm, "model_name"] = df.loc[is_fm, "model_name"] + df.loc[
+            is_fm, "eval_mode"
+        ].map(eval_mode_suffix).fillna("")
     df = _disambiguate_model_variants(df)
     df["loss_name"] = df.loss.apply(pd.Series).name
     df["metric_name"] = df.loss_name.map(loss_to_metric_mapping)

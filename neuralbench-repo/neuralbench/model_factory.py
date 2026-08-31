@@ -296,6 +296,7 @@ def build_brain_model(
     model_summary = summary(
         brain_model,
         input_data=dummy_batch,
+        col_names=("output_size", "num_params", "trainable"),
         row_settings=("hide_recursive_layers",),
         verbose=0,
     )

@@ -42,5 +42,9 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
+  # blocks.*.attn.{qkv_proj,proj}; the cross-attention prediction head is excluded
+  lora_target_modules:
+    - qkv_proj
+    - proj
 
 # Paper config (Doner et al. NeurIPS 2025): AdamW lr 1e-4 wd 0.05, cosine+5ep warmup, 50ep, batch 512, LLRD 0.5, cross-attn aggregation + MLP head, full FT, drop_path 0.1, label smoothing 0.1.

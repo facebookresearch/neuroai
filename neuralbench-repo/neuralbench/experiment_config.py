@@ -132,7 +132,14 @@ def _expand_grid(
     configs = []
     for params in grid_product:
         updated_config = config.copy()
+        # a multi-key preset, not a config key: merge whole, not per-axis
+        overlay = params.pop("_adaptation_overlay", None)
         updated_config.update(params)
+        if overlay is not None:
+            updated_config.update(overlay)
+            # re-null: debug's short run is under OneCycleLR warmup (pct_start div-by-zero)
+            if debug:
+                updated_config["lightning_optimizer_config.scheduler"] = None
         configs.append(updated_config)
 
     return configs

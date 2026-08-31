@@ -161,11 +161,12 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #      name: NtReve
 #      from_pretrained_name: "brain-bzh/reve-base"
 #
-#    # Downstream wrapper: freeze the backbone, flatten, linear probe
+#    # Downstream wrapper: flatten the backbone output into a linear head
 #    downstream_model_wrapper:
 #      model_output_key: null
 #      aggregation: flatten
 #      probe_config: linear
+#      lora_target_modules: [to_qkv, to_out]
 #
 # Key foundation-model fields
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -180,7 +181,8 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 # ``downstream_model_wrapper``
 #   Controls how the pretrained backbone is adapted for each task.
-#   Main options:
+#   These are the defaults; the ``-w`` adaptation presets override
+#   them per run, and are what freeze the backbone.  Main options:
 #
 #   - ``aggregation``: how to reduce the temporal/spatial dimensions
 #     of the backbone output (``flatten``, ``mean``, ``first``).
@@ -190,6 +192,11 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #     applied before the model.
 #   - ``channel_merger_config``: optional learned projection from
 #     variable input channels to the model's expected channels.
+#   - ``lora_target_modules``: the ``nn.Linear`` leaf modules LoRA
+#     adapters attach to, typically the attention projections (e.g.
+#     ``["to_q", "to_k", "to_v", "to_out"]``).  Required to run the
+#     model under the ``lora_*`` presets; see
+#     :doc:`/neuralbench/full_benchmark`.
 
 # %%
 # Advanced: custom optimizer and scheduler

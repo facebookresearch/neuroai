@@ -162,6 +162,33 @@ Use ``-m`` to specify alternative models or model groups:
 **Foundation models** (6): ``bendr``, ``biot``, ``cbramod``, ``labram``,
 ``luna``, ``reve``
 
+Running with adaptation strategies
+-----------------------------------
+
+Foundation models are fine-tuned end-to-end by default. Use ``-w`` to sweep
+over other adaptation strategies instead:
+
+.. code-block:: bash
+
+   neuralbench eeg all -m all_fm -w linear_probe_flatten   # Frozen backbone, linear probe
+   neuralbench eeg all -m all_fm -w lora_r4_flatten        # Frozen backbone, LoRA adapters
+   neuralbench eeg all -m all_fm -w all                    # All 7 presets
+
+**Frozen backbone** (3): ``linear_probe_flatten``, ``linear_probe_mean``,
+``attentive_probe`` -- only the head trains. The suffix is how encoder outputs
+are pooled before the head.
+
+**LoRA** (2): ``lora_r4_flatten``, ``lora_r32_flatten`` -- frozen backbone plus
+low-rank adapters at the attention projections, at rank 4 and 32.
+
+**Full fine-tune** (2): ``finetune_mean``, ``finetune_flatten`` -- all weights
+train.
+
+Presets apply to foundation models only; task-specific models ignore ``-w``.
+Each preset is reported as a separate entry, suffixed in plots and tables (for
+example ``REVE (LP flatten)``), so a single run can compare strategies
+side by side.
+
 Running with dataset variants
 ------------------------------
 

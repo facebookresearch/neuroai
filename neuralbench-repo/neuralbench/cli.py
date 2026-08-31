@@ -32,6 +32,8 @@ from neuralbench.registry import (
     ALL_TASKS,
     ALL_UNVALIDATED_TASKS,
     DEFAULTS_DIR,
+    DEVICE_FM_MODELS,
+    FM_MODELS,
     _expand_models,
     _format_datasets_epilog,
     _resolve_datasets,
@@ -80,7 +82,9 @@ def run_benchmark(
     checkpoint : str or None
         Path to a model checkpoint to reload.
     downstream_wrapper : str or list of str or None
-        Downstream wrapper name(s) or ``"all"``.
+        Adaptation-strategy preset name(s) from
+        ``defaults/downstream_wrappers.yaml``, or ``"all"``.  Swept over
+        foundation models only.
     grid : bool
         Expand the task-specific hyperparameter grid.
     debug : bool
@@ -148,6 +152,7 @@ def run_benchmark(
         config["pretrained_weights_fname"] = checkpoint
 
     # --- downstream wrappers ---
+    overlays: list[dict[str, tp.Any]] | None = None
     if downstream_wrapper is not None:
         wrappers = (
             [downstream_wrapper]
@@ -156,8 +161,7 @@ def run_benchmark(
         )
         if wrappers == ["all"]:
             wrappers = list(ALL_DOWNSTREAM_WRAPPERS.keys())
-        wrapper_configs = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
-        grid_conf["downstream_model_wrapper"] = wrapper_configs
+        overlays = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
 
     # --- tasks ---
     tasks = _resolve_tasks(device, task)
@@ -176,22 +180,44 @@ def run_benchmark(
         # instead of launching every pipeline on every task.
         models = _expand_models(model, device=device, task_name=task_name)
         datasets = _resolve_datasets(device, task_name, dataset)
-        task_configs = prepare_task_configs(
-            config.copy(),
-            grid_conf,
-            device,
-            task_name,
-            grid,
-            debug,
-            force,
-            prepare,
-            download,
-            models,
-            datasets,
-            quiet=plot_cached,
-            retry=retry,
-        )
-        configs.extend(task_configs)
+        # adaptation needs a pretrained backbone: non-FMs get an overlay-free grid
+        model_groups: list[tuple[ConfDict, list[str | None]]]
+        if overlays is not None:
+            fm_names = set(DEVICE_FM_MODELS.get(device, FM_MODELS))
+            fm_models: list[str | None] = [m for m in models if m in fm_names]
+            other_models: list[str | None] = [m for m in models if m not in fm_names]
+            if not fm_models:
+                logger.warning(
+                    "Adaptation wrappers requested (-w) but no foundation model "
+                    "selected for task %r; running without adaptation.",
+                    task_name,
+                )
+            model_groups = []
+            if fm_models:
+                fm_grid = grid_conf.copy()
+                fm_grid["_adaptation_overlay"] = overlays
+                model_groups.append((fm_grid, fm_models))
+            if other_models:
+                model_groups.append((grid_conf, other_models))
+        else:
+            model_groups = [(grid_conf, models)]
+        for group_grid, group_models in model_groups:
+            task_configs = prepare_task_configs(
+                config.copy(),
+                group_grid,
+                device,
+                task_name,
+                grid,
+                debug,
+                force,
+                prepare,
+                download,
+                group_models,
+                datasets,
+                quiet=plot_cached,
+                retry=retry,
+            )
+            configs.extend(task_configs)
 
     if download:
         return []
@@ -291,7 +317,10 @@ def run_benchmark_cli() -> None:
         "--downstream-wrapper",
         nargs="*",
         choices=["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys()),
-        help="Override/add a model wrapper for the downstream tasks.",
+        help=(
+            "Adaptation strategy preset(s) to sweep over; applied to foundation "
+            "models only."
+        ),
     )
     parser.add_argument(
         "--download",

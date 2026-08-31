@@ -391,13 +391,23 @@ class Experiment(BaseExperiment):
 
             wandb.finish()
 
-    @infra.apply(
-        exclude_from_cache_uid=(
-            "wandb_config",
-            "csv_config",
-            "brain_model_name",
-        )
-    )
+    def _exclude_from_cache_uid(self) -> list[str]:
+        """Config paths that must not affect the cache key.
+
+        The LoRA fields are inert while ``lora_config`` is unset, so dropping
+        them then keeps finetune / probe runs on the cache keys they had before
+        LoRA support landed.
+        """
+        excluded = ["wandb_config", "csv_config", "brain_model_name"]
+        wrapper = self.downstream_model_wrapper
+        if wrapper is not None and wrapper.lora_config is None:
+            excluded += [
+                "downstream_model_wrapper.lora_config",
+                "downstream_model_wrapper.lora_target_modules",
+            ]
+        return excluded
+
+    @infra.apply(exclude_from_cache_uid="method:_exclude_from_cache_uid")
     def run(self) -> dict[str, tp.Any]:
         """Execute the full experiment lifecycle: setup, train, test, cleanup.
 
