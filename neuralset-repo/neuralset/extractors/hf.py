@@ -331,6 +331,8 @@ class HuggingFaceMixin(base.BaseModel):
             else:
                 return latents[layer_indices[0]]
         else:  # aggregate
+            if isinstance(latents, torch.Tensor):
+                latents = latents.cpu()
             latents = np.asarray(latents)  # ContiguousMemmap must be loaded first
             if self.layer_aggregation == "mean":
                 return latents[layer_indices].mean(0)  # type: ignore
