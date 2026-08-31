@@ -114,6 +114,36 @@ def test_build_results_df_multi_eval_mode_suffixes_model_name():
         "REVE (LoRA r4 flatten)",
     }
     assert set(df["model_name"]) == expected
+    assert df["base_model_name"].unique().tolist() == ["REVE"]
+
+
+def test_build_results_df_non_fm_eval_mode_does_not_suffix_foundation_models():
+    results = [
+        _row(
+            loss_name="MultiLoss",
+            brain_model_name="NtReve",
+            eval_mode="finetune_mean",
+            seed=0,
+            **{"test/bmae": 1.0},
+        ),
+        _row(
+            loss_name="MultiLoss",
+            brain_model_name="NtReve",
+            eval_mode="finetune_mean",
+            seed=1,
+            **{"test/bmae": 2.0},
+        ),
+        _row(
+            loss_name="MultiLoss",
+            brain_model_name="EEGNet",
+            eval_mode="linear_probe_mean",
+            **{"test/bmae": 3.0},
+        ),
+    ]
+    df = build_results_df(results, _DEFAULT_MAPPING)
+    assert set(df["model_name"]) == {"REVE", "EEGNet"}, (
+        "only foundation-model strategies should decide suffixing"
+    )
 
 
 def test_build_results_df_defaults_missing_eval_mode_to_finetune():

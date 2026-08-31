@@ -29,6 +29,7 @@ from neuralbench.plots._constants import (
     AdaptationMode,
 )
 from neuralbench.plots._style import save_figure
+from neuralbench.plots.tables import eval_mode_suffix
 
 LOGGER = logging.getLogger(__name__)
 
@@ -90,8 +91,8 @@ def plot_adaptation_comparison(
     ----------
     df
         Output of :func:`neuralbench.plots.tables.build_results_df`.  Must
-        contain ``eval_mode``, ``model_name``, ``task_name``,
-        ``metric_name`` and ``metric_value`` columns.
+        contain ``eval_mode``, ``model_name``, ``base_model_name``,
+        ``task_name``, ``metric_name`` and ``metric_value`` columns.
     output_dir
         Destination directory (created if needed).
 
@@ -105,14 +106,16 @@ def plot_adaptation_comparison(
         LOGGER.info("plot_adaptation_comparison: no 'eval_mode' column -- skipping.")
         return None
 
-    # strip any " (LoRA r8)" suffix build_results_df added, to group by model
+    # drop the exact strategy suffix build_results_df added, keeping any
+    # ``[variant]`` bracket so distinct configs stay distinct clusters
     work = df.copy()
-    work["display_name"] = (
-        work["model_name"].astype(str).str.split(" (", n=1, regex=False).str[0]
-    )
+    work["display_name"] = [
+        name.replace(eval_mode_suffix(mode), "", 1)
+        for name, mode in zip(work["model_name"].astype(str), work["eval_mode"])
+    ]
 
     fm_names = set(MEEG_FM_DISPLAY)
-    fm_work = work[work["display_name"].isin(fm_names)].copy()
+    fm_work = work[work["base_model_name"].isin(fm_names)].copy()
     if fm_work.empty:
         LOGGER.info("plot_adaptation_comparison: no foundation-model rows -- skipping.")
         return None
@@ -162,11 +165,12 @@ def _plot_per_task_bars(
         squeeze=False,
     )
 
-    fm_order = [
-        name for name in MEEG_FM_DISPLAY if name in fm_df["display_name"].unique()
-    ]
+    # cluster order follows MEEG_FM_DISPLAY, with a model's variants adjacent
+    base_of = dict(zip(fm_df["display_name"], fm_df["base_model_name"]))
+    fm_rank = {name: i for i, name in enumerate(MEEG_FM_DISPLAY)}
+    fm_order = sorted(base_of, key=lambda name: (fm_rank[base_of[name]], name))
     mode_colors = [palette[m] for m in modes_present]
-    mode_labels = [eval_mode_label(m) for m in modes_present]
+    mode_set = set(modes_present)
 
     for ax, task in zip(axes.flat, tasks):
         task_fm = fm_df[fm_df["task_name"] == task]
@@ -182,12 +186,6 @@ def _plot_per_task_bars(
             err_kws={"linewidth": 1.0},
             ax=ax,
         )
-        if ax.get_legend() is not None:
-            for txt, label in zip(ax.get_legend().get_texts(), mode_labels):
-                txt.set_text(label)
-            ax.get_legend().set_title("Strategy")
-            ax.get_legend().set_visible(ax is axes.flat[0])
-
         task_metric = str(task_fm["metric_name"].iloc[0])
         ax.set_xlabel("")
         ax.set_ylabel(task_metric)
@@ -206,6 +204,17 @@ def _plot_per_task_bars(
                 linestyle="--",
                 linewidth=1.0,
                 label=f"{baseline} ({value:.1f})",
+            )
+
+        # rebuilt after the baselines so their lines get an entry too
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
+        if ax is axes.flat[0]:
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(
+                handles,
+                [eval_mode_label(x) if x in mode_set else x for x in labels],
+                title="Strategy",
             )
 
     for ax in axes.flat[n_tasks:]:

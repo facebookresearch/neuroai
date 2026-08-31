@@ -151,7 +151,7 @@ def _load_optional_scaling() -> tuple[
 
 
 def _run_steps(steps: list[_Step]) -> None:
-    """Execute *steps* in order, short-circuiting gracefully on ``None``."""
+    """Execute *steps* in order, under a shared progress bar."""
     for step in tqdm(steps, desc="Generating plots"):
         step.fn()
 

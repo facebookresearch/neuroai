@@ -189,22 +189,26 @@ def build_results_df(
 ) -> pd.DataFrame:
     """Transform raw experiment dicts into a plot-ready DataFrame.
 
-    With ``suffix_eval_mode`` and several strategies present, foundation-model
+    With ``suffix_eval_mode`` and several FM strategies present, foundation-model
     names carry their strategy (``"REVE (LoRA r32)"``) so each stays a distinct
     entry; pass ``False`` for frames already holding a single strategy.
+    ``base_model_name`` always holds the unsuffixed display name.
     """
     df = pd.DataFrame(results)
     df = _collapse_feature_based_baselines(df)
     df["model_name"] = df["brain_model_name"].map(
         lambda name: MODEL_DISPLAY_NAMES.get(name, name)
     )
+    # the plain display name, kept so consumers need not parse it back out
+    df["base_model_name"] = df["model_name"]
     # cached results predating eval_mode are all finetunes
     if "eval_mode" not in df.columns:
         df["eval_mode"] = "finetune"
     else:
         df["eval_mode"] = df["eval_mode"].fillna("finetune")
-    if suffix_eval_mode and df["eval_mode"].nunique() > 1:
-        is_fm = df["model_name"].isin(_FM_DISPLAY_SET)
+    is_fm = df["base_model_name"].isin(_FM_DISPLAY_SET)
+    # only FMs are swept over strategies, so only their tags decide suffixing
+    if suffix_eval_mode and df.loc[is_fm, "eval_mode"].nunique() > 1:
         df.loc[is_fm, "model_name"] = df.loc[is_fm, "model_name"] + df.loc[
             is_fm, "eval_mode"
         ].map(eval_mode_suffix).fillna("")
