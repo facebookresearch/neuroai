@@ -62,6 +62,12 @@ runs:
       shell: bash
       # All editables in a single resolution pass. transformers pinned
       # because neuralset's tests target 4.41.0 (pyproject leaves it open).
+      env:
+        # GPU-less runners: fetch CPU-only torch/torchvision/torchaudio wheels
+        # instead of the default CUDA builds (~5 GB of unused CUDA libs that also
+        # inflate every monthly .venv cache upload/restore). Scoped to CI here,
+        # not the pyprojects, so GPU users (neuralbench sm_60) are unaffected.
+        UV_TORCH_BACKEND: cpu
       run: |
         source .venv/bin/activate
         uv pip install \
