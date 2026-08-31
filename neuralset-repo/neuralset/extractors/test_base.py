@@ -54,6 +54,11 @@ def test_features_model() -> None:
     assert "\n  'name': 'Pulse'" in string, "Wrong custom repr"
 
 
+def test_extractor_query_invalid() -> None:
+    with pytest.raises(ValueError, match="not valid"):
+        base.Pulse(query="text = 'a'")
+
+
 def test_dynamic_feature() -> None:
     # word pulse
     extractor = base.Pulse(frequency=1.0, aggregation="sum", event_types="Word")
@@ -126,6 +131,57 @@ def test_dynamic_feature() -> None:
     out = extractor(events, start=0.0, duration=4.0)
     assert np.array_equal(out, [2.0])
     # TODO wordpulse + phonemepulse?
+
+
+def _query_test_events(include_image: bool = False) -> pd.DataFrame:
+    rows: list[dict[str, tp.Any]] = [
+        dict(text="cat", start=0.0, split="train", run="0"),
+        dict(text="dog", start=1.0, split="test", run="1"),
+        dict(text="bird", start=2.0, split="train", run="1"),
+    ]
+    records = [dict(type="Word", duration=1.0, timeline="t1", **row) for row in rows]
+    if include_image:
+        records.append(
+            {
+                "type": "Image",
+                "filepath": __file__,
+                "start": 0.0,
+                "duration": 1.0,
+                "timeline": "t1",
+                "split": "train",
+                "run": "0",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def test_extractor_query_dataframe_input() -> None:
+    events = _query_test_events(include_image=True)
+    extractor = base.Pulse(
+        frequency=1.0,
+        aggregation="sum",
+        event_types="Word",
+        query="split == 'train'",
+    )
+
+    out = extractor(events, start=0.0, duration=3.0)
+
+    assert np.array_equal(out, [[1, 0, 1]])
+
+
+def test_extractor_query_event_list_input() -> None:
+    events = _query_test_events()
+    ns_events = [ns.events.Event.from_dict(row) for row in events.to_dict("records")]
+    extractor = base.Pulse(
+        frequency=1.0,
+        aggregation="sum",
+        event_types="Word",
+        query="split == 'train' and run == '1'",
+    )
+
+    out = extractor(ns_events, start=0.0, duration=3.0)
+
+    assert np.array_equal(out, [[0, 0, 1]])
 
 
 class Time(base.BaseExtractor):
@@ -533,6 +589,26 @@ def test_label_encoder_reprepare() -> None:
     )
     with pytest.raises(ValueError, match="not in the existing mapping"):
         enc.prepare(unknown)
+
+
+def test_label_encoder_query_prepare_segments() -> None:
+    events = ns.events.standardize_events(_query_test_events())
+    segments = ns.segments.list_segments(
+        events,
+        triggers=events.type == "Word",
+        duration=1.0,
+    )
+    enc = base.LabelEncoder(
+        event_types="Word",
+        event_field="text",
+        query="split == 'train'",
+    )
+
+    enc.prepare(segments)
+
+    assert set(enc._label_to_ind) == {"bird", "cat"}
+    with pytest.raises(ValueError, match="No"):
+        enc(**segments[1]._to_extractor())
 
 
 @pytest.mark.parametrize("return_one_hot", [False, True])
