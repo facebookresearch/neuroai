@@ -202,6 +202,16 @@ def test_get_default_dataloaders_selects_dataset_variant(
     assert type(study.steps["source"]).__name__ == "Schalk2004Bci2000"
 
 
-def test_get_default_dataloaders_rejects_unknown_task() -> None:
-    with pytest.raises(ValueError, match="Unknown task"):
-        get_default_dataloaders("eeg", "motor_imgery")
+@pytest.mark.parametrize(
+    "task,dataset",
+    [
+        ("motor_imgery", None),
+        ("all", None),  # aggregate: only the CLI expands it
+        ("motor_imagery", "schalk2004"),
+    ],
+)
+def test_get_default_dataloaders_rejects_unknown_inputs(
+    task: str, dataset: str | None
+) -> None:
+    with pytest.raises(ValueError, match="Unknown"):
+        get_default_dataloaders("eeg", task, dataset=dataset)

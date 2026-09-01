@@ -130,9 +130,15 @@ def _merge_dataset_config(
     config: ConfDict, device: str, task_name: str, dataset: str
 ) -> None:
     """Layer a task's ``datasets/<dataset>.yaml`` over *config*, in place."""
-    task_dir = _resolve_task_dir(device, task_name)
+    datasets_dir = _resolve_task_dir(device, task_name) / "datasets"
+    dataset_fname = datasets_dir / f"{dataset}.yaml"
+    if not dataset_fname.is_file():
+        raise ValueError(
+            f"Unknown dataset {dataset!r} for {device}/{task_name}. "
+            f"Choose from: {sorted(p.stem for p in datasets_dir.glob('*.yaml'))}"
+        )
     source_defaults = dict(config["data.study.source"])
-    config.update(load_yaml_config(task_dir / "datasets" / f"{dataset}.yaml"))
+    config.update(load_yaml_config(dataset_fname))
     # =replace= may wipe source; restore default path/infra
     for k, v in source_defaults.items():
         config["data.study.source"].setdefault(k, v)

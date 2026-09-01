@@ -297,10 +297,11 @@ def get_default_dataloaders(
 ) -> dict[str, DataLoader]:
     """Return the train/val/test DataLoaders for a task's default data config.
 
-    The dataloaders match those of a benchmark run for the same task, except
-    for model-specific preprocessing: model configs override ``data.neuro``
-    fields (sampling frequency, filters, clamping) to suit each architecture,
-    and those overrides are not applied here.
+    The dataloaders match those of a non-debug benchmark run for the same
+    task, except for model-specific preprocessing: model configs override
+    ``data.neuro`` (sampling frequency, filters, clamping) and, for some
+    models, ``data.channel_positions``, and those overrides are not applied
+    here.
 
     Parameters
     ----------
@@ -329,8 +330,8 @@ def get_default_dataloaders(
     ...     "eeg", "audiovisual_stimulus", **{"neuro.infra.cluster": None}
     ... )
     """
+    _validate_inputs(device, task, model=None, downstream_wrapper=None, allow_all=False)
     _ensure_initialized()
-    _validate_inputs(device, task, None, None)
     data_config = merge_task_config(device, task, dataset)["data"]
     data_config.update(overrides)
     return Data(**data_config).prepare()

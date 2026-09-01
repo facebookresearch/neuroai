@@ -537,8 +537,14 @@ def _validate_inputs(
     task: str | list[str],
     model: str | list[str] | None,
     downstream_wrapper: str | list[str] | None,
+    *,
+    allow_all: bool = True,
 ) -> None:
-    """Raise ``ValueError`` on invalid device / task / model names."""
+    """Raise ``ValueError`` on invalid device / task / model names.
+
+    *allow_all* accepts the ``"all"`` / ``"all_multi_dataset"`` task
+    aggregates, which only callers that expand them can handle.
+    """
     if device not in ALL_DEVICES:
         raise ValueError(f"Unknown device {device!r}. Choose from: {ALL_DEVICES}")
     tasks = [task] if isinstance(task, str) else task
@@ -548,7 +554,7 @@ def _validate_inputs(
             f"No tasks ship for device {device!r} yet. "
             f"Devices with tasks: {[d for d in ALL_DEVICES if TASKS.get(d) or UNVALIDATED_TASKS.get(d)]}"
         )
-    valid_tasks = {"all", "all_multi_dataset"} | device_tasks
+    valid_tasks = device_tasks | ({"all", "all_multi_dataset"} if allow_all else set())
     for t in tasks:
         if t not in valid_tasks:
             raise ValueError(
