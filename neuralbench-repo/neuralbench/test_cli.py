@@ -22,7 +22,7 @@ from .experiment_config import (
     prepare_task_configs,
 )
 from .main import Data
-from .registry import ALL_DATASETS, ALL_TASKS, DEFAULTS_DIR, load_yaml_config
+from .registry import ALL_DATASETS, ALL_TASKS, DEFAULTS_DIR, load_yaml_config, _resolve_task_dir
 
 
 def test_build_all_datasets() -> None:
@@ -78,6 +78,30 @@ def test_cluster_config_wires_all_infra_clusters(
     assert raw["data"]["neuro"]["infra"]["cluster"] == cluster
     assert raw["data"]["target"]["infra"]["cluster"] == cluster
 
+@pytest.mark.parametrize("cluster", [None, "slurm"])
+def test_task_configs_do_not_override_infra_cluster(
+    patch_config: Callable[..., None], cluster: str | None
+) -> None:
+    """No task config may hardcode *.infra.cluster, overriding the user config."""
+    patch_config(CLUSTER=cluster)
+    defaults = load_yaml_config(DEFAULTS_DIR / "config.yaml")
+    assert defaults is not None
+    base = ConfDict(defaults)
+    for device, tasks in ALL_DATASETS.items():
+        for task_name in tasks:
+            merged = base.copy()
+            task_dir = _resolve_task_dir(device, task_name)
+            task_cfg = load_yaml_config(task_dir / "config.yaml")
+            if task_cfg is None:
+                continue
+            merged.update(task_cfg)
+            flat = merged.flat()
+            for key, value in flat.items():
+                if key.endswith("infra.cluster"):
+                    assert value == cluster, (
+                        f"{device}/{task_name}: {key} is {value!r}, "
+                        f"expected {cluster!r}"
+                    )
 
 @pytest.mark.parametrize("cluster", [None, "auto", "slurm"])
 def test_prepare_overlay_respects_cluster(

@@ -29,9 +29,9 @@ def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
         base = config_manager._default_config()
         base.update(overrides)
         monkeypatch.setattr(config_manager, "_config", base)
-        monkeypatch.setattr(config_manager, "_initialized", False)
         for key in config_manager._LAZY_CONFIG_KEYS:
             monkeypatch.delattr(config_manager, key, raising=False)
+        monkeypatch.setattr(config_manager, "_initialized", False)
 
     return _apply
 
