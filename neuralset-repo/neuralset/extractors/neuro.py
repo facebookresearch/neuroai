@@ -493,7 +493,7 @@ class MneRaw(BaseExtractor):
             dimension = len(self._channels)
             subject1: [a, b, c,]; subject2: [a, d, e]
             self._channel: {a: 0, b: 1, c: 2}
-            self._channel: {a: 0, b: 1, c: 2, d:3, e:3}
+            self._channel: {a: 0, b: 1, c: 2, d: 3, e: 4}
         """
         match self.channel_order:
             case "original":
