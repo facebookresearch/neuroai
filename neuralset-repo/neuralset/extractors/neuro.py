@@ -480,7 +480,7 @@ class MneRaw(BaseExtractor):
             Stack based on original channel order only:
             subject1: [a, b, c,]; subject2: [a, d, e]
             self._channel: {a: 0, b: 1, c: 2}
-            self._channel: {a: 0, d:1, e:2}
+            self._channel: {a: 0, b: 1, c: 2, d: 1, e: 2}
             Allows use of a subject layer of fixed dimension across subjects
             Prevents building a too large channel dimension when many subjects
 
@@ -489,7 +489,7 @@ class MneRaw(BaseExtractor):
             `self.channel_order = "unique"` (default behavior)
 
             Unique channel stacking: we loop across all mne channels.
-            if this channel is not known, we create a new dimension for it:
+            If this channel is not known, we create a new dimension for it:
             dimension = len(self._channels)
             subject1: [a, b, c,]; subject2: [a, d, e]
             self._channel: {a: 0, b: 1, c: 2}
