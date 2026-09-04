@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.utils.root\_study\_folder
+=====================================
+
+.. currentmodule:: neuralfetch.utils
+
+.. autofunction:: root_study_folder
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.audio.ExtractAudioFromVideo
+=======================================================
+
+.. currentmodule:: neuralset.events.transforms.audio
+
+.. autopydantic_model:: ExtractAudioFromVideo
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

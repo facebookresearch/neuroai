@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.transforms.TextPreprocessor
+=======================================
+
+.. currentmodule:: neuralbench.transforms
+
+.. autopydantic_model:: TextPreprocessor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

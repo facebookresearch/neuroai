@@ -1,0 +1,167 @@
+:orphan:
+
+EEG/EMG Foundation Challenge 2026
+=================================
+
+Starter kit for the proposed 2026 EEG/EMG Foundation Challenge.
+
+Each page below walks through one competition track and shows how to
+reproduce its NeuralBench baseline. Start with the overview, then jump
+to the track(s) you plan to submit to.
+
+.. note::
+   These pages assume ``neuralbench`` is already installed and
+   configured. See :doc:`/neuralbench/install` and the
+   :doc:`quickstart </neuralbench/auto_examples/quickstart/01_run_first_task>`
+   if you have not run a task yet.
+
+
+.. raw:: html
+
+  <div id='sg-tag-list' class='sphx-glr-tag-list'></div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbnails">
+
+.. thumbnail-parent-div-open
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="The EEG/EMG Foundation Challenge 2026 is a proposed multi-track competition on shift-robust representation learning for biosignals, and the multi-modal successor to the 2025 EEG Foundation Challenge.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_overview_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_overview`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Overview: EEG/EMG Foundation Challenge 2026</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="This page describes how to package and submit a model to the EEG/EMG Foundation Challenge 2026.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_submission_guide_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_submission_guide`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">How to Submit a Model</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Given EEG recorded while a participant views a natural image, decode the image identity. The competition tests cross-stimulus generalisation: training images and test images do not overlap.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_track1_eeg_to_image_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_track1_eeg_to_image`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Track 1 -- EEG-to-Image (cross-stimulus retrieval)</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Given EEG recorded while a user performs one of three cued mental tasks (kinesthetic motor imagery, mental calculation, or letter/word association), decode the active command after the user has already provided labelled calibration data. The competition tests within-user, cross-session generalisation.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_track2_eeg_to_bci_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Track 2 -- EEG-to-BCI (cross-session command decoding)</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Given a continuous wearable EEG recording, predict the latency (in seconds, from recording start) at which the participant transitions into stable sleep. The competition tests cross-subject generalisation: train sleepers and test sleepers are disjoint.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_track3_sleep_onset_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_track3_sleep_onset`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Track 3 -- Sleep onset (cross-subject latency prediction)</div>
+    </div>
+
+
+.. raw:: html
+
+    <div class="sphx-glr-thumbcontainer" tooltip="Given 16-channel surface EMG (sEMG) recorded from a wristband, predict the corresponding trajectory of 20 hand-joint angles. The paper&#x27;s predefined test split measures generalisation across users, movement stages, and both together.">
+
+.. only:: html
+
+  .. image:: /neuralbench/auto_examples/biosignal_challenge_2026/images/thumb/sphx_glr_plot_track4_emg_to_pose_thumb.png
+    :alt:
+
+  :doc:`/neuralbench/auto_examples/biosignal_challenge_2026/plot_track4_emg_to_pose`
+
+.. raw:: html
+
+      <div class="sphx-glr-thumbnail-title">Track 4 -- EMG-to-Pose (hand-pose regression)</div>
+    </div>
+
+
+.. thumbnail-parent-div-close
+
+.. raw:: html
+
+    </div>
+
+
+.. toctree::
+   :hidden:
+
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_overview
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_submission_guide
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_track1_eeg_to_image
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_track3_sleep_onset
+   /neuralbench/auto_examples/biosignal_challenge_2026/plot_track4_emg_to_pose
+
+
+.. only:: html
+
+  .. container:: sphx-glr-footer sphx-glr-footer-gallery
+
+    .. container:: sphx-glr-download sphx-glr-download-python
+
+      :download:`Download all examples in Python source code: biosignal_challenge_2026_python.zip </neuralbench/auto_examples/biosignal_challenge_2026/biosignal_challenge_2026_python.zip>`
+
+    .. container:: sphx-glr-download sphx-glr-download-jupyter
+
+      :download:`Download all examples in Jupyter notebooks: biosignal_challenge_2026_jupyter.zip </neuralbench/auto_examples/biosignal_challenge_2026/biosignal_challenge_2026_jupyter.zip>`
+
+
+.. only:: html
+
+ .. rst-class:: sphx-glr-signature
+
+    `Gallery generated by Sphinx-Gallery <https://sphinx-gallery.github.io>`_

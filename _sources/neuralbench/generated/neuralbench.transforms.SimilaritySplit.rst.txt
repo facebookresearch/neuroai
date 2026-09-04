@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.transforms.SimilaritySplit
+======================================
+
+.. currentmodule:: neuralbench.transforms
+
+.. autopydantic_model:: SimilaritySplit
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

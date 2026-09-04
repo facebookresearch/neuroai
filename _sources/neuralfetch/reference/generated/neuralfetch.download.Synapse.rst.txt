@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Synapse
+============================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Synapse
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

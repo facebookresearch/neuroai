@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.SpikesExtractor
+==========================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: SpikesExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

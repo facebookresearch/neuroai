@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.chunking.ChunkEvents
+================================================
+
+.. currentmodule:: neuralset.events.transforms.chunking
+
+.. autopydantic_model:: ChunkEvents
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

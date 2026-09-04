@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.image.LBP
+==============================
+
+.. currentmodule:: neuralset.extractors.image
+
+.. autopydantic_model:: LBP
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
