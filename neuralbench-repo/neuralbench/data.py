@@ -97,14 +97,9 @@ class RegressionBinSampler(BaseSampler):
     weights so that, in expectation, every populated bin contributes the
     same total mass to each training epoch.
 
-    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`:
-
-    * Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
-      ``i < n_bins - 1``; the top bin is closed on the right so targets
-      exactly at ``bin_edges[-1]`` are counted in the top bin.
-    * Targets outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero
-      weight** -- they are excluded from sampling and do not contribute to
-      any bin's count.
+    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`.  Targets
+    outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero weight** -- they
+    are excluded from sampling and do not contribute to any bin's count.
 
     Parameters
     ----------

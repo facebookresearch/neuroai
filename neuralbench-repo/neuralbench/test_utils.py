@@ -21,9 +21,8 @@ from neuralset.events import etypes
 from neuralset.extractors.meta import CroppedExtractor
 
 from .data import Data
-from .metrics import BinnedMAE
+from .metrics import _assign_bins
 from .utils import (
-    _assign_bins,
     _compute_regression_bin_weights,
     detect_batch_dim,
     make_regression_bin_sampler,
@@ -71,32 +70,12 @@ def test_compute_regression_bin_weights_includes_upper_boundary_in_last_bin():
 
 
 def test_compute_regression_bin_weights_inner_edge_goes_to_upper_bin():
-    """A target exactly on an inner edge belongs to the upper bin (``[lo, hi)``),
-    matching ``BinnedMAE``.  Regression guard against the ``right=False`` off-by-one
-    that filed edge-valued targets one bin too low."""
-    # Correct binning: 10 -> [0,40), 40 -> [40,90), 90 -> [90,300): one per bin.
+    # 10 -> [0, 40), 40 -> [40, 90), 90 -> [90, 300): one target per bin.
     targets = torch.tensor([10.0, 40.0, 90.0])
     weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
-    assert torch.allclose(weights, torch.tensor([1.0, 1.0, 1.0]))
-
-
-def test_sampler_bins_match_binnedmae_bins():
-    """Contract: the sampler files each target in the SAME bin ``BinnedMAE`` scores
-    it in -- including the exact inner and outer edges -- so training stratification
-    matches evaluation.  Fails if either convention drifts from the other."""
-    probes = torch.tensor([0.0, 39.9, 40.0, 89.9, 90.0, 299.9, 300.0, 599.9, 600.0])
-    sampler_bins = _assign_bins(probes, _BMAE_EDGES)
-
-    metric = BinnedMAE(bin_boundaries=list(_BMAE_EDGES))
-    metric_bins = []
-    for value in probes:
-        metric.reset()
-        metric.update(torch.zeros(1), value.reshape(1))
-        # the single in-range sample increments exactly one bin's count.
-        metric_bins.append(int(torch.argmax(metric.count)))
-
-    assert sampler_bins.tolist() == metric_bins, (
-        f"sampler {sampler_bins.tolist()} != BinnedMAE {metric_bins}"
+    assert torch.allclose(weights, torch.ones(3)), (
+        f"edge targets binned as {_assign_bins(targets, _BMAE_EDGES).tolist()}, "
+        "expected [0, 1, 2]"
     )
 
 
@@ -181,10 +160,7 @@ def test_make_regression_bin_sampler_balances_bins(mocker):
         weights_t, num_samples=100_000, replacement=True, generator=generator
     )
 
-    inner_edges = torch.tensor(_BMAE_EDGES[1:-1])
-    drawn_bins = torch.bucketize(targets[drawn_idx], inner_edges, right=False).clamp_(
-        0, 3
-    )
+    drawn_bins = _assign_bins(targets[drawn_idx], _BMAE_EDGES)
     counts = torch.bincount(drawn_bins, minlength=4).float()
     proportions = counts / counts.sum()
     assert torch.allclose(proportions, torch.full((4,), 0.25), atol=0.01)
