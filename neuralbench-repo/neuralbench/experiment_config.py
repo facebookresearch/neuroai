@@ -17,6 +17,7 @@ from itertools import product
 from pathlib import Path
 from warnings import warn
 
+import torch
 import yaml
 from exca import ConfDict
 
@@ -329,4 +330,49 @@ def _warn_slurm_partition(
             f"in your neuralbench config ({config_path}). Non-debug runs will "
             f"fail when submitting jobs. Either set SLURM_PARTITION in "
             f'{config_path}, set "CLUSTER": null to run locally, or use --debug.'
+        )
+
+
+# ---------------------------------------------------------------------------
+# GPU capability warning
+# ---------------------------------------------------------------------------
+
+
+def _warn_unsupported_gpu() -> None:
+    """Warn when a visible GPU is absent from the installed torch's arch list."""
+    if not torch.cuda.is_available():
+        return
+    # Release wheels are SASS-only (no PTX JIT), so a device needs a listed
+    # arch of its own major with minor <= its own.
+    built = {
+        (int(sm[:-1]), int(sm[-1]))
+        for arch in torch.cuda.get_arch_list()
+        if (sm := arch.removeprefix("sm_")).isdigit()
+    }
+    if not built:
+        return
+    warned: set[tuple[int, int]] = set()
+    for index in range(torch.cuda.device_count()):
+        capability = torch.cuda.get_device_capability(index)
+        major, minor = capability
+        if capability in warned or any(
+            major == bmajor and minor >= bminor for bmajor, bminor in built
+        ):
+            continue
+        warned.add(capability)
+        # sm_50-sm_60 survive only in the CUDA 12.6 wheels; PyPI's default build
+        # tracks the newest CUDA, which drops them.
+        if capability < min(built):
+            fix = (
+                "reinstall from a CUDA 12.6 build, which still ships sm_50-sm_90: "
+                "pip install --force-reinstall torch torchvision torchaudio "
+                "--index-url https://download.pytorch.org/whl/cu126"
+            )
+        else:
+            fix = "upgrade torch: pip install --upgrade torch torchvision torchaudio"
+        warn(
+            f"{torch.cuda.get_device_name(index)} has CUDA capability "
+            f"sm_{major}{minor}, which torch {torch.__version__} was not built for "
+            f"(built for {', '.join(f'sm_{a}{b}' for a, b in sorted(built))}). "
+            f"GPU runs will fail; to fix, {fix}"
         )

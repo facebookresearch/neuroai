@@ -26,10 +26,9 @@ dependencies = [
   "pyriemann>=0.6",
   "seaborn",
   "torchinfo",
-  # Pinning torch version to ensure support for CUDA capability sm_60
-  "torch==2.6",
-  "torchaudio==2.6",
-  "torchvision==0.21",
+  "torch>=2.5.1",
+  "torchaudio>=2.5.1",
+  "torchvision>=0.20.1",
 ]
 
 [project.urls]

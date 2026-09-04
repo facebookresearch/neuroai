@@ -23,6 +23,7 @@ from exca import ConfDict
 
 from neuralbench.experiment_config import (
     _warn_slurm_partition,
+    _warn_unsupported_gpu,
     prepare_task_configs,
 )
 from neuralbench.registry import (
@@ -130,6 +131,7 @@ def run_benchmark(
     _ensure_initialized()
     _validate_inputs(device, task, model, downstream_wrapper)
     _warn_slurm_partition(debug, prepare=prepare, download=download)
+    _warn_unsupported_gpu()
 
     # --- base config & grid ---
     default_config = load_yaml_config(DEFAULTS_DIR / "config.yaml")
