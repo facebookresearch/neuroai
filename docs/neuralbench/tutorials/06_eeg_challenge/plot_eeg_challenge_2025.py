@@ -94,7 +94,7 @@ setup.
 #    neuralbench eeg reaction_time --download
 #
 #    # Prepare the data
-#    neuralbench eeg reaction --prepare
+#    neuralbench eeg reaction_time --prepare
 #
 #    # Quick debug run
 #    neuralbench eeg reaction_time --debug
