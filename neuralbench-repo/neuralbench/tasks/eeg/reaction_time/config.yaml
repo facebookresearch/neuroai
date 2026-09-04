@@ -27,10 +27,8 @@ data:
     event_types: Stimulus
     event_field: reaction_time
     aggregation: trigger
-  # Trigger on the contrast-change (`target`) Stimulus, not the Keystroke, so the
-  # window below is 0.5-2.5 s after *stimulus onset* per Aristimunha et al. 2025
-  # (arXiv:2506.19141). `filter_reaction_time` above keeps only the `target`
-  # Stimulus rows: the `trial` and `feedback` subtypes carry no `reaction_time`.
+  # The contrast change; `filter_reaction_time` drops the `trial` and `feedback`
+  # Stimulus subtypes, which carry no `reaction_time`.
   trigger_event_type: Stimulus
   start: 0.5
   duration: 2.0

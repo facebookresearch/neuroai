@@ -37,21 +37,15 @@ def test_reaction_time_is_stimulus_locked(reaction_time_config: dict) -> None:
     triggering on it puts the window entirely *after* the response. The EEG
     Foundation Challenge 2025 spec (arXiv:2506.19141) defines the window as
     0.5-2.5 s after *stimulus* onset.
+
+    ``target.event_types`` has to move with the trigger: with
+    ``aggregation: trigger`` the extractor reads the label off the trigger
+    itself and rejects a trigger it does not accept.
     """
     assert reaction_time_config["trigger_event_type"] == "Stimulus"
+    assert reaction_time_config["target"]["event_types"] == "Stimulus"
     assert reaction_time_config["start"] == 0.5
     assert reaction_time_config["duration"] == 2.0
-
-
-def test_reaction_time_target_matches_trigger(reaction_time_config: dict) -> None:
-    """``aggregation: trigger`` requires the target to accept the trigger event.
-
-    ``BaseExtractor._select_events`` raises when the trigger is not an instance
-    of the extractor's ``event_types``, so these two keys must move together.
-    """
-    target = reaction_time_config["target"]
-    assert target["aggregation"] == "trigger"
-    assert target["event_types"] == reaction_time_config["trigger_event_type"]
 
 
 def test_reaction_time_window_follows_stimulus_onset(
