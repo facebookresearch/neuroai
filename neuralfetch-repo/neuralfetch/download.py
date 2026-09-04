@@ -1294,8 +1294,7 @@ How to generate a Synapse auth token:
 class Synapse(BaseDownload):
     """Download datasets from Synapse.
 
-    Requires `synapseclient`. Install with `pip install synapseclient`
-    or `pip install "neuralset[all]"`.
+    Requires `synapseclient`, which ships with `neuralfetch[quickstart]`.
     """
 
     study_id: str  # Project SynID
@@ -1316,8 +1315,8 @@ class Synapse(BaseDownload):
     def _download(self, overwrite: bool = False) -> None:
         # ``overwrite`` is best-effort: syncFromSynapse manages its own local
         # cache and refetches changed/missing entities on each sync.
-        import synapseclient  # type: ignore[import-not-found]
-        import synapseutils  # type: ignore[import-not-found]
+        import synapseclient
+        import synapseutils
 
         syn = synapseclient.Synapse()
         syn.login(authToken=self._auth_token)

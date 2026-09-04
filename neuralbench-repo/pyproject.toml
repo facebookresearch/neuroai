@@ -14,6 +14,8 @@ classifiers = [
 dependencies = [
   "adjustText",
   "braindecode>=1.5.2",
+  # Study catalog: registered through an entry point, never imported directly
+  "neuralfetch[quickstart]",
   "neuralset",
   "neuraltrain",
   "exca",
@@ -35,14 +37,6 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 [project.optional-dependencies]
-    datasets = [
-        # Download
-        "boto3",
-        "botocore",
-        "gdown",
-        "openneuro-py>=2025.2.0",
-        "synapseclient",
-    ]
     models = [
         "huggingface_hub",
         "safetensors",

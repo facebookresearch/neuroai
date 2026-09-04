@@ -41,11 +41,12 @@ pre-commit install
 
 ## Optional dependencies
 
-Extra dependency groups are available for dataset downloading and
-model loading:
+Dataset downloading is covered by the base install, which pulls in
+`neuralfetch[quickstart]`. The `models` extra adds what is needed to load
+pretrained model weights:
 
 ```bash
-pip install 'neuralbench-repo/.[datasets,models]'
+pip install 'neuralbench-repo/.[models]'
 ```
 
 ## First-run configuration

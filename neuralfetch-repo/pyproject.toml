@@ -22,12 +22,13 @@ dependencies = [
 [project.optional-dependencies]
 all = ["neuralset[all]", "matplotlib"]
 quickstart = [
-  "openneuro-py",
+  "openneuro-py>=2026.4.0",
   "praatio",
   "pyunpack",
   "boto3",
   "osfclient>=0.0.5",
   "awscli",
+  "synapseclient",
 ]
 
 # Value: root module scanned for Study subclasses (see neuralset.events.study).
@@ -59,6 +60,7 @@ extend = "../pyproject.toml"
   'mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets', 'mne.utils', 'mne_bids',
   'scipy.*', 'nibabel', 'h5py',
   'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack',
+  'synapseclient', 'synapseutils',
   'moviepy',
   'hcp_utils',
   'nilearn',
