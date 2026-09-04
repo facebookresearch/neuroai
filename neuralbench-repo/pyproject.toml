@@ -13,7 +13,7 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode>=1.5.2",
+  "braindecode>=1.8.1",
   # Study catalog: registered through an entry point, never imported directly
   "neuralfetch[quickstart]",
   "neuralset",

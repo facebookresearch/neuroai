@@ -325,6 +325,7 @@ DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "eeg": CLASSIC_MODELS,
     "meg": CLASSIC_MODELS,
     "fmri": _cli_names(family="classic", device="fmri"),
+    "emg": _cli_names(family="classic", device="emg"),
 }
 DEVICE_FM_MODELS: dict[str, list[str]] = {
     "eeg": FM_MODELS,

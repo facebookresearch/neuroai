@@ -125,6 +125,7 @@ class BenchmarkAggregator(ns.BaseModel):
         "CrossEntropyLoss": "test/bal_acc",
         "BCEWithLogitsLoss": "test/f1_score_macro",
         "MSELoss": "test/pearsonr",
+        "L1Loss": "test/mae",  # currently emg/pose only
         "MultiLoss": "test/bmae",  # currently sleep-onset only
         "ClipLoss": "test/full_retrieval/top5_acc_subject-agg",
         "CTCLoss": "test/CER",  # currently emg/typing only

@@ -58,6 +58,9 @@ Singh2021Timing: "subject in ['Singh2021Timing/PD1025', 'Singh2021Timing/PD1795'
 Levy2026NoninvasiveMeg: "subject_index == 0"
 Levy2026NoninvasiveEeg: "subject_index == 0"
 Sivakumar2024Emg2qwerty: "subject_index < 5"
+# No user spans all three splits: sub-60 trains, sub-166 is a validation user,
+# and sub-49 is a held-out test user with the user+stage recordings test keeps.
+Salter2024Emg2pose: "subject in ['Salter2024Emg2pose/49', 'Salter2024Emg2pose/60', 'Salter2024Emg2pose/166']"
 Xu2024Alljoined: "subject_index < 5"
 Xu2025Alljoined: "subject_index < 5"
 Zhang2024Chisco: "timeline_index < 8"

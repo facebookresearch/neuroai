@@ -25,16 +25,15 @@ The competition is organised as **four tracks**:
 3. **Track 3 -- Sleep onset** (cross-subject): estimate sleep-onset
    latency from wearable EEG. Headline metric: **recording-level mean
    absolute error in seconds** (lower is better).
-4. **Track 4 -- EMG-to-Text** (cross-subject): decode keystroke
-   sequences from surface EMG. Headline metric: **character error
-   rate** (lower is better).
+4. **Track 4 -- EMG-to-Pose** (cross-user and cross-stage): regress
+   20 hand-joint angle trajectories from surface EMG. Headline metric:
+   **mean absolute angular error** in radians (lower is better).
 
 All four tracks accept both task-specific models and foundation
 models.
 
 This starter kit shows how to reproduce a baseline for each track with
-NeuralBench, using the closest publicly available dataset when the
-official competition data is not yet released.
+NeuralBench, using publicly available reference datasets.
 """
 
 # %%
@@ -44,7 +43,7 @@ official competition data is not yet released.
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
 # - :doc:`Track 2 -- EEG-to-BCI <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
-# - :doc:`Track 4 -- EMG-to-Text <plot_track4_emg_to_text>`
+# - :doc:`Track 4 -- EMG-to-Pose <plot_track4_emg_to_pose>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`
 #
 # Each page follows the same shape:
@@ -73,17 +72,17 @@ official competition data is not yet released.
 #      - Image (Top-5 %, higher)
 #      - BCI (Bal. acc %, higher)
 #      - Sleep (Onset MAE s, lower)
-#      - EMG (CER %, lower)
+#      - EMG pose (MAE deg, lower)
 #    * - Chance
 #      - 2.22 +/- 0.31
 #      - 24.81 +/- 1.03
 #      - 205.42 +/- 0.01
-#      - 96.71 +/- 0.00
+#      - --
 #    * - Dummy
 #      - 2.50 +/- 0.00
 #      - 25.00 +/- 0.00
 #      - 299.90 +/- 0.00
-#      - 100.00 +/- 0.00
+#      - --
 #    * - EEGNet
 #      - 28.13 +/- 0.14
 #      - 58.58 +/- 0.34
@@ -94,7 +93,8 @@ official competition data is not yet released.
 #      - 68.04 +/- 0.73
 #      - 134.89 +/- 2.02
 #      - --
-#    * - EMG2QwertyNet
+#    * - VEMG2Pose
+#      - --
 #      - --
 #      - --
 #      - --
@@ -174,11 +174,10 @@ official competition data is not yet released.
 #    additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
 #    datasets -- with the same ``SleepOnsetTargetExtractor`` + ``bmae``
 #    metric the competition will use.
-# 3. **Hidden evaluation sets.** Every track is scored against a hidden
-#    test set (Alljoined Emotiv for Track 1, later Graz/BrainHero
-#    sessions for Track 2, the Muse cohort for Track 3, 100 new users
-#    for Track 4). Only the closest public training data ships here, so
-#    the numbers above are sanity checks, not leaderboard scores.
+# 3. **Hidden evaluation sets.** Tracks 1-3 are scored against hidden
+#    test sets (Alljoined Emotiv, later Graz/BrainHero sessions, and the
+#    Muse cohort). Track 4 uses EMG2Pose's published split. The numbers
+#    above are sanity checks, not leaderboard scores.
 #
 # Updates and corrections to this page are tracked on the GitHub
 # repository linked from the (future) competition website.

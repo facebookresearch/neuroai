@@ -17,13 +17,16 @@ from exca.cachedict import CacheDict
 from torch import nn
 from torch.utils.data import DataLoader
 
+from neuraltrain.augmentations import BandRotationConfig
 from neuraltrain.losses import BaseLoss
+from neuraltrain.metrics.metrics import GroupedMetric
 from neuraltrain.models.base import BaseModelConfig
 from neuraltrain.optimizers import LightningOptimizer
 
 from .callbacks import WindowPredictionCollector
 from .data import Data
 from .main import Experiment
+from .pl_module import BrainModule
 from .utils import TrainerConfig
 
 
@@ -35,6 +38,101 @@ class _DummyLoss:
 class _DummyBrainModule:
     def __init__(self, **kwargs) -> None:
         self.kwargs = kwargs
+
+
+def _sequence_module(monkeypatch, metrics: dict[str, tp.Any]) -> BrainModule:
+    module = BrainModule(
+        model=nn.Identity(),
+        loss=nn.L1Loss(),
+        metrics=metrics,
+        lightning_optimizer_config=tp.cast(LightningOptimizer, object()),
+    )
+    module._trainer = SimpleNamespace(world_size=1)  # type: ignore[assignment]
+    monkeypatch.setattr(module, "log", lambda *args, **kwargs: None)
+    return module
+
+
+@pytest.mark.parametrize("grouped", [False, True])
+def test_unlabelled_sequence_frames_are_masked(monkeypatch, grouped: bool) -> None:
+    metrics: dict[str, tp.Any] = {}
+    if grouped:
+        metrics["val/mae"] = GroupedMetric(metric_name="MeanAbsoluteError")
+    module = _sequence_module(monkeypatch, metrics)
+    nan = float("nan")
+    batch = SimpleNamespace(
+        data={
+            # Identity model, so the prediction is time-major (B, T, C) while
+            # the extracted target is channel-major (B, C, T).
+            "neuro": torch.tensor([[[2.0, 2.0], [999.0, 999.0], [1.0, 1.0]]]),
+            "target": torch.tensor([[[1.0, nan, 3.0], [1.0, nan, 3.0]]]),
+            # The loader emits (B, 1), not (B,).
+            "subject_id": torch.tensor([[0]]),
+        }
+    )
+
+    loss, prediction, _ = module._run_step(
+        tp.cast(tp.Any, batch), step_name="val", batch_idx=0
+    )
+
+    assert loss.item() == 1.5, "the unlabelled frame contributes nothing"
+    assert prediction[0].isnan().tolist() == [False, False, True, True, False, False]
+
+
+def test_sequence_target_wider_than_prediction_is_reported(monkeypatch) -> None:
+    module = _sequence_module(monkeypatch, {})
+    batch = SimpleNamespace(
+        data={
+            # Identity model, so the prediction is (B, T=3, C=2) against a
+            # target whose channel axis is 3 rather than 2.
+            "neuro": torch.zeros(1, 3, 2),
+            "target": torch.zeros(1, 3, 3),
+            "subject_id": torch.tensor([[0]]),
+        }
+    )
+
+    with pytest.raises(ValueError, match="2 outputs per frame but its target 3"):
+        module._run_step(tp.cast(tp.Any, batch), step_name="val", batch_idx=0)
+
+
+@pytest.mark.parametrize("training", [True, False])
+def test_augmentation_rolls_the_channel_axis_in_training_only(training: bool) -> None:
+    module = BrainModule(
+        model=nn.Identity(),
+        loss=nn.L1Loss(),
+        metrics={},
+        lightning_optimizer_config=tp.cast(LightningOptimizer, object()),
+        augmentation=BandRotationConfig(
+            probability=1.0, num_bands=1, electrodes_per_band=4, band_offsets=(1,)
+        ).build(),
+    )
+    module.train(training)
+    # (B=1, C=4, T=1): a roll of the channel axis reorders this column.
+    neuro = torch.arange(4, dtype=torch.float32)[None, :, None]
+
+    out = module.model_forward(tp.cast(tp.Any, SimpleNamespace(data={"neuro": neuro})))
+
+    expected = [3.0, 0.0, 1.0, 2.0] if training else [0.0, 1.0, 2.0, 3.0]
+    assert out[0, :, 0].tolist() == expected, "augmentation ran on the wrong axis/split"
+
+
+@pytest.mark.parametrize("global_rank", [0, 1])
+def test_only_rank_zero_deletes_the_checkpoint(tmp_path, global_rank: int) -> None:
+    checkpoint = tmp_path / "best.ckpt"
+    checkpoint.touch()
+    # Only the two flags ``_cleanup`` reads; the rest of the config is unused.
+    experiment = Experiment.model_construct(  # type: ignore[call-arg]
+        delete_checkpoints_on_exit=True, eval_only=False
+    )
+    trainer = SimpleNamespace(
+        global_rank=global_rank,
+        checkpoint_callback=SimpleNamespace(best_model_path=str(checkpoint)),
+    )
+
+    experiment._cleanup(tp.cast(tp.Any, trainer))
+
+    assert checkpoint.exists() == (global_rank != 0), (
+        "a non-zero rank must leave the checkpoint for rank zero to test with"
+    )
 
 
 def _make_experiment_with_capturing_build(

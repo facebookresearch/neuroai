@@ -30,6 +30,8 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
+import neuralset as ns
+
 from .data import Data, get_default_dataloaders
 
 
@@ -161,6 +163,53 @@ def test_per_split_loader_generators_have_distinct_seeds(
     assert len({train_seed, val_seed, test_seed}) == 3, (
         f"Expected three distinct sub-seeds, got "
         f"train={train_seed}, val={val_seed}, test={test_seed}"
+    )
+
+
+def _segments(loaders: dict[str, DataLoader]) -> list[tp.Any]:
+    """Every segment across the three split loaders."""
+    return [s for loader in loaders.values() for s in loader.dataset.segments]  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "nan_fraction,min_finite,keeps_poisoned",
+    [(1.0, 1.0, False), (0.5, 1.0, False), (0.5, 0.75, False), (0.5, 0.5, True)],
+)
+def test_segments_dropped_below_min_finite_target_fraction(
+    build_data: Callable[..., Data],
+    monkeypatch: pytest.MonkeyPatch,
+    nan_fraction: float,
+    min_finite: float,
+    keeps_poisoned: bool,
+) -> None:
+    target: tp.Any = {"name": "MneRaw", "event_types": "Eeg"}
+    segments = _segments(build_data(seed=7, target=target).prepare())
+    poisoned = set(sorted({s.start for s in segments})[::2])
+
+    extract = ns.extractors.MneRaw._get_timed_array
+
+    def nan_poisoned(
+        self: ns.extractors.MneRaw, event: tp.Any, start: float, duration: float
+    ) -> tp.Any:
+        out = extract(self, event, start, duration)
+        if start in poisoned:
+            data = np.array(out.data, copy=True)
+            data[..., : round(nan_fraction * data.shape[-1])] = np.nan
+            out.data = data
+        return out
+
+    monkeypatch.setattr(ns.extractors.MneRaw, "_get_timed_array", nan_poisoned)
+    filtered = build_data(
+        seed=7, target=target, min_finite_target_fraction=min_finite
+    ).prepare()
+
+    kept = {s.start for s in _segments(filtered)}
+    assert bool(kept & poisoned) == keeps_poisoned, (
+        f"a target labelled over {1 - nan_fraction:.0%} of its frames should "
+        f"{'survive' if keeps_poisoned else 'not survive'} min_finite={min_finite}"
+    )
+    assert {s.start for s in segments} - poisoned <= kept, (
+        "dropped segments whose target is finite"
     )
 
 

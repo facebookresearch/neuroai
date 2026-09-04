@@ -155,6 +155,18 @@ def _build_emg2qwerty() -> "torch.nn.Module":
     )
 
 
+def _build_vemg2pose() -> "torch.nn.Module":
+    import braindecode.models as bdm
+
+    # 16 EMG channels at 2 kHz over the paper's 5 s evaluation window.
+    return bdm.VEMG2Pose(
+        n_chans=16,
+        n_times=10000,
+        n_outputs=20,
+        sfreq=2000.0,
+    )
+
+
 def _build_simpleconv_time_agg() -> "torch.nn.Module":
     import torch
 
@@ -473,6 +485,18 @@ MODELS: list[ModelEntry] = [
         config_name="EMG2QwertyNet",
         cli_name="emg2qwerty",
         builder=_build_emg2qwerty,
+        backbone_subtract=("final_layer",),
+    ),
+    # Task-specific EMG model (emg/pose regression task).
+    ModelEntry(
+        name="VEMG2Pose",
+        family="classic",
+        device="emg",
+        year=2024,
+        bibtex="salter2024emg2pose",
+        config_name="VEMG2Pose",
+        cli_name="vemg2pose",
+        builder=_build_vemg2pose,
         backbone_subtract=("final_layer",),
     ),
     # fMRI baselines (kept in the registry to feed FMRI_CLASSIC_DISPLAY and

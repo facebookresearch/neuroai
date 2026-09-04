@@ -9,9 +9,17 @@
 import typing as tp
 from types import SimpleNamespace
 
-from .aggregator import _infer_eval_mode
+from exca import ConfDict
+
+from .aggregator import BenchmarkAggregator, _infer_eval_mode
 from .modules import DownstreamWrapper
-from .registry import ALL_DOWNSTREAM_WRAPPERS
+from .registry import (
+    ALL_DATASETS,
+    ALL_DOWNSTREAM_WRAPPERS,
+    DEFAULTS_DIR,
+    _resolve_task_dir,
+    load_yaml_config,
+)
 
 
 def _eval_mode(wrapper: DownstreamWrapper | None) -> str:
@@ -31,3 +39,24 @@ def test_infer_eval_mode_tags_each_shipped_preset_distinctly():
 
 def test_infer_eval_mode_without_wrapper_is_finetune():
     assert _eval_mode(None) == "finetune"
+
+
+def test_every_shipped_task_loss_has_a_headline_metric():
+    mapping = BenchmarkAggregator.model_fields["loss_to_metric_mapping"].default
+    defaults = load_yaml_config(DEFAULTS_DIR / "config.yaml")
+    assert defaults is not None
+    base = ConfDict(defaults)
+    for device, tasks in ALL_DATASETS.items():
+        for task_name in tasks:
+            task_cfg = load_yaml_config(
+                _resolve_task_dir(device, task_name) / "config.yaml"
+            )
+            if task_cfg is None:
+                continue
+            merged = base.copy()
+            merged.update(task_cfg)
+            loss_name = merged.flat().get("loss.name")
+            assert loss_name in mapping, (
+                f"{device}/{task_name}: loss {loss_name!r} has no headline metric, "
+                "so --plot-cached raises instead of aggregating the task"
+            )

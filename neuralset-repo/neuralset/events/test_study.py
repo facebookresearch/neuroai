@@ -375,6 +375,18 @@ class _SimpleStudy(base.Study):
         return pd.DataFrame([event])
 
 
+class _PartialStudy(base.Study):
+    """Only one of the two declared timelines is on disk, as after a scoped download."""
+
+    _info: tp.ClassVar[base.StudyInfo] = base.StudyInfo(num_timelines=2)
+
+    def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
+        yield {"subject": "01"}
+
+    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
+        return pd.DataFrame([{"type": "Motor", "start": 0, "duration": 1}])
+
+
 def _build_simple(tmp_path: Path, **overrides: tp.Any) -> pd.DataFrame:
     study = _SimpleStudy(path=tmp_path / "data")
     for k, v in overrides.items():
@@ -390,6 +402,12 @@ def test_timeline_dict_auto_columns(tmp_path: Path) -> None:
     assert df.loc[0, "task"] == _events.utils.BIDS_ENTITY_DEFAULT
     assert df.loc[0, "session"] == _events.utils.BIDS_ENTITY_DEFAULT
     assert df.loc[0, "run"] == "0"  # run was provided as int, cast to str
+
+
+def test_query_allows_partial_download(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="Dataset _PartialStudy is corrupted"):
+        _PartialStudy(path=tmp_path)._all_timelines()
+    assert _PartialStudy(path=tmp_path, query="subject == '01'")._all_timelines()
 
 
 def test_timeline_dict_conflict_matching(tmp_path: Path) -> None:

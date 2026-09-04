@@ -18,6 +18,8 @@ import numpy as np
 import torch
 from sklearn.utils import compute_class_weight
 from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 import neuralset as ns
 from neuralset.dataloader import SegmentDataset
@@ -246,6 +248,39 @@ def load_checkpoint(
     logger.info(f"Loaded model hash: {model_hash(brain_model)}")
 
     return brain_model
+
+
+def finite_target_fraction(
+    dataset: SegmentDataset,
+    target: ns.extractors.BaseExtractor,
+    batch_size: int,
+    num_workers: int,
+) -> np.ndarray:
+    """Fraction of each segment's target frames that carry a usable label."""
+    # Target-only dataset: extracting neuro here as well would double the read.
+    probe = SegmentDataset(
+        extractors={"target": target},
+        segments=dataset.segments,
+        pad_duration=dataset.pad_duration,
+    )
+    loader = DataLoader(
+        probe,
+        batch_size=batch_size,
+        collate_fn=probe.collate_fn,
+        num_workers=num_workers,
+        shuffle=False,
+    )
+    # Streams instead of reusing ``get_targets_from_dataset``: a dense target
+    # (emg/pose: 20 x 11790 floats a segment) will not fit a split in RAM.
+    fractions = []
+    for batch in tqdm(loader, desc="Screening targets"):
+        finite = torch.isfinite(batch.data["target"])
+        # A frame counts only where every channel resolved, as ``BrainModule``
+        # masks it; a target without a time axis is all-or-nothing.
+        if finite.ndim == 3:
+            finite = finite.all(dim=1)
+        fractions.append(finite.flatten(start_dim=1).float().mean(dim=1))
+    return torch.cat(fractions).numpy()
 
 
 def get_targets_from_dataset(dataset: SegmentDataset) -> torch.Tensor:

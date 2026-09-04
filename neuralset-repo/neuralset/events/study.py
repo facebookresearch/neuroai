@@ -604,7 +604,11 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
             raise
         if not tls:
             raise RuntimeError(f"No timeline found for {name} in {self.path}")
-        if self._info is not None and self._info.num_timelines != len(tls):
+        if (
+            self._info is not None
+            and self.query is None
+            and self._info.num_timelines != len(tls)
+        ):
             msg = f"Dataset {name} is corrupted, expected {self._info.num_timelines} "
             msg += f"timelines but found {len(tls)} (check/redownload dataset "
             msg += f"folder {self.path} or update study class)"

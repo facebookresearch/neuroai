@@ -269,6 +269,7 @@ TASK_CATEGORIES: dict[str, list[str]] = {
         "motor_execution",
         "motor_imagery",
         "p3",
+        "pose",
         "ssvep",
     ],
     "Evoked Responses": [

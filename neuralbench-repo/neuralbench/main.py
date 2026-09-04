@@ -31,6 +31,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
+from neuraltrain.augmentations import BandRotationConfig
 from neuraltrain.losses import BaseLoss
 from neuraltrain.metrics import BaseMetric
 from neuraltrain.models.base import BaseModelConfig
@@ -84,6 +85,7 @@ class Experiment(BaseExperiment):
     trainer_config: TrainerConfig
     loss: BaseLoss
     lightning_optimizer_config: LightningOptimizer
+    augmentation: BandRotationConfig | None = None
 
     # Evaluation
     eval_only: bool = False
@@ -189,6 +191,7 @@ class Experiment(BaseExperiment):
         self._brain_module = BrainModule(
             model=brain_model,
             target_scaler=self.target_scaler,
+            augmentation=None if self.augmentation is None else self.augmentation.build(),
             loss=self.loss.build(**loss_kwargs),
             lightning_optimizer_config=self.lightning_optimizer_config,
             metrics={metric.log_name: metric.build() for metric in self.metrics},
@@ -375,7 +378,10 @@ class Experiment(BaseExperiment):
     def _cleanup(self, trainer: pl.Trainer) -> None:
         """Delete checkpoint and finalize W&B."""
         if (
-            self.delete_checkpoints_on_exit
+            # Deleting from another rank can strip the checkpoint before rank
+            # zero has tested with it.
+            trainer.global_rank == 0
+            and self.delete_checkpoints_on_exit
             and not self.eval_only
             and hasattr(trainer.checkpoint_callback, "best_model_path")
         ):
@@ -434,6 +440,7 @@ class Experiment(BaseExperiment):
 
         test_results: dict[str, tp.Any] = {}
 
+        best_model_path: str | None = None
         training_time_s: float | None = None
         peak_gpu_memory_mb: float | None = None
         peak_cpu_memory_mb: float | None = None
@@ -454,7 +461,11 @@ class Experiment(BaseExperiment):
             divisor = 1024 if platform.system() != "Darwin" else 1024**2
             peak_cpu_memory_mb = rusage.ru_maxrss / divisor
 
-            if isinstance(trainer.checkpoint_callback, ModelCheckpoint):
+            # Only rank zero writes the checkpoint, and it deletes it in
+            # ``_cleanup``, so reading it elsewhere races that deletion.
+            if trainer.global_rank == 0 and isinstance(
+                trainer.checkpoint_callback, ModelCheckpoint
+            ):
                 best_model_path = trainer.checkpoint_callback.best_model_path
                 assert best_model_path is not None
                 best_ckpt = torch.load(
@@ -467,8 +478,6 @@ class Experiment(BaseExperiment):
                 for logger in [self._wandb_logger, self._csv_logger]:
                     if logger is not None:
                         logger.log_metrics({"best_epoch": best_epoch})
-        else:
-            best_model_path = None
 
         if (
             getattr(self.infra, "gpus_per_node", 0) > 1

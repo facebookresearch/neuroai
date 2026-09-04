@@ -1,0 +1,134 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# emg/pose: surface-EMG -> hand joint-angle trajectories (Salter2024Emg2pose,
+# NEMAR NM000281), following the paper's regression setting.
+
+data:
+  batch_size: 64
+  study:
+    source:
+      name: Salter2024Emg2pose
+    # Recordings shorter than the longest window (VEMG2Pose's 5.895 s) leave the
+    # segmenter nothing to cut; filtering here keeps every model on one set.
+    drop_recordings_shorter_than_a_window:
+      name: QueryEvents
+      query: "duration >= 5.895"
+    # The paper scores its three test sets separately (Table 4), so a pooled
+    # ``test/mae`` matches none of them; ``val`` keeps both of its scenarios.
+    keep_held_out_user_stage_test:
+      name: QueryEvents
+      query: "split != 'test' or generalization == 'user_stage'"
+    split:
+      name: PredefinedSplit
+      event_type: Emg
+      test_split_query: null
+      col_name: split
+      valid_split_by: null
+  # No filter / notch / baseline / scaler / clamp: the paper feeds raw 2 kHz
+  # EMG straight to the model, same convention as ``emg/typing``.
+  neuro:
+    =replace=: true
+    name: EmgExtractor
+    picks: [emg]
+    frequency: 2000.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+    infra:
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      # exca's RAM cache never evicts, so retaining any of these 25232
+      # recordings grows past 250 GB and the host OOM-kills the run.
+      keep_in_ram: false
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 200
+  target:
+    =replace=: true
+    # The 20 joint angles are MISC channels in the same BDF as the EMG.
+    name: EmgExtractor
+    picks: [misc]
+    frequency: 2000.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    # Radians, as emg2pose trains and logs them; its Table 4 degrees are a
+    # reporting-time x57.29578. Scaling here would stall VEMG2Pose's output_scalar.
+    clamp: null
+    # Same cache as the neuro pass above: without it, ``=replace=`` drops the
+    # default target infra and every job re-reads all 25232 recordings.
+    infra:
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
+      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
+      keep_in_ram: false
+      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      timeout_min: 180
+      gpus_per_node: 1
+      cpus_per_task: 10
+      min_samples_per_job: 200
+  # 5-s trajectories, the paper's evaluation length. Models with left context
+  # widen ``duration`` alone, so their scored 5-s tails still tile without gaps.
+  trigger_event_type: Emg
+  start: 0.0
+  duration: 5.0
+  stride: 5.0
+  stride_drop_incomplete: true
+  # emg2pose's ``skip_ik_failures``: windows overlapping an IK failure are dropped
+  # from every split rather than kept with the failed frames masked out.
+  min_finite_target_fraction: 1.0
+  summary_columns: [user, stage, side, generalization]
+brain_model_output_size: &brain_model_output_size 20
+brain_model_config:
+  =replace=: true
+  name: VEMG2Pose
+  kwargs:
+    sfreq: 2000.0
+trainer_config:
+  monitor: val/mae
+  mode: min
+  strategy: auto
+  # emg2pose allows 500 epochs with patience 50; capped to fit SLURM's 2-day
+  # limit at roughly 0.3 h/epoch.
+  patience: 20
+  n_epochs: 100
+  gradient_clip_val: 0
+  # The Rich bar buffers its writes, leaving the log silent for a whole epoch;
+  # per-epoch lines still land without it.
+  enable_progress_bar: false
+# emg2pose holds the learning rate at 1e-3 (config/experiment/regression_*.yaml)
+# where the neuralbench default anneals a 10x smaller one through OneCycleLR.
+lightning_optimizer_config:
+  =replace=: true
+  optimizer:
+    name: Adam
+    lr: 1.0e-3
+  scheduler: null
+# emg2pose's RotationAugmentation, over its single 16-electrode band. Upstream
+# redraws the offset per window; braindecode's BandRotation draws one per batch.
+augmentation:
+  probability: 1.0
+  num_bands: 1
+  electrodes_per_band: 16
+  band_offsets: [-1, 0, 1]
+loss:
+  name: L1Loss
+# Not get_regression_metric_configs(20): num_outputs returns one value per
+# joint, which Lightning cannot log. The paper also reports the joint average.
+metrics:
+  - log_name: mae
+    name: MeanAbsoluteError
+  - log_name: rmse
+    name: MeanSquaredError
+    kwargs:
+      squared: false
+  - log_name: r2_score
+    name: R2Score
