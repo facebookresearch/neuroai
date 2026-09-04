@@ -16,6 +16,7 @@ from . import green as _green  # noqa: F401
 from . import labram as _labram  # noqa: F401
 from . import linear as _linear  # noqa: F401
 from . import luna as _luna  # noqa: F401
+from . import mae as _mae  # noqa: F401
 from . import preprocessor as _preprocessor  # noqa: F401
 from . import reve as _reve  # noqa: F401
 from . import simpleconv as _simpleconv  # noqa: F401

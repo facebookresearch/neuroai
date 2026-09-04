@@ -229,6 +229,47 @@ class SigLipLoss(ClipLoss):
         return loss
 
 
+class MaskedReconstructionLoss(nn.Module):
+    """Mean squared reconstruction error over masked positions only.
+
+    Restricting the error to hidden positions is what makes a masked
+    autoencoder [1]_ a prediction task: averaging over visible positions too
+    would reward copying the input.
+
+    References
+    ----------
+    .. [1] He, Kaiming, et al. "Masked autoencoders are scalable vision
+        learners." CVPR 2022.
+    """
+
+    # `losses/base.py` derives this loss's config fields from `__init__`, and
+    # `nn.Module.__init__`'s `*args`/`**kwargs` would become required fields.
+    def __init__(self) -> None:
+        super().__init__()
+
+    def forward(
+        self, estimate: torch.Tensor, target: torch.Tensor, mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Average the squared error of the masked positions.
+
+        Parameters
+        ----------
+        estimate, target :
+            Reconstruction and ground truth, of shape ``(B, N, D)``.
+        mask :
+            One value per position, ``1`` where masked and ``0`` elsewhere, of
+            shape ``(B, N)``.
+        """
+        if mask.shape != estimate.shape[:-1]:
+            raise ValueError(
+                f"mask must hold one value per position, i.e. have shape "
+                f"{tuple(estimate.shape[:-1])} for estimates of shape "
+                f"{tuple(estimate.shape)}, but got {tuple(mask.shape)}."
+            )
+        error = (estimate - target).pow(2).mean(dim=-1)
+        return (error * mask).sum() / mask.sum()
+
+
 class MultiLoss(nn.Module):
     """Weighted combination of multiple loss terms.
 

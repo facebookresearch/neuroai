@@ -8,7 +8,7 @@ import pytest
 import torch
 from torch import nn
 
-from .losses import ClipLoss, MultiLoss, SigLipLoss
+from .losses import ClipLoss, MaskedReconstructionLoss, MultiLoss, SigLipLoss
 
 
 @pytest.mark.parametrize("norm_kind", ["x", "y", "xy"])
@@ -80,6 +80,23 @@ def test_siglip_loss(
     loss_value_orig = -nn.functional.logsigmoid(targets * scores).sum()
 
     assert torch.isclose(loss_value, loss_value_orig, atol=1e-5)
+
+
+def test_masked_reconstruction_loss():
+    loss = MaskedReconstructionLoss()
+    estimate, target = torch.randn(2, 5, 3), torch.randn(2, 5, 3)
+    mask = torch.zeros(2, 5)
+    mask[:, 1] = 1.0
+
+    out = loss(estimate, target, mask)
+    expected = (estimate[:, 1] - target[:, 1]).pow(2).mean()
+    assert torch.isclose(out, expected), "must average over masked positions only"
+
+    estimate[:, 0] += 100.0
+    assert torch.isclose(loss(estimate, target, mask), out), "unmasked must be ignored"
+
+    with pytest.raises(ValueError, match="one value per position"):
+        loss(estimate, target, mask[:, :, None])
 
 
 @pytest.mark.parametrize("weights", [None, {"mse": 0.25, "clip": 0.75}])
