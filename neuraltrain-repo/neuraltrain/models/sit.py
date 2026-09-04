@@ -17,7 +17,7 @@ import torch
 from torch import nn
 from torchvision.ops import MLP
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig, BaseModelConfig
 from .common import Mean, Mlp
 from .transformer import TransformerEncoder
 
@@ -296,7 +296,7 @@ class Tokenizer(nn.Module):
             raise ValueError(f"hemi value {self.config.hemi} not recognized")
 
 
-class SiTConfig(BaseModelConfig):
+class SiTConfig(BaseBrainModelConfig):
     """SiT (Surface vision Transformer) encoder configuration.
 
     Parameters
@@ -352,8 +352,26 @@ class SiTConfig(BaseModelConfig):
     )
     output_head_config: Mlp | dict[str, Mlp] | None = None
 
-    def build(self, n_frames: int = 3) -> nn.Module:
-        return SiT(self, n_frames)
+    def build(
+        self,
+        n_temporal_samples: int = 3,
+        mesh: str | None = None,
+    ) -> nn.Module:
+        """Build a SiT from context-named parameters.
+
+        The surface mesh resolution is a property of the *data*, read from
+        ``mesh`` (e.g. ``"FS6"``) and overriding the tokenizer config's default
+        when present; the patch sampling ``grid_resolution`` stays a model
+        hyperparameter.  ``n_temporal_samples`` (fMRI TRs) maps onto the
+        model's ``n_frames``.
+        """
+        config = self
+        if mesh is not None:
+            tokenizer_config = self.tokenizer_config.model_copy(
+                update={"mesh_resolution": Density[mesh]}
+            )
+            config = self.model_copy(update={"tokenizer_config": tokenizer_config})
+        return SiT(config, n_frames=n_temporal_samples)
 
 
 class SiT(nn.Module):

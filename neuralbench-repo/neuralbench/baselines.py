@@ -4,7 +4,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Classical sklearn-based baselines for neuralbench tasks.
+"""Fit-once baselines for neuralbench tasks (dummy + classical sklearn).
+
+This module owns the fit-once baseline family: the shared build-context and
+base config (:class:`FitOnceBuildContext`, :class:`BaseFitOnceModelConfig`), the
+distribution-based :class:`DummyPredictor`, and the classical sklearn/pyriemann
+pipelines below.
 
 These baselines are fit once at model-build time from the training (optionally
 train+val) set and wrapped as a ``torch.nn.Module`` so they flow through the
@@ -41,11 +46,13 @@ heavily-scaled (typically diagonal) entries.  The ``CV`` heads pick the
 regularizer via LOO (Ridge, closed form) or k-fold (LogReg) so behaviour is
 stable across tasks/modalities without per-task hyper-tuning.
 
-This module mirrors the :class:`neuraltrain.models.dummy_predictor.DummyPredictor`
-pattern: a pydantic :class:`BaseModelConfig` subclass whose ``build`` consumes
-the training data once and returns an eval-only ``nn.Module``.
+Every baseline here is a pydantic :class:`BaseFitOnceModelConfig` subclass whose
+``build_from_context`` consumes the training data once (via the lazy
+materializers on :class:`FitOnceBuildContext`) and returns an eval-only
+``nn.Module``.
 """
 
+import dataclasses
 import logging
 import typing as tp
 
@@ -60,9 +67,56 @@ from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 from torch import nn
 
-from neuraltrain.models.base import BaseModelConfig
+from neuraltrain.models.base import BaseBrainModelConfig, BrainModelBuildContext
+from neuraltrain.models.utils import inject_from_context
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(frozen=True)
+class FitOnceBuildContext(BrainModelBuildContext):
+    """Build context for fit-once baselines (:class:`DummyPredictor`, sklearn).
+
+    Extends :class:`BrainModelBuildContext` with the baseline-specific,
+    lazily-materialized fit data (and the CTC blank index) these models need
+    but which would otherwise pollute the general shape/data context.  The
+    neuralbench factory builds this subclass only for
+    :class:`BaseFitOnceModelConfig` models.
+
+    Attributes
+    ----------
+    ctc_blank_idx : int or None
+        Blank-token index for CTC sequence tasks, derived from the configured
+        loss by the factory (``None`` for non-CTC tasks).  Consumed only by
+        :class:`DummyPredictor`'s most-frequent-character baseline.
+    load_targets : callable or None
+        Lazily loads the (train, optionally train+val) target tensor on demand.
+        Injected by the factory so this package stays decoupled from the
+        data/runner layer.
+    load_neuro_targets : callable or None
+        Lazily loads the ``(neuro, target)`` tensors for fit-once baselines.
+    """
+
+    ctc_blank_idx: int | None = None
+    load_targets: tp.Callable[[], torch.Tensor] | None = None
+    load_neuro_targets: tp.Callable[[], tuple[torch.Tensor, torch.Tensor]] | None = None
+
+
+class BaseFitOnceModelConfig(BaseBrainModelConfig):
+    """Base for fit-once baseline configs built from a :class:`FitOnceBuildContext`.
+
+    These models are not trained: they fit a closed-form or sklearn-style
+    predictor on the full training pool at build time.  They override
+    :meth:`build_from_context` only to narrow the context type to
+    :class:`FitOnceBuildContext` (whose baseline-specific fields feed their
+    ``build``); the injection is otherwise identical to the base.
+    """
+
+    def build_from_context(  # type: ignore[override]
+        self, ctx: FitOnceBuildContext
+    ) -> nn.Module:
+        return self.build(**inject_from_context(self.build, ctx))
+
 
 # Soft threshold for logging a memory warning; no hard cap.
 _MEMORY_WARN_BYTES = 5 * 1024**3  # 5 GiB
@@ -76,7 +130,7 @@ _MEMORY_WARN_BYTES = 5 * 1024**3  # 5 GiB
 _DEFAULT_MAX_FIT_SAMPLES = 20_000
 
 
-class SklearnBaseline(BaseModelConfig):
+class SklearnBaseline(BaseFitOnceModelConfig):
     """Abstract base for classical sklearn/pyriemann baselines.
 
     Subclasses implement :meth:`_normalise_targets` and :meth:`_build_pipeline`;
@@ -121,10 +175,34 @@ class SklearnBaseline(BaseModelConfig):
     # Each kind-specific base sets this to ``"classifier"`` / ``"regressor"``.
     _kind: tp.ClassVar[tp.Literal["classifier", "regressor"]]
 
-    def build(  # type: ignore[override]
+    def build(
         self,
-        X_train: np.ndarray,
-        y_train: np.ndarray,
+        load_neuro_targets: (
+            tp.Callable[[], tuple[torch.Tensor, torch.Tensor]] | None
+        ) = None,
+        frequency: float | None = None,
+    ) -> "SklearnBaselineModel":
+        """Fit the underlying sklearn pipeline and wrap as ``nn.Module``.
+
+        Parameters are named/typed like ``BrainModelBuildContext`` /
+        ``FitOnceBuildContext`` fields, so the base ``build_from_context``
+        injects them.  The fit data
+        is loaded lazily via ``load_neuro_targets`` (injected by the factory,
+        which handles the train+val concatenation).  The sampling rate is taken
+        from the dataset (``frequency``) when available, falling back to the
+        config value otherwise.
+        """
+        assert load_neuro_targets is not None, (
+            "SklearnBaseline requires `load_neuro_targets` in the build context."
+        )
+        X_train, y_train = load_neuro_targets()
+        return self._build_from_arrays(X_train, y_train, frequency=frequency)
+
+    def _build_from_arrays(
+        self,
+        X_train: np.ndarray | torch.Tensor,
+        y_train: np.ndarray | torch.Tensor,
+        frequency: float | None = None,
     ) -> "SklearnBaselineModel":
         """Fit the underlying sklearn pipeline and wrap as ``nn.Module``."""
         # Keep ``X`` in its incoming dtype (typically f32) through the
@@ -163,7 +241,10 @@ class SklearnBaseline(BaseModelConfig):
             X,
             y_norm,
             lambda ts_metric: self._build_pipeline(
-                y=y_norm, target_info=target_info, ts_metric=ts_metric
+                y=y_norm,
+                target_info=target_info,
+                ts_metric=ts_metric,
+                frequency=frequency,
             ),
         )
         output_dim = self._compute_output_dim(y_norm, target_info)
@@ -193,11 +274,14 @@ class SklearnBaseline(BaseModelConfig):
         y: np.ndarray,
         target_info: dict[str, tp.Any],
         ts_metric: str,
+        frequency: float | None = None,
     ) -> Pipeline:
         """Build (but do not fit) the sklearn pipeline for this baseline.
 
         ``ts_metric`` is supplied by :meth:`_fit_with_fallback`; leaves that
-        have no :class:`TangentSpace` step should simply ignore it.
+        have no :class:`TangentSpace` step should simply ignore it.  ``frequency``
+        is the dataset sampling rate (``None`` when unresolved); only spectral
+        leaves (e.g. :class:`CoSpectraLogLR`) consume it.
         """
         raise NotImplementedError
 
@@ -457,6 +541,7 @@ class XdawnTsLR(SklearnClassifier):
         y: np.ndarray,
         target_info: dict[str, tp.Any],
         ts_metric: str,
+        frequency: float | None = None,
     ) -> Pipeline:
         n_classes = int(target_info["n_classes"])
         if self.xdawn_target_class == -1:
@@ -497,6 +582,7 @@ class CovTsLR(SklearnClassifier):
         y: np.ndarray,
         target_info: dict[str, tp.Any],
         ts_metric: str,
+        frequency: float | None = None,
     ) -> Pipeline:
         return make_pipeline(
             *self._cov_ts_steps(ts_metric),
@@ -557,7 +643,7 @@ class CoSpectraLogLR(SklearnClassifier):
 
     Parameters
     ----------
-    sfreq
+    frequency
         Sampling frequency of the inputs in Hz.  **Must** match the rate at
         which the :class:`~neuralset.extractors.neuro.EegExtractor` resamples
         the raw data (default ``120.0`` in the neuralbench defaults).  Only
@@ -566,7 +652,7 @@ class CoSpectraLogLR(SklearnClassifier):
     window
         Welch-style FFT window length in samples; rounded up to the next
         power of two by pyriemann.  The resulting frequency resolution is
-        ``sfreq / next_pow2(window)`` Hz.
+        ``frequency / next_pow2(window)`` Hz.
     overlap
         Fractional overlap between consecutive Welch windows (0--1).
     fmin, fmax
@@ -575,7 +661,7 @@ class CoSpectraLogLR(SklearnClassifier):
         both to ``None`` to keep every FFT bin up to Nyquist.
     """
 
-    sfreq: float = 120.0
+    frequency: float = 120.0
     window: int = 128
     overlap: float = 0.75
     fmin: float | None = 2.0
@@ -587,18 +673,21 @@ class CoSpectraLogLR(SklearnClassifier):
         y: np.ndarray,
         target_info: dict[str, tp.Any],
         ts_metric: str,
+        frequency: float | None = None,
     ) -> Pipeline:
         # ``ts_metric`` is irrelevant here (no TangentSpace step); the
         # PD-fallback loop will never trigger because CoSpectra + log1p
         # never raises "positive definite" errors.
         del ts_metric
+        # Data-derived sampling rate takes precedence over the config value.
+        fs = self.frequency if frequency is None else frequency
         return make_pipeline(
             CoSpectra(
                 window=self.window,
                 overlap=self.overlap,
                 fmin=self.fmin,
                 fmax=self.fmax,
-                fs=self.sfreq,
+                fs=fs,
             ),
             _UpperTriLog1p(),
             StandardScaler(),
@@ -661,6 +750,7 @@ class CovTsRidge(SklearnRegressor):
         y: np.ndarray,
         target_info: dict[str, tp.Any],
         ts_metric: str,
+        frequency: float | None = None,
     ) -> Pipeline:
         return make_pipeline(
             *self._cov_ts_steps(ts_metric),
@@ -800,3 +890,247 @@ def _normalise_regression_targets(
             f"SklearnBaseline regressor expects 1D or 2D targets, got shape {y.shape}"
         )
     return y
+
+
+class DummyPredictor(BaseFitOnceModelConfig):
+    """
+    Dummy predictor that makes predictions using simple rules based on the
+    target distribution, analogous to ``sklearn.dummy.DummyClassifier``.
+
+    Parameters
+    ----------
+    mode: tp.Literal[
+        "most_frequent",
+        "most_frequent_multilabel",
+        "stratified_multilabel",
+        "mean",
+        "auto",
+    ]
+        Strategy used to derive predictions from the training targets.
+
+        - ``"most_frequent"``: predict the most frequent class (single-label
+          classification, constant output).
+        - ``"most_frequent_multilabel"``: predict the most frequent binary
+          value per class independently (multilabel classification, constant
+          output per class).
+        - ``"stratified_multilabel"``: sample each class label independently
+          from a Bernoulli distribution with probability equal to the class
+          prevalence in the training set (multilabel classification,
+          stochastic output).  Produces macro-F1 scores that reflect the
+          class prior rather than collapsing to 0 on rare-class tasks.
+        - ``"mean"``: predict the mean of the targets (regression).
+        - ``"auto"``: automatically pick a mode based on the dtype and shape
+          of the targets.  Multilabel integer targets resolve to
+          ``"stratified_multilabel"``.
+    random_state: int | None
+        Seed used to initialize the ``torch.Generator`` that drives the
+        Bernoulli sampling in ``stratified_multilabel`` mode.  ``None``
+        (default) falls back to the global RNG state (controlled e.g. by
+        Lightning's ``seed_everything``).  Ignored by the other modes.
+    """
+
+    mode: tp.Literal[
+        "most_frequent",
+        "most_frequent_multilabel",
+        "stratified_multilabel",
+        "mean",
+        "auto",
+    ] = "auto"
+    random_state: int | None = None
+
+    def build(
+        self,
+        load_targets: tp.Callable[[], torch.Tensor] | None = None,
+        ctc_blank_idx: int | None = None,
+        n_outputs: int | None = None,
+    ) -> "DummyPredictorModel | DummyCtcSequenceModel":
+        """Fit the dummy predictor on the (train, optionally train+val) targets.
+
+        The training targets are loaded lazily via ``load_targets`` (injected
+        from the context by the factory).  CTC objectives are signalled by
+        ``ctc_blank_idx`` (a scalar the factory derives from the loss) and
+        dispatched to the sequence baseline.
+        """
+        assert load_targets is not None, (
+            "DummyPredictor requires `load_targets` in the build context."
+        )
+        y_train = load_targets()
+        return self._build_from_targets(y_train, ctc_blank_idx, n_outputs)
+
+    def _build_from_targets(
+        self,
+        y_train: torch.Tensor,
+        blank_idx: int | None = None,
+        n_classes: int | None = None,
+    ) -> "DummyPredictorModel | DummyCtcSequenceModel":
+        # CTC sequence tasks: ``y_train`` is ``(n_samples, max_length)`` of
+        # blank-padded label ids rather than a class / multilabel row.  When
+        # the caller signals a CTC objective (``blank_idx`` set), ignore the
+        # classification ``mode`` and emit a constant most-frequent-character
+        # sequence (see ``DummyCtcSequenceModel``).
+        if blank_idx is not None:
+            return self._build_ctc_sequence(y_train, blank_idx, n_classes)
+
+        if self.mode == "auto":
+            if y_train.dtype in (torch.int, torch.int64, torch.long):
+                mode = "most_frequent"
+                if y_train.ndim == 2:
+                    n_classes_per_example = (y_train > 0).sum(dim=1)
+                    if (n_classes_per_example == 0).any() or (
+                        n_classes_per_example > 1
+                    ).any():
+                        mode = "stratified_multilabel"
+            elif torch.is_floating_point(y_train):
+                mode = "mean"
+            else:
+                raise ValueError(f"Unsupported dtype: {y_train.dtype}")
+        else:
+            mode = self.mode
+
+        if mode == "most_frequent":
+            if y_train.ndim == 1:
+                most_frequent_ind, _ = torch.mode(y_train)
+                n_classes = int(y_train.max().item()) + 1
+            elif y_train.ndim == 2:
+                most_frequent_ind = y_train.sum(dim=0).argmax()
+                n_classes = y_train.shape[1]
+            else:
+                raise NotImplementedError()
+            out = torch.nn.functional.one_hot(most_frequent_ind, num_classes=n_classes)
+            return DummyPredictorModel(out=out.float())
+        if mode == "most_frequent_multilabel":
+            out = (y_train > 0).int().mode(dim=0)[0]
+            return DummyPredictorModel(out=out.float())
+        if mode == "stratified_multilabel":
+            if y_train.ndim != 2:
+                raise ValueError(
+                    f"stratified_multilabel requires 2D targets, got ndim={y_train.ndim}."
+                )
+            probs = (y_train > 0).float().mean(dim=0)
+            return DummyPredictorModel(probs=probs, random_state=self.random_state)
+        if mode == "mean":
+            out = y_train.mean(dim=0)
+            return DummyPredictorModel(out=out.float())
+        raise ValueError(f"Unsupported mode: {mode}")
+
+    @staticmethod
+    def _build_ctc_sequence(
+        y_train: torch.Tensor, blank_idx: int, n_classes: int | None
+    ) -> "DummyCtcSequenceModel":
+        """Most-frequent-character CTC baseline (analogue of ``most_frequent``).
+
+        Given blank-padded label sequences ``y_train`` of shape
+        ``(n_samples, max_length)``, predict the most frequent non-blank
+        character repeated ``L_median`` times, where ``L_median`` is the
+        median number of real (non-blank) tokens per sequence.  The median
+        minimises the L1 length penalty under edit-distance error rates.
+        """
+        y = y_train.long()
+        if y.ndim != 2:
+            raise ValueError(
+                f"CTC dummy expects 2D (n_samples, max_length) targets; "
+                f"got ndim={y.ndim}."
+            )
+        if n_classes is None:
+            n_classes = int(y.max().item()) + 1
+        non_blank_mask = y != blank_idx
+        median_length = int(non_blank_mask.sum(dim=1).float().median().item())
+        non_blank = y[non_blank_mask]
+        if non_blank.numel() == 0 or median_length == 0:
+            # No real keystrokes -> predict the empty string.
+            modal_char = blank_idx
+            median_length = 0
+        else:
+            modal_char = int(torch.mode(non_blank).values.item())
+        return DummyCtcSequenceModel(
+            modal_char=modal_char,
+            length=median_length,
+            blank_idx=blank_idx,
+            n_classes=n_classes,
+        )
+
+
+class DummyPredictorModel(nn.Module):
+    """Evaluation-only module that implements the dummy prediction strategies.
+
+    Constructed by :meth:`DummyPredictor.build`; not intended to be built
+    directly by users.  Depending on the mode chosen at build time, either
+    returns a constant tensor tiled across the batch dimension (``out``) or
+    samples fresh Bernoulli draws per call using a cached ``torch.Generator``
+    (``probs`` + ``random_state``).
+    """
+
+    out: torch.Tensor
+    probs: torch.Tensor
+
+    def __init__(
+        self,
+        out: torch.Tensor | None = None,
+        probs: torch.Tensor | None = None,
+        random_state: int | None = None,
+    ) -> None:
+        super().__init__()
+        if (out is None) == (probs is None):
+            raise ValueError(
+                "Exactly one of `out` or `probs` must be provided to DummyPredictorModel."
+            )
+        self._stratified = probs is not None
+        if out is not None:
+            self.register_buffer("out", out)
+        if probs is not None:
+            self.register_buffer("probs", probs)
+        self._random_state = random_state
+        # Generator objects are device-specific and cannot be registered as
+        # buffers; cache them lazily per device on first forward call.
+        self._generators: dict[torch.device, torch.Generator] = {}
+
+    def _get_generator(self, device: torch.device) -> torch.Generator | None:
+        if self._random_state is None:
+            return None
+        gen = self._generators.get(device)
+        if gen is None:
+            gen = torch.Generator(device=device)
+            gen.manual_seed(self._random_state)
+            self._generators[device] = gen
+        return gen
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        if not self._stratified:
+            return self.out.repeat(X.shape[0], 1)
+        probs = self.probs.expand(X.shape[0], -1)
+        generator = self._get_generator(probs.device)
+        return torch.bernoulli(probs, generator=generator)
+
+
+class DummyCtcSequenceModel(nn.Module):
+    """Constant CTC emitter for the most-frequent-character baseline.
+
+    Emits input-independent per-frame scores of shape
+    ``(batch, n_frames, n_classes)`` whose greedy CTC decode (collapse
+    consecutive repeats + drop the blank, as
+    :class:`neuraltrain.metrics.CharacterErrorRates` does) is exactly
+    ``modal_char`` repeated ``length`` times.  The modal character is
+    interleaved with the blank class (``[c, blank, c, blank, ..., c]``) so
+    the repeats survive consecutive-collapse and the decoded length stays
+    ``length`` even when ``modal_char`` would otherwise merge.
+
+    The non-target classes are filled with a large negative score so the
+    emissions double as valid (near one-hot) log-probabilities for
+    :class:`torch.nn.CTCLoss`; ``argmax`` is unaffected by the magnitude.
+    """
+
+    emissions: torch.Tensor
+
+    def __init__(
+        self, modal_char: int, length: int, blank_idx: int, n_classes: int
+    ) -> None:
+        super().__init__()
+        n_frames = max(2 * length - 1, 1)
+        emissions = torch.full((n_frames, n_classes), -30.0)
+        for t in range(n_frames):
+            cls = modal_char if t % 2 == 0 else blank_idx
+            emissions[t, cls] = 0.0
+        self.register_buffer("emissions", emissions)
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        return self.emissions.to(X.device).unsqueeze(0).expand(X.shape[0], -1, -1)

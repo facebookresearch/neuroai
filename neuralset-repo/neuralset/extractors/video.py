@@ -146,7 +146,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         self, events: list[evts.Video], start: float, duration: float
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
-            sub = ta.with_start(event.start).overlap(start=start, duration=duration)
+            sub = ta.copy(start=event.start).overlap(start=start, duration=duration)
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub

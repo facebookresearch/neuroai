@@ -432,14 +432,22 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
         # )
         # return pd.DataFrame([event])
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download dataset.
-        Needs to be overridden by user.
+
+        Needs to be overridden by user. Overrides MUST accept ``overwrite``
+        (see :meth:`download`): when True the study should redo the work --
+        ignore success markers/exists-gates and force per-file re-transfer or
+        re-verification rather than trusting mere existence on disk.
         """
         raise NotImplementedError("Dataset not available to download yet.")
 
     @tp.final
     def download(self, **kwargs: tp.Any) -> None:
+        # ``**kwargs`` (notably ``overwrite``) is forwarded verbatim to
+        # ``_download``; every ``_download`` override must therefore accept it,
+        # or ``neuralfetch download <Study>`` raises TypeError before doing any
+        # work (the CLI always passes ``overwrite=``).
         self._check_requirements()
         # The study subfolder is settled in ``model_post_init`` (see there), so
         # ``download()`` never reassigns ``self.path`` and is safe to call on a

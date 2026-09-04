@@ -23,7 +23,7 @@ class Test2023Meg(study.Study):
         frequency=100,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

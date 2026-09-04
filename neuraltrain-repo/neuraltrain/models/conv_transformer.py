@@ -10,7 +10,7 @@ import logging
 import torch
 from torch import nn
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 from .common import TemporalDownsampling
 from .conformer import Conformer
 from .simpleconv import SimpleConv
@@ -20,7 +20,7 @@ from .transformer import TransformerEncoder
 logger = logging.getLogger(__name__)
 
 
-class ConvTransformer(BaseModelConfig):
+class ConvTransformer(BaseBrainModelConfig):
     """Convolutional encoder followed by optional temporal aggregation and a transformer.
 
     Parameters
@@ -62,20 +62,15 @@ class ConvTransformer(BaseModelConfig):
     output_layer_dim: int | None = 0
 
     def build(
-        self, n_in_channels: int, n_outputs: int | None = None
+        self, n_spatial_locations: int, n_outputs: int | None
     ) -> "ConvTransformerModel":
         """Build ConvTransformer model.
 
-        Parameters
-        ----------
-        n_in_channels :
-            Number of input channels.
-        n_outputs :
-            Number of output dimensions. If None, use the `output_layer_dim` parameter from the
-            config.
+        Uses ``n_outputs`` when set, otherwise falls back to the config's
+        ``output_layer_dim``.
         """
         return ConvTransformerModel(
-            n_in_channels,
+            n_spatial_locations,
             n_outputs or self.output_layer_dim,
             config=self,
         )
@@ -92,9 +87,13 @@ class ConvTransformerModel(nn.Module):
     ):
         super().__init__()
 
-        # Encoder
+        # Encoder.  SimpleConv/SimplerConv are used here as sub-encoders: the
+        # ``n_outputs`` carries the encoder feature dim (these encoders do not
+        # consume a temporal size).
         self.dim = config.dim
-        self.encoder = config.encoder_config.build(in_channels, self.dim)
+        self.encoder = config.encoder_config.build(
+            n_spatial_locations=in_channels, n_outputs=self.dim
+        )
 
         # Temporal downsampling
         self.temporal_downsampling = None

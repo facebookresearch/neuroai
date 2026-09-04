@@ -195,7 +195,7 @@ def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
         dset_dir=tmp_path / "study",
     )
 
-    def mock_s3_download(self: download.S3) -> None:
+    def mock_s3_download(self: download.S3, overwrite: bool = False) -> None:
         assert self.prefix == "eegmat/1.0.0"
         assert self.output_dir == self._dl_dir / "eegmat" / "1.0.0"
         out_dir = tp.cast(Path, self.output_dir)

@@ -24,5 +24,9 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
+  # transformer.layers.*.0.{to_qkv,to_out}, as in the REVE paper
+  lora_target_modules:
+    - to_qkv
+    - to_out
 
 # Paper config (El Ouahidi et al. NeurIPS 2025): StableAdamW, warmup + ReduceOnPlateau, attn-pool or flatten + Linear head, 2-step (linear probe then LoRA on QKVO); most downstream hyperparams unspecified.

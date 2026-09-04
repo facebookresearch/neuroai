@@ -6,7 +6,7 @@ description = "A Python toolkit for building neuroimaging data pipelines."
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-version = "0.2.2"
+version = "0.2.3"
 
 dependencies = [
   "pandas>=2.2.2",
@@ -17,7 +17,7 @@ dependencies = [
   "torch>=2.5.1",
   "nibabel>=5.1.0",
   "tqdm>=4.65.0",
-  "exca>=0.5.27",
+  "exca>=0.5.29",
   "rapidfuzz",
   "packaging",
   "ujson",

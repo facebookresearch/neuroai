@@ -65,7 +65,7 @@ class Mne2013Sample(study.Study):
         root.mkdir(parents=True, exist_ok=True)
         return mne.datasets.sample.data_path(root, verbose=True)
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download the MNE sample dataset.
 
         The dataset will be automatically downloaded by MNE-Python

@@ -7,7 +7,8 @@
 """``nn.Module`` classes and pydantic config wrappers used by neuralbench.
 
 This module groups the small custom ``nn.Module`` building blocks
-(``IndexSelect``, ``Mean``, ``ConcatGroupedMean``) together with the
+(``IndexSelect``, ``Mean``, ``ConcatGroupedMean``, ``AttentivePool``) together
+with the
 pydantic configs that build trainable adapters / probes on top of a
 pretrained model (``ChannelProjection``, ``DownstreamWrapper``) and the
 runtime wrapper they produce (``DownstreamWrapperModel``).
@@ -27,7 +28,36 @@ from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
 from .utils import detect_batch_dim, run_probe_hook
 
+if tp.TYPE_CHECKING:
+    import peft
+
 LOGGER = logging.getLogger(__name__)
+
+
+class LoraConfig(pydantic.BaseModel):
+    """Pydantic mirror of :class:`peft.LoraConfig`, exposing only the fields we sweep.
+
+    ``target_modules`` defaults to :attr:`DownstreamWrapper.lora_target_modules`.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+    r: int = 8
+    lora_alpha: int = 16
+    lora_dropout: float = 0.0
+    bias: tp.Literal["none", "all", "lora_only"] = "none"
+    target_modules: list[str] | None = None
+
+    def build(self, target_modules: list[str]) -> "peft.LoraConfig":
+        from peft import LoraConfig as _PeftLoraConfig
+
+        return _PeftLoraConfig(
+            r=self.r,
+            lora_alpha=self.lora_alpha,
+            lora_dropout=self.lora_dropout,
+            bias=self.bias,
+            target_modules=target_modules,
+            inference_mode=False,
+        )
 
 
 class IndexSelect(nn.Module):
@@ -72,6 +102,47 @@ class ConcatGroupedMean(nn.Module):
             ],
             dim=self.dim,
         )
+
+
+def _flatten_tokens(x: torch.Tensor) -> torch.Tensor:
+    """Collapse the axes between batch and embedding into a single token axis.
+
+    ``(B, emb)`` -> ``(B, 1, emb)``; ``(B, d1, ..., dk, emb)`` -> ``(B, d1 * ... * dk, emb)``.
+    """
+    if x.ndim <= 2:
+        return x.unsqueeze(1)
+    return x.reshape(x.shape[0], -1, x.shape[-1])
+
+
+class AttentivePool(nn.Module):
+    """Pool tokens with a single learnable query via multi-head cross-attention.
+
+    The attentive-probe read-out for frozen SSL features (cf. the MAE / V-JEPA
+    attentive pooler), without the surrounding transformer MLP/LayerNorm/residual.
+    """
+
+    def __init__(self, emb_dim: int, num_heads: int = 8) -> None:
+        super().__init__()
+        # nn.MultiheadAttention requires emb_dim % num_heads == 0
+        requested_heads = num_heads
+        while emb_dim % num_heads != 0:
+            num_heads //= 2
+        if num_heads != requested_heads:
+            LOGGER.warning(
+                "AttentivePool: emb_dim=%d is not divisible by num_heads=%d, "
+                "falling back to num_heads=%d.",
+                emb_dim,
+                requested_heads,
+                num_heads,
+            )
+        self.query = nn.Parameter(torch.randn(1, 1, emb_dim) * emb_dim**-0.5)
+        self.attn = nn.MultiheadAttention(emb_dim, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _flatten_tokens(x)  # (B, n_tokens, emb)
+        query = self.query.expand(x.shape[0], -1, -1)
+        pooled, _ = self.attn(query, x, x, need_weights=False)  # (B, 1, emb)
+        return pooled.squeeze(1)
 
 
 class ChannelProjection(pydantic.BaseModel):
@@ -379,20 +450,22 @@ class DownstreamWrapper(pydantic.BaseModel):
         (before the first dot) must match exactly. If False, any part of the layer name
         can match the patterns. Default is True.
     aggregation : {"flatten", "mean", "first"} or int, optional
-        Method to aggregate the model output.
+        Parameter-free reduction of the model output before the probe.
         ``"flatten"`` flattens all dimensions except batch;
         ``"mean"`` averages over the temporal/sequence dimension (dim=1);
         ``"first"`` selects only the first timestep/token;
         an ``int`` splits into n groups, averages each group, then concatenates;
-        ``None`` performs no aggregation.
+        ``None`` performs no aggregation (required by ``probe_config="attention"``).
         When ``probe_layer`` is set, the captured activation is canonicalised to
         batch-first before aggregation (see ``probe_batch_dim``), so these
         semantics are identical for intermediate and final outputs.
-    probe_config : Mlp | "linear" | None, optional
-        Configuration for the probe layer added on top.
+    probe_config : Mlp | "linear" | "attention" | None, optional
+        Configuration for the probe head added on top.
         ``None`` uses identity (no additional layer), e.g. if the model already
         has a linear layer of the right output size.
         ``"linear"`` adds a single linear layer.
+        ``"attention"`` adds an ``AttentivePool`` read-out plus a linear layer;
+        it pools the raw tokens itself, so requires ``aggregation=None``.
         An ``Mlp`` instance adds a multi-layer perceptron with specified configuration.
     probe_layer : str | None, optional
         Dotted submodule name (from ``model.named_modules()``) where a forward
@@ -405,6 +478,15 @@ class DownstreamWrapper(pydantic.BaseModel):
         finding the axis that scales with the batch.  Set explicitly (e.g. ``1``
         for sequence-first ``(T, B, D)`` transformer outputs) to skip detection
         or resolve an ambiguous layout.  Only used when ``probe_layer`` is set.
+    lora_config : LoraConfig | None, optional
+        If set, PEFT LoRA adapters are injected into the wrapped model, leaving
+        only the adapters and the probe head trainable.  Requires the ``peft``
+        package.  Default is None.
+    lora_target_modules : list[str] | None, optional
+        ``nn.Linear`` leaf-module names the adapters target (e.g.
+        ``["to_q", "to_k", "to_v", "to_out"]``), usually set per foundation
+        model in its YAML.  Overridden by :attr:`lora_config.target_modules`,
+        ignored when :attr:`lora_config` is None.  Default is None.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -415,9 +497,11 @@ class DownstreamWrapper(pydantic.BaseModel):
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
     strict_matching: bool = True
     aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
-    probe_config: Mlp | tp.Literal["linear"] | None = "linear"
+    probe_config: Mlp | tp.Literal["linear", "attention"] | None = "linear"
     probe_layer: str | None = None
     probe_batch_dim: int | tp.Literal["auto"] = "auto"
+    lora_config: LoraConfig | None = None
+    lora_target_modules: list[str] | None = None
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -447,6 +531,12 @@ class DownstreamWrapper(pydantic.BaseModel):
             raise ValueError(
                 "probe_batch_dim only applies when probe_layer is set; "
                 f"got probe_batch_dim={self.probe_batch_dim} with probe_layer=None."
+            )
+
+        if self.probe_config == "attention" and self.aggregation is not None:
+            raise ValueError(
+                "probe_config='attention' pools the raw model tokens and "
+                f"requires aggregation=None; got aggregation={self.aggregation!r}."
             )
 
     def build(
@@ -520,6 +610,25 @@ class DownstreamWrapper(pydantic.BaseModel):
             probe_batch_dim=probe_batch_dim,
         )
 
+        # must follow the freeze pattern and load_checkpoint (build_brain_model step 3)
+        if self.lora_config is not None:
+            from peft import get_peft_model
+
+            targets = self.lora_config.target_modules or self.lora_target_modules
+            if not targets:
+                raise ValueError(
+                    "LoRA requires target_modules: either set "
+                    "downstream_model_wrapper.lora_config.target_modules in the "
+                    "overlay or downstream_model_wrapper.lora_target_modules in "
+                    "the model YAML."
+                )
+            peft_cfg = self.lora_config.build(target_modules=targets)
+            # typed for HF PreTrainedModel, but only needs named_modules
+            wrapper_model.wrapped_model = get_peft_model(
+                wrapper_model.wrapped_model,  # type: ignore[arg-type]
+                peft_cfg,
+            )
+
         # Sanity check (wrapper handles preprocessing internally)
         wrapper_output = wrapper_model(**dummy_batch)
         assert wrapper_output.shape[-1] == n_outputs
@@ -582,7 +691,7 @@ class DownstreamWrapperModel(nn.Module):
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
         aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten",
-        probe_config: Mlp | tp.Literal["linear"] | None = None,
+        probe_config: Mlp | tp.Literal["linear", "attention"] | None = None,
         probe_layer: str | None = None,
         probe_batch_dim: int = 0,
     ):
@@ -602,7 +711,9 @@ class DownstreamWrapperModel(nn.Module):
 
         self._apply_freeze(layers_to_freeze, layers_to_unfreeze, strict_matching)
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
-        self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
+        self._build_probe(
+            probe_config, n_inputs, wrapper_n_outputs, brain_model_output_size
+        )
 
         # The hook lives on ``self.wrapped_model`` (a submodule of ``self``), so
         # a strong closure over ``self`` would form a self -> wrapped_model ->
@@ -707,9 +818,10 @@ class DownstreamWrapperModel(nn.Module):
 
     def _build_probe(
         self,
-        probe_config: Mlp | tp.Literal["linear"] | None,
+        probe_config: Mlp | tp.Literal["linear", "attention"] | None,
         n_inputs: int,
         n_outputs: int,
+        brain_model_output_size: torch.Size,
     ) -> None:
         """Build the probe (classification/regression head) on top of the aggregated representations."""
         self.probe: nn.Module
@@ -717,6 +829,12 @@ class DownstreamWrapperModel(nn.Module):
             self.probe = nn.Identity()
         elif probe_config == "linear":
             self.probe = nn.Linear(n_inputs, n_outputs)
+        elif probe_config == "attention":
+            emb_dim = brain_model_output_size[-1]
+            self.probe = nn.Sequential(
+                AttentivePool(emb_dim=emb_dim),
+                nn.Linear(emb_dim, n_outputs),
+            )
         else:
             assert not isinstance(probe_config, str)
             self.probe = probe_config.build(

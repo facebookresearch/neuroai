@@ -21,6 +21,8 @@ counts in :data:`MODEL_PARAMS` are loaded from
 
 from __future__ import annotations
 
+import typing as tp
+
 from neuralbench.plots._models import MODELS, load_param_counts
 
 # ---------------------------------------------------------------------------
@@ -38,7 +40,7 @@ _NON_REGISTRY_DISPLAY_NAMES: dict[str, str] = {
     "Chance": "Chance",
     "SimpleConv": "SimpleConv",
     "NtLuna": "LUNA (base)",
-    # Classical sklearn / pyriemann baselines (see neuralbench.sklearn_baseline).
+    # Classical sklearn / pyriemann baselines (see neuralbench.baselines).
     # ``feature_based`` is a synthetic label assigned by
     # :func:`neuralbench.plots.tables._collapse_feature_based_baselines` which
     # keeps only the task-appropriate pipeline (per
@@ -182,6 +184,71 @@ DUMMY_DISPLAY = [
 FEATURE_BASED_COLOR = "#4ea64e"
 
 MODEL_YEAR: dict[str, int] = {m.name: m.year for m in MODELS if m.year is not None}
+
+# ---------------------------------------------------------------------------
+# Adaptation ``eval_mode`` tags
+#
+# :class:`AdaptationMode` is the single home for the grammar: ``aggregator``
+# renders tags through it and the plotting modules parse them back.
+# ---------------------------------------------------------------------------
+
+_LORA_STRATEGY = "lora"
+_LORA_PREFIX = f"{_LORA_STRATEGY}_r"
+
+# by trainable-parameter budget; unknown strategies sort last
+_STRATEGY_ORDER: dict[str, int] = {
+    "linear_probe": 0,
+    "attentive_probe": 1,
+    _LORA_STRATEGY: 2,
+    "finetune": 3,
+}
+_UNKNOWN_ORDER = 4
+_PLAIN_STRATEGIES = tuple(s for s in _STRATEGY_ORDER if s != _LORA_STRATEGY)
+
+
+class AdaptationMode(tp.NamedTuple):
+    """An adaptation strategy, as tagged on a result row.
+
+    Renders as ``{strategy}[_{aggregation}]``, with LoRA using ``lora_r{rank}``
+    as its stem. The aggregation is part of the tag because presets differing
+    only by it would otherwise merge everywhere downstream.
+    """
+
+    strategy: str
+    aggregation: str = ""
+    lora_rank: int | None = None
+
+    @classmethod
+    def parse(cls, tag: str) -> AdaptationMode:
+        """Read a tag back. Unrecognised tags become a strategy of their own."""
+        if tag.startswith(_LORA_PREFIX):
+            rank, _, aggregation = tag[len(_LORA_PREFIX) :].partition("_")
+            if rank.isdigit():
+                return cls(_LORA_STRATEGY, aggregation, int(rank))
+        for strategy in _PLAIN_STRATEGIES:
+            if tag == strategy:
+                return cls(strategy)
+            if tag.startswith(f"{strategy}_"):
+                return cls(strategy, tag[len(strategy) + 1 :])
+        return cls(tag)
+
+    @property
+    def is_lora(self) -> bool:
+        return self.lora_rank is not None
+
+    @property
+    def tag(self) -> str:
+        stem = (
+            self.strategy if self.lora_rank is None else f"{_LORA_PREFIX}{self.lora_rank}"
+        )
+        return f"{stem}_{self.aggregation}" if self.aggregation else stem
+
+    @property
+    def sort_key(self) -> tuple[int, int, str]:
+        """Canonical order, by trainable-parameter budget: probes -> LoRA -> finetune."""
+        order = _STRATEGY_ORDER.get(self.strategy, _UNKNOWN_ORDER)
+        return (order, self.lora_rank or 0, self.aggregation)
+
 
 # ---------------------------------------------------------------------------
 # Task categories and ordering (used for category-grouped layouts)

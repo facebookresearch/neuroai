@@ -14,6 +14,14 @@ Core
    Experiment
    BenchmarkAggregator
 
+.. currentmodule:: neuralbench.data
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   get_default_dataloaders
+
 .. currentmodule:: neuralbench.pl_module
 
 .. autosummary::

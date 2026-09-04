@@ -4,27 +4,33 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Tests for ``neuralbench.data.Data`` RNG plumbing.
+"""Tests for ``neuralbench.data``: ``Data`` RNG plumbing and the config merge
+behind ``get_default_dataloaders``.
 
-Uses the synthetic ``Test2024Eeg`` study from neuralset (3 timelines, ~12 train
-Word events) so we exercise the real ``SegmentDataset`` + ``DataLoader``
-pipeline instead of mocking it.  Each test compares the first-epoch index
-sequence from ``train_loader.sampler``, which is the ground-truth signal that
-``Data.seed`` actually controls shuffling.
+The RNG tests use the synthetic ``Test2024Eeg`` study from neuralset (3
+timelines, ~12 train Word events) so we exercise the real ``SegmentDataset`` +
+``DataLoader`` pipeline instead of mocking it.  Each test compares the
+first-epoch index sequence from ``train_loader.sampler``, which is the
+ground-truth signal that ``Data.seed`` actually controls shuffling.
 
 The ``build_data`` factory fixture (see ``conftest.py``) owns the Data
     construction config, so tests here only have to vary ``seed`` /
     ``sampler``.
+
+The ``get_default_dataloaders`` tests stub out ``Data.prepare`` only, so the
+real task YAMLs still go through ``Data`` validation without reading any data.
 """
 
 import random
+import typing as tp
 from collections.abc import Callable
 
 import numpy as np
+import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from .data import Data
+from .data import Data, get_default_dataloaders
 
 
 def _train_indices(loaders: dict[str, DataLoader]) -> list[int]:
@@ -156,3 +162,56 @@ def test_per_split_loader_generators_have_distinct_seeds(
         f"Expected three distinct sub-seeds, got "
         f"train={train_seed}, val={val_seed}, test={test_seed}"
     )
+
+
+def test_get_default_dataloaders_merges_and_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg: Data | None = None
+    expected_loaders: dict[str, DataLoader] = {}
+
+    def fake_prepare(self: Data) -> dict[str, DataLoader]:
+        nonlocal cfg
+        cfg = self
+        return expected_loaders
+
+    monkeypatch.setattr(Data, "prepare", fake_prepare)
+    overrides: dict[str, tp.Any] = {"neuro.frequency": 60.0}
+    loaders = get_default_dataloaders(
+        "eeg",
+        "audiovisual_stimulus",
+        batch_size=8,
+        **overrides,
+    )
+    assert loaders is expected_loaders
+    assert cfg is not None
+    target: tp.Any = cfg.target
+    assert cfg.trigger_event_type == "Stimulus"  # task config wins over base
+    assert target.event_field == "description"  # task =replace= target
+    assert cfg.batch_size == 8  # base default -> kwarg override
+    assert cfg.neuro.frequency == 60.0  # dotted override (base default 120.0)
+
+
+def test_get_default_dataloaders_selects_dataset_variant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[Data] = []
+    monkeypatch.setattr(Data, "prepare", lambda self: captured.append(self))
+    get_default_dataloaders("eeg", "motor_imagery", dataset="schalk2004bci2000")
+    study: tp.Any = captured[0].study
+    assert type(study.steps["source"]).__name__ == "Schalk2004Bci2000"
+
+
+@pytest.mark.parametrize(
+    "task,dataset",
+    [
+        ("motor_imgery", None),
+        ("all", None),  # aggregate: only the CLI expands it
+        ("motor_imagery", "schalk2004"),
+    ],
+)
+def test_get_default_dataloaders_rejects_unknown_inputs(
+    task: str, dataset: str | None
+) -> None:
+    with pytest.raises(ValueError, match="Unknown"):
+        get_default_dataloaders("eeg", task, dataset=dataset)

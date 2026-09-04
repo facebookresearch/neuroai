@@ -52,6 +52,9 @@ generalisation: training images and test images do not overlap.
 #    # 4. Full baseline -- task-specific model (EEGNet)
 #    neuralbench eeg image -m eegnet
 #
+#    # 5. Full baseline -- foundation model (REVE)
+#    neuralbench eeg image -m reve
+#
 # Step 2 is the most expensive: it computes one DINOv2 embedding per
 # unique stimulus and caches it under ``CACHE_DIR``.
 

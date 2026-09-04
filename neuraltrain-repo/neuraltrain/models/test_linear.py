@@ -26,14 +26,16 @@ def test_linear_model(
     fake_meg: torch.Tensor, subject_layers_config: dict | None, reduction: str
 ) -> None:
     if reduction == "concat":
-        n_in_channels = fake_meg.shape[1] * fake_meg.shape[2]
+        n_channels = fake_meg.shape[1] * fake_meg.shape[2]
     else:
-        n_in_channels = fake_meg.shape[1]
+        n_channels = fake_meg.shape[1]
     model_config = Linear(
         subject_layers_config=subject_layers_config,  # type: ignore[arg-type]
         reduction=reduction,  # type: ignore[arg-type]
     )
-    model = model_config.build(n_in_channels, 10)
+    # Linear.build takes context-named params (Linear does not consume
+    # n_temporal_samples).
+    model = model_config.build(n_spatial_locations=n_channels, n_outputs=10)
     subject_id = torch.randint(0, 2, (4, 1))
     assert model(fake_meg, subject_id=subject_id).shape == (4, 10)
     if subject_layers_config is not None:

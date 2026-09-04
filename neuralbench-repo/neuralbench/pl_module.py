@@ -90,7 +90,9 @@ class BrainModule(pl.LightningModule):
                 model.channel_adapter is not None and model._adapter_needs_positions
             )
             inner_model = model.wrapped_model
-        forward_sig = inspect.signature(inner_model.forward)
+        # PeftModel.forward is a (*args, **kwargs) delegator: unwrap for the real signature
+        sig_model = getattr(inner_model, "get_base_model", lambda: inner_model)()
+        forward_sig = inspect.signature(sig_model.forward)
         self._input_name = list(forward_sig.parameters.keys())[0]
         self._requires_subject = (
             "subject_ids" in forward_sig.parameters or adapter_needs_positions

@@ -15,7 +15,10 @@ from tqdm import tqdm
 
 import neuralset as ns
 
+from .config_manager import _ensure_initialized
+from .experiment_config import merge_task_config
 from .extractors import SleepOnsetTargetExtractor  # noqa: F401
+from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
     AddSleepOnsetTargets,
@@ -287,3 +290,48 @@ class Data(ns.BaseModel):
             )
 
         return loaders
+
+
+def get_default_dataloaders(
+    device: str, task: str, *, dataset: str | None = None, **overrides: tp.Any
+) -> dict[str, DataLoader]:
+    """Return the train/val/test DataLoaders for a task's default data config.
+
+    The dataloaders match those of a non-debug benchmark run for the same
+    task, except for model-specific preprocessing: model configs override
+    ``data.neuro`` (sampling frequency, filters, clamping) and, for some
+    models, ``data.channel_positions``, and those overrides are not applied
+    here.
+
+    Parameters
+    ----------
+    device
+        Brain recording device (``"eeg"``, ``"meg"``, ``"fmri"``, ...).
+    task
+        Single task name, e.g. ``"motor_imagery"``.
+    dataset
+        Dataset variant from the task's ``datasets/`` directory. ``None`` uses
+        the study of the task config.
+    **overrides
+        Overrides for the ``data`` config, as dotted paths, e.g.
+        ``batch_size=8`` or ``**{"neuro.frequency": 60.0}``.
+
+    Returns
+    -------
+    dict with keys ``"train"``, ``"val"``, ``"test"`` mapping to
+    :class:`~torch.utils.data.DataLoader` instances.
+
+    Examples
+    --------
+    Extraction inherits the benchmark infra, which submits SLURM jobs where a
+    cluster is available. To extract in-process instead:
+
+    >>> loaders = get_default_dataloaders(
+    ...     "eeg", "audiovisual_stimulus", **{"neuro.infra.cluster": None}
+    ... )
+    """
+    _validate_inputs(device, task, model=None, downstream_wrapper=None, allow_all=False)
+    _ensure_initialized()
+    data_config = merge_task_config(device, task, dataset)["data"]
+    data_config.update(overrides)
+    return Data(**data_config).prepare()

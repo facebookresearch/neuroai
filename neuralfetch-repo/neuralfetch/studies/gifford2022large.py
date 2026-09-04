@@ -124,10 +124,10 @@ class Gifford2022Large(study.Study):
         raw = mne.io.RawArray(out["raw_eeg_data"], info)
         return raw
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dataset_id = "18470912"
         figshare = download.Figshare(study=dataset_id, dset_dir=self.path)
-        figshare.download()
+        figshare.download(overwrite=overwrite)
 
         # Unzip EEG data
         from pyunpack import Archive
@@ -135,18 +135,20 @@ class Gifford2022Large(study.Study):
         dl_dir = self.path / "download"
         for zip_file in dl_dir.glob("sub-*.zip"):
             with download.success_writer(zip_file) as already_done:
-                if not already_done:
+                if overwrite or not already_done:
                     Archive(str(zip_file)).extractall(str(dl_dir))
 
         # Load .npy and save as mne.io.Raw to enable memmaping
         for eeg_fname in tqdm(dl_dir.glob("**/**/raw_eeg_*.npy")):
             with download.success_writer(eeg_fname) as already_done:
-                if not already_done:
+                if overwrite or not already_done:
                     raw = self._create_raw_from_npy(eeg_fname)
                     raw.save(str(eeg_fname).replace(".npy", "_raw.fif"), overwrite=True)
 
         # Download images from OSF
-        download.Osf(study="y63gw", dset_dir=self.path, folder="download").download()
+        download.Osf(study="y63gw", dset_dir=self.path, folder="download").download(
+            overwrite=overwrite
+        )
 
         # Check for / Download THINGS-images database (used across multiple THINGS studies)
         download_things_images(self.path)
@@ -155,7 +157,7 @@ class Gifford2022Large(study.Study):
         for image_fname in ["training_images.zip", "test_images.zip"]:
             zip_file = dl_dir / image_fname
             with download.success_writer(zip_file) as already_done:
-                if not already_done:
+                if overwrite or not already_done:
                     Archive(str(zip_file)).extractall(str(dl_dir))
 
         # Clean up zip files

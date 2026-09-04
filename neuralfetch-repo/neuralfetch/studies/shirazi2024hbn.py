@@ -129,13 +129,15 @@ class Shirazi2024Hbn(study.Study):
     DUR_CONTRAST_CHANGE_TARGET: tp.ClassVar[float] = 2.4
     DUR_CONTRAST_CHANGE_FEEDBACK: tp.ClassVar[float] = 0.4
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         for release, study_id in self.RELEASE_TO_STUDYID.items():
             n = release.split("-")[-1]
             logger.info(
                 f"Downloading Dataset: Healthy Brain Network (HBN) EEG - Release {n}"
             )
-            download.Openneuro(study=study_id, dset_dir=self.path / release).download()
+            download.Openneuro(study=study_id, dset_dir=self.path / release).download(
+                overwrite=overwrite
+            )
 
     def iter_timelines(self):
         for release in self.RELEASE_TO_STUDYID.keys():

@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 import neuralset as ns
 
+from .plots._constants import AdaptationMode
 from .plots.benchmark import plot_all_results
 from .plots.tables import print_skip_table
 
@@ -27,6 +28,23 @@ if tp.TYPE_CHECKING:
     from .main import Experiment
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _infer_eval_mode(experiment: "Experiment") -> str:
+    """Classify *experiment* by adaptation strategy, as an :class:`AdaptationMode` tag."""
+    # derived rather than an Experiment field, which would change the config hash
+    wrapper = experiment.downstream_model_wrapper
+    if wrapper is None:
+        return AdaptationMode("finetune").tag
+    aggregation = "" if wrapper.aggregation is None else str(wrapper.aggregation)
+    if wrapper.lora_config is not None:
+        return AdaptationMode("lora", aggregation, wrapper.lora_config.r).tag
+    if wrapper.layers_to_unfreeze == [""]:
+        strategy = (
+            "attentive_probe" if wrapper.probe_config == "attention" else "linear_probe"
+        )
+        return AdaptationMode(strategy, aggregation).tag
+    return AdaptationMode("finetune", aggregation).tag
 
 
 def _default_output_dir() -> str:
@@ -169,6 +187,7 @@ class BenchmarkAggregator(ns.BaseModel):
         out["model_variant"] = _experiment_variant(experiment)
         out["loss"] = {"name": type(experiment.loss).__name__}
         out["seed"] = experiment.seed
+        out["eval_mode"] = _infer_eval_mode(experiment)
         return out, task, model
 
     def _collect_results(self, cached_only: bool = False) -> list[dict[str, tp.Any]]:

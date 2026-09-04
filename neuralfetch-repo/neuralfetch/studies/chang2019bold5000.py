@@ -113,14 +113,14 @@ class Chang2019Bold5000(study.Study):
     SUBJ_PADDING: tp.ClassVar[str] = "01"
     SUBJ_SUFFIX: tp.ClassVar[str] = "CSI"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
-            if already_done:
+            if already_done and not overwrite:
                 return
             # Download fMRI data from OpenNeuro
             from neuralfetch.download import Openneuro
 
-            Openneuro(study="ds001499", dset_dir=self.path).download()
+            Openneuro(study="ds001499", dset_dir=self.path).download(overwrite=overwrite)
 
             # Download stimuli data
             stimuli_zip = self.path / "BOLD5000_Stimuli.zip"

@@ -53,7 +53,6 @@ import os
 import re
 import typing as tp
 from collections import OrderedDict
-from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
@@ -72,39 +71,6 @@ if tp.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.propagate = False
-
-
-def _patch_figshare_file_list_cache() -> None:
-    """Cache ``moabb.datasets.download.fs_get_file_list`` to avoid repeated
-    Figshare API calls when data is already on disk.  MOABB's MAMEM loaders
-    call the API on *every* ``get_data`` invocation, which triggers 403 rate
-    limits from datacenter IPs."""
-    try:
-        from moabb.datasets import (  # type: ignore[import-untyped,import-not-found]
-            download as _dl,
-        )
-
-        if not getattr(_dl.fs_get_file_list, "_patched", False):
-            _orig = _dl.fs_get_file_list
-
-            @lru_cache(maxsize=32)
-            def _cached_fs_get_file_list(article_id, version=None):  # type: ignore[no-untyped-def]
-                return _orig(article_id, version=version)
-
-            _cached_fs_get_file_list._patched = True  # type: ignore[attr-defined]
-            _dl.fs_get_file_list = _cached_fs_get_file_list
-            # Also patch in ssvep_mamem where it's imported directly
-            try:
-                from moabb.datasets import ssvep_mamem as _mamem
-
-                _mamem.fs_get_file_list = _cached_fs_get_file_list
-            except (ImportError, AttributeError):
-                pass
-    except ImportError:
-        pass
-
-
-_patch_figshare_file_list_cache()
 
 
 # Module-level bounded cache used by classes that bypass _get_cached_moabb_data
@@ -158,7 +124,7 @@ def find_dataset_in_moabb(
 class _BaseMoabb(studies.Study):
     _dataset_kwargs: tp.ClassVar[dict[str, tp.Any]] = {}
     event_id: tp.ClassVar[dict[str, tp.Any]] = {}
-    requirements: tp.ClassVar[tuple[str, ...]] = ("moabb>=1.5.0",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("moabb>=1.7.1",)
 
     def _rename_numeric_descriptions(self, events_df: pd.DataFrame) -> None:
         """Auto-rename numeric descriptions inferred from event_id keys.
@@ -231,18 +197,21 @@ class _BaseMoabb(studies.Study):
         return df
 
     # Populate subclass-level metadata
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """
         Download MoABB dataset and write timelines as a csv.
 
         (Timelines needed to avoid 'moabb.datasets.studies.get_data()' in self.iter_timelines, which loads ALL raw data.)
 
+        With ``overwrite`` the manifest is rebuilt even if it already exists;
+        forcing moabb to re-fetch the raw cache is best-effort and delegated to
+        the upstream client.
         """
         from moabb.datasets.base import CacheConfig
 
         timeline_path = Path(self.path) / "timelines.csv"
 
-        if not timeline_path.exists():
+        if overwrite or not timeline_path.exists():
             dl_path = Path(self.path) / "download"
             try:
                 dl_path.mkdir(exist_ok=True, parents=True)
@@ -800,38 +769,6 @@ class Cattan2019Passive(_BaseMoabb):
         frequency=512.0,
     )
 
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        raw = super()._load_raw(timeline)
-        # Guard against the lru_cache returning the same mutable RawArray:
-        # only rename channels that haven't been renamed yet.
-        rename = {
-            k: v for k, v in {"Fc5": "FC5", "Fc6": "FC6"}.items() if k in raw.ch_names
-        }
-        if rename:
-            raw.rename_channels(rename)
-        raw.set_montage("standard_1020", on_missing="warn")
-        return raw
-
-    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        """Extend Stimulus durations to span from one marker to the next.
-
-        MOABB annotations are 1-second markers, but each one marks the start of
-        a ~75 s relaxation period. Extending durations enables stride windowing.
-        """
-        df = super()._load_timeline_events(timeline)
-        stim_mask = df["type"] == "Stimulus"
-        stim = df.loc[stim_mask].sort_values("start")
-        starts = stim["start"]
-        durations = starts.shift(-1) - starts
-        eeg_row = df.loc[df["type"] == "Eeg"].iloc[0]
-        if "duration" in eeg_row.index and pd.notna(eeg_row.get("duration")):
-            rec_end = float(eeg_row["start"]) + float(eeg_row["duration"])
-        else:
-            rec_end = starts.iloc[-1] + 60.0
-        durations.iloc[-1] = rec_end - starts.iloc[-1]
-        df.loc[stim.index, "duration"] = durations.values
-        return df
-
 
 class Cattan2019Dataset(_BaseMoabb):
     """Subset of MOABB: Cattan2019_VR"""
@@ -1315,88 +1252,6 @@ class Guger2009How(_BaseMoabb):
     )
 
 
-def _load_haufe2011_raw(dl_path: Path, subject: int) -> mne.io.RawArray:
-    """Load Haufe2011Eeg (BNCI2016-002) raw data directly from MATLAB files.
-
-    Ensures ``marker_labels`` columns are correctly matched to
-    ``event_mapping`` keys when creating annotations.
-    """
-    from moabb.datasets.bnci.bnci_2016_002 import _SUBJECT_VP_CODES, BBCI_URL
-    from moabb.datasets.bnci.utils import bnci_data_path, convert_units, make_raw
-    from pymatreader import read_mat
-
-    vp_code = _SUBJECT_VP_CODES[subject]
-    url = f"{BBCI_URL}VP{vp_code}.mat"
-    filename = bnci_data_path(url, dl_path, False, None, None)[0]
-
-    mat = read_mat(filename)
-    sfreq = float(np.asarray(mat["cnt"]["fs"]).flat[0])
-    ch_names = mat["cnt"]["clab"]
-    if isinstance(ch_names, str):
-        ch_names = [ch_names]
-    data = np.asarray(mat["cnt"]["x"]).T
-    marker_times = np.asarray(mat["mrk"]["time"]).flatten()
-    marker_labels = np.asarray(mat["mrk"]["y"])
-
-    eog_chs = {"EOGv", "EOGh"}
-    emg_chs = {"EMGf"}
-    misc_chs = {
-        "lead_gas",
-        "lead_brake",
-        "dist_to_lead",
-        "wheel_X",
-        "wheel_Y",
-        "gas",
-        "brake",
-    }
-    ch_types = [
-        (
-            "eog"
-            if ch in eog_chs
-            else "emg"
-            if ch in emg_chs
-            else "misc"
-            if ch in misc_chs
-            else "eeg"
-        )
-        for ch in ch_names
-    ]
-
-    bio_mask = [i for i, ct in enumerate(ch_types) if ct in ("eeg", "eog", "emg")]
-    data = convert_units(data.copy(), from_unit="uV", to_unit="V", channel_mask=bio_mask)
-
-    raw = make_raw(
-        data,
-        ch_names,
-        ch_types,
-        sfreq,
-        montage="standard_1005",
-        line_freq=50.0,
-        meas_date=datetime(2011, 1, 1, tzinfo=timezone.utc),
-    )
-
-    event_mapping = {0: "NonTarget", 1: "Target"}
-    onset_times: list[float] = []
-    descriptions: list[str] = []
-    for i, time_ms in enumerate(marker_times):
-        for class_idx, value in enumerate(marker_labels[:, i]):
-            if value > 0 and class_idx in event_mapping:
-                onset_times.append(time_ms / 1000.0)
-                descriptions.append(event_mapping[class_idx])
-                break
-
-    if onset_times:
-        raw.set_annotations(
-            mne.Annotations(
-                onset=onset_times,
-                duration=[0.0] * len(onset_times),
-                description=descriptions,
-            )
-        )
-
-    return raw
-
-
 class Haufe2011Eeg(_BaseMoabb):
     """Subset of MOABB: BNCI2016_002"""
 
@@ -1433,25 +1288,6 @@ class Haufe2011Eeg(_BaseMoabb):
         data_shape=(59, 1619936),
         frequency=200.0,
     )
-
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        """Load raw data using custom MATLAB parser for correct marker handling."""
-        tl = timeline
-        dl_path = Path(self.path) / "download"
-        subject = tl["subject"]
-
-        key = (str(dl_path), subject)
-        if key in _moabb_data_cache:
-            _moabb_data_cache.move_to_end(key)
-            return _moabb_data_cache[key][subject][tl["session"]][tl["run"]]
-
-        raw = _load_haufe2011_raw(dl_path, subject)
-
-        _moabb_data_cache[key] = {subject: {tl["session"]: {tl["run"]: raw}}}
-        while len(_moabb_data_cache) > _MOABB_CACHE_MAXSIZE:
-            _moabb_data_cache.popitem(last=False)
-
-        return raw
 
 
 class Hinss2021Open(_BaseMoabb):
@@ -2213,11 +2049,11 @@ class Lee2019EegErp(_BaseMoabb):
     )
     event_id: tp.ClassVar[dict[str, int]] = {"Target": 1, "NonTarget": 2}
     _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
-        num_timelines=108,
+        num_timelines=216,
         num_subjects=54,
         num_events_in_query=1981,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(62, 1143560),
+        data_shape=(62, 1005560),
         frequency=1000.0,
     )
 
@@ -2250,11 +2086,11 @@ class Lee2019EegMi(_BaseMoabb):
     )
     event_id: tp.ClassVar[dict[str, int]] = {"left_hand": 2, "right_hand": 1}
     _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
-        num_timelines=54,
+        num_timelines=108,
         num_subjects=54,
         num_events_in_query=101,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(62, 1519160),
+        data_shape=(62, 1418040),
         frequency=1000.0,
     )
 
@@ -2287,11 +2123,11 @@ class Lee2019EegSsvep(_BaseMoabb):
     )
     event_id: tp.ClassVar[dict[str, int]] = {"12.0": 1, "8.57": 2, "6.67": 3, "5.45": 4}
     _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
-        num_timelines=54,
+        num_timelines=108,
         num_subjects=54,
         num_events_in_query=101,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(62, 1298000),
+        data_shape=(62, 1560080),
         frequency=1000.0,
     )
 
@@ -2367,126 +2203,15 @@ class Liu2024Eeg(_BaseMoabb):
     )
 
 
-def _martinez_cagigal_convert_to_mne_format(  # type: ignore[no-untyped-def]
-    self, path, true_labels=None
-):
-    """Patched ``_convert_to_mne_format`` for MartinezCagigal2023Checker and MartinezCagigal2023Pary.
-
-    Upstream MOABB writes ``np.unique(trial_idx)`` (per-recording trial index
-    ``0..n_trials-1``) into ``stim_trial`` for these two datasets, instead
-    of the attended command id. That breaks downstream multiclass
-    classification across recordings as the same marker corresponds to
-    different attended commands. Every other c-VEP dataset in MOABB
-    (``CabreraCastillos2023*``, ``Thielen2015``, ``Thielen2021``) writes the
-    attended-symbol id, so this patch brings the Martinez-Cagigal datasets
-    in line with the rest of the c-VEP collection.
-
-    Implementation: call the original upstream method, then post-process
-    the resulting ``Raw`` to (1) replace ``stim_trial`` markers with
-    ``command_id + 200`` and (2) augment the existing ``_trial_meta``
-    annotation extras with a ``command_id`` field (preserving ``trial_id``).
-    The ``stim_epoch`` channel is left untouched: its codebook columns are
-    indexed by the per-recording ``trial_idx``, which is correct.
-    """
-    from moabb.datasets.utils import (  # type: ignore[import-untyped,import-not-found]
-        add_stim_channel_trial,
-    )
-
-    raw = type(self)._upstream_convert_to_mne_format(self, path, true_labels)
-
-    cvep_data = self._trim_unfinished_trial(
-        self._load_bson_recording(path)["cvepspellerdata"]
-    )
-    trial_idx_arr = np.array(cvep_data["trial_idx"], dtype=int)
-    unique_trials = np.unique(trial_idx_arr)
-
-    if cvep_data["mode"] == "train":
-        cmd_arr = np.array(cvep_data["command_idx"], dtype=int)
-        command_ids = np.array(
-            [int(cmd_arr[np.where(trial_idx_arr == t)[0][0]]) for t in unique_trials],
-            dtype=int,
-        )
-    else:
-        assert true_labels is not None
-        label_to_cmd = {
-            item["label"]: int(c) for c, item in cvep_data["commands_info"][0].items()
-        }
-        command_ids = np.array(
-            [label_to_cmd[true_labels[int(t)]] for t in unique_trials], dtype=int
-        )
-
-    trial_events = mne.find_events(
-        raw, stim_channel="stim_trial", shortest_event=0, verbose=False
-    )
-    assert len(trial_events) == len(command_ids), (
-        f"stim_trial has {len(trial_events)} events but BSON has "
-        f"{len(command_ids)} trials"
-    )
-    raw.drop_channels(["stim_trial"])
-    raw = add_stim_channel_trial(raw, trial_events[:, 0], command_ids, offset=200)
-
-    raw.annotations.extras = [
-        {**(extra or {}), "command_id": int(cid)}
-        for extra, cid in zip(raw.annotations.extras, command_ids)
-    ]
-    return raw
-
-
-_martinez_cagigal_convert_to_mne_format._neuralhub_command_id_patch = True  # type: ignore[attr-defined]
-
-
 class _MartinezCagigalCvepBase(_BaseCvepTrialMoabb):
     """Shared base for the two Martinez-Cagigal 2023 c-VEP datasets.
 
-    Both upstream MOABB classes (``MartinezCagigal2023Checker`` and
-    ``MartinezCagigal2023Pary``) write per-recording trial indices into
-    the ``stim_trial`` channel instead of the attended command id. This
-    base class lazily replaces ``_convert_to_mne_format`` on the upstream
-    class the first time a Martinez-Cagigal recording is loaded, so the
-    fix is owned by the dataset that needs it (no import-time side
-    effects on the rest of the module).
-
-    The replacement is implemented in
-    :func:`_martinez_cagigal_convert_to_mne_format`; the patch is
-    idempotent (guarded by a sentinel attribute on the bound method).
+    ``stim_trial`` carries the attended command id (offset 200), matching
+    the rest of the MOABB c-VEP collection; MOABB >= 1.6.0 writes it that
+    way upstream.
     """
 
     _presentation_rate: tp.ClassVar[float] = 120.0
-    _moabb_patched: tp.ClassVar[bool] = False
-
-    @classmethod
-    def _ensure_moabb_patched(cls) -> None:
-        if _MartinezCagigalCvepBase._moabb_patched:
-            return
-        try:
-            from moabb.datasets import (  # type: ignore[import-untyped,import-not-found]
-                martinezcagigal2023_checker_cvep as _checker_mod,
-            )
-            from moabb.datasets import (
-                martinezcagigal2023_pary_cvep as _pary_mod,
-            )
-        except ImportError:
-            return
-        for mod, cls_name in (
-            (_checker_mod, "MartinezCagigal2023Checker"),
-            (_pary_mod, "MartinezCagigal2023Pary"),
-        ):
-            upstream_cls = getattr(mod, cls_name, None)
-            if upstream_cls is None:
-                continue
-            existing = getattr(upstream_cls, "_convert_to_mne_format", None)
-            if existing is None or getattr(
-                existing, "_neuralhub_command_id_patch", False
-            ):
-                continue
-            # Save the original so the patched method can call back into it.
-            upstream_cls._upstream_convert_to_mne_format = existing
-            upstream_cls._convert_to_mne_format = _martinez_cagigal_convert_to_mne_format
-        _MartinezCagigalCvepBase._moabb_patched = True
-
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        type(self)._ensure_moabb_patched()
-        return super()._load_raw(timeline)
 
 
 class MartinezCagigal2023Dataset(_MartinezCagigalCvepBase):
@@ -2926,22 +2651,6 @@ class Reichert2020Impact(_BaseMoabb):
     contralateral to ``PO7`` (i.e. attended-right) and ``NonTarget``
     otherwise.  This brings the per-subject event count from 120 to ~1200
     and restores the canonical N2pc trial structure.
-
-    We also override :meth:`_load_raw` to fix a layout bug in MOABB's
-    ``BNCI2020_002._convert_attention_shift`` (in
-    ``moabb/datasets/bnci/bnci_2020.py``).  The raw EEG comes out of
-    ``scipy.io.loadmat`` as an F-contiguous array of shape
-    ``(n_channels, n_samples_per_trial, n_trials)``, and MOABB flattens it
-    to a continuous ``(n_channels, n_samples_per_trial * n_trials)`` array
-    via ``bciexp.data.reshape(n_channels, -1)``.  Because the source array
-    is F-contiguous, the default C-order reshape produces a *trial-fastest*
-    layout (``flat[c, k] = data[c, k // n_trials, k % n_trials]``) instead
-    of the trial-major layout that MOABB's per-trial markers and our
-    per-stimulus events both assume.  The correct reshape is
-    ``data.transpose(0, 2, 1).reshape(n_channels, -1)``.  Without this
-    patch, every per-stimulus epoch is sampled from the wrong trial and
-    the wrong sample offset, the canonical N2pc is invisible, and
-    per-stim Target/NonTarget decoding sits at chance.
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("BNCI2020_002",)
@@ -2979,51 +2688,18 @@ class Reichert2020Impact(_BaseMoabb):
     )
 
     def _mat_path(self, timeline: dict[str, tp.Any]) -> Path:
-        """Return the path to ``P<subject>.mat`` on disk."""
-        subject = int(timeline["subject"])
-        return (
-            Path(self.path)
-            / "download"
-            / "MNE-bnci-data"
-            / "database"
-            / "data-sets"
-            / "002-2020"
-            / f"P{subject:02d}.mat"
-        )
+        """Return the path to ``P<subject>.mat``, asking MOABB where it is.
 
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        raw = super()._load_raw(timeline)
-
-        # Re-load the raw EEG from the .mat with the correct layout to
-        # work around the MOABB BNCI2020_002 reshape bug.  See class
-        # docstring for details.
-        mat = loadmat(
-            str(self._mat_path(timeline)), struct_as_record=False, squeeze_me=True
-        )
-        bciexp = mat["bciexp"]
-        data = np.asarray(bciexp.data)  # (n_channels, n_samples, n_trials)
-        n_channels, n_samples, n_trials = data.shape
-        eeg_correct = (
-            data.transpose(0, 2, 1)
-            .reshape(n_channels, n_samples * n_trials)
-            .astype(raw._data.dtype)
-        )
-        # MOABB's `_convert_attention_shift` scales raw .mat data (uV) to
-        # V via ``* 1e-6``; mirror that scaling here so the patched
-        # channels keep MOABB's unit convention.
-        eeg_correct *= 1e-6
-
-        # Replace the EEG channels in MOABB's Raw.  MOABB lays out
-        # ``ch_names_full = list(bciexp.label) + ["HEOG", "VEOG", "STI"]``,
-        # so the first ``n_channels`` rows of ``raw._data`` are the EEG.
-        # HEOG/VEOG are flattened via ``arr.T.reshape(1, -1)`` which is
-        # already correct (transpose makes the F-contiguous (samples,
-        # trials) array C-contiguous before reshape), so we leave them
-        # untouched.  The STI channel is built sample-by-sample at
-        # ``trial_idx * n_samples`` -- consistent with trial-major
-        # layout, so it is also correct *after* this EEG fix.
-        raw._data[:n_channels] = eeg_correct  # noqa: SLF001
-        return raw
+        MOABB owns the on-disk layout, so hardcoding
+        ``download/MNE-bnci-data/database/data-sets/002-2020/`` here only works
+        until it changes. ``data_path`` resolves the same file through
+        ``only_filenames=True`` and, unlike the hardcoded path, guarantees it is
+        actually present.
+        """
+        dl_path = Path(self.path) / "download"
+        with temp_mne_data(dl_path, clear_dataset_configs=True):
+            ds = self._get_dataset()
+            return Path(ds.data_path(int(timeline["subject"]), path=dl_path)[0])
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         info = studies.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
@@ -3199,10 +2875,10 @@ class Romani2025Brainform(_BaseMoabb):
         labels = [s for s in labels if s not in self._EXCLUDE_SUBJECTS]
         return {i: s for i, s in enumerate(labels)}
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Build timelines.csv by scanning BIDS directory (no mne_bids needed)."""
         timeline_path = Path(self.path) / "timelines.csv"
-        if timeline_path.exists():
+        if timeline_path.exists() and not overwrite:
             return
 
         bids = self._bids_root()
@@ -3743,17 +3419,6 @@ class Srisrisawang2024Simultaneous(_BaseMoabb):
         "right_fast_near": 15,
         "right_fast_far": 16,
     }
-    # Non-brain channels (motion tracking, boolean validity flag, and target
-    # positions from the reaching task) that need their type corrected to misc.
-    _NON_EEG_CHANNELS: tp.ClassVar[dict[str, str]] = {
-        "x": "misc",
-        "y": "misc",
-        "vx": "misc",
-        "vy": "misc",
-        "validity": "misc",
-        "targetPosX": "misc",
-        "targetPoxY": "misc",  # typo in original data (should be targetPosY)
-    }
     _info: tp.ClassVar[studies.StudyInfo] = studies.StudyInfo(
         num_timelines=20,
         num_subjects=20,
@@ -3762,15 +3427,6 @@ class Srisrisawang2024Simultaneous(_BaseMoabb):
         data_shape=(60, 4115020),
         frequency=500.0,
     )
-
-    def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
-        raw = super()._load_raw(timeline)
-        mapping = {
-            ch: t for ch, t in self._NON_EEG_CHANNELS.items() if ch in raw.ch_names
-        }
-        if mapping:
-            raw.set_channel_types(mapping)
-        return raw
 
 
 class Scherer2012Brain(_BaseMoabb):
@@ -3857,10 +3513,6 @@ class Stieger2021Continuous(_BaseMoabb):
         data_shape=(60, 3876072),
         frequency=1000.0,
     )
-
-    @classmethod
-    def _get_dataset(cls) -> type[MoabbBaseDataset]:
-        return find_dataset_in_moabb(cls.aliases[0], {"fix_bads": False})
 
 
 class Tangermann2012Review(_BaseMoabb):

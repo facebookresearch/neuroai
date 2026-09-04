@@ -60,8 +60,8 @@ runs:
 
     - name: Install / sync packages
       shell: bash
-      # All editables in a single resolution pass. transformers pinned
-      # because neuralset's tests target 4.41.0 (pyproject leaves it open).
+      # All editables in a single resolution pass. transformers pinned for
+      # reproducibility (pyproject leaves it open); 4.43+ is required by peft.
       run: |
         source .venv/bin/activate
         uv pip install \
@@ -70,7 +70,7 @@ runs:
           -e neuralfetch-repo/. \
           -e neuraltrain-repo/.[lightning,dev,models,metrics] \
           -e neuralbench-repo/.[dev,wandb,models] \
-          'transformers==4.41.0'
+          'transformers==4.57.6'
 
     - name: Download spacy models (on cache miss)
       if: steps.cache-venv.outputs.cache-hit != 'true'

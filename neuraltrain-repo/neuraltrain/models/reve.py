@@ -27,7 +27,7 @@ import typing as tp
 import torch
 import torch.nn as nn
 
-from .base import BaseBrainDecodeModel
+from .base import BaseBrainDecodeModel, RequiredBuildField
 from .common import parse_bipolar_name
 
 logger = logging.getLogger(__name__)
@@ -102,8 +102,7 @@ class NtReve(BaseBrainDecodeModel):
     """
 
     _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.REVE"
-    chs_info_required: tp.ClassVar[bool] = True
-    needs_n_times: tp.ClassVar[bool] = True
+    required_fields: tp.ClassVar[list[RequiredBuildField]] = ["ch_names", "n_times"]
     channel_mapping: dict[str, str] | None = None
 
     def _remap_chs_info(
@@ -138,14 +137,19 @@ class NtReve(BaseBrainDecodeModel):
 
     def build(
         self,
-        n_chans: int | None = None,
-        n_times: int | None = None,
+        n_spatial_locations: int,
+        n_temporal_samples: int,
         n_outputs: int | None = None,
         chs_info: list[dict[str, tp.Any]] | None = None,
-        **kwargs: tp.Any,
+        frequency: float | None = None,
     ) -> nn.Module:
         if chs_info is not None:
             chs_info = self._remap_chs_info(chs_info)
+
+        # Spatial size the model receives (already the adapter target when a
+        # channel adapter is present).  Reduced below if some channels cannot
+        # be resolved.
+        n_chans = n_spatial_locations
 
         channel_indices: list[int] | None = None
         custom_positions: torch.Tensor | None = None
@@ -212,13 +216,12 @@ class NtReve(BaseBrainDecodeModel):
             if n_derived > 0:
                 custom_positions = torch.stack(positions)
 
-        build_kwargs: dict[str, tp.Any] = {}
-        if n_chans is not None:
-            build_kwargs["n_chans"] = n_chans
+        build_kwargs: dict[str, tp.Any] = {
+            "n_chans": n_chans,
+            "n_times": n_temporal_samples,
+        }
         if chs_info is not None and custom_positions is None:
             build_kwargs["chs_info"] = chs_info
-        if n_times is not None:
-            build_kwargs["n_times"] = n_times
 
         encoder_only = n_outputs is None
 
@@ -227,7 +230,7 @@ class NtReve(BaseBrainDecodeModel):
         elif n_outputs is not None:
             build_kwargs["n_outputs"] = n_outputs
 
-        model = super().build(**build_kwargs, **kwargs)
+        model = self._construct(**build_kwargs)
 
         if custom_positions is not None:
             model.default_pos = custom_positions

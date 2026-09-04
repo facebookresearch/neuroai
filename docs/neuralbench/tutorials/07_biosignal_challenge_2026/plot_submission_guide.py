@@ -16,8 +16,8 @@ EEG/EMG Foundation Challenge 2026.
 # Overview
 # --------
 #
-# Each track accepts a trained model (or, for Track 5, a frozen
-# encoder). The submission workflow follows three steps:
+# Each track accepts a trained model -- task-specific or a
+# foundation model. The submission workflow follows three steps:
 #
 # 1. **Train** your model locally using NeuralBench or your own
 #    pipeline.
@@ -26,9 +26,6 @@ EEG/EMG Foundation Challenge 2026.
 # 3. **Upload** the package to the competition portal, where
 #    organisers run evaluation on the hidden test set.
 #
-# Tracks 1--4 accept both task-specific models and foundation
-# models. Track 5 accepts only a single frozen EEG encoder (see
-# :doc:`plot_track5_foundation_transfer`).
 
 # %%
 # Important dates (TBD)
