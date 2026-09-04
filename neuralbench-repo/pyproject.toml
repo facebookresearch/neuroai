@@ -13,7 +13,9 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode>=1.5.2",
+  # [hub]: braindecode stubs out from_pretrained unless huggingface_hub is
+  # installed, which every pretrained foundation model goes through
+  "braindecode[hub]>=1.5.2",
   # Study catalog: registered through an entry point, never imported directly
   "neuralfetch[quickstart]",
   "neuralset",
@@ -36,10 +38,6 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 [project.optional-dependencies]
-    models = [
-        "huggingface_hub",
-        "safetensors",
-    ]
     wandb = [
         "wandb>=0.15.11",
     ]

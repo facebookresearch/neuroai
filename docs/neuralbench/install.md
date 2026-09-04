@@ -41,12 +41,12 @@ pre-commit install
 
 ## Optional dependencies
 
-Dataset downloading is covered by the base install, which pulls in
-`neuralfetch[quickstart]`. The `models` extra adds what is needed to load
-pretrained model weights:
+The base install covers dataset downloading (via `neuralfetch[quickstart]`) and
+loading pretrained model weights (via `braindecode[hub]`). The `wandb` extra adds
+Weights & Biases logging:
 
 ```bash
-pip install 'neuralbench-repo/.[models]'
+pip install 'neuralbench-repo/.[wandb]'
 ```
 
 ## First-run configuration
