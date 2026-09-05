@@ -35,6 +35,9 @@ quickstart = [
 [project.entry-points."neuralset.studies"]
 neuralfetch = "neuralfetch"
 
+[project.scripts]
+neuralfetch = "neuralfetch.commands:main"
+
 [build-system]
 requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
@@ -57,7 +60,8 @@ extend = "../pyproject.toml"
   show_error_codes = true
 [[tool.mypy.overrides]]
   module = [
-  'mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets', 'mne.utils', 'mne_bids',
+  'mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets', 'mne.utils', 'mne_bids', 'mne_bids.*',
+  'exca', 'exca.*',
   'scipy.*', 'nibabel', 'h5py',
   'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack',
   'synapseclient', 'synapseutils',
