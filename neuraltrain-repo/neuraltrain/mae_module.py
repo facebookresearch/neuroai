@@ -14,7 +14,7 @@ from torch import nn
 
 from .models.mae import MaeEncoderModel
 from .models.transformer import TransformerEncoder
-from .optimizers import BaseOptimizer
+from .optimizers import LightningOptimizer
 
 
 def random_masking(
@@ -86,7 +86,7 @@ class MaeModule(pl.LightningModule):
         self,
         model: MaeEncoderModel,
         loss: nn.Module,
-        optim_config: BaseOptimizer,
+        optim_config: LightningOptimizer,
         mask_ratio: float = 0.5,
         decoder_config: TransformerEncoder | None = None,
         x_name: str = "input",
@@ -141,4 +141,11 @@ class MaeModule(pl.LightningModule):
         return self._run_step(batch, step_name="val")
 
     def configure_optimizers(self) -> tp.Any:
-        return self.optim_config.build(self.parameters())
+        # Schedules like OneCycleLR need the total number of steps, which only
+        # the trainer can know; the ones that do not reject the argument.
+        try:
+            return self.optim_config.build(
+                self.parameters(), total_steps=self.trainer.estimated_stepping_batches
+            )
+        except TypeError:
+            return self.optim_config.build(self.parameters())

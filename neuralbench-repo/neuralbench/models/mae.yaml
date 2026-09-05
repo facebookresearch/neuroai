@@ -1,0 +1,29 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Reference self-supervised baseline, pretrained by `neuraltrain-repo/ssl_example`.
+# It has no published weights, so it is only meaningful together with
+# `--checkpoint <your pretrained encoder>`.
+data:
+  neuro:
+    frequency: 120.0
+    filter:
+      - 0.5
+      - 25.0
+    baseline: null
+    scaler: RobustScaler
+    clamp: 16.0
+brain_model_config:
+  =replace=: true
+  name: MaeEncoder
+  dim: 256
+  patch_size: 32
+# Built with n_outputs=None, so the encoder emits a token sequence that the
+# probe pools over, rather than class scores.
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
