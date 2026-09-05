@@ -15,9 +15,10 @@ is far too little data to learn useful representations. Once the
 pipeline runs, swap in a larger study and a bigger encoder.
 
 .. note::
-   Continue with :doc:`How to Submit a Model <plot_submission_guide>`
-   once you have a checkpoint, and see the per-track pages for the
-   downstream task each track scores.
+   Already have a model of your own? Skip to `Evaluating a model of your
+   own`_. Continue with :doc:`How to Submit a Model
+   <plot_submission_guide>` once you have a checkpoint, and see the
+   per-track pages for the downstream task each track scores.
 """
 
 # %%
@@ -155,6 +156,45 @@ pipeline runs, swap in a larger study and a bigger encoder.
 # against the same architecture with no checkpoint (drop
 # ``--checkpoint``) and against the task-specific baselines on the
 # track pages.
+
+# %%
+# Evaluating a model of your own
+# ------------------------------
+#
+# ``mae.yaml`` works because the MAE lives in this repo. A model that
+# lives in your own script has no YAML here and needs none:
+# :func:`~neuralbench.evaluate_model` takes the built instance.
+#
+# .. code-block:: python
+#
+#    from neuralbench import check_model, evaluate_model
+#
+#    model = MyFoundationModel()   # built and pretrained however you like
+#
+#    print(check_model(model, "eeg", "motor_imagery"))
+#    scores = evaluate_model(model, "eeg", "all", name="my-fm", debug=True)
+#
+# One instance serves every task in the selection, so the model must
+# accept any channel count and any window length, and take channel
+# identity from a ``channel_positions`` argument to ``forward`` rather
+# than from a montage fixed at construction. It needs no classifier
+# head -- ``neuralbench`` wraps it in a probe sized to each task, the
+# same frozen-backbone linear probe ``mae.yaml`` configures, so the two
+# routes produce comparable scores.
+#
+# Run :func:`~neuralbench.check_model` before you queue anything: it
+# pushes synthetic batches of the selection's shapes through the model
+# and reads only YAML, so a shape bug surfaces in seconds rather than an
+# hour into a real run. Then start with ``debug=True``, which runs
+# locally on two epochs and a data subset.
+#
+# The MAE above is not eligible for this route -- its input layer is
+# sized from the channel count at build time, so one instance cannot
+# span tasks, which is what ``mae.yaml`` and ``--checkpoint`` are for.
+#
+# See :doc:`Evaluating your own model
+# </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>`
+# for suites, running on SLURM, and changing the protocol.
 
 # %%
 # Next steps
