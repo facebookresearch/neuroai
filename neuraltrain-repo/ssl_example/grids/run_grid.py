@@ -27,9 +27,12 @@ update = {
     },
 }
 
+# `patch_size` and `dim` are deliberately not swept: `neuralbench`'s `mae.yaml`
+# pins both, and the CLI cannot override them, so a checkpoint that disagrees
+# loads into a randomly initialised input layer without failing.  Change them in
+# `defaults.py` and in `mae.yaml` together instead.
 grid = {
     "mask_ratio": [0.25, 0.5, 0.75],
-    "brain_model_config.patch_size": [16, 32],
     "seed": [33, 87],
 }
 

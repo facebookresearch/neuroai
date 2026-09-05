@@ -22,9 +22,8 @@ self-supervision changes, and nothing else:
 - the run ends by saving the **encoder alone**, since the decoder is
   pretraining scaffolding that downstream tasks throw away.
 
-The example grid sweeps the two knobs that matter most for masked
-pretraining: how much of the signal is hidden (`mask_ratio`) and how finely it
-is cut up (`patch_size`).
+The example grid sweeps the knob that matters most for masked pretraining: how
+much of the signal is hidden (`mask_ratio`).
 
 ## Running the example
 
@@ -61,8 +60,11 @@ at the file from step 2:
 neuralbench eeg audiovisual_stimulus -m mae --checkpoint <path>/encoder.ckpt
 ```
 
-`neuralbench` rebuilds the same encoder, loads the weights into it, and trains
-only a linear probe on top, which is what makes the score a measure of the
-representations rather than of the probe. See the
-[training walkthrough](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/biosignal_challenge_2026/plot_01_train_mae.html)
-for the full story.
+`neuralbench` rebuilds the same encoder, loads the weights into it, freezes it,
+and trains only a linear probe on top, which is what makes the score a measure
+of the representations rather than of the probe. Note that this task uses the
+same recording the example pretrains on, so its score is a smoke test rather
+than an evaluation. See the
+[training walkthrough](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/biosignal_challenge_2026/plot_pretrain_mae.html)
+for the full story, including how to keep `mae.yaml` in step with your
+pretraining config.

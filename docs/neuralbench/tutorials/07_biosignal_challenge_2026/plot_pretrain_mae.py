@@ -45,17 +45,14 @@ pipeline runs, swap in a larger study and a bigger encoder.
 # -----
 #
 # Pretraining needs ``neuraltrain`` (the MAE encoder lives behind the
-# ``models`` extra) alongside ``neuralbench``. Competition runs are
-# expected to be logged to Weights & Biases, so install that too:
+# ``models`` extra) alongside ``neuralbench``:
 #
 # .. code-block:: bash
 #
 #    pip install 'neuraltrain-repo/.[lightning,models]'
-#    pip install 'neuralbench-repo/.[wandb]'
 #
-# Then set ``WANDB_HOST`` in ``~/.neuralbench/config.json`` to your W&B
-# host. See :doc:`/neuralbench/install` for the rest of the
-# configuration (data, cache, and result directories).
+# See :doc:`/neuralbench/install` for the rest of the configuration
+# (data, cache, and result directories).
 
 # %%
 # Pretraining the encoder
@@ -89,10 +86,9 @@ pipeline runs, swap in a larger study and a bigger encoder.
 #   correlated windows, so the tail of each recording is held out for
 #   validation instead of splitting over events or subjects.
 #
-# The two knobs that matter most for pretraining quality are
-# ``mask_ratio`` (how much of the signal is hidden -- too little makes
-# reconstruction trivial) and ``patch_size`` (how finely the signal is
-# cut up). ``ssl_example/grids/run_grid.py`` sweeps both on SLURM.
+# The knob that matters most for pretraining quality is ``mask_ratio``:
+# hide too little and reconstruction becomes trivial copying.
+# ``ssl_example/grids/run_grid.py`` sweeps it on SLURM.
 
 # %%
 # Scaling it up
@@ -106,7 +102,8 @@ pipeline runs, swap in a larger study and a bigger encoder.
 #   of them. Unlabelled EEG is the one resource pretraining scales
 #   with, so this matters more than any architecture choice.
 # - **A bigger encoder**: raise ``brain_model_config.dim`` and
-#   ``transformer_config.depth``.
+#   ``transformer_config.depth``. Copy any change to ``dim`` or
+#   ``patch_size`` into ``mae.yaml`` as well -- see the warning below.
 # - **Longer training**: raise ``n_epochs`` and ``patience``, and run on
 #   SLURM through ``run_grid.py``.
 #
@@ -130,23 +127,29 @@ pipeline runs, swap in a larger study and a bigger encoder.
 #        --checkpoint <savedir>/encoder.ckpt
 #
 # ``neuralbench`` builds the encoder with no output head, loads the
-# checkpoint into it, and trains only a **linear probe** on top of the
-# mean-pooled tokens. Freezing everything but the probe is what makes
-# the resulting score a measure of the representations rather than of
-# the probe:
+# checkpoint into it, freezes it, and trains only a **linear probe** on
+# the mean-pooled tokens. Training nothing but the probe is what makes
+# the score a measure of the representations rather than of the probe:
 #
 # .. literalinclude:: ../../../../neuralbench-repo/neuralbench/models/mae.yaml
 #    :language: yaml
 #
 # .. warning::
-#    The encoder's first layer has shape ``dim x (n_channels *
-#    patch_size)``, so ``dim`` and ``patch_size`` must match between
-#    pretraining and ``mae.yaml``, and the downstream task must have the
-#    same channel count as pretraining. On a mismatch ``neuralbench``
-#    logs a size mismatch and **silently keeps the randomly initialised
-#    layer**, which looks like a failed pretraining run rather than a
-#    misconfiguration. Check the log for ``Size mismatch`` before
-#    trusting a score.
+#    ``mae.yaml`` describes the encoder it expects, and nothing checks
+#    that against yours. Its preprocessing must match the pretraining
+#    extractor, its ``dim`` and ``patch_size`` must match the encoder
+#    you pretrained, and the downstream task must have the same channel
+#    count, since the first layer has shape ``dim x (n_channels *
+#    patch_size)``. On a mismatch ``neuralbench`` logs ``Size mismatch``
+#    and **keeps the randomly initialised layer** -- which reads as a
+#    failed pretraining run rather than a misconfiguration. Check the
+#    log before trusting a score.
+#
+# ``audiovisual_stimulus`` is the quickest task to try because it uses
+# the same MNE sample recording as the example above -- which also means
+# the probe is scored on data the encoder pretrained on. Treat the
+# number as a smoke test, and move to a task with held-out data before
+# reading anything into it.
 #
 # To confirm the pretraining actually bought you something, compare
 # against the same architecture with no checkpoint (drop
