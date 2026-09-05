@@ -41,13 +41,16 @@ official competition data is not yet released.
 # Starter kit pages
 # -----------------
 #
+# - :doc:`Training a model -- masked autoencoding on EEG <plot_01_train_mae>`
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
 # - :doc:`Track 2 -- EEG-to-BCI <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
 # - :doc:`Track 4 -- EMG-to-Text <plot_track4_emg_to_text>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`
 #
-# Each page follows the same shape:
+# The training page is track-agnostic: it shows how to pretrain a
+# foundation model and hand it to ``neuralbench``, whichever track you
+# then score it on. Each track page follows the same shape:
 #
 # 1. What the track measures (data, shift, headline metric).
 # 2. The matching ``neuralbench`` task and CLI commands.
