@@ -19,7 +19,11 @@ import pandas as pd
 import pydantic
 import torch
 from exca import TaskInfra
-from lightning.pytorch.callbacks import EarlyStopping, LearningRateMonitor
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers.logger import DummyLogger, Logger
 from torch.utils.data import DataLoader
 
@@ -132,9 +136,19 @@ class Experiment(pydantic.BaseModel):
             callbacks=[
                 EarlyStopping(monitor="val_loss", mode="min", patience=self.patience),
                 LearningRateMonitor(logging_interval="epoch"),
+                # Early stopping runs `patience` epochs past the best one, so
+                # the weights left in memory are not the ones worth keeping.
+                ModelCheckpoint(
+                    monitor="val_loss",
+                    mode="min",
+                    save_top_k=1,
+                    # Per-run folder, not `infra.folder`: a grid runs many of
+                    # these at once and they would otherwise share one file.
+                    dirpath=self.checkpoint_path.parent,
+                    filename="best",
+                ),
             ],
             logger=loggers,
-            enable_checkpointing=False,
         )
 
     def _build_mae_module(self, train_loader: DataLoader) -> MaeModule:
@@ -150,6 +164,25 @@ class Experiment(pydantic.BaseModel):
             optim_config=self.optim,
             mask_ratio=self.mask_ratio,
         )
+
+    @staticmethod
+    def _best_encoder(trainer: pl.Trainer, module: MaeModule) -> dict[str, torch.Tensor]:
+        """Encoder weights of the best-validation epoch.
+
+        ``MaeModule`` holds the encoder as ``self.model``, so its checkpoint
+        keys carry a ``"model."`` prefix that a bare encoder does not.
+        """
+        callback = trainer.checkpoint_callback
+        assert isinstance(callback, ModelCheckpoint)  # set in `_setup_trainer`
+        if not callback.best_model_path:
+            # `fast_dev_run` suppresses checkpointing, and there is no best
+            # epoch to pick from anyway.
+            return module.model.state_dict()
+        state = torch.load(callback.best_model_path, weights_only=True)["state_dict"]
+        prefix = "model."
+        return {
+            k.removeprefix(prefix): v for k, v in state.items() if k.startswith(prefix)
+        }
 
     @infra.apply
     def run(self) -> dict[str, float | None]:
@@ -167,7 +200,8 @@ class Experiment(pydantic.BaseModel):
         # Save the encoder alone: the decoder is pretraining scaffolding, and
         # `neuralbench --checkpoint` matches against a bare encoder state dict.
         self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"state_dict": mae_module.model.state_dict()}, self.checkpoint_path)
+        encoder = self._best_encoder(trainer, mae_module)
+        torch.save({"state_dict": encoder}, self.checkpoint_path)
         print(f"\nSaved pretrained encoder to {self.checkpoint_path}\n")
 
         return {k: float(v) for k, v in trainer.logged_metrics.items()}

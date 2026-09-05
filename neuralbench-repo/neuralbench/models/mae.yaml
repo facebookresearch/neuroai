@@ -7,6 +7,11 @@
 # Reference self-supervised baseline, pretrained by `neuraltrain-repo/ssl_example`.
 # It has no published weights, so it is only meaningful together with
 # `--checkpoint <your pretrained encoder>`.
+#
+# Every value below must match the pretraining run: preprocessing mirrors
+# `ssl_example`'s "input" extractor, and `dim` / `patch_size` mirror its
+# `brain_model_config`.  A mismatch is not an error -- `load_checkpoint` logs
+# "Size mismatch" and keeps the randomly initialised layer.
 data:
   neuro:
     frequency: 120.0
@@ -27,3 +32,6 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
+  # Linear probe: `[""]` matches no layer name, so the whole encoder freezes and
+  # only the probe trains.  Drop this line to fine-tune the encoder too.
+  layers_to_unfreeze: [""]

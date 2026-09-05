@@ -41,7 +41,7 @@ official competition data is not yet released.
 # Starter kit pages
 # -----------------
 #
-# - :doc:`Training a model -- masked autoencoding on EEG <plot_01_train_mae>`
+# - :doc:`Training a model -- masked autoencoding on EEG <plot_pretrain_mae>`
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
 # - :doc:`Track 2 -- EEG-to-BCI <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
