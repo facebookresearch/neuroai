@@ -933,33 +933,81 @@ class Figshare(BaseDownload):
     study : str
         Figshare article ID (numeric string, e.g. ``"12345678"``).  Found
         in the article URL on figshare.com.
+    skip_existing : bool
+        If True (default), skip files that already exist locally and whose
+        MD5 matches the Figshare metadata.  Existing files with a mismatched
+        (or unverifiable) checksum are re-downloaded.
+    max_retries : int
+        Number of times to retry a file whose download is truncated or whose
+        checksum does not match (guards against expired presigned URLs that
+        return an error page instead of the file).
     """
 
+    skip_existing: bool = True
+    max_retries: int = 3
+
+    @staticmethod
+    def _md5(path: Path) -> str:
+        import hashlib
+
+        h = hashlib.md5()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     def _download(self, overwrite: bool = False) -> None:
-        # Every file is (re)written unconditionally, so a forced re-run under
-        # ``overwrite`` naturally refreshes the whole article.
+        import hashlib
+
         import requests
 
-        item_ids = [self.study]
+        # ``overwrite`` re-downloads every file, including checksum-matching ones.
+        skip_existing = self.skip_existing and not overwrite
+
         BASE_URL = "https://api.figshare.com/v2"
-        api_call_headers = {"Authorization": "token ENTER-TOKEN"}
-
-        file_info = []
-
-        for i in item_ids:
-            # page_size set to arbitrary high value to return items
-            r = requests.get(f"{BASE_URL}/articles/{i}/files?page_size=1000")
-            file_metadata = json.loads(r.text)
-            for j in file_metadata:
-                j["item_id"] = i
-                file_info.append(j)
+        r = requests.get(f"{BASE_URL}/articles/{self.study}/files?page_size=1000")
+        r.raise_for_status()
+        file_info = json.loads(r.text)
 
         for k in tqdm(file_info):
-            response = requests.get(
-                f"{BASE_URL}/file/download/{k['id']}",
-                headers=api_call_headers,
-            )
-            open(self._dl_dir / k["name"], "wb").write(response.content)
+            dest = self._dl_dir / k["name"]
+            expected_md5 = k.get("computed_md5") or k.get("supplied_md5")
+
+            if skip_existing and dest.exists():
+                if expected_md5 is None or self._md5(dest) == expected_md5:
+                    continue
+                logger.warning(
+                    "Checksum mismatch for existing %s; re-downloading.", k["name"]
+                )
+
+            last_err: str | None = None
+            for attempt in range(1, self.max_retries + 1):
+                response = requests.get(f"{BASE_URL}/file/download/{k['id']}")
+                # A failed/expired download often returns a small XML/HTML error
+                # page with a 2xx-on-redirect body; validate before trusting it.
+                if response.status_code != 200:
+                    last_err = f"HTTP {response.status_code}"
+                    continue
+                content = response.content
+                if (
+                    expected_md5 is not None
+                    and hashlib.md5(content).hexdigest() != expected_md5
+                ):
+                    last_err = (
+                        f"checksum mismatch (got {len(content)} bytes, "
+                        f"expected md5 {expected_md5})"
+                    )
+                    continue
+                tmp = dest.with_name(dest.name + ".part")
+                tmp.write_bytes(content)
+                tmp.replace(dest)
+                break
+            else:
+                raise RuntimeError(
+                    f"Failed to download {k['name']} from Figshare article "
+                    f"{self.study} after {self.max_retries} attempts: {last_err}. "
+                    "Refusing to save a corrupt file."
+                )
 
 
 globus_msg = """Globus authentication requires a service-account client ID and secret.
