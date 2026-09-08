@@ -14,12 +14,14 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from .losses.losses import MaskedReconstructionLoss
-from .mae_module import MaeModule, random_masking
+from .mae_module import MaeModule, random_mask
+from .models.common import ChannelMerger, FourierEmb
 from .models.mae import MaeEncoder
 from .models.transformer import TransformerEncoder
 from .optimizers.base import LightningOptimizer
 
 N_CHANNELS, N_TIMES, PATCH_SIZE = 4, 200, 20
+POSITIONS = torch.rand(N_CHANNELS, 3)
 
 
 @dataclasses.dataclass
@@ -45,48 +47,47 @@ class _Windows(Dataset):
 
 
 def _collate(windows: list[torch.Tensor]) -> _Batch:
-    return _Batch(data={"input": torch.stack(windows)})
+    return _Batch(
+        data={
+            "input": torch.stack(windows),
+            "channel_positions": POSITIONS.expand(len(windows), -1, -1),
+        }
+    )
 
 
 def _build_module() -> MaeModule:
     config = MaeEncoder(
         dim=32,
         patch_size=PATCH_SIZE,
+        merger_config=ChannelMerger(
+            n_virtual_channels=8,
+            fourier_emb_config=FourierEmb(n_freqs=2, n_dims=3),
+            dropout=0.0,
+        ),
         transformer_config=TransformerEncoder(
             heads=2, depth=1, rotary_pos_emb=False, attn_dropout=0.0
         ),
     )
     return MaeModule(
-        model=config.build(n_spatial_locations=N_CHANNELS, n_outputs=None),
+        model=config.build(n_outputs=None),
         loss=MaskedReconstructionLoss(),
         optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 3e-3}),  # type: ignore
         mask_ratio=0.5,
-        decoder_config=TransformerEncoder(
-            heads=2, depth=1, rotary_pos_emb=False, attn_dropout=0.0
-        ),
     )
 
 
 @pytest.mark.parametrize("mask_ratio", [0.1, 0.5, 0.9])
-def test_random_masking(mask_ratio) -> None:
-    tokens = torch.randn(3, 10, 8)
-    kept, mask, restore = random_masking(tokens, mask_ratio)
+def test_random_mask(mask_ratio) -> None:
+    mask = random_mask(3, 10, mask_ratio, torch.device("cpu"))
 
-    assert kept.shape == (3, 10 - int(mask[0].sum()), 8)
+    assert mask.shape == (3, 10) and mask.dtype == torch.bool
     assert (mask.sum(dim=1) == mask[0].sum()).all(), "mask count must be per-batch equal"
     assert 0 < mask[0].sum() < 10, "must leave at least one token of each kind"
-
-    # `restore` must reorder [kept, dropped] back to the original positions.
-    dropped = torch.zeros(3, int(mask[0].sum()), 8)
-    reordered = torch.gather(
-        torch.cat([kept, dropped], dim=1), 1, restore[:, :, None].expand(-1, -1, 8)
-    )
-    assert torch.equal(reordered[mask == 0], tokens[mask == 0])
 
 
 def test_masking_needs_at_least_two_tokens() -> None:
     with pytest.raises(ValueError, match="at least 2 tokens"):
-        random_masking(torch.randn(2, 1, 8), 0.5)
+        random_mask(2, 1, 0.5, torch.device("cpu"))
 
 
 def test_rejects_degenerate_mask_ratio() -> None:

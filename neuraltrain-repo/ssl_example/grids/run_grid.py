@@ -30,7 +30,9 @@ update = {
 # `patch_size` and `dim` are deliberately not swept: `neuralbench`'s `mae.yaml`
 # pins both, and the CLI cannot override them, so a checkpoint that disagrees
 # loads into a randomly initialised input layer without failing.  Change them in
-# `defaults.py` and in `mae.yaml` together instead.
+# `defaults.py` and in `mae.yaml` together instead.  Channel count is not on
+# that list -- the encoder's merger makes it a property of the data, not of the
+# weights.
 grid = {
     "mask_ratio": [0.25, 0.5, 0.75],
     "seed": [33, 87],

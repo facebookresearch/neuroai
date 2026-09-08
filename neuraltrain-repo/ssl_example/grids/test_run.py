@@ -6,20 +6,41 @@
 
 """Quick test run on reduced data and number of epochs for CI."""
 
+import copy
+
 from exca import ConfDict
 
 import neuralset as ns
 
 from ..main import Experiment  # type: ignore
-from .defaults import default_config  # type: ignore
+from .defaults import CACHEDIR, default_config  # type: ignore
 
 update = {
     "infra.cluster": None,
-    # use same folder as in neuralset tests to share cache:
-    "data.study.0.path": ns.CACHE_FOLDER,
     "accelerator": "cpu",
     "fast_dev_run": True,
+    "wandb_config": None,
 }
+
+
+def debug_config() -> dict:
+    """`default_config` with the challenge datasets swapped for a bundled one."""
+    config = copy.deepcopy(default_config)
+    config["data"]["studies"] = [  # type: ignore[index]
+        [
+            {
+                "name": "Mne2013SampleEeg",
+                # use same folder as in neuralset tests to share cache:
+                "path": ns.CACHE_FOLDER,
+                "query": None,
+                "infra": {"backend": "Cached", "folder": CACHEDIR},
+            }
+        ]
+    ]
+    # This recording names its channels "EEG 001"..., which no standard montage
+    # knows; its own coordinates are set, so read them from the file instead.
+    config["data"]["channel_positions"]["layout_or_montage_name"] = None  # type: ignore[index]
+    return config
 
 
 def test_run(config: dict) -> None:
@@ -31,6 +52,6 @@ def test_run(config: dict) -> None:
 
 
 if __name__ == "__main__":
-    updated_config = ConfDict(default_config)
+    updated_config = ConfDict(debug_config())
     updated_config.update(update)
     test_run(updated_config)

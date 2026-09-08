@@ -9,23 +9,34 @@
 # `--checkpoint <your pretrained encoder>`.
 #
 # Every value below must match the pretraining run: preprocessing mirrors
-# `ssl_example`'s "input" extractor, and `dim` / `patch_size` mirror its
-# `brain_model_config`.  A mismatch is not an error -- `load_checkpoint` logs
-# "Size mismatch" and keeps the randomly initialised layer.
+# `ssl_example`'s "input" extractor and `channel_positions`, and `dim` /
+# `patch_size` mirror its `brain_model_config`.  A mismatch is not an error --
+# `load_checkpoint` logs "Size mismatch" and keeps the randomly initialised
+# layer.  The channel count is the exception: the encoder's merger reads a
+# montage off its channel positions, so a task with its own montage needs no
+# change here.
 data:
   neuro:
-    frequency: 120.0
+    frequency: 100.0
     filter:
       - 0.5
       - 25.0
     baseline: null
     scaler: RobustScaler
     clamp: 16.0
+  channel_positions:
+    n_spatial_dims: 3
+    # Same montage as pretraining, so a given electrode lands in the same place
+    # here as it did there.  Also resolves bipolar derivations, whose own
+    # coordinates are unset.
+    layout_or_montage_name: standard_1020
 brain_model_config:
   =replace=: true
   name: MaeEncoder
   dim: 256
   patch_size: 32
+  # `merger_config` is deliberately absent, here and in `ssl_example`: both
+  # sides take the same default, so neither can drift from the other.
 # Built with n_outputs=None, so the encoder emits a token sequence that the
 # probe pools over, rather than class scores.
 downstream_model_wrapper:
