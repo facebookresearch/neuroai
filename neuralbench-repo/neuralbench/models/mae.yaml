@@ -5,16 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 
 # Reference self-supervised baseline, pretrained by `neuraltrain-repo/ssl_example`.
-# It has no published weights, so it is only meaningful together with
-# `--checkpoint <your pretrained encoder>`.
+# It has no published weights, so use it with `--checkpoint <your encoder>`.
 #
-# Every value below must match the pretraining run: preprocessing mirrors
-# `ssl_example`'s "input" extractor and `channel_positions`, and `dim` /
-# `patch_size` mirror its `brain_model_config`.  A mismatch is not an error --
-# `load_checkpoint` logs "Size mismatch" and keeps the randomly initialised
-# layer.  The channel count is the exception: the encoder identifies a channel
-# by its position rather than its index, so a task with its own montage needs
-# no change here.
+# Preprocessing, `dim` and `patch_size` must match the pretraining run: on a
+# mismatch `load_checkpoint` only logs "Size mismatch" and keeps random weights.
+# Channel count need not match, as channels are identified by their position.
 data:
   neuro:
     frequency: 100.0
@@ -26,25 +21,18 @@ data:
     clamp: 16.0
   channel_positions:
     n_spatial_dims: 3
-    # Same montage as pretraining, so a given electrode lands in the same place
-    # here as it did there.  Also resolves bipolar derivations, whose own
-    # coordinates are unset.
+    # same montage as pretraining; also resolves bipolar derivations
     layout_or_montage_name: standard_1020
 brain_model_config:
   =replace=: true
   name: MaeEncoder
   dim: 256
   patch_size: 32
-  # `channel_emb_config` is deliberately absent, here and in `ssl_example`:
-  # both sides take the same default, so neither can drift from the other.
-# Built with n_outputs=None, so the encoder emits one token per channel and
-# time patch, which the probe pools over rather than class scores.  Tokens of
-# channels a recording lacks come back zeroed, so the mean is diluted rather
-# than polluted on a task whose recordings differ in their montage.
+  # `channel_emb_config` absent here and in `ssl_example`, so neither can drift
+# n_outputs=None: the probe pools the encoder's tokens; absent channels are zeroed
 downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
-  # Linear probe: `[""]` matches no layer name, so the whole encoder freezes and
-  # only the probe trains.  Drop this line to fine-tune the encoder too.
+  # linear probe: `[""]` matches no layer, so only the probe trains
   layers_to_unfreeze: [""]

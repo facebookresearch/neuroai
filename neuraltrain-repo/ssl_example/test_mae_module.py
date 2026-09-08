@@ -11,22 +11,23 @@ from pathlib import Path
 import lightning.pytorch as pl
 import pytest
 import torch
+from mae_module import MaeModule, random_mask
 from torch.utils.data import DataLoader, Dataset
 
-from .losses.losses import MaskedReconstructionLoss
-from .mae_module import MaeModule, random_mask
-from .models.common import INVALID_POS_VALUE, FourierEmb
-from .models.mae import MaeEncoder
-from .models.transformer import TransformerEncoder
-from .optimizers.base import LightningOptimizer
+from neuraltrain.losses.losses import MaskedReconstructionLoss
+from neuraltrain.models.common import INVALID_POS_VALUE, FourierEmb
+from neuraltrain.models.mae import MaeEncoder
+from neuraltrain.models.transformer import TransformerEncoder
+from neuraltrain.optimizers.base import LightningOptimizer
 
 N_CHANNELS, N_TIMES, PATCH_SIZE = 4, 200, 20
-POSITIONS = torch.rand(N_CHANNELS, 3)
+# seeded: convergence below depends on the positions, `seed_everything` comes too late
+POSITIONS = torch.rand(N_CHANNELS, 3, generator=torch.Generator().manual_seed(0))
 
 
 @dataclasses.dataclass
 class _Batch:
-    """Minimal stand-in for a ``neuralset`` ``Batch`` (not a neuraltrain dependency)."""
+    """Minimal stand-in for a ``neuralset`` ``Batch``."""
 
     data: dict[str, torch.Tensor]
 
@@ -83,15 +84,13 @@ def test_random_mask(mask_ratio) -> None:
 
 
 def test_random_mask_only_hides_present_channels() -> None:
-    """Padding is not signal, so it must never become a reconstruction target."""
     valid = torch.ones(2, 12, dtype=torch.bool)
     valid[0, 6:] = False  # first example has half its channels absent
 
     mask = random_mask(valid, 0.5)
 
     assert not (mask & ~valid).any(), "an absent channel's token was hidden"
-    # The fraction is per example, so the two rows hide different counts.
-    assert mask[0].sum() == 3 and mask[1].sum() == 6
+    assert mask[0].sum() == 3 and mask[1].sum() == 6, "fraction must be per example"
 
 
 def test_masking_needs_at_least_two_valid_tokens() -> None:
@@ -112,7 +111,6 @@ def test_rejects_degenerate_mask_ratio() -> None:
 
 
 def test_step_ignores_absent_channels() -> None:
-    """A step must not change when an absent channel's padding does."""
     pl.seed_everything(0)
     module = _build_module()
     positions = POSITIONS.expand(2, -1, -1).clone()
@@ -128,7 +126,9 @@ def test_step_ignores_absent_channels() -> None:
         batch = _Batch(data={"input": data, "channel_positions": positions})
         losses.append(float(module._run_step(batch, "val")))
 
-    assert losses[0] == pytest.approx(losses[1], abs=1e-6)
+    assert losses[0] == pytest.approx(losses[1], abs=1e-6), (
+        "loss changed when an absent channel's padding did"
+    )
 
 
 def test_pretraining_needs_no_target_and_checkpoints_the_encoder(
@@ -165,9 +165,7 @@ def test_pretraining_needs_no_target_and_checkpoints_the_encoder(
     start, end = sum(losses[:2]) / 2, sum(losses[-2:]) / 2
     assert end < 0.25 * start, f"loss did not decrease: {start:.4f} -> {end:.4f}"
 
-    # `neuralbench.utils.load_checkpoint` strips the LightningModule's "model."
-    # prefix and then matches against a freshly built encoder, so the encoder's
-    # every parameter must be in the checkpoint under exactly that name.
+    # neuralbench strips the "model." prefix, then matches a freshly built encoder
     saved = torch.load(tmp_path / "last.ckpt", weights_only=True)["state_dict"]
     saved = {k[len("model.") :]: v for k, v in saved.items() if k.startswith("model.")}
     encoder = _build_module().model.state_dict()

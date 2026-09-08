@@ -12,32 +12,16 @@ import lightning.pytorch as pl
 import torch
 from torch import nn
 
-from .models.mae import MaeEncoderModel
-from .optimizers import LightningOptimizer
+from neuraltrain.models.mae import MaeEncoderModel
+from neuraltrain.optimizers import LightningOptimizer
 
 
 def random_mask(valid: torch.Tensor, mask_ratio: float) -> torch.Tensor:
-    """Choose which of each example's tokens to hide.
+    """Pick a ``mask_ratio`` fraction of each example's ``valid`` tokens to hide.
 
-    Only tokens flagged in ``valid`` are eligible: the rest stand for channels
-    a recording does not have, and reconstructing their padding would teach the
-    model to predict zeros.  Because examples differ in how many channels they
-    have, the number hidden is a fraction of each example's own count rather
-    than a fixed number.
-
-    Parameters
-    ----------
-    valid :
-        Boolean ``(B, N)`` flags marking the tokens worth attending to -- see
-        :meth:`~neuraltrain.models.mae.MaeEncoderModel.valid_tokens`.
-    mask_ratio :
-        Fraction of each example's valid tokens to hide.  At least one is
-        hidden and at least one is left visible, whatever the ratio rounds to.
-
-    Returns
-    -------
-    torch.Tensor
-        Boolean mask of shape ``(B, N)``, ``True`` on hidden positions.
+    Returns boolean ``(B, N)`` flags, ``True`` on hidden positions.  Invalid
+    tokens are never hidden, and every example keeps at least one token of each
+    kind whatever the ratio rounds to.
     """
     n_valid = valid.sum(dim=1, keepdim=True)
     if int(n_valid.min()) < 2:
@@ -46,8 +30,7 @@ def random_mask(valid: torch.Tensor, mask_ratio: float) -> torch.Tensor:
             f"got {int(n_valid.min())}: shorten patch_size, lengthen the input "
             f"window, or check that channel positions are not all invalid."
         )
-    # Ranking random scores hides a precise fraction of each example's tokens;
-    # sending invalid ones to the back of the ranking keeps them out of it.
+    # invalid rank last -> the fraction is taken from valid tokens only
     scores = torch.rand_like(valid, dtype=torch.float).masked_fill(~valid, torch.inf)
     ranks = scores.argsort(dim=1).argsort(dim=1)
     n_hidden = (n_valid * mask_ratio).round().long().clamp(min=1)
@@ -59,18 +42,10 @@ class MaeModule(pl.LightningModule):
 
     The input is its own target, so batches need no ``"target"`` key: this
     trains on the unlabelled sliding windows of a ``neuralset`` segmenter
-    configured with ``stride``.
-
-    Hidden patches are replaced by a learned mask token and run through the
-    encoder along with the visible ones, so the encoder sees the same kind of
-    sequence here as it will downstream, and a single linear layer reads the
-    reconstruction off its output.  The original MAE instead encodes only the
-    visible patches and restores the rest with a transformer decoder, which is
-    cheaper per step and a natural thing to try.
-
-    Only ``model`` outlives pretraining; the mask token and the linear
-    reconstruction layer are scaffolding, which is why they live here rather
-    than on the encoder config.
+    configured with ``stride``.  Hidden patches are replaced by a learned mask
+    token, encoded along with the visible ones, and read back by a single
+    linear layer.  Only ``model`` outlives pretraining; the mask token and that
+    layer are scaffolding.
 
     Parameters
     ----------
@@ -118,12 +93,10 @@ class MaeModule(pl.LightningModule):
         hidden = random_mask(valid, self.mask_ratio)
 
         tokens = self.model.patch_tokens(x)
-        # Substituting before positions are added leaves a hidden token its
-        # place on the head and in time, and takes only its content.
+        # substitute before positions: a hidden token keeps its place, loses content
         tokens = torch.where(hidden[..., None], self.mask_token.to(tokens), tokens)
         tokens = self.model.add_positions(tokens, channel_positions)
-        # Hidden tokens stay in the sequence -- predicting them is the task;
-        # absent channels do not, since their padding is not signal.
+        # drops absent channels only; hidden tokens stay, predicting them is the task
         encoded = self.model.encoder(tokens, mask=valid)
         loss = self.loss(
             self.reconstruct(encoded), patches.flatten(1, 2), hidden.to(tokens)
@@ -137,9 +110,7 @@ class MaeModule(pl.LightningModule):
             logger=True,
             prog_bar=True,
             batch_size=x.shape[0],
-            # Epoch metrics drive early stopping and checkpoint selection, so
-            # every rank must agree on them under DDP.
-            sync_dist=True,
+            sync_dist=True,  # epoch metrics gate checkpointing: ranks must agree
         )
         return loss
 
@@ -150,8 +121,7 @@ class MaeModule(pl.LightningModule):
         return self._run_step(batch, step_name="val")
 
     def configure_optimizers(self) -> tp.Any:
-        # Schedules like OneCycleLR need the total number of steps, which only
-        # the trainer can know; the ones that do not reject the argument.
+        # OneCycleLR and friends need the trainer's step count; others reject it
         try:
             return self.optim_config.build(
                 self.parameters(), total_steps=self.trainer.estimated_stepping_batches

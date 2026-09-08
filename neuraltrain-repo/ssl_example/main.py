@@ -32,9 +32,10 @@ from torch.utils.data import DataLoader
 
 import neuralset as ns
 from neuraltrain import BaseLoss, LightningOptimizer
-from neuraltrain.mae_module import MaeModule
 from neuraltrain.models.mae import MaeEncoder
 from neuraltrain.utils import CsvLoggerConfig, WandbLoggerConfig
+
+from .mae_module import MaeModule
 
 
 class Data(pydantic.BaseModel):
@@ -42,47 +43,36 @@ class Data(pydantic.BaseModel):
 
     model_config = pydantic.ConfigDict(extra="forbid")
 
-    # A list of steps would be read as one *chain* (each step feeding the next),
-    # so pooling studies takes a list of them, concatenated below.
+    # pooled by concatenation in `build`, not chained as a single `ns.Step`
     studies: list[ns.Step]
     segmenter: ns.dataloader.Segmenter
-    # Kept beside the segmenter rather than among its extractors so it can be
-    # wired to the "input" extractor instead of repeating its preprocessing.
+    # beside the segmenter, not among its extractors: wired to "input" in `build`
     channel_positions: ns.extractors.ChannelPositions
     val_ratio: float = 0.2
     batch_size: int = 64
     num_workers: int = 0
 
     def build(self) -> dict[str, DataLoader]:
-        # `standardize_events` renumbers the concatenated index; studies already
-        # prefix `timeline` and `subject` with their own name, so pooling cannot
-        # merge two recordings into one.
+        # studies prefix `timeline`/`subject` with their name, so pooling cannot collide
         events = ns.events.standardize_events(
             pd.concat([study.run() for study in self.studies], ignore_index=True)
         )
 
         neuro = self.segmenter.extractors["input"]
-        # Positions are read off the same Raw objects as the signal, and must
-        # come from the very same extractor so that both index channels alike.
+        # built off the signal's own extractor, so both index channels alike
         assert isinstance(neuro, ns.extractors.MneRaw)
         self.segmenter.extractors["channel_positions"] = self.channel_positions.build(
             neuro
         )
         dataset = self.segmenter.apply(events)
-        # Prepares over the pooled events, so the channel axis is the union of
-        # every montage and a given channel keeps one index throughout.
-        # Recordings lacking a channel are zero-padded there and get invalid
-        # positions, which the model's merger masks out.
+        # over pooled events: the channel axis is the union of every montage
         dataset.prepare()
         rank_zero_info(
             f"Segmented {len(dataset)} unlabelled windows over "
             f"{len(neuro._channels)} channels"
         )
 
-        # Striding produces many windows per recording, so the split has to be
-        # over windows rather than over the trigger events an event-level
-        # transform like `SklearnSplit` sees.  Holding out the tail of each
-        # timeline keeps neighbouring (hence correlated) windows on one side.
+        # window-level split; per-timeline tail keeps correlated windows on one side
         segments = pd.DataFrame(
             [{"timeline": s.timeline, "start": s.start} for s in dataset.segments]
         )
@@ -153,8 +143,7 @@ class Experiment(pydantic.BaseModel):
         if self.csv_config is not None:
             loggers.append(self.csv_config.build(save_dir=self.infra.folder))
         if self.wandb_config is not None:
-            # `build` logs in and starts the run; under DDP it tolerates being
-            # called from a non-zero rank, where it yields a no-op logger.
+            # DDP-safe: on a non-zero rank `build` yields a no-op logger
             loggers.append(
                 self.wandb_config.build(
                     save_dir=str(self.infra.folder), xp_config=self.model_dump()
@@ -173,14 +162,12 @@ class Experiment(pydantic.BaseModel):
             callbacks=[
                 EarlyStopping(monitor="val_loss", mode="min", patience=self.patience),
                 LearningRateMonitor(logging_interval="epoch"),
-                # Early stopping runs `patience` epochs past the best one, so
-                # the weights left in memory are not the ones worth keeping.
+                # early stopping ends `patience` epochs past the best weights
                 ModelCheckpoint(
                     monitor="val_loss",
                     mode="min",
                     save_top_k=1,
-                    # Per-run folder, not `infra.folder`: a grid runs many of
-                    # these at once and they would otherwise share one file.
+                    # per-run folder: a grid would otherwise share one file
                     dirpath=self.checkpoint_path.parent,
                     filename="best",
                 ),
@@ -190,9 +177,6 @@ class Experiment(pydantic.BaseModel):
 
     def _build_mae_module(self) -> MaeModule:
         return MaeModule(
-            # n_outputs=None: pretraining and downstream probing both want the
-            # encoder alone, with no classification head.  No channel count
-            # either -- the encoder's merger makes it montage-independent.
             model=self.brain_model_config.build(n_outputs=None),
             loss=self.loss.build(),
             optim_config=self.optim,
@@ -209,9 +193,7 @@ class Experiment(pydantic.BaseModel):
         callback = trainer.checkpoint_callback
         assert isinstance(callback, ModelCheckpoint)  # set in `_setup_trainer`
         if not callback.best_model_path:
-            # `fast_dev_run` suppresses checkpointing, and there is no best
-            # epoch to pick from anyway.
-            return module.model.state_dict()
+            return module.model.state_dict()  # `fast_dev_run` skips checkpointing
         state = torch.load(callback.best_model_path, weights_only=True)["state_dict"]
         prefix = "model."
         return {
@@ -231,17 +213,12 @@ class Experiment(pydantic.BaseModel):
             val_dataloaders=loaders["val"],
         )
 
-        # Save the encoder alone: the mask token and reconstruction layer are
-        # pretraining scaffolding, and `neuralbench --checkpoint` matches
-        # against a bare encoder state dict.  Ranks hold identical weights
-        # after DDP has synchronised them, so only one of them writes.
+        # DDP has synchronised the weights, so only one rank writes them
         if trainer.is_global_zero:
             self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
             encoder = self._best_encoder(trainer, mae_module)
             torch.save({"state_dict": encoder}, self.checkpoint_path)
             rank_zero_info(f"\nSaved pretrained encoder to {self.checkpoint_path}\n")
-        # Every rank returns the same metrics, since `MaeModule` logs them with
-        # `sync_dist=True`, but none may return before the checkpoint exists.
-        trainer.strategy.barrier()
+        trainer.strategy.barrier()  # no rank returns before the checkpoint exists
 
         return {k: float(v) for k, v in trainer.logged_metrics.items()}

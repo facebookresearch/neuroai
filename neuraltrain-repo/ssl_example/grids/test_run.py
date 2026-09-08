@@ -37,8 +37,7 @@ def debug_config() -> dict:
             }
         ]
     ]
-    # This recording names its channels "EEG 001"..., which no standard montage
-    # knows; its own coordinates are set, so read them from the file instead.
+    # channels named "EEG 001"...: no montage knows them, read coords from the file
     config["data"]["channel_positions"]["layout_or_montage_name"] = None  # type: ignore[index]
     return config
 
@@ -47,8 +46,7 @@ def test_run(config: dict) -> None:
     task = Experiment(**config)
     task.infra.clear_job()
     task.run()
-    # The point of pretraining is the encoder it leaves behind.
-    assert task.checkpoint_path.exists()
+    assert task.checkpoint_path.exists(), "pretraining left no encoder behind"
 
 
 if __name__ == "__main__":

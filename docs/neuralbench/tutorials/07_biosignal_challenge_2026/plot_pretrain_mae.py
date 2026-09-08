@@ -162,8 +162,8 @@ than it ships with.
 #
 # You are not required to use this encoder at all -- it is a starting
 # point. Any ``neuraltrain`` model config works with the same
-# :class:`~neuraltrain.mae_module.MaeModule` loop, and any pretraining
-# objective works if it produces an encoder checkpoint.
+# ``MaeModule`` loop, and any pretraining objective works if it produces
+# an encoder checkpoint.
 
 # %%
 # Evaluating the pretrained encoder

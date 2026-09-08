@@ -13,23 +13,15 @@ import neuralset as ns
 PROJECT_NAME = "challenge_mae"
 CACHEDIR = f"{ns.CACHE_FOLDER}/cache/{PROJECT_NAME}"
 SAVEDIR = f"{ns.CACHE_FOLDER}/results/{PROJECT_NAME}"
-# Studies each claim their own subfolder of this root.
+# each study claims its own subfolder
 DATADIR = f"{ns.CACHE_FOLDER}/data"
 for path in [CACHEDIR, SAVEDIR, DATADIR]:
     Path(path).mkdir(parents=True, exist_ok=True)
 
-# Common sampling rate for every study. 100 Hz is the lowest of the four, so
-# nothing is upsampled, and 4 s * 100 Hz // 32 = 12 patches per window. The
-# encoder makes one token per channel *and* patch, so the sequence it attends
-# over is 12 times the number of channels: lengthen the window and that grows
-# with it.
-FREQUENCY = 100.0
-WINDOW = 4.0
+FREQUENCY = 100.0  # lowest of the four studies, so nothing is upsampled
+WINDOW = 4.0  # 12 patches of 32 samples, hence 12 * n_channels tokens
 
-# The EEG datasets of tracks 1-3, plus a resting-state one that belongs to no
-# track. Track 4 is EMG, which shares no sensor space with any of these.
-# Pretraining pools them raw: the model sees no labels, so a dataset is worth
-# including for its signal alone.
+# tracks 1-3 plus a resting-state study; track 4 is EMG, a different sensor space
 STUDIES = [
     "Gifford2022Large",  # track 1, image decoding, 63 ch
     "Stieger2021Continuous",  # track 2, motor imagery, 60 ch
@@ -45,7 +37,7 @@ default_config = {
         "cpus_per_task": 10,
     },
     "data": {
-        # No split transform here: `Data` splits the strided windows in time.
+        # no split transform: `Data` splits the strided windows in time
         "studies": [
             [
                 {
@@ -73,19 +65,12 @@ default_config = {
                     },
                 },
             },
-            # Slide a window across the whole recording instead of cutting at
-            # events: self-supervision needs no labels, so every sample counts.
-            # The trigger is the recording itself, not a stimulus.
+            # the recording itself is the trigger: windows slide, no events needed
             "trigger_query": "type == 'Eeg'",
             "stride": WINDOW,
             "duration": WINDOW,
         },
-        # What lets one encoder read four montages: the model identifies a
-        # channel by its position, not its index. Naming the montage matters
-        # for Sleep-EDF, whose bipolar derivations (Fpz-Cz, Pz-Oz) carry no
-        # coordinates of their own: the extractor falls back to the part before
-        # the dash and finds Fpz and Pz here. Channels a recording lacks get
-        # invalid positions, and the model drops their tokens.
+        # standard_1020 also resolves Sleep-EDF's bipolar names (Fpz-Cz -> Fpz)
         "channel_positions": {
             "n_spatial_dims": 3,
             "layout_or_montage_name": "standard_1020",
@@ -102,10 +87,7 @@ default_config = {
         "name": "MaeEncoder",
         "dim": 256,
         "patch_size": 32,
-        # `channel_emb_config` is left at its default: naming it here would
-        # rebuild it from `FourierEmb`'s own defaults, which embed 2D
-        # positions, and every field would then have to be restated in
-        # `mae.yaml` too.
+        # `channel_emb_config` left at its default: naming it resets n_dims to 2
     },
     "mask_ratio": 0.5,
     "loss": {"name": "MaskedReconstructionLoss"},
@@ -124,7 +106,7 @@ default_config = {
         "name": PROJECT_NAME,
         "flush_logs_every_n_steps": 100,
     },
-    # Drop to None to train without Weights & Biases; nothing else depends on it.
+    # set to None to train without Weights & Biases
     "wandb_config": {
         "log_model": False,
         "group": PROJECT_NAME,

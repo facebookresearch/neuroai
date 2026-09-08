@@ -145,6 +145,15 @@ jobs:
           mkdir -p project_example/cache
           python -m project_example.grids.test_run
 
+      # the examples live outside the package, so `pytest neuraltrain` misses them
+      - name: neuraltrain ssl example
+        if: needs.changes.outputs.neuraltrain == 'true'
+        run: |
+          source .venv/bin/activate
+          cd neuraltrain-repo
+          pytest ssl_example/test_mae_module.py --durations=10
+          python -m ssl_example.grids.test_run
+
       - name: pytest neuralfetch
         if: needs.changes.outputs.neuralfetch == 'true'
         run: |

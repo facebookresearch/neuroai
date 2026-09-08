@@ -29,8 +29,7 @@ def _positions(n_channels: int, batch_size: int = 2) -> torch.Tensor:
     return torch.rand(batch_size, n_channels, 3)
 
 
-# One model instance must handle any window length, so that a checkpoint stays
-# usable downstream; 205 also exercises the incomplete trailing patch.
+# one instance must span window lengths; 205 has an incomplete trailing patch
 @pytest.mark.parametrize("n_times", [200, 205, 400])
 @pytest.mark.parametrize("n_outputs", [None, 3])
 def test_build_and_forward(config, n_times, n_outputs) -> None:
@@ -45,8 +44,6 @@ def test_build_and_forward(config, n_times, n_outputs) -> None:
     ), "output head must exist if and only if n_outputs is set"
 
 
-# The point of embedding channel positions: pretraining pools datasets that
-# share no montage, so channel count must not reach any weight.
 @pytest.mark.parametrize("n_channels", [2, 19, 63])
 def test_one_instance_spans_montages(config, n_channels) -> None:
     model = config.build()
@@ -56,15 +53,9 @@ def test_one_instance_spans_montages(config, n_channels) -> None:
 
 
 def test_absent_channels_are_dropped_from_attention(config) -> None:
-    """Tokens of a channel with invalid positions must not reach the others.
-
-    That is how a recording missing a channel arrives: ``MneRaw`` zero-pads the
-    data to the union montage and ``ChannelPositions`` marks the padding
-    invalid.
-    """
     model = config.build().eval()
     positions = _positions(4)
-    positions[:, 3] = INVALID_POS_VALUE
+    positions[:, 3] = INVALID_POS_VALUE  # how MneRaw zero-padding arrives
 
     x = torch.randn(2, 4, 200)
     other = x.clone()
@@ -81,7 +72,6 @@ def test_absent_channels_are_dropped_from_attention(config) -> None:
 
 
 def test_channel_identity_comes_from_position(config) -> None:
-    """Reordering channels and their positions together must not change anything."""
     model = config.build().eval()
     x = torch.randn(2, 5, 200)
     positions = _positions(5)
@@ -92,7 +82,9 @@ def test_channel_identity_comes_from_position(config) -> None:
         out = model(x, positions).unflatten(1, (5, n_patches))
         shuffled = model(x[:, order], positions[:, order]).unflatten(1, (5, n_patches))
 
-    assert torch.allclose(out[:, order], shuffled, atol=1e-5)
+    assert torch.allclose(out[:, order], shuffled, atol=1e-5), (
+        "reordering channels with their positions changed their tokens"
+    )
 
 
 def test_patchify_rejects_too_short_input(config) -> None:
