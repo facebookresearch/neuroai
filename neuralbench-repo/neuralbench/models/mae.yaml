@@ -12,9 +12,9 @@
 # `ssl_example`'s "input" extractor and `channel_positions`, and `dim` /
 # `patch_size` mirror its `brain_model_config`.  A mismatch is not an error --
 # `load_checkpoint` logs "Size mismatch" and keeps the randomly initialised
-# layer.  The channel count is the exception: the encoder's merger reads a
-# montage off its channel positions, so a task with its own montage needs no
-# change here.
+# layer.  The channel count is the exception: the encoder identifies a channel
+# by its position rather than its index, so a task with its own montage needs
+# no change here.
 data:
   neuro:
     frequency: 100.0
@@ -35,10 +35,12 @@ brain_model_config:
   name: MaeEncoder
   dim: 256
   patch_size: 32
-  # `merger_config` is deliberately absent, here and in `ssl_example`: both
-  # sides take the same default, so neither can drift from the other.
-# Built with n_outputs=None, so the encoder emits a token sequence that the
-# probe pools over, rather than class scores.
+  # `channel_emb_config` is deliberately absent, here and in `ssl_example`:
+  # both sides take the same default, so neither can drift from the other.
+# Built with n_outputs=None, so the encoder emits one token per channel and
+# time patch, which the probe pools over rather than class scores.  Tokens of
+# channels a recording lacks come back zeroed, so the mean is diluted rather
+# than polluted on a task whose recordings differ in their montage.
 downstream_model_wrapper:
   model_output_key: null
   aggregation: mean

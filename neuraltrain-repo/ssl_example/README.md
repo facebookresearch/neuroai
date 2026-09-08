@@ -16,12 +16,14 @@ hidden ones from the encoder's output; the training signal comes entirely from
 the recordings themselves, so no labels or events are used.
 
 Those four datasets share no montage — they range from a 63-channel cap to
-Sleep-EDF's two bipolar derivations — so the encoder starts with a
-`ChannelMerger`, which maps whatever channels a recording has onto a fixed set
-of virtual ones using their 3D positions. Channels a recording does not have
-are zero-padded by the extractor, arrive with invalid positions, and are masked
-out of the merge. That is also what lets one checkpoint score on a downstream
-task with a montage of its own.
+Sleep-EDF's two bipolar derivations — so a channel is never identified by its
+index. One token is one channel over one time patch, and it carries a Fourier
+embedding of that channel's 3D position on the head alongside the embedding of
+its time patch. Channels a recording does not have are zero-padded by the
+extractor, arrive with invalid positions, and have their tokens dropped from
+the attention and excluded from the reconstruction targets. That is also what
+lets one checkpoint score on a downstream task with a montage of its own; the
+cost is a sequence of `n_channels * n_patches` tokens.
 
 The model is **encoder-only**: the original MAE encodes just the visible patches
 and restores the rest with a transformer decoder, which is cheaper per step and

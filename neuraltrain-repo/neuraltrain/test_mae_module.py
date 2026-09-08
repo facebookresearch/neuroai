@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from .losses.losses import MaskedReconstructionLoss
 from .mae_module import MaeModule, random_mask
-from .models.common import ChannelMerger, FourierEmb
+from .models.common import INVALID_POS_VALUE, FourierEmb
 from .models.mae import MaeEncoder
 from .models.transformer import TransformerEncoder
 from .optimizers.base import LightningOptimizer
@@ -59,11 +59,7 @@ def _build_module() -> MaeModule:
     config = MaeEncoder(
         dim=32,
         patch_size=PATCH_SIZE,
-        merger_config=ChannelMerger(
-            n_virtual_channels=8,
-            fourier_emb_config=FourierEmb(n_freqs=2, n_dims=3),
-            dropout=0.0,
-        ),
+        channel_emb_config=FourierEmb(n_freqs=2, n_dims=3),
         transformer_config=TransformerEncoder(
             heads=2, depth=1, rotary_pos_emb=False, attn_dropout=0.0
         ),
@@ -78,16 +74,31 @@ def _build_module() -> MaeModule:
 
 @pytest.mark.parametrize("mask_ratio", [0.1, 0.5, 0.9])
 def test_random_mask(mask_ratio) -> None:
-    mask = random_mask(3, 10, mask_ratio, torch.device("cpu"))
+    valid = torch.ones(3, 10, dtype=torch.bool)
+    mask = random_mask(valid, mask_ratio)
 
     assert mask.shape == (3, 10) and mask.dtype == torch.bool
     assert (mask.sum(dim=1) == mask[0].sum()).all(), "mask count must be per-batch equal"
     assert 0 < mask[0].sum() < 10, "must leave at least one token of each kind"
 
 
-def test_masking_needs_at_least_two_tokens() -> None:
-    with pytest.raises(ValueError, match="at least 2 tokens"):
-        random_mask(2, 1, 0.5, torch.device("cpu"))
+def test_random_mask_only_hides_present_channels() -> None:
+    """Padding is not signal, so it must never become a reconstruction target."""
+    valid = torch.ones(2, 12, dtype=torch.bool)
+    valid[0, 6:] = False  # first example has half its channels absent
+
+    mask = random_mask(valid, 0.5)
+
+    assert not (mask & ~valid).any(), "an absent channel's token was hidden"
+    # The fraction is per example, so the two rows hide different counts.
+    assert mask[0].sum() == 3 and mask[1].sum() == 6
+
+
+def test_masking_needs_at_least_two_valid_tokens() -> None:
+    valid = torch.zeros(2, 8, dtype=torch.bool)
+    valid[:, 0] = True
+    with pytest.raises(ValueError, match="at least 2 valid tokens"):
+        random_mask(valid, 0.5)
 
 
 def test_rejects_degenerate_mask_ratio() -> None:
@@ -98,6 +109,26 @@ def test_rejects_degenerate_mask_ratio() -> None:
             optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 1e-3}),  # type: ignore
             mask_ratio=0.0,
         )
+
+
+def test_step_ignores_absent_channels() -> None:
+    """A step must not change when an absent channel's padding does."""
+    pl.seed_everything(0)
+    module = _build_module()
+    positions = POSITIONS.expand(2, -1, -1).clone()
+    positions[:, 3] = INVALID_POS_VALUE
+
+    x = torch.randn(2, N_CHANNELS, N_TIMES)
+    other = x.clone()
+    other[:, 3] = torch.randn(2, N_TIMES)
+
+    losses = []
+    for data in (x, other):
+        torch.manual_seed(0)  # same mask draw for both
+        batch = _Batch(data={"input": data, "channel_positions": positions})
+        losses.append(float(module._run_step(batch, "val")))
+
+    assert losses[0] == pytest.approx(losses[1], abs=1e-6)
 
 
 def test_pretraining_needs_no_target_and_checkpoints_the_encoder(

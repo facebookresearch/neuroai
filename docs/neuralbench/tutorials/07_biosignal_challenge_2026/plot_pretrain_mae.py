@@ -27,7 +27,8 @@ than it ships with.
 # The model learns by hiding part of its input and reconstructing it:
 #
 # 1. Each window of EEG is cut into **time patches** of ``patch_size``
-#    samples, and every patch becomes one token.
+#    samples, one channel at a time, so a token is one channel over one
+#    patch rather than all channels at once.
 # 2. A random ``mask_ratio`` of those tokens is replaced by a learned
 #    **mask token**, and the encoder reads the whole sequence.
 # 3. A single **linear layer** reconstructs the hidden patches from the
@@ -54,19 +55,25 @@ than it ships with.
 # Sleep-EDF's two bipolar derivations. An encoder whose first layer is
 # sized from a channel count cannot span them.
 #
-# So the encoder begins with a
-# :class:`~neuraltrain.models.common.ChannelMerger`, which maps whatever
-# channels a recording has onto a fixed number of **virtual channels**
-# using their 3D positions. Everything after it has a fixed width, and
-# the channel count never reaches a weight.
+# So a channel is never identified by its index here. Every token carries
+# a Fourier embedding of its channel's **3D position on the head**,
+# alongside the sin-cos embedding of its time patch. Two datasets that
+# both record Cz describe it the same way, and a montage the encoder has
+# never seen is just a set of positions it has not visited.
 #
-# This is also what makes a recording with *missing* channels safe. The
-# extractor pads the data to the union of all montages seen; the padded
-# channels carry invalid positions, and the merger masks them out of the
-# merge rather than reading zeros as signal.
+# That also settles what to do about *missing* channels. Pooling studies
+# makes the channel axis the union of every montage, and each recording
+# is zero-padded wherever it lacks a channel. Those padded channels come
+# back with invalid positions, and their tokens are **dropped from the
+# attention** rather than read as signal -- they are also never chosen as
+# reconstruction targets, since predicting padding teaches nothing.
 #
-# The same property applies downstream: one checkpoint scores on a task
-# with a montage it never saw during pretraining.
+# The cost is sequence length: one token per channel *and* patch means
+# the encoder attends over ``n_channels * n_patches`` positions, so the
+# window length and the montage size now both set the compute bill.
+#
+# The payoff applies downstream too: one checkpoint scores on a task with
+# a montage it never saw during pretraining.
 
 # %%
 # Setup
@@ -146,8 +153,7 @@ than it ships with.
 # - **More data**: add any study from the :doc:`NeuralFetch catalog
 #   </neuralfetch/index>` to ``STUDIES``. Unlabelled EEG is the one
 #   resource pretraining scales with, so this matters more than any
-#   architecture choice, and the merger means a new montage costs
-#   nothing.
+#   architecture choice, and a new montage needs no code change.
 # - **A bigger encoder**: raise ``brain_model_config.dim`` and
 #   ``transformer_config.depth``. Copy any change to ``dim`` or
 #   ``patch_size`` into ``mae.yaml`` as well -- see the warning below.
@@ -189,8 +195,8 @@ than it ships with.
 #    mismatch`` and **keeps the randomly initialised layer** -- which
 #    reads as a failed pretraining run rather than a misconfiguration.
 #    Check the log before trusting a score. Channel count is the one
-#    thing you never have to match, since the merger reads the montage
-#    off the data.
+#    thing you never have to match, since the encoder reads the montage
+#    off the channel positions.
 #
 # The example pretrains on the datasets of tracks 1-3, so a probe scored
 # on one of those tasks has seen that data unlabelled already. That is

@@ -31,8 +31,8 @@ update = {
 # pins both, and the CLI cannot override them, so a checkpoint that disagrees
 # loads into a randomly initialised input layer without failing.  Change them in
 # `defaults.py` and in `mae.yaml` together instead.  Channel count is not on
-# that list -- the encoder's merger makes it a property of the data, not of the
-# weights.
+# that list -- the encoder reads channels off their positions, which makes the
+# montage a property of the data rather than of the weights.
 grid = {
     "mask_ratio": [0.25, 0.5, 0.75],
     "seed": [33, 87],

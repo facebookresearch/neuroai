@@ -19,10 +19,12 @@ for path in [CACHEDIR, SAVEDIR, DATADIR]:
     Path(path).mkdir(parents=True, exist_ok=True)
 
 # Common sampling rate for every study. 100 Hz is the lowest of the four, so
-# nothing is upsampled, and 8 s * 100 Hz // 32 = 25 patches per window gives the
-# encoder enough tokens to mask over.
+# nothing is upsampled, and 4 s * 100 Hz // 32 = 12 patches per window. The
+# encoder makes one token per channel *and* patch, so the sequence it attends
+# over is 12 times the number of channels: lengthen the window and that grows
+# with it.
 FREQUENCY = 100.0
-WINDOW = 8.0
+WINDOW = 4.0
 
 # The EEG datasets of tracks 1-3, plus a resting-state one that belongs to no
 # track. Track 4 is EMG, which shares no sensor space with any of these.
@@ -78,10 +80,12 @@ default_config = {
             "stride": WINDOW,
             "duration": WINDOW,
         },
-        # What lets one encoder read four montages. Naming the montage matters
+        # What lets one encoder read four montages: the model identifies a
+        # channel by its position, not its index. Naming the montage matters
         # for Sleep-EDF, whose bipolar derivations (Fpz-Cz, Pz-Oz) carry no
         # coordinates of their own: the extractor falls back to the part before
-        # the dash and finds Fpz and Pz here.
+        # the dash and finds Fpz and Pz here. Channels a recording lacks get
+        # invalid positions, and the model drops their tokens.
         "channel_positions": {
             "n_spatial_dims": 3,
             "layout_or_montage_name": "standard_1020",
@@ -98,9 +102,10 @@ default_config = {
         "name": "MaeEncoder",
         "dim": 256,
         "patch_size": 32,
-        # `merger_config` is left at its default: naming it here would rebuild
-        # it from `ChannelMerger`'s own defaults, which embed 2D positions,
-        # and every field would then have to be restated in `mae.yaml` too.
+        # `channel_emb_config` is left at its default: naming it here would
+        # rebuild it from `FourierEmb`'s own defaults, which embed 2D
+        # positions, and every field would then have to be restated in
+        # `mae.yaml` too.
     },
     "mask_ratio": 0.5,
     "loss": {"name": "MaskedReconstructionLoss"},

@@ -16,37 +16,42 @@ from .models.mae import MaeEncoderModel
 from .optimizers import LightningOptimizer
 
 
-def random_mask(
-    batch_size: int, n_tokens: int, mask_ratio: float, device: torch.device
-) -> torch.Tensor:
-    """Choose which tokens to hide from each example.
+def random_mask(valid: torch.Tensor, mask_ratio: float) -> torch.Tensor:
+    """Choose which of each example's tokens to hide.
+
+    Only tokens flagged in ``valid`` are eligible: the rest stand for channels
+    a recording does not have, and reconstructing their padding would teach the
+    model to predict zeros.  Because examples differ in how many channels they
+    have, the number hidden is a fraction of each example's own count rather
+    than a fixed number.
 
     Parameters
     ----------
-    batch_size, n_tokens :
-        Shape of the token sequence to mask.
+    valid :
+        Boolean ``(B, N)`` flags marking the tokens worth attending to -- see
+        :meth:`~neuraltrain.models.mae.MaeEncoderModel.valid_tokens`.
     mask_ratio :
-        Fraction of the ``n_tokens`` to hide.  At least one token is hidden and
-        at least one is left visible, whatever the ratio rounds to.
-    device :
-        Device to build the mask on.
+        Fraction of each example's valid tokens to hide.  At least one is
+        hidden and at least one is left visible, whatever the ratio rounds to.
 
     Returns
     -------
     torch.Tensor
-        Boolean mask of shape ``(batch_size, n_tokens)``, ``True`` on hidden
-        positions.
+        Boolean mask of shape ``(B, N)``, ``True`` on hidden positions.
     """
-    if n_tokens < 2:
+    n_valid = valid.sum(dim=1, keepdim=True)
+    if int(n_valid.min()) < 2:
         raise ValueError(
-            f"masking needs at least 2 tokens to leave one of each kind, "
-            f"got {n_tokens}: shorten patch_size or lengthen the input window."
+            f"masking needs at least 2 valid tokens to leave one of each kind, "
+            f"got {int(n_valid.min())}: shorten patch_size, lengthen the input "
+            f"window, or check that channel positions are not all invalid."
         )
-    n_hidden = min(max(1, round(n_tokens * mask_ratio)), n_tokens - 1)
-    # Ranking random scores hides exactly `n_hidden` tokens per example, which
-    # keeps the loss comparable across the batch.
-    ranks = torch.rand(batch_size, n_tokens, device=device).argsort(dim=1)
-    return ranks < n_hidden
+    # Ranking random scores hides a precise fraction of each example's tokens;
+    # sending invalid ones to the back of the ranking keeps them out of it.
+    scores = torch.rand_like(valid, dtype=torch.float).masked_fill(~valid, torch.inf)
+    ranks = scores.argsort(dim=1).argsort(dim=1)
+    n_hidden = (n_valid * mask_ratio).round().long().clamp(min=1)
+    return ranks < torch.minimum(n_hidden, n_valid - 1)
 
 
 class MaeModule(pl.LightningModule):
@@ -57,11 +62,11 @@ class MaeModule(pl.LightningModule):
     configured with ``stride``.
 
     Hidden patches are replaced by a learned mask token and run through the
-    encoder along with the visible ones, so the encoder sees full-length
-    sequences here exactly as it will downstream, and a single linear layer
-    reads the reconstruction off its output.  The original MAE instead encodes
-    only the visible patches and restores the rest with a transformer decoder,
-    which is cheaper per step and a natural thing to try.
+    encoder along with the visible ones, so the encoder sees the same kind of
+    sequence here as it will downstream, and a single linear layer reads the
+    reconstruction off its output.  The original MAE instead encodes only the
+    visible patches and restores the rest with a transformer decoder, which is
+    cheaper per step and a natural thing to try.
 
     Only ``model`` outlives pretraining; the mask token and the linear
     reconstruction layer are scaffolding, which is why they live here rather
@@ -77,7 +82,7 @@ class MaeModule(pl.LightningModule):
     optim_config :
         Optimizer configuration.
     mask_ratio :
-        Fraction of time patches hidden from the encoder.
+        Fraction of each example's channel-time patches hidden from the encoder.
     x_name, channel_positions_name :
         Batch keys holding the neuro input and its channel positions.
     """
@@ -102,25 +107,26 @@ class MaeModule(pl.LightningModule):
         self.channel_positions_name = channel_positions_name
 
         self.mask_token = nn.Parameter(torch.zeros(1, 1, model.dim))
-        self.reconstruct = nn.Linear(model.dim, model.patch_dim)
+        self.reconstruct = nn.Linear(model.dim, model.patch_size)
 
     def _run_step(self, batch: tp.Any, step_name: str) -> torch.Tensor:
         x = batch.data[self.x_name]
-        merged = self.model.merge(x, batch.data[self.channel_positions_name])
-        tokens = self.model.patch_tokens(merged)
-        mask = random_mask(
-            tokens.shape[0], tokens.shape[1], self.mask_ratio, tokens.device
-        )
+        channel_positions = batch.data[self.channel_positions_name]
+
+        patches = self.model.patchify(x)
+        valid = self.model.valid_tokens(channel_positions, patches.shape[2])
+        hidden = random_mask(valid, self.mask_ratio)
+
+        tokens = self.model.patch_tokens(x)
         # Substituting before positions are added leaves a hidden token its
-        # place in the sequence and takes only its content.
-        tokens = torch.where(mask[..., None], self.mask_token.to(tokens), tokens)
-        encoded = self.model.encoder(self.model.add_positions(tokens))
-        # The target is detached so that the merger is trained to feed the
-        # encoder, never to make its own output easier to predict.
+        # place on the head and in time, and takes only its content.
+        tokens = torch.where(hidden[..., None], self.mask_token.to(tokens), tokens)
+        tokens = self.model.add_positions(tokens, channel_positions)
+        # Hidden tokens stay in the sequence -- predicting them is the task;
+        # absent channels do not, since their padding is not signal.
+        encoded = self.model.encoder(tokens, mask=valid)
         loss = self.loss(
-            self.reconstruct(encoded),
-            self.model.patchify(merged).detach(),
-            mask.to(tokens),
+            self.reconstruct(encoded), patches.flatten(1, 2), hidden.to(tokens)
         )
 
         self.log(
