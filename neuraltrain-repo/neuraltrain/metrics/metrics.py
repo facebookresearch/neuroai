@@ -494,7 +494,14 @@ class ImageSimilarity(torchmetrics.Metric):
         elif model_name == "efficientnet":
             net = tvmodels.efficientnet_b1(weights=True)
         elif model_name == "swav":
-            net = torch.hub.load("facebookresearch/swav:main", "resnet50")
+            # skip_validation drops the GitHub API call checking the repo is not
+            # a fork: it is rate-limited per IP, so shared CI runners get a 403
+            net = torch.hub.load(
+                "facebookresearch/swav:main",
+                "resnet50",
+                trust_repo=True,
+                skip_validation=True,
+            )
 
         self.net = net.float().eval()
 
