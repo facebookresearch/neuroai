@@ -255,7 +255,7 @@ class TimelineLoader(base.Step):
 
     CACHE_TYPE: tp.ClassVar[str | None] = "ValidatedParquet"  # preserves str dtypes
 
-    # Study.model_post_init reverts this to None when no cache folder resolves
+    # Study._body downgrades this to inline when no cache folder resolves
     infra: backends.Backend | None = backends.ProcessPool(keep_in_ram=True)
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -319,6 +319,7 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     _timelines: list[dict[str, tp.Any]] | None = (
         None  # iter_timelines() memo; dropped at pickle
     )
+    _inline_loader: TimelineLoader | None = None
 
     # Class level info
     _info: tp.ClassVar[None | StudyInfo] = None  # for easy testing
@@ -509,10 +510,6 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
             self.path = self.path / name
         STUDY_PATHS[self.__class__.__name__] = self.path  # record for path lookup
 
-        if "infra" not in self.timelines.model_fields_set:
-            if self.infra is None or self.infra.folder is None:
-                self.timelines.infra = None  # a backend needs a folder
-
     def __init_subclass__(cls, **kwargs: tp.Any) -> None:
         name = cls.__name__
         super().__init_subclass__(**kwargs)
@@ -615,6 +612,17 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
             raise RuntimeError(msg)
         self._timelines = tls
         return tls
+
+    def _body(self) -> base.Step:
+        """The timeline loader, inline when no cache folder resolves."""
+        loader = self.timelines
+        if "infra" in loader.model_fields_set or loader.infra is None:
+            return loader  # explicit choice
+        if loader.infra.folder is not None:
+            return loader
+        if self._inline_loader is None:
+            self._inline_loader = loader.model_copy(update={"infra": None})
+        return self._inline_loader
 
     def branches(self, item: tp.Any) -> list[dict[str, tp.Any]]:
         """Query-selected timeline dicts to load, one per branch (``item`` is unused)."""

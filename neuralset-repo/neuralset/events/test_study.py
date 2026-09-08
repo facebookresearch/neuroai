@@ -460,6 +460,7 @@ def test_raw_studychain(tmp_path: Path, as_dict: bool) -> None:
         {
             "name": "Test2023Meg",
             "path": tmp_path / "data",
+            "timelines": {"infra": None},  # no multiproc in tests
         },
         {"name": "FakeChapter", "path": tmp_path, "infra": infra},  # cache
         {"name": "ChunkEvents", "event_type_to_chunk": "Audio", "max_duration": 5.0},
@@ -487,6 +488,7 @@ def test_bad_transform(tmp_path: Path):
         {
             "name": "FakeData2025",
             "path": tmp_path,
+            "timelines": {"infra": None},
         },
         {"name": "BadEnhancer"},
     ]
@@ -527,21 +529,19 @@ def test_study_discovery(tmp_path: Path) -> None:
 def test_intermediary_study_cache(tmp_path: Path) -> None:
     infra: tp.Any = {"backend": "Cached", "folder": tmp_path}
     steps: list[tp.Any] = [
-        # cache after study as it can be slow
         {
             "name": "Fake2025Meg",
             "path": ns.CACHE_FOLDER,
-            "infra": infra,
-            "timelines": {"infra": {"backend": "Cached"}},
+            "infra": infra,  # cache after study as it can be slow
+            "timelines": {"infra": {"backend": "Cached"}},  # no multiproc in tests
         },
-        #  Cache after chunking - useful if chunking is slow
         {
             "name": "ChunkEvents",
             "event_type_to_chunk": "Audio",
             "max_duration": 5.0,
-            "infra": infra,
+            "infra": infra,  # cache: useful if chunking is slow
         },
-        # Step 4: Cache after chunking - useful if chunking is slow
+        # Step 4: fast filtering -> no caching
         {"name": "QueryEvents", "query": "type in ['Audio', 'Word', 'Meg']"},
     ]
     chain = ns.Chain(steps=steps, infra=infra)
@@ -562,9 +562,18 @@ def test_intermediary_study_cache(tmp_path: Path) -> None:
     assert chain_caches == {study, chunk, query, loader}
 
 
+def test_timelines_cache_with_chain_folder(tmp_path: Path) -> None:
+    steps: tp.Any = [{"name": "Fake2025Meg", "path": ns.CACHE_FOLDER}]
+    infra: tp.Any = {"backend": "Cached", "folder": tmp_path}
+    ns.Chain(steps=steps, infra=infra).run()
+    caches = set(extract_cache_folders(tmp_path))
+    loader = "version=v3,name=Fake2025Meg-ff4b4eb4/name=TimelineLoader-99bb1625"
+    assert loader in caches, f"chain folder must reach the loader, got {caches}"
+
+
 def test_validate_events_in_steps(tmp_path: Path) -> None:
     steps: list[tp.Any] = [
-        {"name": "Fake2025Meg", "path": ns.CACHE_FOLDER},
+        {"name": "Fake2025Meg", "path": ns.CACHE_FOLDER, "timelines": {"infra": None}},
         {"name": "ChunkEvents", "event_type_to_chunk": "Audio", "max_duration": 5.0},
     ]
     infra: tp.Any = {"backend": "Cached", "folder": tmp_path}
@@ -583,7 +592,7 @@ def test_sub_chain(tmp_path) -> None:
     # Main chain that uses the sub-chain
     steps = [
         # Step 1: Load the study
-        {"name": "Fake2025Meg", "path": ns.CACHE_FOLDER},
+        {"name": "Fake2025Meg", "path": ns.CACHE_FOLDER, "timelines": {"infra": None}},
         # Step 2: Apply audio preprocessing sub-chain
         audio_subchain,
         # Step 3: Filter to relevant events
