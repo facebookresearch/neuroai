@@ -20,6 +20,9 @@ update = {
     "accelerator": "cpu",
     "fast_dev_run": True,
     "wandb_config": None,
+    # `fast_dev_run` trains on one batch, so sliding the window instead of
+    # stepping it would only make the segmentation slower
+    "data.segmenter.stride": 12.0,
 }
 
 
