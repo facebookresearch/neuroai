@@ -73,12 +73,12 @@ comparison figures and tables from the stored results (no retraining):
    :gutter: 2
 
    .. grid-item-card:: :fas:`rocket` Quickstart
-      :link: auto_examples/quickstart/01_run_first_task
+      :link: auto_examples/quickstart/index
       :link-type: doc
       :class-card: sd-shadow-sm
 
-      Run your first benchmark task: CLI usage, debug mode, model
-      switching, and hyperparameter grids.
+      Run your first benchmark task, three ways: the CLI, the same
+      selections from Python, and a model of your own.
 
    .. grid-item-card:: :fas:`chart-bar` Visualizing Results
       :link: auto_examples/results/plot_visualize_results

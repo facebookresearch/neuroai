@@ -157,7 +157,12 @@ class Experiment(BaseExperiment):
         # Seed before any model construction so wrapper/adapters/lazy init do
         # not depend on RNG already consumed by data preparation or setup.
         pl.seed_everything(self.seed, workers=True)
-        brain_model, self._n_total_params, self._n_trainable_params = build_brain_model(
+        (
+            brain_model,
+            self._n_total_params,
+            self._n_trainable_params,
+            ch_names,
+        ) = build_brain_model(
             brain_model_config=self.brain_model_config,
             downstream_model_wrapper=self.downstream_model_wrapper,
             pretrained_weights_fname=self.pretrained_weights_fname,
@@ -190,6 +195,7 @@ class Experiment(BaseExperiment):
 
         self._brain_module = BrainModule(
             model=brain_model,
+            ch_names=ch_names,
             target_scaler=self.target_scaler,
             augmentation=None if self.augmentation is None else self.augmentation.build(),
             loss=self.loss.build(**loss_kwargs),

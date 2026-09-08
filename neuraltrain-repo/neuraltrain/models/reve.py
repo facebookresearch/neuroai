@@ -11,6 +11,10 @@ Includes the following adaptations over the raw braindecode REVE model:
 * **Channel name remapping** -- an explicit ``channel_mapping`` dict maps
   dataset channel names to names recognised by REVE's position bank.
   Channels whose names already appear in the bank need no entry.
+* **Per-batch channel positions** -- the wrapper takes the dataset's
+  ``channel_positions`` as REVE's ``pos`` for any montage the build could not
+  resolve from the position bank, so one instance serves montages it was not
+  built for.
 * **Pretrained loading** -- REVE's ``__init__`` requires ``n_times`` and
   ``n_outputs`` to build its ``final_layer``, but
   :class:`BaseBrainDecodeModel.build` blocks ``n_times`` for pretrained
@@ -28,19 +32,27 @@ import torch
 import torch.nn as nn
 
 from .base import BaseBrainDecodeModel, RequiredBuildField
-from .common import parse_bipolar_name
+from .common import INVALID_POS_VALUE, parse_bipolar_name
 
 logger = logging.getLogger(__name__)
 
 
 class _ReveWrapper(nn.Module):
-    """Thin wrapper around REVE for channel subsetting and encoder-only output.
+    """Thin wrapper around REVE for channel handling and encoder-only output.
 
-    Combines two optional adaptations in a single module:
+    Combines three adaptations in a single module:
 
-    * **Channel subsetting** -- when *channel_indices* is not ``None``,
-      the input EEG tensor is sliced along the channel dimension before
-      forwarding to REVE.  No-op when ``None``.
+    * **Channel subsetting** -- when *channel_indices* is not ``None``, the EEG
+      tensor and the channel positions are sliced along the channel dimension
+      before forwarding to REVE.  No-op when ``None``.
+    * **Channel positions** -- when the build named every channel,
+      *bank_positions* wins: those are the coordinates REVE was pretrained
+      with, and using them keeps a result independent of how the montage was
+      digitised.  Otherwise the batch's ``channel_positions`` become REVE's
+      ``pos``, and channels the montage could not place (they arrive as
+      ``INVALID_POS_VALUE``) are dropped.  A bank only lines up with the
+      montage it was built from, so an instance that must span montages of the
+      same width should be built without ``chs_info``.
     * **Encoder-only output** -- when *encoder_only* is ``True``, the
       forward call passes ``return_output=True`` to REVE and returns the
       final transformer layer output (index ``-1``), bypassing REVE's
@@ -48,16 +60,19 @@ class _ReveWrapper(nn.Module):
     """
 
     channel_indices: torch.Tensor | None
+    bank_positions: torch.Tensor | None
 
     def __init__(
         self,
         model: nn.Module,
         channel_indices: list[int] | None = None,
         encoder_only: bool = False,
+        bank_positions: torch.Tensor | None = None,
     ):
         super().__init__()
         self.model = model
         self.encoder_only = encoder_only
+        self.register_buffer("bank_positions", bank_positions)
         if channel_indices is not None:
             self.register_buffer(
                 "channel_indices",
@@ -67,13 +82,27 @@ class _ReveWrapper(nn.Module):
             self.register_buffer("channel_indices", None)
 
     def forward(
-        self, eeg: torch.Tensor, pos: torch.Tensor | None = None, **kwargs: tp.Any
+        self,
+        eeg: torch.Tensor,
+        channel_positions: torch.Tensor | None = None,
+        **kwargs: tp.Any,
     ) -> torch.Tensor:
         if self.channel_indices is not None:
             eeg = eeg[:, self.channel_indices]
+            if channel_positions is not None:
+                channel_positions = channel_positions[:, self.channel_indices]
+        bank = self.bank_positions
+        if bank is not None and eeg.shape[1] == bank.shape[0]:
+            channel_positions = bank.to(eeg).expand(eeg.shape[0], -1, -1)
+        elif channel_positions is not None:
+            unplaced = (channel_positions == INVALID_POS_VALUE).all(dim=-1)
+            keep = ~unplaced.any(dim=0)
+            eeg, channel_positions = eeg[:, keep], channel_positions[:, keep]
         if self.encoder_only:
-            return self.model(eeg, pos=pos, return_output=True, **kwargs)[-1]
-        return self.model(eeg, pos=pos, **kwargs)
+            return self.model(eeg, pos=channel_positions, return_output=True, **kwargs)[
+                -1
+            ]
+        return self.model(eeg, pos=channel_positions, **kwargs)
 
 
 class NtReve(BaseBrainDecodeModel):
@@ -152,7 +181,8 @@ class NtReve(BaseBrainDecodeModel):
         n_chans = n_spatial_locations
 
         channel_indices: list[int] | None = None
-        custom_positions: torch.Tensor | None = None
+        bank_positions: torch.Tensor | None = None
+        n_derived = 0
 
         if chs_info is not None:
             from braindecode.models.reve import RevePositionBank
@@ -164,7 +194,6 @@ class NtReve(BaseBrainDecodeModel):
             valid_chs: list[dict[str, tp.Any]] = []
             positions: list[torch.Tensor] = []
             dropped: list[str] = []
-            n_derived = 0
 
             for i, ch in enumerate(chs_info):
                 name = ch["ch_name"]
@@ -213,14 +242,13 @@ class NtReve(BaseBrainDecodeModel):
                 n_derived,
             )
 
-            if n_derived > 0:
-                custom_positions = torch.stack(positions)
+            bank_positions = torch.stack(positions)
 
         build_kwargs: dict[str, tp.Any] = {
             "n_chans": n_chans,
             "n_times": n_temporal_samples,
         }
-        if chs_info is not None and custom_positions is None:
+        if chs_info is not None and n_derived == 0:
             build_kwargs["chs_info"] = chs_info
 
         encoder_only = n_outputs is None
@@ -232,7 +260,7 @@ class NtReve(BaseBrainDecodeModel):
 
         model = self._construct(**build_kwargs)
 
-        if custom_positions is not None:
-            model.default_pos = custom_positions
+        if bank_positions is not None and n_derived > 0:
+            model.default_pos = bank_positions
 
-        return _ReveWrapper(model, channel_indices, encoder_only)
+        return _ReveWrapper(model, channel_indices, encoder_only, bank_positions)

@@ -13,6 +13,7 @@ configs ready for ``BenchmarkAggregator``.
 import logging
 import os
 import shutil
+import typing as tp
 from itertools import product
 from pathlib import Path
 from warnings import warn
@@ -32,21 +33,43 @@ from neuralbench.registry import (
 
 LOGGER = logging.getLogger(__name__)
 
+#: A registered model name, an inline config dict (:mod:`neuralbench.evaluate`),
+#: or ``None`` for the default model of ``defaults/config.yaml``.
+ModelSpec = str | dict[str, tp.Any] | None
+
 # ---------------------------------------------------------------------------
 # Mode overlays
 # ---------------------------------------------------------------------------
+
+
+def apply_cluster(config: ConfDict, cluster: str | None) -> None:
+    """Point every infra in *config* at *cluster*.
+
+    ``None`` computes in-process (exca maps it to submitit's debug executor, so
+    a job array runs inline and blocks); ``"auto"`` fans out to SLURM when one
+    is available and falls back to local otherwise.
+
+    The run and the extractor/target caches are set together: leaving a cache
+    on SLURM while the run is local, or the reverse, is never what a caller
+    means and fails confusingly on machines without a cluster.
+    """
+    config["infra.cluster"] = cluster
+    if "data" in config:
+        config["data.neuro.infra.cluster"] = cluster
+    target_cfg = config.get("data", {}).get("target", {})
+    if isinstance(target_cfg, dict) and "infra" in target_cfg:
+        config["data.target.infra.cluster"] = cluster
 
 
 def _apply_debug_overlay(config: ConfDict) -> None:
     """Apply debug-mode overrides: disable SLURM/W&B, reduce epochs and batches."""
     LOGGER.info("--- RUNNING IN DEBUG MODE ---")
     config["wandb_config"] = None
-    config["infra.cluster"] = None
+    apply_cluster(config, None)
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
     if "data" in config:
-        config["data.neuro.infra.cluster"] = None
         config["data.batch_size"] = 8
         config["trainer_config"] = {
             "strategy": "auto",
@@ -64,20 +87,13 @@ def _apply_debug_overlay(config: ConfDict) -> None:
 def _apply_prepare_overlay(config: ConfDict) -> None:
     """Apply prepare-mode overrides: single run to warm the preprocessing cache."""
     LOGGER.info("--- RUNNING SINGLE EXPERIMENT TO PREPARE CACHE ---")
-    # Use the configured CLUSTER for both the run and the extractor/target
-    # caches. "auto" already fans out to SLURM when available (submitit's auto
-    # executor) and falls back to local otherwise, so we avoid hard-coding
-    # "slurm", which would fail on machines without a SLURM cluster.
-    cluster = get_config().get("CLUSTER", "auto")
-    config["infra.cluster"] = cluster
+    apply_cluster(config, get_config().get("CLUSTER", "auto"))
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
-    config["data.neuro.infra.cluster"] = cluster
     config["data.neuro.infra.min_samples_per_job"] = 8
     target_cfg = config.get("data", {}).get("target", {})
     if isinstance(target_cfg, dict) and "infra" in target_cfg:
-        config["data.target.infra.cluster"] = cluster
         config["data.target.infra.min_samples_per_job"] = 8
     if "trainer_config" in config:
         config["trainer_config"] = {
@@ -248,7 +264,7 @@ def prepare_task_configs(
     force: bool,
     prepare: bool,
     download: bool,
-    models: list[str | None],
+    models: tp.Sequence[ModelSpec],
     datasets: list[str | None] | None = None,
     quiet: bool = False,
     retry: bool = False,
@@ -263,13 +279,19 @@ def prepare_task_configs(
     config = merge_task_config(device, task_name, base=config)
 
     configs = []
-    for model_name in models:
+    for model in models:
         exp_config = config.copy()
-        if model_name is not None:
+        if model is not None:
+            # A dict is an inline config: out-of-tree models reach the
+            # benchmark through neuralbench.evaluate and have no models/*.yaml.
+            if isinstance(model, dict):
+                model_config = model
+                label = model.get("brain_model_name", "inline config")
+            else:
+                model_config = load_yaml_config(_resolve_model_config_path(model)) or {}
+                label = model
             if not quiet:
-                LOGGER.info("--- USING MODEL %s ---", model_name)
-            model_config_fname = _resolve_model_config_path(model_name)
-            model_config = load_yaml_config(model_config_fname)
+                LOGGER.info("--- USING MODEL %s ---", label)
             exp_config.update(model_config)
 
         for dataset_name in datasets:
@@ -295,6 +317,139 @@ def prepare_task_configs(
             )
             configs.extend(exp_configs)
 
+    return configs
+
+
+def build_experiment_configs(
+    device: str,
+    task: str | list[str],
+    *,
+    model: str | list[str] | dict[str, tp.Any] | None = None,
+    dataset: str | list[str] | None = None,
+    checkpoint: str | None = None,
+    downstream_wrapper: str | list[str] | None = None,
+    grid: bool = False,
+    debug: bool = False,
+    force: bool = False,
+    retry: bool = False,
+    prepare: bool = False,
+    download: bool = False,
+    quiet: bool = False,
+) -> list[ConfDict]:
+    """Assemble one experiment config per (task, dataset, model, grid point).
+
+    The single home for turning benchmark selections into configs, shared by
+    :func:`neuralbench.cli.run_benchmark` and
+    :mod:`neuralbench.evaluate`.  *model* is a registered name (or ``"all"``
+    and friends) as on the CLI, or an already-loaded config dict for a model
+    with no ``models/*.yaml`` -- see :mod:`neuralbench.evaluate`.
+
+    Arguments mirror :func:`neuralbench.cli.run_benchmark`; see its docstring.
+    """
+    from neuralbench.config_manager import _ensure_initialized
+    from neuralbench.registry import (
+        ALL_DOWNSTREAM_WRAPPERS,
+        DEVICE_FM_MODELS,
+        FM_MODELS,
+        _expand_models,
+        _resolve_datasets,
+        _resolve_tasks,
+        _validate_inputs,
+    )
+
+    _ensure_initialized()
+    inline_model = model if isinstance(model, dict) else None
+    _validate_inputs(device, task, None if inline_model else model, downstream_wrapper)  # type: ignore[arg-type]
+    _warn_slurm_partition(debug, prepare=prepare, download=download)
+    _warn_unsupported_gpu()
+
+    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+    # A blank W&B host means logging is off for the whole pipeline (mirrors
+    # the debug-mode overlay).
+    wandb_cfg = config.get("wandb_config")
+    host = wandb_cfg.get("host") if isinstance(wandb_cfg, dict) else None
+    if not host:
+        config["wandb_config"] = None
+
+    grid_conf = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))
+    if prepare or debug:
+        grid_conf["seed"] = [grid_conf["seed"][0]]
+
+    if checkpoint is not None:
+        config["pretrained_weights_fname"] = checkpoint
+
+    overlays: list[dict[str, tp.Any]] | None = None
+    if downstream_wrapper is not None:
+        wrappers = (
+            [downstream_wrapper]
+            if isinstance(downstream_wrapper, str)
+            else list(downstream_wrapper)
+        )
+        if wrappers == ["all"]:
+            wrappers = list(ALL_DOWNSTREAM_WRAPPERS.keys())
+        overlays = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
+
+    tasks = _resolve_tasks(device, task)
+
+    configs: list[ConfDict] = []
+    task_iter: tp.Iterable[str] = tasks
+    if prepare and len(tasks) > 1:
+        from tqdm import tqdm
+
+        task_iter = tqdm(tasks, desc="Preparing tasks")
+
+    for task_name in task_iter:
+        # Resolve models per-task so the `all` / `all_baseline` aliases pick
+        # only the task-appropriate sklearn baseline (via FEATURE_BASED_BY_TASK)
+        # instead of launching every pipeline on every task.
+        models: list[ModelSpec] = (
+            [inline_model]
+            if inline_model is not None
+            else list(_expand_models(model, device=device, task_name=task_name))  # type: ignore[arg-type]
+        )
+        datasets = _resolve_datasets(device, task_name, dataset)
+        # adaptation needs a pretrained backbone: non-FMs get an overlay-free grid
+        model_groups: list[tuple[ConfDict, list[ModelSpec]]]
+        if overlays is not None:
+            # An out-of-tree model is a backbone by assumption: it is not in the
+            # in-tree FM list, but adaptation is exactly why it is being run.
+            fm_names = set(DEVICE_FM_MODELS.get(device, FM_MODELS))
+            inline = inline_model is not None
+            fm_models = [m for m in models if inline or m in fm_names]
+            other_models = [m for m in models if not inline and m not in fm_names]
+            if not fm_models:
+                LOGGER.warning(
+                    "Adaptation wrappers requested (-w) but no foundation model "
+                    "selected for task %r; running without adaptation.",
+                    task_name,
+                )
+            model_groups = []
+            if fm_models:
+                fm_grid = grid_conf.copy()
+                fm_grid["_adaptation_overlay"] = overlays
+                model_groups.append((fm_grid, fm_models))
+            if other_models:
+                model_groups.append((grid_conf, other_models))
+        else:
+            model_groups = [(grid_conf, models)]
+        for group_grid, group_models in model_groups:
+            configs.extend(
+                prepare_task_configs(
+                    config.copy(),
+                    group_grid,
+                    device,
+                    task_name,
+                    grid,
+                    debug,
+                    force,
+                    prepare,
+                    download,
+                    group_models,
+                    datasets,
+                    quiet=quiet,
+                    retry=retry,
+                )
+            )
     return configs
 
 

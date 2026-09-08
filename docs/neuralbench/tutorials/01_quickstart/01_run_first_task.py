@@ -222,6 +222,12 @@ results programmatically.
 # Next steps
 # ----------
 #
+# - :doc:`Drive the same runs from Python
+#   </neuralbench/auto_examples/quickstart/02_using_python_api>` when the
+#   benchmark is one step of a scripted workflow.
+# - :doc:`Evaluate a model of your own
+#   </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>`, with no
+#   config in this repo.
 # - :doc:`Visualize results
 #   </neuralbench/auto_examples/results/plot_visualize_results>` from
 #   completed experiments.

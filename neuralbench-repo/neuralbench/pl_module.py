@@ -44,6 +44,10 @@ class BrainModule(pl.LightningModule):
         A scaler to apply to the target values.
     augmentation : nn.Module | None, optional
         Augmentation applied to the neuro input during training only.
+    ch_names : list[str] | None, optional
+        Names of the channels the model receives, passed to every forward call
+        of a model that names ``ch_names`` -- models keyed by electrode name
+        (e.g. LaBraM) cannot get that from ``channel_positions``.
     """
 
     def __init__(
@@ -56,11 +60,13 @@ class BrainModule(pl.LightningModule):
         test_full_retrieval_metrics: dict[str, Metric] | None = None,
         target_scaler: StandardScaler | None = None,
         augmentation: nn.Module | None = None,
+        ch_names: list[str] | None = None,
     ):
         super().__init__()
         self._infer_forward_params(model)
         self.model = model
         self.augmentation = augmentation
+        self._ch_names = ch_names
 
         self.loss = loss
         self.target_scaler = target_scaler
@@ -106,6 +112,7 @@ class BrainModule(pl.LightningModule):
             or has_preprocessor
             or adapter_needs_positions
         )
+        self._requires_ch_names = "ch_names" in forward_sig.parameters
 
     @staticmethod
     def _update_metrics(
@@ -119,25 +126,25 @@ class BrainModule(pl.LightningModule):
             }
         )
 
-    def model_forward(self, batch: Batch) -> torch.Tensor:
+    def _forward_inputs(self, batch: Batch) -> dict[str, tp.Any]:
         neuro = batch.data["neuro"]
         if self.augmentation is not None and self.training:
             neuro = self.augmentation(neuro)
-        inputs = {self._input_name: neuro}
+        inputs: dict[str, tp.Any] = {self._input_name: neuro}
         if self._requires_subject:
             inputs["subject_ids"] = batch.data["subject_id"]
         if self._requires_channel_positions:
             inputs["channel_positions"] = batch.data["channel_positions"]
-        return self.model(**inputs)
+        if self._requires_ch_names and self._ch_names is not None:
+            inputs["ch_names"] = self._ch_names
+        return inputs
+
+    def model_forward(self, batch: Batch) -> torch.Tensor:
+        return self.model(**self._forward_inputs(batch))
 
     def model_forward_embedding(self, batch: Batch) -> torch.Tensor:
         """Forward pass returning the penultimate embedding (before the probe)."""
-        inputs = {self._input_name: batch.data["neuro"]}
-        if self._requires_subject:
-            inputs["subject_ids"] = batch.data["subject_id"]
-        if self._requires_channel_positions:
-            inputs["channel_positions"] = batch.data["channel_positions"]
-        return self.model(**inputs, return_embedding=True)
+        return self.model(**self._forward_inputs(batch), return_embedding=True)
 
     def _run_step(
         self, batch: Batch, step_name: str, batch_idx: int

@@ -542,7 +542,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     def build(
         self,
         model: nn.Module,
-        dummy_batch: dict[str, torch.Tensor | None],
+        dummy_batch: dict[str, tp.Any],
         n_outputs: int,
         input_channel_names: list[str] | None = None,
     ) -> "DownstreamWrapperModel":

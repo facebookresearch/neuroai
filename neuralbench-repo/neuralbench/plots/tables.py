@@ -307,8 +307,14 @@ def make_full_table(
 def print_skip_table(
     total: dict[tuple[str, str], int],
     skipped: dict[tuple[str, str], int],
+    failed: dict[tuple[str, str], int] | None = None,
 ) -> None:
-    """Print a tasks x models table of included / total experiment counts."""
+    """Print a tasks x models table of included / total experiment counts.
+
+    *failed* is the subset of *skipped* whose job errored out, as opposed to
+    not having run yet; those counts are marked with a trailing ``!n``.
+    """
+    failed = failed or {}
     tasks = sorted({t for t, _ in total})
     models = sorted({m for _, m in total})
 
@@ -320,7 +326,10 @@ def print_skip_table(
             key = (task, model)
             n_total = total.get(key, 0)
             n_included = n_total - skipped.get(key, 0)
-            cells[key] = f"{n_included}/{n_total}" if n_total else "-"
+            n_failed = failed.get(key, 0)
+            cells[key] = "-" if not n_total else f"{n_included}/{n_total}"
+            if n_failed:
+                cells[key] += f"!{n_failed}"
             inc, tot = model_totals[model]
             model_totals[model] = (inc + n_included, tot + n_total)
             tinc, ttot = task_totals[task]
@@ -348,7 +357,9 @@ def print_skip_table(
 
     n_skip = sum(skipped.values())
     n_total = sum(total.values())
+    n_failed = sum(failed.values())
+    legend = f"\n!n = n experiment(s) failed ({n_failed} total)." if n_failed else ""
     print(
         f"\nExperiments with cached results ({n_total - n_skip}/{n_total} included):\n"
-        f"{table_df.to_string()}"
+        f"{table_df.to_string()}{legend}"
     )
