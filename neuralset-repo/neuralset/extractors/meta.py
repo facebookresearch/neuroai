@@ -6,8 +6,9 @@
 
 import hashlib
 import logging
-import tempfile
+import shutil
 import typing as tp
+from pathlib import Path
 
 import exca
 import numpy as np
@@ -308,22 +309,27 @@ class HuggingFacePCA(ExtractorPCA):
 
     def prepare(self, obj: tp.Any) -> None:
         pca_events = self._prepare_pca_uid(obj)
+        if not isinstance(self.extractor, HuggingFaceMixin):  # for typing
+            raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
+        basefolder = Path(self.extractor.infra.folder)
+        # uid-keyed (events + extractor): retries reuse it, other models can't rmtree it
+        uid_folder = self.extractor.infra.uid_folder()
+        staging = basefolder / f"HF-PCA-tmp-{self._uid},{uid_folder.name}"
         if not pca_events:
             logger.debug("In %r, all events for uid=%r are cached", self, self._uid)
+            if self.use_tmp_cache:
+                shutil.rmtree(staging, ignore_errors=True)  # kill leftover
             return  # all done
 
         from sklearn.decomposition import PCA
 
         # Note: all the PCA has to be done on prepare (in the main thread)
         # because it cannot be split and distributed onto many machines
-        if not isinstance(self.extractor, HuggingFaceMixin):  # for typing
-            raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
         events = list(pca_events.values())
-        basefolder = self.extractor.infra.folder
-        with tempfile.TemporaryDirectory(prefix="HF-PCA-tmp", dir=basefolder) as tmp:
-            # change to a temporary folder folder that will be deleted
-            feat_folder = tmp if self.use_tmp_cache else basefolder
-            feat = self.extractor.infra.clone_obj(**{"infra.folder": feat_folder})
+        feat_folder = staging if self.use_tmp_cache else basefolder
+        feat = self.extractor.infra.clone_obj(**{"infra.folder": feat_folder})
+        embds: list[np.ndarray] = []
+        try:
             feat.prepare(events)
             embds = list(feat._get_data(events))  # N x Layer x *Embd
             # note: this may be too big to keep in memory, so we dont turn it to array
@@ -335,8 +341,9 @@ class HuggingFacePCA(ExtractorPCA):
                 pca = PCA(n_components=self.n_components, whiten=self.whiten)
                 layers.append(pca.fit_transform(layer))
                 del layer  # free memory if need be
+        finally:
+            # open fd + a peer's rmtree -> ".nfs*" ghost ("Device or resource busy")
             embds.clear()
-            # avoid keeping files open, explicitly delete cache
             del feat.infra._state.cache_dict
             del feat
         # back to N * Layer * prod(*Embd)
@@ -350,6 +357,9 @@ class HuggingFacePCA(ExtractorPCA):
                 if i_uid not in done:
                     w[i_uid] = d
                     done.add(i_uid)
+        # failures skip this: staging survives for the retry
+        if self.use_tmp_cache:
+            shutil.rmtree(staging, ignore_errors=True)
         logger.debug("%r.prepare finished with uid=%r", self, self._uid)
 
     def _get_timed_arrays(
