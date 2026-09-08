@@ -40,8 +40,8 @@ self-supervision changes, and nothing else:
 - the segmenter has an `"input"` extractor and channel positions, but no
   `"target"` one;
 - the split holds out whole subjects, so the validation loss measures
-  reconstruction of a recording the encoder has never seen rather than of a
-  near-copy of its training windows;
+  reconstruction of a recording the encoder has never seen rather than of
+  another window of one it trained on;
 - the run ends by saving the **encoder alone**, since the mask token and the
   reconstruction layer are pretraining scaffolding that downstream tasks throw
   away.
@@ -103,10 +103,10 @@ neuralbench eeg motor_imagery -m mae --checkpoint <path>/encoder.ckpt \
     -w linear_probe_mean
 ```
 
-`neuralbench` rebuilds the same encoder, loads the weights into it, freezes it,
-and trains only a linear probe on top, which is what makes the score a measure
-of the pretrained representation rather than of the fine-tuning that would
-otherwise follow. Note that pretraining above includes the dataset behind this
+`neuralbench` rebuilds the same encoder and loads the weights into it, and
+`-w linear_probe_mean` freezes it and trains only a linear probe on top, which
+is what makes the score a measure of the pretrained representation rather than
+of the fine-tuning that would otherwise follow. Note that pretraining above includes the dataset behind this
 task, so the score says nothing about generalising to data the encoder has never
 seen -- use a task built on another dataset for that.
 

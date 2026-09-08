@@ -110,21 +110,26 @@ class MaeEncoderModel(nn.Module):
         valid = (channel_positions != INVALID_POS_VALUE).any(dim=-1)
         return valid[:, :, None].expand(-1, -1, n_patches).flatten(1)
 
-    def patch_tokens(self, x: torch.Tensor) -> torch.Tensor:
+    def patch_tokens(self, patches: torch.Tensor) -> torch.Tensor:
         """Embed patch contents as ``(B, C * n_patches, dim)``, without positions.
 
         Separate from :meth:`add_positions` so that pretraining can substitute
         its mask token before positions are added.
         """
-        return self.patch_embed(self.patchify(x)).flatten(1, 2)
+        return self.patch_embed(patches).flatten(1, 2)
 
     def add_positions(
-        self, tokens: torch.Tensor, channel_positions: torch.Tensor
+        self, tokens: torch.Tensor, channel_positions: torch.Tensor, n_patches: int
     ) -> torch.Tensor:
         """Add time and channel embeddings to a ``(B, C * n_patches, dim)`` sequence."""
         n_channels = channel_positions.shape[1]
         batch_size, n_tokens, _ = tokens.shape
-        n_patches = n_tokens // n_channels
+        if n_tokens != n_channels * n_patches:
+            raise ValueError(
+                f"got {n_tokens} tokens for {n_channels} channels of {n_patches} "
+                f"patches: `channel_positions` must carry one position per channel "
+                f"of the input, in the same order."
+            )
 
         time = self._time_embedding(n_patches).to(tokens)
         channel = self.channel_embed(self.channel_emb(channel_positions))
@@ -150,9 +155,12 @@ class MaeEncoderModel(nn.Module):
         in nothing rather than noise.  With an output head, tokens are pooled
         over the present channels only and projected to ``(B, n_outputs)``.
         """
-        n_patches = self.patchify(x).shape[2]
+        patches = self.patchify(x)
+        n_patches = patches.shape[2]
         valid = self.valid_tokens(channel_positions, n_patches)
-        tokens = self.add_positions(self.patch_tokens(x), channel_positions)
+        tokens = self.add_positions(
+            self.patch_tokens(patches), channel_positions, n_patches
+        )
         encoded = self.encoder(tokens, mask=valid) * valid[..., None]
         if self.head is None:
             return encoded

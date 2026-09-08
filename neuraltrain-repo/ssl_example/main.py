@@ -66,10 +66,12 @@ class Data(pydantic.BaseModel):
         neuro = self.segmenter.extractors["input"]
         # built off the signal's own extractor, so both index channels alike
         assert isinstance(neuro, ns.extractors.MneRaw)
-        self.segmenter.extractors["channel_positions"] = self.channel_positions.build(
-            neuro
-        )
-        dataset = self.segmenter.apply(events)
+        extractors = self.segmenter.extractors | {
+            "channel_positions": self.channel_positions.build(neuro)
+        }
+        # copied, not mutated: `self` is the config exca hashes into the task uid
+        segmenter = self.segmenter.model_copy(update={"extractors": extractors})
+        dataset = segmenter.apply(events)
         # over pooled events: the channel axis is the union of every montage
         dataset.prepare()
         rank_zero_info(

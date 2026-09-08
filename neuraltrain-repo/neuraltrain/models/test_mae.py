@@ -80,6 +80,12 @@ def test_channel_identity_comes_from_position(config) -> None:
     )
 
 
+def test_rejects_positions_that_do_not_match_the_input(config) -> None:
+    model = config.build()
+    with pytest.raises(ValueError, match="one position per channel"):
+        model(torch.randn(2, 4, 200), _positions(5))
+
+
 def test_patchify_rejects_too_short_input(config) -> None:
     model = config.build()
     with pytest.raises(ValueError, match="less than patch_size"):

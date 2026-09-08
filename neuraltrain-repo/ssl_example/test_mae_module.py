@@ -11,7 +11,6 @@ from pathlib import Path
 import lightning.pytorch as pl
 import pytest
 import torch
-from mae_module import MaeModule, random_mask
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
@@ -19,6 +18,8 @@ from neuraltrain.models.common import INVALID_POS_VALUE, FourierEmb
 from neuraltrain.models.mae import MaeEncoder
 from neuraltrain.models.transformer import TransformerEncoder
 from neuraltrain.optimizers.base import LightningOptimizer
+
+from .mae_module import MaeModule, random_mask
 
 N_CHANNELS, N_TIMES, PATCH_SIZE = 4, 200, 20
 # seeded: convergence below depends on the positions, `seed_everything` comes too late

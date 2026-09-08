@@ -146,16 +146,18 @@ than it ships with.
 # they are the parts to keep when you swap in your own data:
 #
 # - **Windows come from a stride, not from events.** The segmenter
-#   triggers on the recording and slides a window across it every
-#   ``WINDOW`` seconds, so every sample of the recording is used rather
-#   than only the moments around a stimulus.
+#   triggers on the recording and steps a ``WINDOW``-second window
+#   across it every ``WINDOW`` seconds, so the windows tile the
+#   recording rather than clustering around stimuli. Set ``stride``
+#   below ``duration`` to overlap them instead.
 # - **There is no target extractor.** The segmenter has an ``"input"``
 #   entry and channel positions, but no target, because the input is its
 #   own target.
 # - **The split holds out whole subjects.** Striding turns one recording
-#   into many overlapping windows, so a split over windows would leave
-#   near-copies of the training data in validation and report a loss
-#   that mostly measures memorisation. ``SklearnSplit(split_by=
+#   into hundreds of windows that share its subject, session and
+#   electrodes, so a split over windows would leave near-duplicates of
+#   the training data in validation and report a loss that mostly
+#   measures memorisation. ``SklearnSplit(split_by=
 #   "subject")`` puts every recording of a subject on one side instead,
 #   so the validation loss measures reconstruction of a recording the
 #   encoder has never seen -- the same convention the downstream tasks
@@ -218,15 +220,16 @@ than it ships with.
 #        --checkpoint <savedir>/encoder.ckpt \
 #        -w linear_probe_mean
 #
-# ``neuralbench`` builds the encoder with no output head, loads the
-# checkpoint into it, freezes every parameter it has, and trains only a
-# **linear probe** on the mean-pooled tokens. Freezing is what makes the
-# score a property of the pretrained representation rather than of the
-# fine-tuning that would otherwise follow. ``mae.yaml`` already asks for
-# it -- ``layers_to_unfreeze: [""]`` matches no layer name, so nothing in
-# the encoder is unfrozen -- and ``-w linear_probe_mean`` requests the
-# same freezing plus the learning rate the benchmark uses for its own
-# probes, which is what makes a score comparable to the published ones.
+# ``neuralbench`` builds the encoder with no output head and loads the
+# checkpoint into it. ``-w linear_probe_mean`` does the rest: it freezes
+# every parameter the encoder has and trains only a **linear probe** on
+# the mean-pooled tokens, at the learning rate the benchmark uses for
+# its own probes. Freezing is what makes the score a property of the
+# pretrained representation rather than of the fine-tuning that would
+# otherwise follow, and reusing the benchmark's own preset is what makes
+# the number comparable to the published ones. Leave ``-w`` out and the
+# encoder is fine-tuned end to end, as for every other model; ``-w
+# lora_r4_flatten`` sits in between.
 #
 # .. literalinclude:: ../../../../neuralbench-repo/neuralbench/models/mae.yaml
 #    :language: yaml

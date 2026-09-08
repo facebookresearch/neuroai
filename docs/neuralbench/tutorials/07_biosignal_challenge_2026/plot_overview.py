@@ -21,8 +21,10 @@ distribution shift:
    **balanced accuracy** (higher is better).
 3. **Track 3 -- Sleep onset** (cross-device): predict the latency from
    recording start to the first stable N2 epoch, on consumer wearable
-   EEG rather than clinical polysomnography. Headline metric:
-   **bMAE in seconds** (lower is better).
+   EEG rather than clinical polysomnography. Headline metric: **binned
+   MAE (bMAE) in seconds** (lower is better) -- the absolute error
+   averaged inside time-to-onset bins and then across bins with equal
+   weight, so late onsets count as much as early ones.
 4. **Track 4 -- EMG-to-Pose** (cross-user and cross-stage): regress
    20 hand-joint angle trajectories from 16-channel wrist surface EMG.
    Headline metric: **mean angular error** (lower is better), logged in

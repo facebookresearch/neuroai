@@ -32,6 +32,8 @@ dependencies = [
   "torch>=2.5.1",
   "torchaudio>=2.5.1",
   "torchvision>=0.20.1",
+  # mae.yaml builds neuraltrain's TransformerEncoder, kept behind its models extra
+  "x_transformers>=1.27.20",
 ]
 
 [project.urls]

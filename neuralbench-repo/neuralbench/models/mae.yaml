@@ -30,5 +30,9 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
-  # linear probe: `[""]` matches no layer, so only the probe trains
-  layers_to_unfreeze: [""]
+  # encoder.layers.*.1.{to_q,to_k,to_v,to_out}
+  lora_target_modules:
+    - to_q
+    - to_k
+    - to_v
+    - to_out

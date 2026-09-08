@@ -77,7 +77,7 @@ default_config = {
                     },
                 },
             },
-            # the recording itself is the trigger: windows slide, no events needed
+            # the recording itself is the trigger: windows tile it, no events needed
             "trigger_query": "type == 'Eeg'",
             "stride": WINDOW,
             "duration": WINDOW,

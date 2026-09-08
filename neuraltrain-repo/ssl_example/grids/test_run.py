@@ -63,7 +63,7 @@ def debug_config() -> dict:
     return config
 
 
-def test_run(config: dict) -> None:
+def run(config: dict) -> None:
     task = Experiment(**config)
     task.infra.clear_job()
     task.run()
@@ -73,4 +73,4 @@ def test_run(config: dict) -> None:
 if __name__ == "__main__":
     updated_config = ConfDict(debug_config())
     updated_config.update(update)
-    test_run(updated_config)
+    run(updated_config)

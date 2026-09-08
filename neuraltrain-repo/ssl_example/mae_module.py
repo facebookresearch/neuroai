@@ -41,7 +41,7 @@ class MaeModule(pl.LightningModule):
     """Pretrain a :class:`~neuraltrain.models.mae.MaeEncoderModel` by masked prediction.
 
     The input is its own target, so batches need no ``"target"`` key: this
-    trains on the unlabelled sliding windows of a ``neuralset`` segmenter
+    trains on the unlabelled windows a ``neuralset`` segmenter cuts when
     configured with ``stride``.  Hidden patches are replaced by a learned mask
     token, encoded along with the visible ones, and read back by a single
     linear layer.  Only ``model`` outlives pretraining; the mask token and that
@@ -89,13 +89,14 @@ class MaeModule(pl.LightningModule):
         channel_positions = batch.data[self.channel_positions_name]
 
         patches = self.model.patchify(x)
-        valid = self.model.valid_tokens(channel_positions, patches.shape[2])
+        n_patches = patches.shape[2]
+        valid = self.model.valid_tokens(channel_positions, n_patches)
         hidden = random_mask(valid, self.mask_ratio)
 
-        tokens = self.model.patch_tokens(x)
+        tokens = self.model.patch_tokens(patches)
         # substitute before positions: a hidden token keeps its place, loses content
         tokens = torch.where(hidden[..., None], self.mask_token.to(tokens), tokens)
-        tokens = self.model.add_positions(tokens, channel_positions)
+        tokens = self.model.add_positions(tokens, channel_positions, n_patches)
         # drops absent channels only; hidden tokens stay, predicting them is the task
         encoded = self.model.encoder(tokens, mask=valid)
         # scoring the hidden patches alone is what stops the model from copying
