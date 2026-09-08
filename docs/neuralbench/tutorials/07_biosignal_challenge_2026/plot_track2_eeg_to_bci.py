@@ -20,8 +20,8 @@ recalibration allowed.
 
 .. note::
    The official Track 2 corpus (Graz / BrainHero, 3 classes: MI / Calc
-   / Word) is released through NeuralBench when submissions open on 16
-   September 2026. NeuralBench's :doc:`motor_imagery
+   / Word) is released through NeuralBench when submissions open.
+   NeuralBench's :doc:`motor_imagery
    </neuralbench/tasks/eeg/motor_imagery>` task is the closest
    analog and is used here as the starter-kit baseline.
 """

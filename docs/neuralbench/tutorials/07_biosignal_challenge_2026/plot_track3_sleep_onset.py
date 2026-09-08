@@ -12,10 +12,10 @@ per-epoch hypnogram reconstruction.
 
 - **Shift**: clinical polysomnography -> home wearable EEG, on unseen
   sleepers.
-- **Headline metric**: ``W-bMAE`` in seconds -- onset error averaged
-  over latency bins, so long and short sleep onsets count equally
-  (lower is better). Tolerance rates within 30 / 60 / 300 s are
-  reported as diagnostics.
+- **Headline metric**: ``bMAE`` in seconds -- onset error averaged with
+  equal weight over four time-to-onset bins, so long and short sleep
+  onsets count the same (lower is better). Tolerance rates within
+  30 / 60 / 300 s are reported as diagnostics.
 - **Data**: continuous Muse wearable EEG, ~1000 training subjects,
   hidden evaluation set of the same order of magnitude. The reference
   onset is the first annotated N2 event (or equivalently the first
@@ -23,10 +23,9 @@ per-epoch hypnogram reconstruction.
 
 .. note::
    The Muse training set is released through NeuralBench when
-   submissions open on 16 September 2026. Until then, this starter kit
-   runs on the Sleep-EDF dataset (``Kemp2000Analysis``) -- the data
-   format and target extractor are identical, only the recording
-   hardware differs.
+   submissions open. Until then, this starter kit runs on the Sleep-EDF
+   dataset (``Kemp2000Analysis``) -- the data format and target
+   extractor are identical, only the recording hardware differs.
 """
 
 # %%

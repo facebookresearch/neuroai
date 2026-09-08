@@ -28,20 +28,12 @@ EEG/EMG Foundation Challenge 2026.
 #
 
 # %%
-# Important dates (TBD)
-# ---------------------
+# Important dates
+# ---------------
 #
-# .. list-table::
-#    :widths: 40 60
-#
-#    * - Competition launch
-#      - TBD
-#    * - Submission portal opens
-#      - TBD
-#    * - Submission deadline
-#      - TBD
-#    * - Winners announced
-#      - NeurIPS 2026 competition track
+# The submission window, the audit, and the award dates live on the
+# `competition website <https://neural-interfaces26.github.io/>`_, which
+# is the authoritative source for all of them.
 
 # %%
 # Next steps

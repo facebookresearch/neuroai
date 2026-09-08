@@ -3,11 +3,10 @@ Overview: EEG/EMG Foundation Challenge 2026
 ============================================
 
 The `EEG/EMG Foundation Challenge 2026
-<https://neural-interfaces26.github.io/>`_ is a NeurIPS 2026 competition on
-shift-robust decoding of biosignals, and the multi-modal successor to the
-2025 EEG Foundation Challenge. Submissions run from **16 September to 16
-November 2026** (AoE), and the winners present at the Brain and Body
-Workshop at NeurIPS in Sydney.
+<https://neural-interfaces26.github.io/>`_ is a competition on shift-robust
+decoding of biosignals, and the multi-modal successor to the 2025 EEG
+Foundation Challenge. It runs as part of the Brain and Body Foundation Model
+workshop; the website has the submission window, the rules, and the prizes.
 
 The competition is organised as **four tracks**, each isolating one kind of
 distribution shift:
@@ -23,18 +22,17 @@ distribution shift:
 3. **Track 3 -- Sleep onset** (cross-device): predict the latency from
    recording start to the first stable N2 epoch, on consumer wearable
    EEG rather than clinical polysomnography. Headline metric:
-   **W-bMAE in seconds** (lower is better).
+   **bMAE in seconds** (lower is better).
 4. **Track 4 -- EMG-to-Pose** (cross-user and cross-stage): regress
    20 hand-joint angle trajectories from 16-channel wrist surface EMG.
-   Headline metric: **mean angular error in degrees** (lower is better).
+   Headline metric: **mean angular error** (lower is better), logged in
+   radians here and reported in degrees by the competition.
 
 All four tracks accept both task-specific models and foundation
 models.
 
 This starter kit shows how to reproduce a baseline for each track with
-NeuralBench, using publicly available reference datasets. See the
-`competition website <https://neural-interfaces26.github.io/>`_ for
-registration, the rules, and the prizes.
+NeuralBench, using publicly available reference datasets.
 """
 
 # %%
@@ -75,7 +73,7 @@ registration, the rules, and the prizes.
 #    * - Model
 #      - Image (Top-5 %, higher)
 #      - BCI (Bal. acc %, higher)
-#      - Sleep (W-bMAE s, lower)
+#      - Sleep (bMAE s, lower)
 #      - EMG pose (MAE deg, lower)
 #    * - Chance
 #      - 2.22 +/- 0.31
@@ -102,6 +100,9 @@ registration, the rules, and the prizes.
 #      - --
 #      - --
 #      - 25.14 +/- 2.30
+#
+# The pose column is in degrees, to match the published baseline, while
+# the task logs ``val/mae`` in radians: multiply by 180 / pi to compare.
 
 # %%
 # Collecting and plotting your results
@@ -164,8 +165,8 @@ registration, the rules, and the prizes.
 # -------------------------------
 #
 # The competition releases its own corpora through NeuralBench when
-# submissions open on 16 September 2026. Until then the track pages run
-# on the closest open datasets, so three pieces are still missing here:
+# submissions open. Until then the track pages run on the closest open
+# datasets, so three pieces are still missing here:
 #
 # 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
 #    sessions, Graz + BrainHero).** Track 2 currently uses

@@ -9,8 +9,9 @@ device placement, and hand kinematics at once.
 
 - **Shift**: held-out users, movement stages, and user-stage
   combinations.
-- **Headline metric**: mean angular error in degrees (lower is
-  better).
+- **Headline metric**: mean angular error (lower is better). The task
+  trains and logs radians; the competition and the paper report the
+  same quantity in degrees.
 - **Data**: ``emg2pose`` / NM000281 (193 participants, 25,253
   recordings, 370 hours, 29 movement stages, 2 kHz).
 """
@@ -24,8 +25,8 @@ device placement, and hand kinematics at once.
 #   with motion-capture hand pose).
 # - **Model**: ``VEMG2Pose``, the paper's regression baseline.
 # - **Target**: a dense 20-joint angle trajectory for each 5-s window.
-# - **Headline metric key**: ``test/mae`` (radians; x57.29578 for the
-#   degrees the competition and the paper report).
+# - **Headline metric key**: ``test/mae`` (radians; x57.29578 for
+#   degrees).
 #
 # .. dropdown:: Show ``tasks/emg/pose/config.yaml``
 #
