@@ -18,8 +18,10 @@ DATADIR = f"{ns.CACHE_FOLDER}/data"
 for path in [CACHEDIR, SAVEDIR, DATADIR]:
     Path(path).mkdir(parents=True, exist_ok=True)
 
-FREQUENCY = 100.0  # lowest of the four studies, so nothing is upsampled
-WINDOW = 4.0  # 12 patches of 32 samples, hence 12 * n_channels tokens
+# preprocessing below matches `neuralbench/defaults/config.yaml`, so the encoder
+# sees the same signal downstream as it does here
+FREQUENCY = 120.0
+WINDOW = 4.0  # 15 patches of 32 samples, hence 15 * n_channels tokens
 
 # tracks 1-3 plus a resting-state study; track 4 is EMG, a different sensor space
 STUDIES = [
@@ -37,7 +39,6 @@ default_config = {
         "cpus_per_task": 10,
     },
     "data": {
-        # no split transform: `Data` splits the strided windows in time
         "studies": [
             [
                 {
@@ -45,7 +46,17 @@ default_config = {
                     "path": DATADIR,
                     "query": None,
                     "infra": {"backend": "Cached", "folder": CACHEDIR},
-                }
+                },
+                # whole subjects held out, so validation measures generalisation to
+                # an unseen recording; pretraining leaves the test split untouched
+                {
+                    "name": "SklearnSplit",
+                    "split_by": "subject",
+                    "valid_split_ratio": 0.1,
+                    "test_split_ratio": 0.1,
+                    "valid_random_state": 33,
+                    "test_random_state": 33,
+                },
             ]
             for name in STUDIES
         ],
@@ -55,9 +66,10 @@ default_config = {
                 "input": {
                     "name": "EegExtractor",
                     "frequency": FREQUENCY,
-                    "filter": (0.5, 25.0),
+                    "filter": (0.1, 75.0),
+                    "notch_filter": [50.0, 60.0],
                     "scaler": "RobustScaler",
-                    "clamp": 16.0,
+                    "clamp": 20.0,
                     "infra": {
                         "keep_in_ram": True,
                         "folder": CACHEDIR,
@@ -80,7 +92,6 @@ default_config = {
                 "cluster": None,
             },
         },
-        "val_ratio": 0.2,
         "batch_size": 16,
     },
     "brain_model_config": {
@@ -90,12 +101,13 @@ default_config = {
         # `channel_emb_config` left at its default: naming it resets n_dims to 2
     },
     "mask_ratio": 0.5,
-    "loss": {"name": "MaskedReconstructionLoss"},
+    # the module scores the hidden patches only, so a plain MSE is the MAE loss
+    "loss": {"name": "MSELoss"},
     "optim": {
         "optimizer": {
-            "name": "Adam",
+            "name": "AdamW",
             "lr": 1e-4,
-            "kwargs": {"weight_decay": 0.0},
+            "kwargs": {"weight_decay": 0.05},
         },
         "scheduler": {
             "name": "OneCycleLR",

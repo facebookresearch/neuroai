@@ -52,8 +52,8 @@ class MaeModule(pl.LightningModule):
     model :
         Encoder to pretrain, built with ``n_outputs=None``.
     loss :
-        Reconstruction loss, called as ``loss(estimate, target, mask)`` -- see
-        :class:`~neuraltrain.losses.losses.MaskedReconstructionLoss`.
+        Reconstruction loss over the hidden patches, called as
+        ``loss(estimate, target)`` on ``(n_hidden, patch_size)`` tensors.
     optim_config :
         Optimizer configuration.
     mask_ratio :
@@ -98,9 +98,8 @@ class MaeModule(pl.LightningModule):
         tokens = self.model.add_positions(tokens, channel_positions)
         # drops absent channels only; hidden tokens stay, predicting them is the task
         encoded = self.model.encoder(tokens, mask=valid)
-        loss = self.loss(
-            self.reconstruct(encoded), patches.flatten(1, 2), hidden.to(tokens)
-        )
+        # scoring the hidden patches alone is what stops the model from copying
+        loss = self.loss(self.reconstruct(encoded)[hidden], patches.flatten(1, 2)[hidden])
 
         self.log(
             f"{step_name}_loss",

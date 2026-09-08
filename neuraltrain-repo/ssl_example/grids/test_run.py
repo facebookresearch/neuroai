@@ -34,7 +34,24 @@ def debug_config() -> dict:
                 "path": ns.CACHE_FOLDER,
                 "query": None,
                 "infra": {"backend": "Cached", "folder": CACHEDIR},
-            }
+            },
+            # only the recording matters here: it is the trigger, and there is no
+            # target, so dropping the stimuli makes the split below exact
+            {"name": "QueryEvents", "query": "type == 'Eeg'"},
+            # this study is one subject in one recording, which no grouped split
+            # can divide; chunking it yields ten pseudo-recordings that it can
+            {
+                "name": "ChunkEvents",
+                "event_type_to_chunk": "Eeg",
+                "max_duration": 30.0,
+                "tiling": "equal",
+            },
+            {
+                "name": "SklearnSplit",
+                "split_by": "_index",
+                "valid_split_ratio": 0.2,
+                "test_split_ratio": 0.2,
+            },
         ]
     ]
     # channels named "EEG 001"...: no montage knows them, read coords from the file

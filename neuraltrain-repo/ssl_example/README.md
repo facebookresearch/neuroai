@@ -6,17 +6,19 @@ EEG data, and how to hand that encoder to `neuralbench` for evaluation.
 
 ## Description
 
-This example pools the EEG datasets behind challenge tracks 1-3
-(`Gifford2022Large`, `Stieger2021Continuous`, `Kemp2000Analysis`) with one
-resting-state dataset that belongs to no track (`Miltiadous2023Dice`), and
-pretrains a small [MAE](https://arxiv.org/abs/2111.06377)-style encoder on all
-of them at once. Each window is split into time patches, half of them are
-replaced by a learned mask token, and a single linear layer reconstructs the
-hidden ones from the encoder's output; the training signal comes entirely from
-the recordings themselves, so no labels or events are used.
+The example pools four public EEG datasets -- image viewing
+(`Gifford2022Large`), motor imagery (`Stieger2021Continuous`), sleep
+(`Kemp2000Analysis`) and resting state (`Miltiadous2023Dice`), together some 240
+subjects -- and pretrains a small [MAE](https://arxiv.org/abs/2111.06377)-style
+encoder on all of them at once. Each window is split into time patches, half of
+them are replaced by a learned mask token, and a single linear layer
+reconstructs the hidden ones from the encoder's output. The loss is a plain MSE
+over the hidden patches only; scoring the visible ones too would reward copying
+the input. No labels or events are used, so the training signal comes entirely
+from the recordings themselves.
 
-Those four datasets share no montage — they range from a 63-channel cap to
-Sleep-EDF's two bipolar derivations — so a channel is never identified by its
+Those four datasets share no montage -- they range from a 63-channel cap to
+Sleep-EDF's two bipolar derivations -- so a channel is never identified by its
 index. One token is one channel over one time patch, and it carries a Fourier
 embedding of that channel's 3D position on the head alongside the embedding of
 its time patch. Channels a recording does not have are zero-padded by the
@@ -37,12 +39,19 @@ self-supervision changes, and nothing else:
   around events, so every sample of the recording is used;
 - the segmenter has an `"input"` extractor and channel positions, but no
   `"target"` one;
+- the split holds out whole subjects, so the validation loss measures
+  reconstruction of a recording the encoder has never seen rather than of a
+  near-copy of its training windows;
 - the run ends by saving the **encoder alone**, since the mask token and the
   reconstruction layer are pretraining scaffolding that downstream tasks throw
   away.
 
 The example grid sweeps the knob that matters most for masked pretraining: how
 much of the signal is hidden (`mask_ratio`).
+
+Preprocessing (sampling rate, filters, scaling) is the set `neuralbench` applies
+by default to EEG tasks, so the encoder sees the same signal during pretraining
+as it will during evaluation.
 
 ## Running the example
 
@@ -57,8 +66,9 @@ pip install 'neuraltrain-repo/.[lightning,models]'
 
 **2. Check the wiring**
 
-The four datasets are large, so start with the debug config, which swaps them
-for one small bundled recording and runs a single batch:
+The four datasets are downloaded on first use and then preprocessed into a
+cache, which takes a while, so start with the debug config. It swaps them for
+one small bundled recording and runs a single batch:
 
 ```
 python -m ssl_example.grids.test_run
@@ -70,10 +80,11 @@ python -m ssl_example.grids.test_run
 python -m ssl_example.grids.defaults
 ```
 
-This downloads the four datasets on first use and prints the path of the
-pretrained encoder when it finishes. Set `wandb_config` to `None` in
-`grids/defaults.py` to train without Weights & Biases. To pretrain on fewer
-datasets, or on your own, edit `STUDIES` in the same file.
+This downloads the four datasets on first use, caches their preprocessed form,
+and prints the path of the pretrained encoder when it finishes. Set
+`wandb_config` to `None` in `grids/defaults.py` to train without Weights &
+Biases. To pretrain on fewer datasets, or on your own, edit `STUDIES` in the
+same file.
 
 **4. Run example grid**
 
@@ -88,14 +99,22 @@ score the encoder on a downstream `neuralbench` task by pointing `--checkpoint`
 at the file from step 3:
 
 ```
-neuralbench eeg motor_imagery -m mae --checkpoint <path>/encoder.ckpt
+neuralbench eeg motor_imagery -m mae --checkpoint <path>/encoder.ckpt \
+    -w linear_probe_mean
 ```
 
 `neuralbench` rebuilds the same encoder, loads the weights into it, freezes it,
 and trains only a linear probe on top, which is what makes the score a measure
-of the representations rather than of the probe. Note that pretraining above
-includes the datasets of tracks 1-3, so a score on one of those tasks says
-nothing about generalising to unseen data. See the
+of the pretrained representation rather than of the fine-tuning that would
+otherwise follow. Note that pretraining above includes the dataset behind this
+task, so the score says nothing about generalising to data the encoder has never
+seen -- use a task built on another dataset for that.
+
+## Using this example for the biosignal challenge
+
+This example doubles as the starter kit for the training stage of the
+EEG/EMG Foundation Challenge 2026. The
 [training walkthrough](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/biosignal_challenge_2026/plot_pretrain_mae.html)
-for the full story, including how to keep `mae.yaml` in step with your
-pretraining config.
+covers the same ground with the competition in view, including which datasets
+back which track, how to keep `mae.yaml` in step with your pretraining config,
+and how to submit a model trained outside this repository.

@@ -29,27 +29,20 @@ def _positions(n_channels: int, batch_size: int = 2) -> torch.Tensor:
     return torch.rand(batch_size, n_channels, 3)
 
 
-# one instance must span window lengths; 205 has an incomplete trailing patch
-@pytest.mark.parametrize("n_times", [200, 205, 400])
+# one instance must span montages and window lengths, so that a checkpoint stays
+# usable downstream; 205 also exercises the incomplete trailing patch
+@pytest.mark.parametrize("n_channels, n_times", [(2, 200), (19, 205), (63, 400)])
 @pytest.mark.parametrize("n_outputs", [None, 3])
-def test_build_and_forward(config, n_times, n_outputs) -> None:
+def test_build_and_forward(config, n_channels, n_times, n_outputs) -> None:
     model = config.build(n_outputs=n_outputs)
-    out = model(torch.randn(2, 8, n_times), _positions(8))
+    out = model(torch.randn(2, n_channels, n_times), _positions(n_channels))
 
     n_patches = n_times // PATCH_SIZE
-    expected = (2, 3) if n_outputs is not None else (2, 8 * n_patches, DIM)
+    expected = (2, 3) if n_outputs is not None else (2, n_channels * n_patches, DIM)
     assert out.shape == expected, f"unexpected output shape {tuple(out.shape)}"
     assert (n_outputs is not None) == any(
         name.startswith("head.") for name in model.state_dict()
     ), "output head must exist if and only if n_outputs is set"
-
-
-@pytest.mark.parametrize("n_channels", [2, 19, 63])
-def test_one_instance_spans_montages(config, n_channels) -> None:
-    model = config.build()
-    out = model(torch.randn(2, n_channels, 200), _positions(n_channels))
-
-    assert out.shape == (2, n_channels * (200 // PATCH_SIZE), DIM)
 
 
 def test_absent_channels_are_dropped_from_attention(config) -> None:

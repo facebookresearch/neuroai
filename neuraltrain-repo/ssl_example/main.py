@@ -48,7 +48,6 @@ class Data(pydantic.BaseModel):
     segmenter: ns.dataloader.Segmenter
     # beside the segmenter, not among its extractors: wired to "input" in `build`
     channel_positions: ns.extractors.ChannelPositions
-    val_ratio: float = 0.2
     batch_size: int = 64
     num_workers: int = 0
 
@@ -57,6 +56,12 @@ class Data(pydantic.BaseModel):
         events = ns.events.standardize_events(
             pd.concat([study.run() for study in self.studies], ignore_index=True)
         )
+        if "split" not in events.columns:
+            raise ValueError(
+                "events carry no `split` column: end each study chain with a split "
+                "transform (e.g. `SklearnSplit`) so that whole recordings, rather "
+                "than windows of the same recording, are held out for validation."
+            )
 
         neuro = self.segmenter.extractors["input"]
         # built off the signal's own extractor, so both index channels alike
@@ -72,18 +77,15 @@ class Data(pydantic.BaseModel):
             f"{len(neuro._channels)} channels"
         )
 
-        # window-level split; per-timeline tail keeps correlated windows on one side
-        segments = pd.DataFrame(
-            [{"timeline": s.timeline, "start": s.start} for s in dataset.segments]
-        )
-        cutoff = segments.groupby("timeline")["start"].transform(
-            lambda s: s.quantile(1 - self.val_ratio)
-        )
-        is_val = (segments["start"] >= cutoff).to_numpy()
-
         loaders = {}
-        for split, mask, shuffle in [("train", ~is_val, True), ("val", is_val, False)]:
-            ds = dataset.select(mask)
+        for split, shuffle in [("train", True), ("val", False)]:
+            ds = dataset.select(dataset.triggers["split"] == split)
+            if not len(ds):
+                raise ValueError(
+                    f"the {split!r} split is empty: the studies hold too few "
+                    f"recordings for the configured split ratios."
+                )
+            rank_zero_info(f"# {split} windows: {len(ds)}")
             loaders[split] = DataLoader(
                 ds,
                 collate_fn=ds.collate_fn,

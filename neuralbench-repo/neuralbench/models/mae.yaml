@@ -7,18 +7,14 @@
 # Reference self-supervised baseline, pretrained by `neuraltrain-repo/ssl_example`.
 # It has no published weights, so use it with `--checkpoint <your encoder>`.
 #
-# Preprocessing, `dim` and `patch_size` must match the pretraining run: on a
-# mismatch `load_checkpoint` only logs "Size mismatch" and keeps random weights.
+# `dim` and `patch_size` must match the pretraining run: on a mismatch
+# `load_checkpoint` only logs "Size mismatch" and keeps random weights.
 # Channel count need not match, as channels are identified by their position.
+#
+# `data.neuro` is deliberately absent: `ssl_example` pretrains with the
+# preprocessing from `defaults/config.yaml`, so inheriting it keeps the two
+# sides in step without restating any of it here.
 data:
-  neuro:
-    frequency: 100.0
-    filter:
-      - 0.5
-      - 25.0
-    baseline: null
-    scaler: RobustScaler
-    clamp: 16.0
   channel_positions:
     n_spatial_dims: 3
     # same montage as pretraining; also resolves bipolar derivations

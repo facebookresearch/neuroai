@@ -2,12 +2,19 @@
 Training a model -- masked prediction on EEG
 =================================================
 
-Every track of the challenge accepts a **foundation model**: one network
-pretrained once on unlabelled data, then evaluated on a downstream task
-without being redesigned for it. This page walks through the smallest
-version of that story end to end -- pretrain an encoder by masked
-prediction on unlabelled EEG, then hand it to ``neuralbench`` -- using
-``neuraltrain``'s ``ssl_example`` project.
+Every track of the challenge accepts two kinds of entry: a
+**task-specific model**, trained on that track's task alone, and a
+**foundation model**, one network reused across tasks rather than
+rebuilt for each. Neither is privileged, and how you obtain a
+foundation model is up to you -- unlabelled data, labelled data,
+several datasets or one, any objective you like.
+
+This page walks through the smallest version of the foundation-model
+route end to end -- pretrain an encoder by masked prediction on
+unlabelled EEG, then hand it to ``neuralbench`` -- using
+``neuraltrain``'s ``ssl_example`` project. Masked prediction is chosen
+here only because it needs no labels, so it can pool datasets that
+share nothing but the fact that they are EEG.
 
 The point is the *workflow*, not the score. The example is deliberately
 small, and a competitive entry will need a bigger encoder and more data
@@ -76,36 +83,53 @@ than it ships with.
 # a montage it never saw during pretraining.
 
 # %%
-# Setup
-# -----
+# Getting the data
+# ----------------
 #
-# Pretraining needs ``neuraltrain`` (the encoder lives behind the
-# ``models`` extra) alongside ``neuralbench``:
+# Pretraining adds one requirement to a working ``neuralbench``
+# install (:doc:`/neuralbench/install`): the encoder lives behind
+# ``neuraltrain``'s ``models`` extra.
 #
 # .. code-block:: bash
 #
 #    pip install 'neuraltrain-repo/.[lightning,models]'
 #
-# See :doc:`/neuralbench/install` for the rest of the configuration
-# (data, cache, and result directories).
-
-# %%
-# Pretraining the encoder
-# ------------------------
+# The example pretrains on four EEG datasets: those behind tracks 1-3
+# (``Gifford2022Large``, ``Stieger2021Continuous``,
+# ``Kemp2000Analysis``) plus one resting-state dataset that belongs to
+# no track (``Miltiadous2023Dice``), together some 240 subjects. Each
+# is fetched from its public source the first time its study runs, into
+# the ``DATA_DIR`` you configured at install time. Nothing else is
+# needed to start them downloading -- but they are large, and the first
+# run does two slow things before the first gradient step:
 #
-# The example lives in ``neuraltrain-repo/ssl_example``. It pretrains on
-# the EEG datasets behind tracks 1-3 plus one resting-state dataset that
-# belongs to no track. Those are large, so check the wiring first with
-# the debug config, which swaps them for one small bundled recording and
-# runs a single batch:
+# 1. **Download** each dataset into ``DATA_DIR`` (once per machine).
+# 2. **Preprocess and cache** it into ``CACHE_DIR``: resampling,
+#    filtering and scaling run once per configuration, and every later
+#    run and every grid job reads the cache instead of redoing them.
+#
+# Both steps are cached by ``exca``, keyed on the extractor config, so
+# changing the preprocessing invalidates the cache and pays for it
+# again. Budget for that first pass, and prefer to warm it once on a
+# machine with a good connection.
+#
+# Because it is a long first step, check the wiring before paying for
+# it. The debug config swaps the four datasets for one small bundled
+# recording -- MNE's sample dataset, already used by the
+# ``neuralbench`` quickstart -- and runs a single batch:
 #
 # .. code-block:: bash
 #
 #    cd neuraltrain-repo
 #    python -m ssl_example.grids.test_run
+
+# %%
+# Pretraining the encoder
+# ------------------------
 #
-# Then run the real thing, which downloads the four datasets on first
-# use and prints the path of the pretrained encoder when it finishes:
+# With the wiring checked, run the real thing. It downloads and caches
+# as described above, then prints the path of the pretrained encoder
+# when it finishes:
 #
 # .. code-block:: bash
 #
@@ -118,23 +142,24 @@ than it ships with.
 #    .. literalinclude:: ../../../../neuraltrain-repo/ssl_example/grids/defaults.py
 #       :language: python
 #
-# Four parts of that config are what make it *self-supervised*, and they
-# are the parts to keep when you swap in your own data:
+# Three parts of that config are what make it *self-supervised*, and
+# they are the parts to keep when you swap in your own data:
 #
-# - **Several studies are pooled.** ``data.studies`` is a list of
-#   studies whose events are concatenated into one training set. A list
-#   *within* one entry means something different -- a chain of steps, each
-#   feeding the next -- which is why each study sits in its own.
 # - **Windows come from a stride, not from events.** The segmenter
-#   triggers on the recording (``"type == 'Eeg'"``) and slides a window
-#   across it every ``WINDOW`` seconds, so every sample of the
-#   recording is used rather than only the moments around a stimulus.
+#   triggers on the recording and slides a window across it every
+#   ``WINDOW`` seconds, so every sample of the recording is used rather
+#   than only the moments around a stimulus.
 # - **There is no target extractor.** The segmenter has an ``"input"``
 #   entry and channel positions, but no target, because the input is its
 #   own target.
-# - **The split is in time.** Striding turns one recording into many
-#   correlated windows, so the tail of each recording is held out for
-#   validation instead of splitting over events or subjects.
+# - **The split holds out whole subjects.** Striding turns one recording
+#   into many overlapping windows, so a split over windows would leave
+#   near-copies of the training data in validation and report a loss
+#   that mostly measures memorisation. ``SklearnSplit(split_by=
+#   "subject")`` puts every recording of a subject on one side instead,
+#   so the validation loss measures reconstruction of a recording the
+#   encoder has never seen -- the same convention the downstream tasks
+#   use.
 #
 # The knob that matters most for pretraining quality is ``mask_ratio``:
 # hide too little and reconstruction becomes trivial copying.
@@ -160,10 +185,23 @@ than it ships with.
 # - **Longer training**: raise ``n_epochs`` and ``patience``, and run on
 #   SLURM through ``run_grid.py``.
 #
-# You are not required to use this encoder at all -- it is a starting
-# point. Any ``neuraltrain`` model config works with the same
-# ``MaeModule`` loop, and any pretraining objective works if it produces
-# an encoder checkpoint.
+# You are not required to use this encoder, this loop, or this
+# repository at all -- the example is a starting point, and there are
+# three ways past it:
+#
+# - **Keep the loop, change the model.** Any ``neuraltrain`` model
+#   config drops into the same ``MaeModule`` by setting
+#   ``brain_model_config``.
+# - **Add your own model to** ``neuraltrain``. A new architecture is a
+#   ``BaseBrainModelConfig`` subclass with a ``build`` method, after
+#   which it is available to this example and to ``neuralbench`` by
+#   name, exactly as ``MaeEncoder`` is.
+# - **Train wherever you like.** Nothing about the competition requires
+#   ``neuraltrain``, ``neuralset``, or PyTorch Lightning. Train in your
+#   own codebase, with your own data pipeline and objective, and bring
+#   only the finished model to ``neuralbench`` through the
+#   Bring-Your-Own-Model API described in `Evaluating a model of your
+#   own`_.
 
 # %%
 # Evaluating the pretrained encoder
@@ -177,20 +215,30 @@ than it ships with.
 # .. code-block:: bash
 #
 #    neuralbench eeg motor_imagery -m mae \
-#        --checkpoint <savedir>/encoder.ckpt
+#        --checkpoint <savedir>/encoder.ckpt \
+#        -w linear_probe_mean
 #
 # ``neuralbench`` builds the encoder with no output head, loads the
-# checkpoint into it, freezes it, and trains only a **linear probe** on
-# the mean-pooled tokens. Training nothing but the probe is what makes
-# the score a measure of the representations rather than of the probe:
+# checkpoint into it, freezes every parameter it has, and trains only a
+# **linear probe** on the mean-pooled tokens. Freezing is what makes the
+# score a property of the pretrained representation rather than of the
+# fine-tuning that would otherwise follow. ``mae.yaml`` already asks for
+# it -- ``layers_to_unfreeze: [""]`` matches no layer name, so nothing in
+# the encoder is unfrozen -- and ``-w linear_probe_mean`` requests the
+# same freezing plus the learning rate the benchmark uses for its own
+# probes, which is what makes a score comparable to the published ones.
 #
 # .. literalinclude:: ../../../../neuralbench-repo/neuralbench/models/mae.yaml
 #    :language: yaml
 #
+# Preprocessing needs no attention: ``mae.yaml`` sets none, so both
+# sides inherit the benchmark defaults that ``ssl_example`` pretrains
+# with. If you *do* change the extractors in ``defaults.py``, mirror
+# the change under ``data.neuro`` here.
+#
 # .. warning::
 #    ``mae.yaml`` describes the encoder it expects, and nothing checks
-#    that against yours. Its preprocessing must match the pretraining
-#    extractors, and its ``dim`` and ``patch_size`` must match the
+#    that against yours: its ``dim`` and ``patch_size`` must match the
 #    encoder you pretrained. On a mismatch ``neuralbench`` logs ``Size
 #    mismatch`` and **keeps the randomly initialised layer** -- which
 #    reads as a failed pretraining run rather than a misconfiguration.

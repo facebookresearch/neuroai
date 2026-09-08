@@ -12,9 +12,9 @@ import lightning.pytorch as pl
 import pytest
 import torch
 from mae_module import MaeModule, random_mask
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-from neuraltrain.losses.losses import MaskedReconstructionLoss
 from neuraltrain.models.common import INVALID_POS_VALUE, FourierEmb
 from neuraltrain.models.mae import MaeEncoder
 from neuraltrain.models.transformer import TransformerEncoder
@@ -67,30 +67,25 @@ def _build_module() -> MaeModule:
     )
     return MaeModule(
         model=config.build(n_outputs=None),
-        loss=MaskedReconstructionLoss(),
+        loss=nn.MSELoss(),
         optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 3e-3}),  # type: ignore
         mask_ratio=0.5,
     )
 
 
-@pytest.mark.parametrize("mask_ratio", [0.1, 0.5, 0.9])
-def test_random_mask(mask_ratio) -> None:
-    valid = torch.ones(3, 10, dtype=torch.bool)
-    mask = random_mask(valid, mask_ratio)
-
-    assert mask.shape == (3, 10) and mask.dtype == torch.bool
-    assert (mask.sum(dim=1) == mask[0].sum()).all(), "mask count must be per-batch equal"
-    assert 0 < mask[0].sum() < 10, "must leave at least one token of each kind"
-
-
-def test_random_mask_only_hides_present_channels() -> None:
+# counts are per example, and never all or none of its valid tokens
+@pytest.mark.parametrize(
+    "mask_ratio, hidden", [(0.1, (1, 1)), (0.5, (3, 6)), (0.9, (5, 11))]
+)
+def test_random_mask(mask_ratio, hidden) -> None:
     valid = torch.ones(2, 12, dtype=torch.bool)
     valid[0, 6:] = False  # first example has half its channels absent
 
-    mask = random_mask(valid, 0.5)
+    mask = random_mask(valid, mask_ratio)
 
+    assert mask.shape == (2, 12) and mask.dtype == torch.bool
     assert not (mask & ~valid).any(), "an absent channel's token was hidden"
-    assert mask[0].sum() == 3 and mask[1].sum() == 6, "fraction must be per example"
+    assert tuple(mask.sum(dim=1).tolist()) == hidden
 
 
 def test_masking_needs_at_least_two_valid_tokens() -> None:
@@ -104,7 +99,7 @@ def test_rejects_degenerate_mask_ratio() -> None:
     with pytest.raises(ValueError, match=r"mask_ratio must lie in \(0, 1\)"):
         MaeModule(
             model=_build_module().model,
-            loss=MaskedReconstructionLoss(),
+            loss=nn.MSELoss(),
             optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 1e-3}),  # type: ignore
             mask_ratio=0.0,
         )

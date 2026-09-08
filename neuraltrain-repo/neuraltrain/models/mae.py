@@ -17,7 +17,11 @@ from .transformer import TransformerEncoder
 
 
 class MaeEncoder(BaseBrainModelConfig):
-    """Encoder trained by masked prediction over channel-time patches [1]_.
+    """Encoder trained by masked prediction over channel-time patches.
+
+    The objective follows the masked autoencoder of He et al. [1]_, developed
+    for images; patching and channel handling are specific to neural
+    time series.
 
     One token is one channel over one time patch, carrying a sin-cos embedding
     of its time patch plus a Fourier embedding of its channel's 3D position.
