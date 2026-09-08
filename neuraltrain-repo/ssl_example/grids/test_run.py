@@ -20,9 +20,6 @@ update = {
     "accelerator": "cpu",
     "fast_dev_run": True,
     "wandb_config": None,
-    # `fast_dev_run` trains on one batch, so sliding the window instead of
-    # stepping it would only make the segmentation slower
-    "data.segmenter.stride": 12.0,
 }
 
 
@@ -42,13 +39,17 @@ def debug_config() -> dict:
             # target, so dropping the stimuli makes the split below exact
             {"name": "QueryEvents", "query": "type == 'Eeg'"},
             # this study is one subject in one recording, which no grouped split
-            # can divide; chunking it yields ten pseudo-recordings that it can
+            # can divide; chunking it yields pseudo-recordings that it can
             {
                 "name": "ChunkEvents",
                 "event_type_to_chunk": "Eeg",
-                "max_duration": 30.0,
+                "max_duration": 24.0,
                 "tiling": "equal",
             },
+            # the extractor preprocesses every chunk asked of it, so dropping all
+            # but the first five is what keeps this run cheap; they still yield
+            # about a batch of windows, and the preprocessing stays the shipped one
+            {"name": "SelectIdx", "column": "start", "idx": [0, 1, 2, 3, 4]},
             {
                 "name": "SklearnSplit",
                 "split_by": "_index",
