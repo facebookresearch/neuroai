@@ -113,7 +113,7 @@ seen -- use a task built on another dataset for that.
 ## Using this example for the biosignal challenge
 
 This example doubles as the starter kit for the training stage of the
-EEG/EMG Foundation Challenge 2026. The
+[EEG/EMG Foundation Challenge 2026](https://neural-interfaces26.github.io/). The
 [training walkthrough](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/biosignal_challenge_2026/plot_pretrain_mae.html)
 covers the same ground with the competition in view, including which datasets
 back which track, how to keep `mae.yaml` in step with your pretraining config,

@@ -300,7 +300,7 @@ than it ships with.
 # ----------
 #
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
-# - :doc:`Track 2 -- EEG-to-BCI <plot_track2_eeg_to_bci>`
+# - :doc:`Track 2 -- BCI command decoding <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
-# - :doc:`Track 4 -- EMG-to-Text <plot_track4_emg_to_text>`
+# - :doc:`Track 4 -- EMG-to-Pose <plot_track4_emg_to_pose>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`

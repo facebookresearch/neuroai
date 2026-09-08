@@ -7,11 +7,12 @@ the image identity. The competition tests **cross-stimulus**
 generalisation: training images and test images do not overlap.
 
 - **Shift**: seen images -> unseen images.
-- **Headline metric**: Top-5 retrieval accuracy in a frozen DINOv2
-  embedding space (higher is better).
+- **Headline metric**: Top-5 accuracy against held-out candidates,
+  ranked in a frozen DINOv2-giant embedding space (higher is better).
 - **Data**: THINGS-EEG1 + THINGS-EEG2 + Alljoined-1 + Alljoined-1.6M
   (88 subjects, research- and consumer-grade hardware). The hidden
-  evaluation set is provided by Alljoined and uses Emotiv hardware.
+  evaluation cohort adds 11 subjects recorded by Alljoined on the same
+  Emotiv hardware and natural-image paradigm as Alljoined-1.6M.
 """
 
 # %%

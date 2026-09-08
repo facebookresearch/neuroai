@@ -1,14 +1,19 @@
 """
-Track 3 -- Sleep onset (cross-subject latency prediction)
-===========================================================
+Track 3 -- Sleep onset (cross-device latency prediction)
+=========================================================
 
 Given a continuous wearable EEG recording, predict the latency
-(in seconds, from recording start) at which the participant
-transitions into stable sleep. The competition tests **cross-subject**
-generalisation: train sleepers and test sleepers are disjoint.
+(in seconds, from recording start) to the first stable N2 epoch. The
+competition tests **cross-device** generalisation: the seed corpora are
+clinical polysomnography, while the evaluation set is consumer-grade
+home-wearable EEG with its own channels and montage. Precise timing
+replaces full staging because the wearable signal is too sparse for
+per-epoch hypnogram reconstruction.
 
-- **Shift**: seen sleepers -> unseen sleepers.
-- **Headline metric**: recording-level mean absolute error in seconds
+- **Shift**: clinical polysomnography -> home wearable EEG, on unseen
+  sleepers.
+- **Headline metric**: ``W-bMAE`` in seconds -- onset error averaged
+  over latency bins, so long and short sleep onsets count equally
   (lower is better). Tolerance rates within 30 / 60 / 300 s are
   reported as diagnostics.
 - **Data**: continuous Muse wearable EEG, ~1000 training subjects,
@@ -17,10 +22,11 @@ generalisation: train sleepers and test sleepers are disjoint.
   non-Wake epoch satisfying a fixed persistence rule).
 
 .. note::
-   The Muse training set will be released by InteraXon for the
-   competition. Until then, this starter kit runs on the Sleep-EDF
-   dataset (``Kemp2000Analysis``) -- the data format and target
-   extractor are identical, only the recording hardware differs.
+   The Muse training set is released through NeuralBench when
+   submissions open on 16 September 2026. Until then, this starter kit
+   runs on the Sleep-EDF dataset (``Kemp2000Analysis``) -- the data
+   format and target extractor are identical, only the recording
+   hardware differs.
 """
 
 # %%

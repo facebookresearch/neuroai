@@ -1,15 +1,16 @@
 """
-Track 4 -- EMG-to-Pose (hand-pose regression)
-================================================
+Track 4 -- EMG-to-Pose (cross-user and cross-stage regression)
+===============================================================
 
 Given 16-channel surface EMG (sEMG) recorded from a wristband, predict
-the corresponding trajectory of 20 hand-joint angles. The paper's
-predefined test split measures generalisation across users, movement
-stages, and both together.
+the corresponding trajectory of 20 hand-joint angles. The competition
+combines two shifts, so a model has to survive changes in anatomy,
+device placement, and hand kinematics at once.
 
-- **Shift**: held-out users, stages, and user-stage combinations.
-- **Headline metric**: mean absolute angular error in radians (lower
-  is better).
+- **Shift**: held-out users, movement stages, and user-stage
+  combinations.
+- **Headline metric**: mean angular error in degrees (lower is
+  better).
 - **Data**: ``emg2pose`` / NM000281 (193 participants, 25,253
   recordings, 370 hours, 29 movement stages, 2 kHz).
 """
@@ -24,7 +25,7 @@ stages, and both together.
 # - **Model**: ``VEMG2Pose``, the paper's regression baseline.
 # - **Target**: a dense 20-joint angle trajectory for each 5-s window.
 # - **Headline metric key**: ``test/mae`` (radians; x57.29578 for the
-#   paper's degrees).
+#   degrees the competition and the paper report).
 #
 # .. dropdown:: Show ``tasks/emg/pose/config.yaml``
 #
