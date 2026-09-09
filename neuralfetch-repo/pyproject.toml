@@ -6,10 +6,11 @@ description = "Download backends and data-fetching utilities for neuralset."
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-version = "0.2.3"
+version = "0.3.0"
 
 dependencies = [
-  "neuralset>=0.0.1",
+  # Siblings release in lockstep; stay within the release line.
+  "neuralset~=0.3.0",
   "h5py",
   "pybv>=0.7.3",
   "mne_bids>=0.19",

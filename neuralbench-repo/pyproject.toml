@@ -1,7 +1,7 @@
 [project]
 name = "neuralbench"
 readme = "README.md"
-version = "0.2.3"
+version = "0.3.0"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -17,10 +17,11 @@ dependencies = [
   # installed, which every pretrained foundation model goes through
   "braindecode[hub]>=1.8.1",
   "cloudpickle",
+  # Siblings release in lockstep; stay within the release line.
   # Study catalog: registered through an entry point, never imported directly
-  "neuralfetch[quickstart]",
-  "neuralset",
-  "neuraltrain",
+  "neuralfetch[quickstart]~=0.3.0",
+  "neuralset~=0.3.0",
+  "neuraltrain~=0.3.0",
   "exca",
   "lightning>=2.0.8",
   "peft>=0.13",

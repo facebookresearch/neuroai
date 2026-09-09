@@ -10,6 +10,7 @@
 # as namespace packages and shadows the installed ones — front-load real repos.
 import builtins
 import importlib
+import importlib.metadata
 import importlib.util
 import os
 import sys
@@ -35,7 +36,7 @@ for _repo in [
 project = "neuroai"
 copyright = "Meta Platforms, Inc. and affiliates"
 author = "FAIR"
-release = "0.1"
+release = importlib.metadata.version("neuralset")
 
 # -- General configuration ---------------------------------------------------
 
