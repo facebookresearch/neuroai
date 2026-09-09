@@ -131,6 +131,18 @@ def test_aggregated_extractor(
         assert out["agg"].shape == (batch_size, 2, 1)
 
 
+def test_aggregated_extractor_accepts_temporal_static_extractors() -> None:
+    pulse = ns.extractors.Pulse(frequency=100.0, aggregation="sum")
+    meg = ns.extractors.MegExtractor(frequency=100.0, aggregation="sum")
+
+    aggregated = ns.extractors.AggregatedExtractor(
+        extractors=[pulse, meg],
+        extractor_aggregation="cat",
+    )
+
+    assert aggregated.frequency == 100.0
+
+
 def test_extractor_pca(tmp_path: Path) -> None:
     infra: tp.Any = {"infra": {"folder": tmp_path}}
     fparams: tp.Any = {"name": "HuggingFaceText", "cache_n_layers": 3, **infra}

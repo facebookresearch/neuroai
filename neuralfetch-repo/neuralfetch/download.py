@@ -629,6 +629,26 @@ class Datalad(BaseDownload):
         cmd = f'datalad get "{cur_path}"{threads_}'
         self._datalad(cmd, self._dl_dir / self.repo_name)
 
+    def _expand_folders(self) -> list[Path]:
+        """Resolve :attr:`folders` into absolute paths inside the cloned repo.
+
+        Wildcard entries are glob-expanded against the working tree (which
+        already contains the BIDS layout because ``datalad clone`` populates
+        directory structure and small files even on annex-ignored remotes).
+        Bare strings are appended as-is.
+        """
+        folders = self.folders if self.folders else [Wildcard(folder="*")]
+        all_folders: list[Path] = []
+        for folder in folders:
+            if isinstance(folder, Wildcard):
+                all_folders += [
+                    Path(str(p))
+                    for p in glob(str(self._dl_dir / self.repo_name / folder.folder))
+                ]
+            else:
+                all_folders += [self._dl_dir / self.repo_name / folder]  # type: ignore[list-item]
+        return all_folders
+
     def _download(self, overwrite: bool = False) -> None:
         """Downloads data from datalab
 
@@ -648,18 +668,7 @@ class Datalad(BaseDownload):
         # clone repo
         self._datalad(f"datalad clone {self.repo_url}", self._dl_dir)
 
-        # expand folders
-        folders = self.folders if self.folders else [Wildcard(folder="*")]
-
-        all_folders: list[Path] = []
-        for folder in folders:
-            if isinstance(folder, Wildcard):
-                all_folders += [
-                    Path(str(p))
-                    for p in glob(str(self._dl_dir / self.repo_name / folder.folder))
-                ]
-            else:
-                all_folders += [self._dl_dir / self.repo_name / folder]  # type: ignore
+        all_folders = self._expand_folders()
         print(f"Loading {len(all_folders)} folders: ", all_folders)
 
         # download
@@ -669,6 +678,179 @@ class Datalad(BaseDownload):
             self._dl_item(item)
 
         print("\nDownloaded Dataset")
+
+
+class Gin(Datalad):
+    """Download datasets from G-Node Infrastructure (gin.g-node.org).
+
+    GIN-hosted repositories publish data via git-annex but their HTTPS
+    clone URL (``https://gin.g-node.org/<owner>/<repo>.git``) does not
+    expose ``.git/config`` to anonymous clients. As a result, the bare
+    ``datalad clone`` step run by :class:`Datalad` sets ``annex-ignore``
+    on the origin remote and every subsequent ``datalad get`` exits
+    successfully having done nothing -- the working tree stays full of
+    ~60-byte git-annex pointer files instead of real binary content.
+
+    This backend works around the limitation by:
+
+    1. Cloning the repo (same as :class:`Datalad`; only pointer files
+       are materialised).
+    2. Scanning the requested ``folders`` for git-annex pointer files
+       (v8 in-tree pointers and v7 symlinks under ``.git/annex/objects``).
+    3. Batch-registering ``https://gin.g-node.org/<owner>/<repo>/raw/<branch>/<relpath>``
+       URLs against each annex key via ``git annex registerurl --batch``.
+       GIN serves annexed content over plain HTTPS at that path.
+    4. Running ``git annex get --from=web --jobs=<threads>`` per folder
+       to actually pull content.
+
+    Studies pass the same arguments as :class:`Datalad` (``repo_url``,
+    ``folders``, ``threads``) and additionally set ``branch=`` when the
+    default branch is not ``master``. No other plumbing is required in
+    the study class.
+
+    Parameters
+    ----------
+    repo_url : str
+        Full HTTPS clone URL, e.g.
+        ``"https://gin.g-node.org/CUBRIC/WAND.git"``.
+    branch : str
+        Git branch served at ``/raw/<branch>/`` on GIN's HTTPS endpoint
+        (default ``"master"``; some repos use ``"main"``).
+    threads : int
+        Number of parallel ``git annex get`` jobs (default 1).
+    folders : list of str or Wildcard
+        Same semantics as :attr:`Datalad.folders`. Restricts the URL
+        registration scan as well, so we avoid walking the whole tree
+        when only a subset is requested.
+    """
+
+    branch: str = "master"
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def _https_base(self) -> str:
+        """``https://...<repo>.git`` -> ``https://...<repo>/raw/<branch>``."""
+        base = self.repo_url
+        if base.endswith(".git"):
+            base = base[:-4]
+        return f"{base}/raw/{self.branch}"
+
+    @staticmethod
+    def _read_pointer_key(path: Path) -> str | None:
+        """Return the git-annex key for *path*, or None if it's not a pointer.
+
+        Handles both modern v8 pointer files (small ASCII files whose
+        first line is ``"/annex/objects/<key>"``) and legacy v7 symlinks
+        targeting ``.git/annex/objects/.../<key>``.
+        """
+        if path.is_symlink():
+            target = os.readlink(path)
+            if "/.git/annex/objects/" in target:
+                # The annex key is the basename (also the parent dir name).
+                return Path(target).name
+            return None
+        try:
+            if path.stat().st_size > 256:
+                return None
+            with path.open("rb") as f:
+                head = f.read(256)
+        except OSError:
+            return None
+        if not head.startswith(b"/annex/objects/"):
+            return None
+        try:
+            first_line = head.split(b"\n", 1)[0].decode("ascii")
+        except UnicodeDecodeError:
+            return None
+        return first_line[len("/annex/objects/") :]
+
+    def _iter_pointers(
+        self, repo_root: Path, folders: list[Path]
+    ) -> tp.Iterator[tuple[str, Path]]:
+        """Yield ``(annex_key, repo_relative_path)`` for every pointer file."""
+        seen: set[Path] = set()
+        for folder in folders:
+            if not folder.is_dir():
+                continue
+            for path in folder.rglob("*"):
+                if path in seen:
+                    continue
+                seen.add(path)
+                if not (path.is_file() or path.is_symlink()):
+                    continue
+                key = self._read_pointer_key(path)
+                if key is None:
+                    continue
+                try:
+                    rel = path.relative_to(repo_root)
+                except ValueError:
+                    continue
+                yield key, rel
+
+    def _register_urls(self, repo_root: Path, folders: list[Path]) -> int:
+        """Register web URLs for every pointer file. Returns the count."""
+        pairs = list(self._iter_pointers(repo_root, folders))
+        if not pairs:
+            return 0
+        batch = "".join(
+            f"{key} {self._https_base}/{rel.as_posix()}\n" for key, rel in pairs
+        )
+        proc = subprocess.run(
+            ["git", "annex", "registerurl", "--batch"],
+            input=batch,
+            text=True,
+            cwd=str(repo_root),
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            logger.warning(
+                "git annex registerurl exited %d:\n%s", proc.returncode, proc.stderr
+            )
+        return len(pairs)
+
+    def _annex_get_web(self, target: Path, repo_root: Path) -> None:
+        """Fetch annexed content for *target* via the built-in web remote."""
+        cmd = [
+            "git",
+            "annex",
+            "get",
+            "--from=web",
+            f"--jobs={self.threads}",
+            str(target),
+        ]
+        proc = subprocess.run(
+            cmd, cwd=str(repo_root), capture_output=True, text=True, check=False
+        )
+        if proc.returncode != 0:
+            logger.warning(
+                "git annex get --from=web exited %d on %s:\n%s",
+                proc.returncode,
+                target,
+                proc.stderr,
+            )
+
+    def _download(self, overwrite: bool = False) -> None:
+        self._datalad(f"datalad clone {self.repo_url}", self._dl_dir)
+        repo_root = self._dl_dir / self.repo_name
+
+        all_folders = self._expand_folders()
+        print(f"Loading {len(all_folders)} folders: ", all_folders, flush=True)
+
+        # registerurl --batch is slow and silent on large datasets; flush to timestamp it
+        print(
+            f"Registering GIN web URLs for pointer files under {len(all_folders)} folders...",
+            flush=True,
+        )
+        n_registered = self._register_urls(repo_root, all_folders)
+        print(f"Registered {n_registered} GIN web URLs against annex keys", flush=True)
+
+        for item in tqdm(all_folders, desc=f"Downloading {self.study}", ncols=100):
+            if not item.is_dir():
+                continue
+            self._annex_get_web(item, repo_root)
+
+        print("\nDownloaded Dataset", flush=True)
 
 
 class Donders(BaseDownload):

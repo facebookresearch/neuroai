@@ -34,6 +34,7 @@ _EXTRA_KWARGS: dict[str, dict[str, tp.Any]] = {
     "Physionet": {"version": "1.0.0"},
     "Donders": {"study_id": "DSC_123"},
     "Datalad": {"repo_url": "https://example.com/repo.git"},
+    "Gin": {"repo_url": "https://gin.g-node.org/test/repo.git"},
     "Synapse": {"study_id": "syn123"},
     "Zenodo": {"record_id": "12345"},
     "Huggingface": {"org": "abc"},
@@ -167,6 +168,115 @@ def test_dryad_missing_token_raises(tmp_path: Path) -> None:
             doi="12.3456/dryad.abcdefghijk",
             dset_dir=tmp_path / "dryad",
         )
+
+
+def _make_gin(tmp_path: Path, **kwargs: tp.Any) -> download.Gin:
+    """Factory that builds a Gin instance rooted at *tmp_path*."""
+    defaults: dict[str, tp.Any] = {
+        "study": "test",
+        "dset_dir": tmp_path / "study",
+        "repo_url": "https://gin.g-node.org/CUBRIC/WAND.git",
+    }
+    defaults.update(kwargs)
+    return download.Gin(**defaults)
+
+
+def test_gin_https_base_strips_dot_git_and_appends_branch(tmp_path: Path) -> None:
+    """`_https_base` derives the GIN raw URL prefix from `repo_url` + `branch`."""
+    gin_master = _make_gin(tmp_path)
+    assert gin_master._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
+    gin_main = _make_gin(tmp_path, branch="main")
+    assert gin_main._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/main"
+    # `.git` suffix is optional in the input
+    gin_bare = _make_gin(tmp_path, repo_url="https://gin.g-node.org/CUBRIC/WAND")
+    assert gin_bare._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
+
+
+def test_gin_read_pointer_key_v8(tmp_path: Path) -> None:
+    """A v8 in-tree pointer file parses to its annex key."""
+    key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+    pointer = tmp_path / "sub-001.meg4"
+    pointer.write_text(f"/annex/objects/{key}\n")
+    assert download.Gin._read_pointer_key(pointer) == key
+
+
+def test_gin_read_pointer_key_v7_symlink(tmp_path: Path) -> None:
+    """A v7 symlink into ``.git/annex/objects/...`` resolves to its key."""
+    key = "SHA256E-s100--abc"
+    target = f"../../../.git/annex/objects/Wp/g8/{key}/{key}"
+    symlink = tmp_path / "sub-001.res4"
+    symlink.symlink_to(target)
+    assert download.Gin._read_pointer_key(symlink) == key
+
+
+def test_gin_read_pointer_key_rejects_non_pointers(tmp_path: Path) -> None:
+    """Regular files, oversize ASCII, and non-annex symlinks return None."""
+    real = tmp_path / "real.bin"
+    real.write_bytes(b"\x00\x01\x02real binary data")
+    assert download.Gin._read_pointer_key(real) is None
+
+    big = tmp_path / "oversize.txt"
+    big.write_bytes(b"/annex/objects/foo\n" + b"x" * 1024)
+    assert download.Gin._read_pointer_key(big) is None
+
+    elsewhere = tmp_path / "elsewhere.lnk"
+    elsewhere.symlink_to("../somewhere/else.bin")
+    assert download.Gin._read_pointer_key(elsewhere) is None
+
+
+def test_gin_download_invokes_clone_register_and_get(
+    tmp_path: Path, mocker: tp.Any
+) -> None:
+    """End-to-end ``Gin._download`` wires clone -> registerurl -> annex get.
+
+    The clone step is stubbed to materialise the WAND-like directory
+    structure with one pointer file; the rest is mocked so the test stays
+    offline.
+    """
+    gin = _make_gin(
+        tmp_path,
+        folders=[download.Wildcard(folder="sub-*/ses-01/meg")],
+        threads=3,
+    )
+
+    pointer_rel = Path("sub-00395/ses-01/meg/sub-00395_ses-01_task-resting.meg4")
+    pointer_abs = gin._dl_dir / gin.repo_name / pointer_rel
+    annex_key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+
+    def fake_clone(cmd: str, path: tp.Any) -> None:
+        # `datalad clone` should populate the working tree; emulate that
+        # by writing the pointer file under the expected repo root.
+        pointer_abs.parent.mkdir(parents=True, exist_ok=True)
+        pointer_abs.write_text(f"/annex/objects/{annex_key}\n")
+
+    mocker.patch.object(download.Gin, "_datalad", side_effect=fake_clone)
+    run_mock = mocker.patch(
+        "neuralfetch.download.subprocess.run",
+        return_value=mocker.Mock(returncode=0, stderr="", stdout=""),
+    )
+
+    gin._download()
+
+    # 1. registerurl invoked with key + correct GIN HTTPS URL
+    expected_url = (
+        "https://gin.g-node.org/CUBRIC/WAND/raw/master/" + pointer_rel.as_posix()
+    )
+    register_calls = [
+        c
+        for c in run_mock.call_args_list
+        if c.args[0][:3] == ["git", "annex", "registerurl"]
+    ]
+    assert len(register_calls) == 1
+    assert register_calls[0].kwargs["input"] == f"{annex_key} {expected_url}\n"
+    assert register_calls[0].kwargs["cwd"] == str(gin._dl_dir / gin.repo_name)
+
+    # 2. annex get --from=web invoked per resolved folder with --jobs=threads
+    get_calls = [
+        c for c in run_mock.call_args_list if c.args[0][:3] == ["git", "annex", "get"]
+    ]
+    assert len(get_calls) == 1
+    assert "--from=web" in get_calls[0].args[0]
+    assert "--jobs=3" in get_calls[0].args[0]
 
 
 def test_globus_missing_credentials_raises(tmp_path: Path) -> None:

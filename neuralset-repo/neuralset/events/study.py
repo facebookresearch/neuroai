@@ -283,7 +283,8 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     version : str
         Cache-busting key kept in the uid; bump when loading logic changes.
     query : Query or None
-        Optional filter applied after loading (e.g. ``"timeline_index < 5"``).
+        Optional timeline selection, applied before loading (e.g.
+        ``"timeline_index < 5"``); filter loaded rows with ``QueryEvents``.
 
     Examples
     --------

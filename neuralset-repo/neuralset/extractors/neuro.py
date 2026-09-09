@@ -289,7 +289,7 @@ class MneRaw(BaseExtractor):
 
     def _exclude_from_cache_uid(self) -> list[str]:
         prev = super()._exclude_from_cache_uid()
-        return prev + ["baseline", "offset", "scale_factor", "clamp"]
+        return prev + ["baseline", "offset", "scale_factor", "clamp", "channel_order"]
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
