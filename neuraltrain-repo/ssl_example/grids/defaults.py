@@ -115,7 +115,7 @@ default_config = {
         },
         "scheduler": {
             "name": "OneCycleLR",
-            "kwargs": {"max_lr": 3e-3, "pct_start": 0.2},
+            "kwargs": {"max_lr": 1e-3, "pct_start": 0.2},
         },
     },
     "csv_config": {
