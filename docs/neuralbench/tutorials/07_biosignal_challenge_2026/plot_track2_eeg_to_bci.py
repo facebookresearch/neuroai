@@ -1,12 +1,13 @@
 """
-Track 2 -- EEG-to-BCI (cross-session command decoding)
-========================================================
+Track 2 -- BCI command decoding (cross-session)
+=================================================
 
-Given EEG recorded while a user performs one of three cued mental
-tasks (kinesthetic motor imagery, mental calculation, or
-letter/word association), decode the active command after the user
-has already provided labelled calibration data. The competition tests
-**within-user, cross-session** generalisation.
+Given short EEG windows recorded while a user performs one of three
+cued mental commands (kinesthetic motor imagery, mental calculation, or
+letter/word association), decode the active command. The competition
+tests **cross-session** generalisation: models train on a subject's
+early sessions and are scored on their later ones, with no per-session
+recalibration allowed.
 
 - **Shift**: early sessions -> later sessions (Graz + BrainHero
   contexts).
@@ -18,9 +19,9 @@ has already provided labelled calibration data. The competition tests
   subjects have all 6 sessions released.
 
 .. note::
-   At the time of writing the official Track 2 dataset
-   (Dreyer / Kojima / Lotte, 3 classes: MI / Calc / Word) is not
-   publicly released. NeuralBench's :doc:`motor_imagery
+   The official Track 2 corpus (Graz / BrainHero, 3 classes: MI / Calc
+   / Word) is released through NeuralBench when submissions open.
+   NeuralBench's :doc:`motor_imagery
    </neuralbench/tasks/eeg/motor_imagery>` task is the closest
    analog and is used here as the starter-kit baseline.
 """

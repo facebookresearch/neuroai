@@ -1,0 +1,38 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Reference self-supervised baseline, pretrained by `neuraltrain-repo/ssl_example`.
+# It has no published weights, so use it with `--checkpoint <your encoder>`.
+#
+# `dim` and `patch_size` must match the pretraining run: on a mismatch
+# `load_checkpoint` only logs "Size mismatch" and keeps random weights.
+# Channel count need not match, as channels are identified by their position.
+#
+# `data.neuro` is deliberately absent: `ssl_example` pretrains with the
+# preprocessing from `defaults/config.yaml`, so inheriting it keeps the two
+# sides in step without restating any of it here.
+data:
+  channel_positions:
+    n_spatial_dims: 3
+    # same montage as pretraining; also resolves bipolar derivations
+    layout_or_montage_name: standard_1020
+brain_model_config:
+  =replace=: true
+  name: MaeEncoder
+  dim: 256
+  patch_size: 32
+  # `channel_emb_config` absent here and in `ssl_example`, so neither can drift
+# n_outputs=None: the probe pools the encoder's tokens; absent channels are zeroed
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+  # encoder.layers.*.1.{to_q,to_k,to_v,to_out}
+  lora_target_modules:
+    - to_q
+    - to_k
+    - to_v
+    - to_out

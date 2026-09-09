@@ -1,0 +1,170 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+import dataclasses
+import typing as tp
+from pathlib import Path
+
+import lightning.pytorch as pl
+import pytest
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
+
+from neuraltrain.models.common import INVALID_POS_VALUE, FourierEmb
+from neuraltrain.models.mae import MaeEncoder
+from neuraltrain.models.transformer import TransformerEncoder
+from neuraltrain.optimizers.base import LightningOptimizer
+
+from .mae_module import MaeModule, random_mask
+
+N_CHANNELS, N_TIMES, PATCH_SIZE = 4, 200, 20
+# seeded: convergence below depends on the positions, `seed_everything` comes too late
+POSITIONS = torch.rand(N_CHANNELS, 3, generator=torch.Generator().manual_seed(0))
+
+
+@dataclasses.dataclass
+class _Batch:
+    """Minimal stand-in for a ``neuralset`` ``Batch``."""
+
+    data: dict[str, torch.Tensor]
+
+
+class _Windows(Dataset):
+    """Unlabelled sinusoidal windows, i.e. what a strided segmenter would emit."""
+
+    def __init__(self, n_windows: int) -> None:
+        cycle = torch.linspace(0, 1, N_TIMES)
+        phases = torch.rand(n_windows, N_CHANNELS, 1)
+        self.windows = torch.sin(2 * torch.pi * (cycle + phases))
+
+    def __len__(self) -> int:
+        return len(self.windows)
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return self.windows[idx]
+
+
+def _collate(windows: list[torch.Tensor]) -> _Batch:
+    return _Batch(
+        data={
+            "input": torch.stack(windows),
+            "channel_positions": POSITIONS.expand(len(windows), -1, -1),
+        }
+    )
+
+
+def _build_module() -> MaeModule:
+    config = MaeEncoder(
+        dim=32,
+        patch_size=PATCH_SIZE,
+        channel_emb_config=FourierEmb(n_freqs=2, n_dims=3),
+        transformer_config=TransformerEncoder(
+            heads=2, depth=1, rotary_pos_emb=False, attn_dropout=0.0
+        ),
+    )
+    return MaeModule(
+        model=config.build(n_outputs=None),
+        loss=nn.MSELoss(),
+        optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 3e-3}),  # type: ignore
+        mask_ratio=0.5,
+    )
+
+
+# counts are per example, and never all or none of its valid tokens
+@pytest.mark.parametrize(
+    "mask_ratio, hidden", [(0.1, (1, 1)), (0.5, (3, 6)), (0.9, (5, 11))]
+)
+def test_random_mask(mask_ratio, hidden) -> None:
+    valid = torch.ones(2, 12, dtype=torch.bool)
+    valid[0, 6:] = False  # first example has half its channels absent
+
+    mask = random_mask(valid, mask_ratio)
+
+    assert mask.shape == (2, 12) and mask.dtype == torch.bool
+    assert not (mask & ~valid).any(), "an absent channel's token was hidden"
+    assert tuple(mask.sum(dim=1).tolist()) == hidden
+
+
+def test_masking_needs_at_least_two_valid_tokens() -> None:
+    valid = torch.zeros(2, 8, dtype=torch.bool)
+    valid[:, 0] = True
+    with pytest.raises(ValueError, match="at least 2 valid tokens"):
+        random_mask(valid, 0.5)
+
+
+def test_rejects_degenerate_mask_ratio() -> None:
+    with pytest.raises(ValueError, match=r"mask_ratio must lie in \(0, 1\)"):
+        MaeModule(
+            model=_build_module().model,
+            loss=nn.MSELoss(),
+            optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 1e-3}),  # type: ignore
+            mask_ratio=0.0,
+        )
+
+
+def test_step_ignores_absent_channels() -> None:
+    pl.seed_everything(0)
+    module = _build_module()
+    positions = POSITIONS.expand(2, -1, -1).clone()
+    positions[:, 3] = INVALID_POS_VALUE
+
+    x = torch.randn(2, N_CHANNELS, N_TIMES)
+    other = x.clone()
+    other[:, 3] = torch.randn(2, N_TIMES)
+
+    losses = []
+    for data in (x, other):
+        torch.manual_seed(0)  # same mask draw for both
+        batch = _Batch(data={"input": data, "channel_positions": positions})
+        losses.append(float(module._run_step(batch, "val")))
+
+    assert losses[0] == pytest.approx(losses[1], abs=1e-6), (
+        "loss changed when an absent channel's padding did"
+    )
+
+
+def test_pretraining_needs_no_target_and_checkpoints_the_encoder(
+    tmp_path: Path,
+) -> None:
+    pl.seed_everything(0)
+    module = _build_module()
+    losses: list[float] = []
+
+    class _Record(pl.Callback):
+        def on_train_batch_end(
+            self, trainer: tp.Any, pl_module: tp.Any, outputs: tp.Any, *args: tp.Any
+        ) -> None:
+            losses.append(float(outputs["loss"]))
+
+    trainer = pl.Trainer(
+        max_epochs=40,
+        accelerator="cpu",
+        logger=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+        default_root_dir=tmp_path,
+        callbacks=[_Record()],
+    )
+    loader = DataLoader(
+        _Windows(32),
+        batch_size=8,
+        shuffle=True,
+        collate_fn=_collate,  # type: ignore[arg-type]
+    )
+    trainer.fit(module, train_dataloaders=loader)
+    trainer.save_checkpoint(tmp_path / "last.ckpt")
+
+    start, end = sum(losses[:2]) / 2, sum(losses[-2:]) / 2
+    assert end < 0.25 * start, f"loss did not decrease: {start:.4f} -> {end:.4f}"
+
+    # neuralbench strips the "model." prefix, then matches a freshly built encoder
+    saved = torch.load(tmp_path / "last.ckpt", weights_only=True)["state_dict"]
+    saved = {k[len("model.") :]: v for k, v in saved.items() if k.startswith("model.")}
+    encoder = _build_module().model.state_dict()
+    assert {k: v.shape for k, v in encoder.items()} == {
+        k: saved[k].shape for k in encoder if k in saved
+    }, f"encoder keys missing from checkpoint: {sorted(set(encoder) - set(saved))}"

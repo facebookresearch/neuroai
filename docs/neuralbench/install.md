@@ -41,12 +41,13 @@ pre-commit install
 
 ## Optional dependencies
 
-Dataset downloading is covered by the base install, which pulls in
-`neuralfetch[quickstart]`. The `models` extra adds what is needed to load
-pretrained model weights:
+The base install is enough to download datasets (via `neuralfetch[quickstart]`),
+load pretrained model weights (via `braindecode[hub]`), and run and score every
+task. The only extra a user may want is `wandb`, for the optional experiment
+tracking described below:
 
 ```bash
-pip install 'neuralbench-repo/.[models]'
+pip install 'neuralbench-repo/.[wandb]'
 ```
 
 ## First-run configuration
@@ -82,11 +83,12 @@ For example, to run the full benchmark locally without SLURM, set:
 }
 ```
 
-### Disabling Weights & Biases
+### Weights & Biases (optional)
 
-Leave `WANDB_HOST` blank (`""`) in your config to disable W&B logging entirely;
-results are still written to `SAVE_DIR` and remain accessible via
-`--plot-cached`.
+W&B logging is off unless `WANDB_HOST` is set in your config, and nothing
+requires it: results are written to `SAVE_DIR` either way and stay accessible
+through `--plot-cached`. To opt in, install the `wandb` extra and set
+`WANDB_HOST` to your host.
 
 ### Custom config location
 

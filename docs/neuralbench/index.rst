@@ -122,8 +122,9 @@ comparison figures and tables from the stored results (no retraining):
       :link-type: doc
       :class-card: sd-shadow-sm
 
-      Starter kit for the proposed 2026 multi-track challenge:
-      EEG-to-Image, BCI, sleep onset, and EMG-to-Pose.
+      Starter kit for the `2026 multi-track challenge
+      <https://neural-interfaces26.github.io/>`_: EEG-to-Image, BCI
+      command decoding, sleep onset, and EMG-to-Pose.
 
 ----
 
