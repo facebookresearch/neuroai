@@ -186,7 +186,7 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
                     latent = self._aggregate_tokens(latent)
                     if aggregate_layers:
                         latent = self._aggregate_layers(latent)
-                    yield latent.cpu().numpy()
+                    yield latent.cpu().numpy() if isinstance(latent, torch.Tensor) else latent
 
     @infra.apply(
         item_uid=_huggingface_image_event_uid,
