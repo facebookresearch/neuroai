@@ -29,11 +29,22 @@ def debug_config() -> dict:
     config["data"]["studies"] = [  # type: ignore[index]
         [
             {
-                "name": "Mne2013SampleEeg",
+                # Mne2013SampleEeg reads this same recording, but a study caches
+                # under its own name, so it would refetch what CI already holds
+                "name": "Mne2013Sample",
                 # use same folder as in neuralset tests to share cache:
                 "path": ns.CACHE_FOLDER,
                 "query": None,
                 "infra": {"backend": "Cached", "folder": CACHEDIR},
+            },
+            # the relabelling that subclass does, so EegExtractor still picks the
+            # EEG channels of the recording rather than the MEG ones
+            {
+                "name": "CreateColumn",
+                "column": "type",
+                "query_row": "type == 'Meg'",
+                "query_value": "Eeg",
+                "on_column_exists": "ignore",
             },
             # only the recording matters here: it is the trigger, and there is no
             # target, so dropping the stimuli makes the split below exact
@@ -58,6 +69,11 @@ def debug_config() -> dict:
             },
         ]
     ]
+    # ten channels still exercise the per-channel position embedding, and the
+    # encoder tokenises channels independently, so this only shortens sequences
+    config["data"]["segmenter"]["extractors"]["input"]["picks"] = tuple(  # type: ignore[index]
+        f"EEG {i:03d}" for i in range(1, 11)
+    )
     # channels named "EEG 001"...: no montage knows them, read coords from the file
     config["data"]["channel_positions"]["layout_or_montage_name"] = None  # type: ignore[index]
     return config
