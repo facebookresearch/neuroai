@@ -313,6 +313,48 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
         return torch.Tensor(np.array(latent, copy=True))
 
 
+class ClipVersatileDiffusion(HuggingFaceImage):
+    """CLIP image features with `Versatile Diffusion
+    <https://huggingface.co/shi-labs/versatile-diffusion>`_ image-conditioning post-processing.
+
+    ``normalize=True`` divides every token by the L2 norm of the first token (the CLS
+    token for CLIP), matching ``ClipImage`` with ``normalize=True``.
+    """
+
+    model_name: str = "openai/clip-vit-large-patch14"
+    token_aggregation: tp.Literal["first", "last", "mean", "sum", "max", "cat"] | None = (
+        None
+    )
+    normalize: bool = True
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        from transformers import AutoConfig
+
+        config = AutoConfig.from_pretrained(self.model_name, local_files_only=True)
+        if not (hasattr(config, "vision_config") and hasattr(config, "projection_dim")):
+            raise ValueError(
+                f"{type(self).__name__} requires a CLIP-style model exposing a vision "
+                f"tower and visual_projection; {self.model_name!r} "
+                f"({getattr(config, 'model_type', '?')}) does not."
+            )
+
+    def _extract_batched_latents(self, images: torch.Tensor) -> torch.Tensor:
+        inputs = self.processor(images=[i.float() for i in images], return_tensors="pt")
+        _fix_pixel_values(inputs)
+        inputs = inputs.to(self.model_device)
+        model: tp.Any = self.model
+        with torch.inference_mode():
+            vout = model.vision_model(pixel_values=inputs["pixel_values"])
+        embeds = vout.last_hidden_state  # (B, n_tokens, hidden_dim)
+        embeds = model.vision_model.post_layernorm(embeds)
+        embeds = model.visual_projection(embeds)  # (B, n_tokens, proj_dim)
+        if self.normalize:
+            first_norm = embeds[:, 0:1].norm(dim=-1, keepdim=True)  # (B, 1, 1)
+            embeds = embeds / first_norm
+        return embeds.unsqueeze(1)
+
+
 class BaseClassicImageExtractor(extractor_base.BaseStatic):
     """Base class for classic image extractors, e.g. based on numpy, skimage, OpenCV, etc.
 
