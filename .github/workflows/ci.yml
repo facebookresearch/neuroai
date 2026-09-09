@@ -31,6 +31,7 @@ jobs:
       neuralset: ${{ steps.filter.outputs.neuralset }}
       neuralfetch: ${{ steps.filter.outputs.neuralfetch }}
       neuraltrain: ${{ steps.filter.outputs.neuraltrain }}
+      ssl_example: ${{ steps.filter.outputs.ssl_example }}
       neuralbench: ${{ steps.filter.outputs.neuralbench }}
       docs: ${{ steps.filter.outputs.docs }}
       any: ${{ steps.filter.outputs.neuralset == 'true' || steps.filter.outputs.neuralfetch == 'true' || steps.filter.outputs.neuraltrain == 'true' || steps.filter.outputs.neuralbench == 'true' }}
@@ -48,6 +49,11 @@ jobs:
               - 'neuralfetch-repo/**'
             neuraltrain:
               - 'neuraltrain-repo/**'
+            # the end-to-end run below segments a real recording, so it is worth
+            # its minute only when the example or the model it trains changes
+            ssl_example:
+              - 'neuraltrain-repo/ssl_example/**'
+              - 'neuraltrain-repo/neuraltrain/models/mae.py'
             neuralbench:
               - 'neuralset-repo/**'
               - 'neuraltrain-repo/**'
@@ -146,12 +152,18 @@ jobs:
           python -m project_example.grids.test_run
 
       # the examples live outside the package, so `pytest neuraltrain` misses them
-      - name: neuraltrain ssl example
+      - name: neuraltrain ssl example tests
         if: needs.changes.outputs.neuraltrain == 'true'
         run: |
           source .venv/bin/activate
           cd neuraltrain-repo
           pytest ssl_example/test_mae_module.py --durations=10
+
+      - name: neuraltrain ssl example end-to-end
+        if: needs.changes.outputs.ssl_example == 'true'
+        run: |
+          source .venv/bin/activate
+          cd neuraltrain-repo
           python -m ssl_example.grids.test_run
 
       - name: pytest neuralfetch
