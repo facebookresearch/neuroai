@@ -86,9 +86,13 @@ default_config = {
         "channel_positions": {
             "n_spatial_dims": 3,
             "layout_or_montage_name": "standard_1020",
+            # positions are padded to the channel union of the studies, which is
+            # not part of the cache key: kept on disk, they would be served at the
+            # width of whichever study set filled the cache first. Recomputing
+            # them costs seconds, and `keep_in_ram` still spares repeated reads.
             "infra": {
                 "keep_in_ram": True,
-                "folder": CACHEDIR,
+                "folder": None,
                 "cluster": None,
             },
         },
