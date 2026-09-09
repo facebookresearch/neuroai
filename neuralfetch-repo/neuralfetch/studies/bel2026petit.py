@@ -304,10 +304,10 @@ class Bel2026PetitListen(_Bel2026PetitBase):
 
         events_df = pd.DataFrame(events)
 
-        # Remove empty words that were included in the metadata files...
-        events_df = events_df[events_df["text"] != " "]
-
         metadata = pd.read_csv(self._get_seq_id_path(tl))
+        # Remove empty words that were included in the metadata files...
+        metadata = metadata[metadata["word"] != " "]
+
         rows_events, rows_metadata = nutils.match_list(
             [str(word) for word in events_df["text"].values],
             [str(word) for word in metadata["word"].values],
