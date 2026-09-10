@@ -50,7 +50,8 @@ recalibration allowed.
 # ``Stieger2021Continuous`` and the alternative MI datasets are served by
 # MOABB, which the base install does not pull, so install it first:
 # ``pip install 'moabb>=1.7.1'``. Budget ~600 GB under ``DATA_DIR`` for the
-# download, plus ~280 GB for the copy MOABB converts on first read.
+# download, plus ~280 GB for the copy MOABB converts on first read -- or
+# start on the much smaller ``tangermann2012`` described below.
 #
 # .. code-block:: bash
 #
@@ -73,6 +74,12 @@ recalibration allowed.
 # :doc:`/neuralbench/tasks/eeg/motor_imagery` (MOABB, Dreyer2023,
 # BCI Competition IV, ...) can also be selected with ``--dataset
 # <name>`` and are useful for stress-testing cross-subject behaviour.
+#
+# ``--dataset tangermann2012`` is the one to reach for first: BCI
+# Competition IV-2a is 9 subjects of 22-channel four-class MI in under
+# 1 GB, so the whole download-prepare-train loop can be exercised
+# against a well-known published baseline before committing ~900 GB to
+# ``Stieger2021Continuous``.
 
 # %%
 # Adapting to the competition setup

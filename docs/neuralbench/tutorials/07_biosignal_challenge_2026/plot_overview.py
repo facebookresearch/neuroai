@@ -125,6 +125,9 @@ NeuralBench, using publicly available reference datasets.
 #    * - Track
 #      - Default dataset
 #      - Disk under ``DATA_DIR``
+#    * - 1 -- Image
+#      - ``Gifford2022Large``
+#      - ~210 GB
 #    * - 2 -- BCI
 #      - ``Stieger2021Continuous``
 #      - ~600 GB, plus ~280 GB for the copy MOABB converts on first read
@@ -135,9 +138,10 @@ NeuralBench, using publicly available reference datasets.
 #      - ``Salter2024Emg2pose``
 #      - ~310 GB
 #
-# Track 1's ``Gifford2022Large`` default is the one we have no measured
-# figure for; among its alternatives, ``Xu2024Alljoined`` is ~24 GB and
-# ``Xu2025Alljoined`` (Alljoined-1.6M) ~250 GB.
+# Among Track 1's alternatives, ``Xu2024Alljoined`` is ~24 GB and
+# ``Xu2025Alljoined`` (Alljoined-1.6M) ~250 GB. Track 2's
+# ``tangermann2012`` is under 1 GB, small enough to exercise the whole
+# pipeline before committing to a default.
 #
 # ``--prepare`` then writes a separate preprocessing cache under
 # ``CACHE_DIR``, so the two directories are worth pointing at different
