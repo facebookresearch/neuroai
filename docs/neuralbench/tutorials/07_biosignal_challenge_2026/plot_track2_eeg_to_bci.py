@@ -104,17 +104,21 @@ recalibration allowed.
 #
 #    # 2. Preprocess into CACHE_DIR (~96 GB) -- resample, filter, scale, and
 #    #    window the 598 recordings once, so every later run reads the cache
-#    #    instead. <<TIME_PREPARE_T2>>
+#    #    instead. ~65 min spread over 75 SLURM jobs. Do not skip it here: a
+#    #    cold-cache --debug on this corpus spent ~45 min doing the same work
+#    #    serially in-process.
 #    neuralbench eeg motor_imagery --prepare
 #
-#    # 3. Sanity check before you queue anything: runs locally on 2 epochs and
-#    #    a data subset. <<TIME_DEBUG_T2>>
+#    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
+#    #    seed, always in-process. ~45 s on one V100 with the cache warm.
 #    neuralbench eeg motor_imagery --debug
 #
-#    # 4. Full baseline -- task-specific model (EEGNet). <<TIME_RUN_T2>>
+#    # 4. Full baseline -- task-specific model (EEGNet). ~30 min per seed, and
+#    #    the default grid is three seeds (concurrent on SLURM).
 #    neuralbench eeg motor_imagery -m eegnet
 #
 #    # 5. Full baseline -- foundation model (REVE), fine-tuned end to end.
+#    #    ~2.5 h per seed.
 #    neuralbench eeg motor_imagery -m reve
 #
 # Steps 4 and 5 print the test-metric dictionary at the end and cache it under
@@ -123,8 +127,9 @@ recalibration allowed.
 #
 # ``--dataset tangermann2012`` is the one to reach for first: BCI
 # Competition IV-2a is 9 subjects of 22-channel four-class MI in under
-# 1 GB, so the whole download-prepare-train loop can be exercised
-# against a well-known published baseline before committing ~940 GB to
+# 1 GB, and the whole download-prepare-train loop runs in well under an
+# hour (~15 min to prepare, ~2 min per training seed) against a well-known
+# published baseline -- worth doing before committing ~940 GB and a day to
 # ``Stieger2021Continuous``.
 
 # %%

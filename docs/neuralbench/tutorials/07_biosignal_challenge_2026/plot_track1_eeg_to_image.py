@@ -97,17 +97,20 @@ concepts.
 #    #    plus one frozen DINOv2-giant embedding per unique stimulus (~100 MB
 #    #    for THINGS-EEG2, content-keyed and shared with the other image
 #    #    tasks). The only --prepare of the four tracks that needs a GPU.
-#    #    <<TIME_PREPARE_T1>>
+#    #    ~15 min for eegnet's cache, ~45 min for reve's, and ~10 min to embed
+#    #    the 16740 stimuli, spread over 10 and 128 SLURM jobs respectively.
 #    neuralbench eeg image --prepare
 #
-#    # 3. Sanity check before you queue anything: runs locally on 2 epochs and
-#    #    a data subset. <<TIME_DEBUG_T1>>
+#    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
+#    #    seed, always in-process. ~2 min on one V100 with the cache warm.
 #    neuralbench eeg image --debug
 #
-#    # 4. Full baseline -- task-specific model (EEGNet). <<TIME_RUN_T1>>
+#    # 4. Full baseline -- task-specific model (EEGNet). ~2.5 h per seed, and
+#    #    the default grid is three seeds (concurrent on SLURM).
 #    neuralbench eeg image -m eegnet
 #
 #    # 5. Full baseline -- foundation model (REVE), fine-tuned end to end.
+#    #    ~5.5 h per seed.
 #    neuralbench eeg image -m reve
 #
 # Steps 4 and 5 print the test-metric dictionary at the end and cache it under

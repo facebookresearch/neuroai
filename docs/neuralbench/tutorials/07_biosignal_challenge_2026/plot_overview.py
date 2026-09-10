@@ -220,6 +220,12 @@ re-run the top three submissions of each track.
 # lists, which describe the compressed upstream releases rather than what
 # lands on your disk after download and conversion.
 #
+# One thing the table cannot show: the cache is keyed on the
+# *preprocessing* config, and models disagree about it. ``reve`` asks for
+# 200 Hz where the benchmark default is 120 Hz, so running both baselines
+# warms two caches rather than reusing one. Budget per model family you
+# intend to run, not per track.
+#
 # Among Track 1's alternatives, ``Xu2024Alljoined`` is ~25 GB,
 # ``Grootswagers2022Human`` ~75 GB and ``Xu2025Alljoined``
 # (Alljoined-1.6M) ~270 GB. Track 2's ``tangermann2012`` is under 1 GB,
@@ -227,10 +233,51 @@ re-run the top three submissions of each track.
 # default.
 
 # %%
+# How much wall-clock to expect
+# ------------------------------
+#
+# The track pages quote measured times for each command. Three things about
+# *how* the commands run explain most of the variance between what they say
+# and what you will see, and only the first is under your control:
+#
+# - **SLURM or not.** ``--prepare`` and the training runs dispatch through
+#   the ``CLUSTER`` key in your config (see :doc:`/neuralbench/install`).
+#   Where SLURM is available, ``--prepare`` fans the preprocessing out over
+#   10 to 128 jobs, so the quoted 15 minutes is 15 minutes of *job wall
+#   time*, not of compute. On one machine the same work runs serially and
+#   takes proportionally longer.
+# - **Three seeds, not one.** A full run is one job per model x dataset x
+#   seed, and the default grid is three seeds. On SLURM they run
+#   concurrently, so the command finishes in roughly the time of its slowest
+#   job; locally they run one after another, so budget three times the
+#   per-seed figure the track pages quote.
+# - **Cache warmth.** ``--debug`` is the odd one out: it always runs
+#   in-process on one GPU with a single seed, never on SLURM. That makes it
+#   a genuine end-to-end check, but it also means skipping ``--prepare``
+#   does not skip the preprocessing -- it just moves it into your debug run,
+#   which is how a nominally 45-second sanity check becomes a 45-minute one.
+
+# %%
 # Collecting and plotting your results
 # -------------------------------------
 #
-# Every NeuralBench run caches its test-metric dictionary on disk.
+# A finished run prints Lightning's test-metric table and returns the same
+# numbers as a dictionary, which is what lands on disk. From a real
+# ``sleep_onset`` job:
+#
+# .. code-block:: python
+#
+#    {'n_total_params': 1425, 'n_trainable_params': 1425,
+#     'peak_cpu_memory_mb': 2040.26, 'peak_gpu_memory_mb': 15.89,
+#     'test/bmae': 140.209, 'test/mae': 257.191, 'test/pearsonr': 0.4220,
+#     'test/r2_score': -1.3576, 'test/rmse': 298.825,
+#     'training_time_s': 314.687}
+#
+# The headline metric each track is scored on is one key of that dictionary,
+# named on the track page. The rest is there to keep you honest about what
+# produced it -- parameter counts, peak memory, and training time.
+#
+# Every run caches that dictionary under ``SAVE_DIR``.
 # After the experiments you care about have finished, re-invoke the
 # same CLI command with ``--plot-cached`` to aggregate results into
 # comparison plots and CSV tables without retraining:

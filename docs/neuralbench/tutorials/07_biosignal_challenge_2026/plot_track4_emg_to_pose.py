@@ -104,18 +104,19 @@ wristband placement and kinematic context at once.
 #    #    and re-run.
 #    neuralbench emg pose -m vemg2pose --download
 #
-#    # 2. Preprocess into CACHE_DIR -- window the 25k recordings and pair them
-#    #    with the joint-angle trajectories once, so every later run reads the
-#    #    cache instead. Budget ~440 GB: more than the raw download, because
-#    #    the 20 joint angles are cached as a second 2 kHz pass (~230 GB)
-#    #    alongside the EMG (~185 GB). <<TIME_PREPARE_T4>>
+#    # 2. Preprocess into CACHE_DIR -- window the 25232 recordings and pair
+#    #    them with the joint-angle trajectories once, so every later run reads
+#    #    the cache instead. ~25 min spread over 128 SLURM jobs. Budget
+#    #    ~440 GB: more than the raw download, because the 20 joint angles are
+#    #    cached as a second 2 kHz pass (~230 GB) alongside the EMG (~185 GB).
 #    neuralbench emg pose -m vemg2pose --prepare
 #
-#    # 3. Sanity check before you queue anything: runs locally on 2 epochs and
-#    #    a data subset. <<TIME_DEBUG_T4>>
+#    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
+#    #    seed, always in-process. ~1 min on one V100 with the cache warm.
 #    neuralbench emg pose -m vemg2pose --debug
 #
-#    # 4. Full paper regression baseline. <<TIME_RUN_T4>>
+#    # 4. Full paper regression baseline. ~2.5 h per seed, and the default grid
+#    #    is three seeds (concurrent on SLURM). ``-m neuropose`` is ~4 h.
 #    neuralbench emg pose -m vemg2pose
 #
 # Step 4 prints the test-metric dictionary at the end -- ``test/mae`` in

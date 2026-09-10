@@ -116,18 +116,21 @@ supports it poorly.
 #
 #    # 2. Preprocess into CACHE_DIR -- resample, filter, scale, and cut the
 #    #    153 whole-night recordings into 5 s windows once, so every later run
-#    #    reads the cache instead. No GPU needed. Note the cache (~18 GB) is
-#    #    larger than the raw download. <<TIME_PREPARE_T3>>
+#    #    reads the cache instead. No GPU needed. ~15 min for eegnet's cache
+#    #    and ~9 min for reve's, spread over 20 SLURM jobs. Note the cache
+#    #    (~18 GB) is larger than the raw download.
 #    neuralbench eeg sleep_onset --prepare
 #
-#    # 3. Sanity check before you queue anything: runs locally on 2 epochs and
-#    #    a data subset. <<TIME_DEBUG_T3>>
+#    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
+#    #    seed, always in-process. ~1 min on one V100 with the cache warm.
 #    neuralbench eeg sleep_onset --debug
 #
-#    # 4. Full baseline -- task-specific model (EEGNet). <<TIME_RUN_T3>>
+#    # 4. Full baseline -- task-specific model (EEGNet). ~6 min per seed, and
+#    #    the default grid is three seeds (concurrent on SLURM).
 #    neuralbench eeg sleep_onset -m eegnet
 #
 #    # 5. Full baseline -- foundation model (REVE), fine-tuned end to end.
+#    #    ~8 min per seed.
 #    neuralbench eeg sleep_onset -m reve
 #
 # Steps 4 and 5 print the test-metric dictionary at the end -- ``test/bmae``
