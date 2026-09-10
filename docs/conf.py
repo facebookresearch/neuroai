@@ -316,6 +316,7 @@ def setup(app):
     app.connect("builder-inited", _regen_code_builder_data)
     app.connect("builder-inited", _regen_neuralfetch_explore_studies)
     app.connect("missing-reference", _resolve_short_paths)
+    app.connect("html-page-context", _gallery_source_links)
 
     listeners = app.events.listeners.get("autodoc-skip-member", [])
     for i, ev in enumerate(listeners):
@@ -421,3 +422,27 @@ sphinx_gallery_conf = {
     "remove_config_comments": True,
     "within_subsection_order": "FileNameSortKey",
 }
+
+
+def _gallery_source_links(app, pagename, templatename, context, doctree):
+    """Point the theme's view/edit buttons at the file a gallery page comes from.
+
+    The buttons default to ``<source_directory>/<pagename>.rst``, but
+    sphinx-gallery writes that rst under ``gallery_dirs`` at build time and it is
+    never committed, so the default 404s. The committed source is the example
+    itself, under the paired ``examples_dirs`` entry.
+    """
+    repo = html_theme_options["source_repository"].rstrip("/")
+    branch = html_theme_options["source_branch"]
+    directory = html_theme_options["source_directory"].strip("/")
+    pairs = zip(sphinx_gallery_conf["examples_dirs"], sphinx_gallery_conf["gallery_dirs"])
+    for examples_dir, gallery_dir in pairs:
+        if not pagename.startswith(f"{gallery_dir}/"):
+            continue
+        name = pagename[len(gallery_dir) + 1 :]
+        # each gallery's index page is rendered from the header rst, not an example
+        basename = "GALLERY_HEADER.rst" if name == "index" else f"{name}.py"
+        source = f"{directory}/{examples_dir}/{basename}"
+        context["theme_source_view_link"] = f"{repo}/blob/{branch}/{source}?plain=true"
+        context["theme_source_edit_link"] = f"{repo}/edit/{branch}/{source}"
+        return

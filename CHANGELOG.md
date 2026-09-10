@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- docs: the theme's "View this page" and "Edit this page" buttons on a sphinx-gallery page point at the example they are built from, rather than at the rst sphinx-gallery generates at build time and never commits, which 404'd on all 42 gallery pages (#252).
+
 ## [0.3.1] - 2026-09-10
 
 - `neuralbench`: adaptation wrappers (`-w`) apply to every model whose config ships a `downstream_model_wrapper`, not just the published foundation models, so a locally pretrained `mae` encoder is linear-probed as documented instead of silently fine-tuned end to end (#249).
