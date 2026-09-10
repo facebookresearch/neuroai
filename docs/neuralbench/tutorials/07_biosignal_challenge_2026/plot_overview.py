@@ -107,6 +107,43 @@ NeuralBench, using publicly available reference datasets.
 # the task logs ``val/mae`` in radians: multiply by 180 / pi to compare.
 
 # %%
+# Budgeting the first download
+# -----------------------------
+#
+# ``--download`` is a one-off step per machine, but not a small one, and
+# the track pages put it first for that reason: the default corpora run
+# from a few gigabytes to several hundred, and the upstream server is
+# usually slower than your disk. Check free space on ``DATA_DIR`` before
+# starting one, and run it somewhere you can leave going for hours.
+#
+# Footprints measured under ``DATA_DIR`` after a full download:
+#
+# .. list-table::
+#    :header-rows: 1
+#    :widths: 20 35 45
+#
+#    * - Track
+#      - Default dataset
+#      - Disk under ``DATA_DIR``
+#    * - 2 -- BCI
+#      - ``Stieger2021Continuous``
+#      - ~600 GB, plus ~280 GB for the copy MOABB converts on first read
+#    * - 3 -- Sleep onset
+#      - ``Kemp2000Analysis``
+#      - ~7 GB
+#    * - 4 -- EMG pose
+#      - ``Salter2024Emg2pose``
+#      - ~310 GB
+#
+# Track 1's ``Gifford2022Large`` default is the one we have no measured
+# figure for; among its alternatives, ``Xu2024Alljoined`` is ~24 GB and
+# ``Xu2025Alljoined`` (Alljoined-1.6M) ~250 GB.
+#
+# ``--prepare`` then writes a separate preprocessing cache under
+# ``CACHE_DIR``, so the two directories are worth pointing at different
+# filesystems if only one of them is large.
+
+# %%
 # Collecting and plotting your results
 # -------------------------------------
 #
@@ -124,7 +161,7 @@ NeuralBench, using publicly available reference datasets.
 #    neuralbench eeg image motor_imagery sleep_onset -m eegnet reve --plot-cached
 #
 #    # 3. Track 4 lives under another device -- aggregate separately
-#    neuralbench emg typing -m emg2qwerty --plot-cached
+#    neuralbench emg pose -m vemg2pose --plot-cached
 #
 # ``--plot-cached`` aggregates within a single device, so the EMG
 # track is collected by its own invocation. It produces, under
@@ -147,10 +184,11 @@ NeuralBench, using publicly available reference datasets.
 # This starter kit relies on the following organiser-maintained
 # open-source libraries:
 #
-# - `NeuralBench <https://facebookresearch.github.io/neuroai/>`_
-#   (this package): unified benchmark suite.
-# - `NeuralSet <https://arxiv.org/abs/2605.03169>`_: data
-#   loading, study registry, event system.
+# - :doc:`NeuralBench </neuralbench/index>` (this package): unified
+#   benchmark suite.
+# - :doc:`NeuralSet </neuralset/index>`
+#   (`paper <https://arxiv.org/abs/2605.03169>`_): data loading, study
+#   registry, event system.
 # - `Braindecode <https://github.com/braindecode/braindecode>`_ and
 #   `MOABB <https://github.com/NeuroTechX/moabb>`_: deep-learning EEG
 #   architectures and BCI benchmarks.

@@ -5,11 +5,11 @@ How to Submit a Model
 This page describes how to package and submit a model to the
 EEG/EMG Foundation Challenge 2026.
 
-.. warning::
-   The submission portal is **not yet open**. This page is a
-   placeholder that documents the expected submission workflow.
-   It will be updated with concrete instructions and URLs once
-   the competition is officially launched.
+Submissions are handled on `Codabench <https://www.codabench.org/>`_,
+with a separate registration for each track you enter. The `competition
+website <https://neural-interfaces26.github.io/>`_ carries the per-track
+Codabench links, the submission window, and the rules, and is the
+authoritative source for all three.
 """
 
 # %%
@@ -23,8 +23,8 @@ EEG/EMG Foundation Challenge 2026.
 #    pipeline.
 # 2. **Package** the model weights and a minimal inference script
 #    into the required format.
-# 3. **Upload** the package to the competition portal, where
-#    organisers run evaluation on the hidden test set.
+# 3. **Upload** the package to your track's Codabench competition,
+#    where the organisers run evaluation on the hidden test set.
 #
 
 # %%
@@ -39,12 +39,12 @@ EEG/EMG Foundation Challenge 2026.
 # Next steps
 # ----------
 #
-# While the portal is not yet open, you can already:
+# Before you submit:
 #
 # - Run the track baselines from the starter kit to familiarise
 #   yourself with the tasks and metrics.
 # - Register a new model in NeuralBench and iterate on your
 #   architecture (see
 #   :doc:`/neuralbench/auto_examples/adding_model/create_new_model`).
-# - Watch the competition repository for announcements on portal
-#   availability and dataset releases.
+# - Watch the competition website for announcements on the remaining
+#   dataset releases.

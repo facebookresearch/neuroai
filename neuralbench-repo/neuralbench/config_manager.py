@@ -38,6 +38,14 @@ def prompt_user_for_path(
         return response
 
 
+def _make_dirs(config: dict[str, Any]) -> list[Path]:
+    """Create the three configured directories, returning them in config order."""
+    paths = [Path(str(config[key])) for key in ("CACHE_DIR", "SAVE_DIR", "DATA_DIR")]
+    for path in paths:
+        path.mkdir(parents=True, exist_ok=True)
+    return paths
+
+
 def setup_config(config_path: Path | None = None) -> dict[str, Any]:
     """
     Set up neuralbench configuration.
@@ -117,10 +125,7 @@ def setup_config(config_path: Path | None = None) -> dict[str, Any]:
         "DATA_DIR - Where to download and store datasets",
     )
 
-    # Create directories if they don't exist
-    for key in ["CACHE_DIR", "SAVE_DIR", "DATA_DIR"]:
-        path = Path(config[key])
-        path.mkdir(parents=True, exist_ok=True)
+    for path in _make_dirs(config):
         print(f"Created directory: {path}")
 
     # Prompt for W&B host
@@ -160,8 +165,7 @@ def _default_config() -> dict[str, Any]:
         "N_CPUS": 10,
         "CLUSTER": "auto",
     }
-    for key in ["CACHE_DIR", "SAVE_DIR", "DATA_DIR"]:
-        Path(str(config[key])).mkdir(parents=True, exist_ok=True)
+    _make_dirs(config)
     return config
 
 
@@ -189,11 +193,23 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
 
     if not config_path.exists():
         if not _is_interactive():
-            return _default_config()
+            config = _default_config()
+            print(
+                f"No configuration file at {config_path}, and stdin is not a "
+                "terminal so the setup prompt is skipped: datasets, caches and "
+                f"results go under {Path(config['DATA_DIR']).parent}. Run "
+                "neuralbench from a terminal, or point NEURALBENCH_CONFIG at a "
+                "config file, to choose your own paths.",
+                file=sys.stderr,
+            )
+            return config
         return setup_config(config_path)
 
     with config_path.open() as f:
-        return json.load(f)
+        config = json.load(f)
+    # a hand-written config names directories the wizard would have created
+    _make_dirs(config)
+    return config
 
 
 # Global config instance (will be initialized when module is imported)

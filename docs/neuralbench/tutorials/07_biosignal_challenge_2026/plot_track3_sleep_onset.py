@@ -32,13 +32,20 @@ per-epoch hypnogram reconstruction.
 # NeuralBench mapping
 # -------------------
 #
+# The matching task in NeuralBench is
+# :doc:`/neuralbench/tasks/eeg/sleep_onset`.
+#
 # - **CLI**: ``neuralbench eeg sleep_onset``
 # - **Default dataset**: ``Kemp2000Analysis`` (Sleep-EDF Expanded,
-#   78 nights, 2 EEG channels, full polysomnography).
-# - **Target**: latency from recording start to the first N2 epoch,
-#   extracted by ``AddSleepOnsetTargets`` + ``SleepOnsetTargetExtractor``
-#   and capped at 600 s. This matches the competition's reference
-#   definition.
+#   78 participants recorded over up to two nights each, 2 EEG
+#   channels, full polysomnography).
+# - **Target**: the time *remaining* until the first N2 epoch, which
+#   ``AddSleepOnsetTargets`` + ``SleepOnsetTargetExtractor`` recompute for
+#   every window as ``clip(n2_onset - window_stop, 0, 600)`` seconds. The
+#   task therefore predicts once per 5-second window rather than once per
+#   recording, and the competition's single ``tau_hat`` is
+#   ``window_stop + prediction`` read off any window within 600 s of
+#   onset, where the cap has not saturated the target.
 # - **Headline metric key**: ``test/bmae`` (binned MAE in seconds).
 #
 # .. dropdown:: Show ``tasks/eeg/sleep_onset/config.yaml``
@@ -104,4 +111,5 @@ per-epoch hypnogram reconstruction.
 # - per-window time-to-onset predictions, **or**
 # - per-window sleep probabilities.
 #
-# The current NeuralBench head produces the first format directly.
+# The current NeuralBench head produces the second format directly, and
+# the first by the conversion above.

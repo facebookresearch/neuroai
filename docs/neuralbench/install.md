@@ -3,6 +3,20 @@
 ## Prerequisites
 
 - Python >= 3.12
+- For GPU training, an NVIDIA driver new enough for the `torch` wheel that pip
+  resolves. `pip install neuralbench` takes the default PyPI `torch`, which
+  tracks the newest CUDA release, so an older driver fails on every GPU call.
+  Check with `python -c "import torch; print(torch.cuda.get_device_capability(0))"`
+  -- if it raises (typically `The NVIDIA driver on your system is too old`),
+  install a build matching your driver, for example CUDA 12.6:
+
+  ```bash
+  pip install --force-reinstall torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu126
+  ```
+
+  CPU-only workflows (`--download`, `--prepare`, `--plot-cached`) need none of
+  this.
 
 ## Install from PyPI
 
@@ -26,8 +40,9 @@ pip install .
 ```
 
 (Use `pip install -e .` instead if you intend to modify the source -- see
-[Developer install](#developer-install) below.)
+[Developer install](developer-install) below.)
 
+(developer-install)=
 ## Developer install
 
 Editable mode picks up local source changes without reinstalling, and the
@@ -41,13 +56,27 @@ pre-commit install
 
 ## Optional dependencies
 
-The base install is enough to download datasets (via `neuralfetch[quickstart]`),
-load pretrained model weights (via `braindecode[hub]`), and run and score every
-task. The only extra a user may want is `wandb`, for the optional experiment
+The base install loads pretrained model weights (via `braindecode[hub]`) and
+downloads most datasets (via `neuralfetch[quickstart]`). Two dataset families
+reach their host through a client `neuralbench` does not depend on:
+
+| Package | Needed by |
+| --- | --- |
+| `moabb>=1.7.1` | every MOABB-backed EEG dataset, including the `eeg motor_imagery` default |
+| `eegdash>=0.8.2` | every EEG-Dash-served dataset, including `emg pose` |
+
+The error names the missing package, so installing on demand works; to have
+both up front:
+
+```bash
+pip install 'moabb>=1.7.1' 'eegdash>=0.8.2'
+```
+
+`wandb` is the only extra of the package itself, for the optional experiment
 tracking described below:
 
 ```bash
-pip install 'neuralbench-repo/.[wandb]'
+pip install 'neuralbench[wandb]'
 ```
 
 ## First-run configuration
@@ -59,7 +88,14 @@ paths:
 - **`CACHE_DIR`** -- where preprocessed data is cached.
 - **`SAVE_DIR`** -- where results are saved.
 
-The configuration is stored in `~/.neuralbench/config.json` by default.
+The configuration is stored in `~/.neuralbench/config.json` by default, and the
+three directories are created if they do not exist.
+
+The prompt needs a terminal. Where stdin is not one -- a SLURM batch script,
+`nohup`, CI, some notebooks -- `neuralbench` skips it, prints a notice, and
+falls back to `/tmp/neuralbench/{data,cache,save}`. Write the config file
+beforehand, or point `NEURALBENCH_CONFIG` at one, to keep such runs off local
+disk.
 
 ### Execution backend (SLURM vs. local)
 

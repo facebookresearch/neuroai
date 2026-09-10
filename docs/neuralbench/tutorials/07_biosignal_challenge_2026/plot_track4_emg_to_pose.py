@@ -20,6 +20,8 @@ device placement, and hand kinematics at once.
 # NeuralBench mapping
 # -------------------
 #
+# The matching task in NeuralBench is :doc:`/neuralbench/tasks/emg/pose`.
+#
 # - **CLI**: ``neuralbench emg pose``
 # - **Default dataset**: ``Salter2024Emg2pose`` (16-channel sEMG paired
 #   with motion-capture hand pose).
@@ -36,6 +38,10 @@ device placement, and hand kinematics at once.
 # %%
 # Reproducing the baseline
 # ------------------------
+#
+# emg2pose is served through EEG-Dash, which the base install does not
+# pull, so install it first: ``pip install 'eegdash>=0.8.2'``. The full
+# release is ~310 GB under ``DATA_DIR``.
 #
 # .. code-block:: bash
 #

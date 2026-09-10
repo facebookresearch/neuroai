@@ -28,7 +28,11 @@ generalisation: training images and test images do not overlap.
 # - **Target**: frozen ``facebook/dinov2-giant`` image embeddings
 #   (1536-d), aligned with a CLIP contrastive loss -- the same
 #   embedding space the competition scorer uses.
-# - **Headline metric key**: ``test/batch_top5_acc`` (Top-5 retrieval).
+# - **Headline metric key**: ``test/full_retrieval/top5_acc_subject-agg``
+#   -- Top-5 accuracy against every candidate in the test set, averaged
+#   over subjects. ``val/batch_top5_acc``, which early stopping
+#   monitors, ranks within a batch instead, so it reads far higher and
+#   is not comparable.
 #
 # .. dropdown:: Show ``tasks/eeg/image/config.yaml``
 #

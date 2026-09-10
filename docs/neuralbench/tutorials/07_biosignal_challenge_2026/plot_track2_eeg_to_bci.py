@@ -47,6 +47,11 @@ recalibration allowed.
 # Reproducing the baseline
 # ------------------------
 #
+# ``Stieger2021Continuous`` and the alternative MI datasets are served by
+# MOABB, which the base install does not pull, so install it first:
+# ``pip install 'moabb>=1.7.1'``. Budget ~600 GB under ``DATA_DIR`` for the
+# download, plus ~280 GB for the copy MOABB converts on first read.
+#
 # .. code-block:: bash
 #
 #    # 1. Download Stieger2021Continuous

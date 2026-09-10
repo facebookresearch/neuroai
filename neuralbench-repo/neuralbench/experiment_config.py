@@ -320,6 +320,14 @@ def prepare_task_configs(
     return configs
 
 
+def _adapts_a_backbone(model: str) -> bool:
+    """Whether *model*'s config describes how to adapt a pretrained backbone."""
+    from neuralbench.registry import _resolve_model_config_path
+
+    config = load_yaml_config(_resolve_model_config_path(model)) or {}
+    return "downstream_model_wrapper" in config
+
+
 def build_experiment_configs(
     device: str,
     task: str | list[str],
@@ -349,8 +357,6 @@ def build_experiment_configs(
     from neuralbench.config_manager import _ensure_initialized
     from neuralbench.registry import (
         ALL_DOWNSTREAM_WRAPPERS,
-        DEVICE_FM_MODELS,
-        FM_MODELS,
         _expand_models,
         _resolve_datasets,
         _resolve_tasks,
@@ -408,26 +414,30 @@ def build_experiment_configs(
             else list(_expand_models(model, device=device, task_name=task_name))  # type: ignore[arg-type]
         )
         datasets = _resolve_datasets(device, task_name, dataset)
-        # adaptation needs a pretrained backbone: non-FMs get an overlay-free grid
+        # adaptation needs a pretrained backbone: the rest get an overlay-free grid
         model_groups: list[tuple[ConfDict, list[ModelSpec]]]
         if overlays is not None:
-            # An out-of-tree model is a backbone by assumption: it is not in the
-            # in-tree FM list, but adaptation is exactly why it is being run.
-            fm_names = set(DEVICE_FM_MODELS.get(device, FM_MODELS))
+            # An out-of-tree model is a backbone by assumption: it has no
+            # models/*.yaml to say so, but adaptation is exactly why it is
+            # being run.
+            backbones = {
+                m for m in models if isinstance(m, str) and _adapts_a_backbone(m)
+            }
             inline = inline_model is not None
-            fm_models = [m for m in models if inline or m in fm_names]
-            other_models = [m for m in models if not inline and m not in fm_names]
-            if not fm_models:
+            adapted = [m for m in models if inline or m in backbones]
+            other_models = [m for m in models if not inline and m not in backbones]
+            if not adapted:
                 LOGGER.warning(
-                    "Adaptation wrappers requested (-w) but no foundation model "
-                    "selected for task %r; running without adaptation.",
+                    "Adaptation wrappers requested (-w) but no selected model "
+                    "adapts a pretrained backbone for task %r; running without "
+                    "adaptation.",
                     task_name,
                 )
             model_groups = []
-            if fm_models:
-                fm_grid = grid_conf.copy()
-                fm_grid["_adaptation_overlay"] = overlays
-                model_groups.append((fm_grid, fm_models))
+            if adapted:
+                adapted_grid = grid_conf.copy()
+                adapted_grid["_adaptation_overlay"] = overlays
+                model_groups.append((adapted_grid, adapted))
             if other_models:
                 model_groups.append((grid_conf, other_models))
         else:
@@ -506,9 +516,24 @@ def _warn_unsupported_gpu() -> None:
     }
     if not built:
         return
+    try:
+        capabilities = [
+            torch.cuda.get_device_capability(index)
+            for index in range(torch.cuda.device_count())
+        ]
+    except RuntimeError as error:
+        # a driver too old for the wheel raises here; this check must not be
+        # what surfaces it, since --download and --plot-cached never touch a GPU
+        warn(
+            f"Could not query the visible GPU(s) with torch {torch.__version__} "
+            f"({error}). GPU runs will fail; to fix, install a torch build "
+            "matching your driver, e.g. pip install --force-reinstall torch "
+            "torchvision torchaudio --index-url "
+            "https://download.pytorch.org/whl/cu126"
+        )
+        return
     warned: set[tuple[int, int]] = set()
-    for index in range(torch.cuda.device_count()):
-        capability = torch.cuda.get_device_capability(index)
+    for index, capability in enumerate(capabilities):
         major, minor = capability
         if capability in warned or any(
             major == bmajor and minor >= bminor for bmajor, bminor in built

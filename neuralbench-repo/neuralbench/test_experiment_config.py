@@ -7,9 +7,14 @@
 import functools
 
 import pytest
+import torch
 from exca import ConfDict
 
-from neuralbench.experiment_config import _expand_grid
+from neuralbench.experiment_config import (
+    _adapts_a_backbone,
+    _expand_grid,
+    _warn_unsupported_gpu,
+)
 from neuralbench.registry import (
     ALL_DOWNSTREAM_WRAPPERS,
     DEFAULTS_DIR,
@@ -77,6 +82,33 @@ def _base_and_model_config(model_name: str) -> ConfDict:
     config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
     config.update(load_yaml_config(_resolve_model_config_path(model_name)))
     return config
+
+
+@pytest.mark.parametrize(
+    ("model_name", "expected"),
+    # mae is a backbone without published weights, so it is absent from FM_MODELS
+    [
+        *((name, True) for name in [*FM_MODELS, "mae"]),
+        ("eegnet", False),
+        ("chance", False),
+    ],
+)
+def test_adaptation_applies_to_backbones_only(model_name: str, expected: bool):
+    assert _adapts_a_backbone(model_name) is expected
+
+
+def test_unsupported_gpu_check_survives_a_driver_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _too_old(index: int) -> tuple[int, int]:
+        raise RuntimeError("driver too old")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_arch_list", lambda: ["sm_90"])
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", _too_old)
+    with pytest.warns(UserWarning, match="driver too old"):
+        _warn_unsupported_gpu()
 
 
 @pytest.mark.parametrize("preset", list(ALL_DOWNSTREAM_WRAPPERS))

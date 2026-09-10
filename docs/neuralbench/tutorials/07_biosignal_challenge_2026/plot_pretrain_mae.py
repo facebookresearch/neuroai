@@ -86,25 +86,37 @@ than it ships with.
 # Getting the data
 # ----------------
 #
-# Pretraining adds one requirement to a working ``neuralbench``
-# install (:doc:`/neuralbench/install`): the encoder lives behind
+# Pretraining adds two requirements to a working ``neuralbench``
+# install (:doc:`/neuralbench/install`). ``ssl_example`` is a project in
+# the repository rather than part of the ``neuraltrain`` wheel, so it
+# comes from a clone; and the encoder it builds lives behind
 # ``neuraltrain``'s ``models`` extra.
 #
 # .. code-block:: bash
 #
-#    pip install 'neuraltrain-repo/.[lightning,models]'
+#    git clone https://github.com/facebookresearch/neuroai
+#    cd neuroai
+#    pip install './neuraltrain-repo[lightning,models]'
 #
 # The example pretrains on four EEG datasets: those behind tracks 1-3
 # (``Gifford2022Large``, ``Stieger2021Continuous``,
 # ``Kemp2000Analysis``) plus one resting-state dataset that belongs to
 # no track (``Miltiadous2023Dice``), together some 240 subjects. Each
-# is fetched from its public source the first time its study runs, into
-# the ``DATA_DIR`` you configured at install time. Nothing else is
-# needed to start them downloading -- but they are large, and the first
-# run does two slow things before the first gradient step:
+# is fetched from its public source the first time its study runs.
 #
-# 1. **Download** each dataset into ``DATA_DIR`` (once per machine).
-# 2. **Preprocess and cache** it into ``CACHE_DIR``: resampling,
+# ``ssl_example`` keeps its own paths, set by ``DATADIR``, ``CACHEDIR``
+# and ``SAVEDIR`` at the top of ``defaults.py``: all three sit under
+# ``~/.cache/neuralset`` and are independent of the ``DATA_DIR`` you
+# configured for ``neuralbench``. Repoint them before the first run
+# unless your home directory can take close to a terabyte:
+# ``Stieger2021Continuous`` alone is ~600 GB downloaded plus ~280 GB once
+# MOABB converts it.
+#
+# Nothing else is needed to start them downloading -- but they are large,
+# and the first run does two slow things before the first gradient step:
+#
+# 1. **Download** each dataset into ``DATADIR`` (once per machine).
+# 2. **Preprocess and cache** it into ``CACHEDIR``: resampling,
 #    filtering and scaling run once per configuration, and every later
 #    run and every grid job reads the cache instead of redoing them.
 #
@@ -114,9 +126,9 @@ than it ships with.
 # machine with a good connection.
 #
 # Because it is a long first step, check the wiring before paying for
-# it. The debug config swaps the four datasets for one small bundled
-# recording -- MNE's sample dataset, already used by the
-# ``neuralbench`` quickstart -- and runs a single batch:
+# it. The debug config swaps the four datasets for one small recording
+# -- MNE's sample dataset, downloaded on first use and already used by
+# the ``neuralbench`` quickstart -- and runs a single batch:
 #
 # .. code-block:: bash
 #
@@ -128,8 +140,10 @@ than it ships with.
 # ------------------------
 #
 # With the wiring checked, run the real thing. It downloads and caches
-# as described above, then prints the path of the pretrained encoder
-# when it finishes:
+# as described above, then finishes on a line reading ``Pretrained
+# encoder: <SAVEDIR>/ssl_example.main.Experiment.run,1/<uid>/encoder.ckpt``.
+# The ``<uid>`` is a hash of the config, so copy that path rather than
+# reconstruct it:
 #
 # .. code-block:: bash
 #
@@ -217,7 +231,7 @@ than it ships with.
 # .. code-block:: bash
 #
 #    neuralbench eeg motor_imagery -m mae \
-#        --checkpoint <savedir>/encoder.ckpt \
+#        --checkpoint <the encoder.ckpt path printed above> \
 #        -w linear_probe_mean
 #
 # ``neuralbench`` builds the encoder with no output head and loads the

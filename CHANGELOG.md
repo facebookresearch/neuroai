@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: adaptation wrappers (`-w`) apply to every model whose config ships a `downstream_model_wrapper`, not just the published foundation models, so a locally pretrained `mae` encoder is linear-probed as documented instead of silently fine-tuned end to end (#TBD).
+- `neuralbench`: the GPU capability check warns rather than aborting when the driver is too old for the installed torch, so `--download`, `--prepare` and `--plot-cached` still run on such a host (#TBD).
+- `neuralbench`: `load_config` creates the directories a hand-written `config.json` names, and reports the `/tmp` fallback it takes when no config exists and stdin is not a terminal (#TBD).
+- `neuralfetch`: a MOABB study whose subjects all fail to download raises an error naming the counts and chaining the underlying failure, instead of asserting that `timelines.csv` is missing (#TBD).
+- `neuralset`: `ChannelPositions` names the montage it resolved against, and the fix, when no channel has a valid position (#TBD).
+- docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections — Track 1's headline metric key, Track 3's per-window target, the Track 4 aggregation command, the dataset clients and download footprints each track needs, `ssl_example`'s clone step and its own cache paths, and the Codabench submission route (#TBD).
+
 ## [0.3.0] - 2026-09-09
 
 - `neuralbench`: added the `emg pose` task — 20-joint hand-angle trajectory regression on EMG2Pose (NEMAR NM000281), in the paper's regression setting (#229).
