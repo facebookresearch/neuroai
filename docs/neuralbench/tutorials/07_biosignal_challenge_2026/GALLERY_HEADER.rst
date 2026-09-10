@@ -13,7 +13,7 @@ winners are announced at the Brain & Body Workshop at NeurIPS 2026.
    .. grid-item-card:: Track 1 -- EEG-to-Image
       :link: plot_track1_eeg_to_image
       :link-type: doc
-      :img-top: /_static/challenge_2026_track1_eeg_to_image.gif
+      :img-top: https://neural-interfaces26.github.io/exports/eeg-to-image.gif
       :class-card: sd-shadow-sm
 
       **Cross-stimulus.** Retrieve the viewed image from one EEG epoch,
@@ -22,7 +22,7 @@ winners are announced at the Brain & Body Workshop at NeurIPS 2026.
    .. grid-item-card:: Track 2 -- BCI decoding
       :link: plot_track2_eeg_to_bci
       :link-type: doc
-      :img-top: /_static/challenge_2026_track2_bci_decoding.gif
+      :img-top: https://neural-interfaces26.github.io/exports/bci-decoding.gif
       :class-card: sd-shadow-sm
 
       **Cross-session.** Decode one of three cued mental commands on a day
@@ -31,7 +31,7 @@ winners are announced at the Brain & Body Workshop at NeurIPS 2026.
    .. grid-item-card:: Track 3 -- Sleep onset
       :link: plot_track3_sleep_onset
       :link-type: doc
-      :img-top: /_static/challenge_2026_track3_sleep_onset.gif
+      :img-top: https://neural-interfaces26.github.io/exports/sleep-onset.gif
       :class-card: sd-shadow-sm
 
       **Cross-user.** Predict seconds to first stable N2 from wearable EEG,
@@ -40,7 +40,7 @@ winners are announced at the Brain & Body Workshop at NeurIPS 2026.
    .. grid-item-card:: Track 4 -- EMG-to-Pose
       :link: plot_track4_emg_to_pose
       :link-type: doc
-      :img-top: /_static/challenge_2026_track4_emg_to_pose.gif
+      :img-top: https://neural-interfaces26.github.io/exports/emg-to-pose.gif
       :class-card: sd-shadow-sm
 
       **Cross-user.** Regress 20 hand-joint angles from wrist sEMG, on new

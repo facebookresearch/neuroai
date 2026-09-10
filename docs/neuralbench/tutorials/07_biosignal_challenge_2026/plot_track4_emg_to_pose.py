@@ -2,7 +2,7 @@
 Track 4 -- EMG-to-Pose (cross-user regression)
 ================================================
 
-.. image:: /_static/challenge_2026_track4_emg_to_pose.gif
+.. image:: https://neural-interfaces26.github.io/exports/emg-to-pose.gif
    :alt: 20 hand-joint angles regressed from 16-channel wrist sEMG
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%

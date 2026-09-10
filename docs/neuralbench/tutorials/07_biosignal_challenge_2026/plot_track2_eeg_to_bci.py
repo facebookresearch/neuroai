@@ -2,7 +2,7 @@
 Track 2 -- BCI decoding (cross-session)
 =========================================
 
-.. image:: /_static/challenge_2026_track2_bci_decoding.gif
+.. image:: https://neural-interfaces26.github.io/exports/bci-decoding.gif
    :alt: Three cued mental commands decoded on an unseen later session
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%

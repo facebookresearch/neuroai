@@ -2,7 +2,7 @@
 Track 3 -- Sleep onset (cross-user latency prediction)
 =======================================================
 
-.. image:: /_static/challenge_2026_track3_sleep_onset.gif
+.. image:: https://neural-interfaces26.github.io/exports/sleep-onset.gif
    :alt: Seconds to first stable N2 predicted from wearable EEG
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%

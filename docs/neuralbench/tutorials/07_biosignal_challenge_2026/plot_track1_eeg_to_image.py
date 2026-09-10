@@ -2,7 +2,7 @@
 Track 1 -- EEG-to-Image (cross-stimulus retrieval)
 ====================================================
 
-.. image:: /_static/challenge_2026_track1_eeg_to_image.gif
+.. image:: https://neural-interfaces26.github.io/exports/eeg-to-image.gif
    :alt: EEG epochs ranked against a held-out image gallery in DINOv2 space
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%
