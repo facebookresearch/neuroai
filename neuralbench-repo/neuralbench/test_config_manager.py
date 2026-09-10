@@ -8,6 +8,8 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from . import config_manager
 
 
@@ -25,6 +27,17 @@ def test_load_config_creates_the_configured_dirs(tmp_path: Path) -> None:
     )
     config_manager.load_config(config_path)
     assert all((tmp_path / name).is_dir() for name in names)
+
+
+def test_load_config_warns_rather_than_fails_on_an_uncreatable_dir(
+    tmp_path: Path,
+) -> None:
+    blocker = tmp_path / "blocker"
+    blocker.write_text("")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"DATA_DIR": str(blocker / "data")}))
+    with pytest.warns(UserWarning, match="DATA_DIR"):
+        config_manager.load_config(config_path)
 
 
 def test_cluster_resolves_to_none_when_configured_null(

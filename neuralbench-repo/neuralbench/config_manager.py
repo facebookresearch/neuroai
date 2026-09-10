@@ -11,6 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from warnings import warn
 
 
 def _is_interactive() -> bool:
@@ -39,11 +40,21 @@ def prompt_user_for_path(
 
 
 def _make_dirs(config: dict[str, Any]) -> list[Path]:
-    """Create the three configured directories, returning them in config order."""
-    paths = [Path(str(config[key])) for key in ("CACHE_DIR", "SAVE_DIR", "DATA_DIR")]
-    for path in paths:
-        path.mkdir(parents=True, exist_ok=True)
-    return paths
+    """Create the configured directories, returning those that now exist."""
+    created = []
+    for key in ("CACHE_DIR", "SAVE_DIR", "DATA_DIR"):
+        if config.get(key) is None:
+            continue
+        path = Path(str(config[key]))
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            # an unmounted or read-only path must not stop a command that never
+            # touches it, such as --plot-cached on a login node
+            warn(f"Could not create {key} {path}: {error}")
+            continue
+        created.append(path)
+    return created
 
 
 def setup_config(config_path: Path | None = None) -> dict[str, Any]:
