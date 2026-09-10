@@ -94,7 +94,7 @@ recalibration allowed.
 # 2. **Split**: replace the default ``SklearnSplit`` with a
 #    predefined per-subject split where sessions 1-3 are train and
 #    sessions 4-6 are test. The
-#    ``neuralset.events.transforms.PredefinedSplit`` already used by
+#    ``neuralbench.transforms.PredefinedSplit`` already used by
 #    ``reaction_time`` and ``psychopathology`` is the right primitive
 #    -- the ``test_split_query`` becomes
 #    ``"subject in evaluation_subjects and session in [4, 5, 6]"``.

@@ -20,7 +20,7 @@ distribution shift:
    scoring on later ones without recalibration. Headline metric:
    **balanced accuracy** (higher is better).
 3. **Track 3 -- Sleep onset** (cross-device): predict the latency from
-   recording start to the first stable N2 epoch, on consumer wearable
+   recording start to the first N2 epoch, on consumer wearable
    EEG rather than clinical polysomnography. Headline metric: **binned
    MAE (bMAE) in seconds** (lower is better) -- the absolute error
    averaged inside time-to-onset bins and then across bins with equal
@@ -136,7 +136,7 @@ NeuralBench, using publicly available reference datasets.
 #      - ~7 GB
 #    * - 4 -- EMG pose
 #      - ``Salter2024Emg2pose``
-#      - ~310 GB
+#      - ~340 GB
 #
 # Among Track 1's alternatives, ``Xu2024Alljoined`` is ~24 GB and
 # ``Xu2025Alljoined`` (Alljoined-1.6M) ~250 GB. Track 2's

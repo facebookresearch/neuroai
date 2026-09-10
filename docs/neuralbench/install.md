@@ -15,8 +15,12 @@
     --index-url https://download.pytorch.org/whl/cu126
   ```
 
-  CPU-only workflows (`--download`, `--prepare`, `--plot-cached`) need none of
-  this.
+  Every training run needs a working GPU, `--debug` included: there is no CPU
+  fallback, so a mismatched driver stops the quick sanity check each task page
+  opens with. `--download` and `--plot-cached` need none of this, and neither
+  does `--prepare` for most tasks -- but one whose target extractor runs a
+  vision or audio model, as `eeg image` embeds its stimuli with DINOv2, uses
+  the GPU to build that cache.
 
 ## Install from PyPI
 
@@ -72,7 +76,8 @@ both up front:
 pip install 'moabb>=1.7.1' 'eegdash>=0.8.2'
 ```
 
-`wandb` is the only extra of the package itself, for the optional experiment
+`wandb` is the package's only runtime extra -- `dev` and `docs` exist for
+working on `neuralbench` itself -- and it enables the optional experiment
 tracking described below:
 
 ```bash
@@ -90,6 +95,25 @@ paths:
 
 The configuration is stored in `~/.neuralbench/config.json` by default, and the
 three directories are created if they do not exist.
+
+A config file you write yourself has to define everything the prompt would have
+written. These six keys have no default, and a missing one fails with a bare
+`KeyError`:
+
+```json
+{
+  "USER": "your-username",
+  "ENTITY_NAME": "your-username",
+  "PROJECT_NAME": "neuralbench",
+  "DATA_DIR": "/path/to/data",
+  "CACHE_DIR": "/path/to/cache",
+  "SAVE_DIR": "/path/to/results"
+}
+```
+
+`USER`, `ENTITY_NAME` and `PROJECT_NAME` only label runs and W&B entries, so
+any string does. Every remaining key -- `CLUSTER`, `SLURM_PARTITION`,
+`SLURM_CONSTRAINT`, `N_CPUS`, `WANDB_HOST` -- is optional.
 
 The prompt needs a terminal. Where stdin is not one -- a SLURM batch script,
 `nohup`, CI, some notebooks -- `neuralbench` skips it, prints a notice, and
@@ -111,7 +135,8 @@ key in `~/.neuralbench/config.json`:
   caches locally when `CLUSTER` is `null`.
 - **`"slurm"`** -- always submit to SLURM.
 
-For example, to run the full benchmark locally without SLURM, set:
+For example, to run the full benchmark locally without SLURM, add this
+alongside the required keys above:
 
 ```json
 {

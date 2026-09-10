@@ -41,7 +41,7 @@ device placement, and hand kinematics at once.
 #
 # emg2pose is served through EEG-Dash, which the base install does not
 # pull, so install it first: ``pip install 'eegdash>=0.8.2'``. The full
-# release is ~310 GB under ``DATA_DIR``.
+# release is ~340 GB under ``DATA_DIR``.
 #
 # .. code-block:: bash
 #

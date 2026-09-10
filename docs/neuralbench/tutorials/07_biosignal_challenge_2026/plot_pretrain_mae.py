@@ -86,36 +86,43 @@ than it ships with.
 # Getting the data
 # ----------------
 #
-# Pretraining adds two requirements to a working ``neuralbench``
+# Pretraining adds three requirements to a working ``neuralbench``
 # install (:doc:`/neuralbench/install`). ``ssl_example`` is a project in
 # the repository rather than part of the ``neuraltrain`` wheel, so it
-# comes from a clone; and the encoder it builds lives behind
-# ``neuraltrain``'s ``models`` extra.
+# comes from a clone; the encoder it builds lives behind
+# ``neuraltrain``'s ``models`` extra; and ``Stieger2021Continuous``
+# reaches its host through ``moabb``, which nothing installs for you.
 #
 # .. code-block:: bash
 #
 #    git clone https://github.com/facebookresearch/neuroai
 #    cd neuroai
-#    pip install './neuraltrain-repo[lightning,models]'
+#    pip install './neuraltrain-repo[lightning,models]' 'moabb>=1.7.1'
 #
 # The example pretrains on four EEG datasets: those behind tracks 1-3
 # (``Gifford2022Large``, ``Stieger2021Continuous``,
 # ``Kemp2000Analysis``) plus one resting-state dataset that belongs to
 # no track (``Miltiadous2023Dice``), together some 240 subjects. Each
-# is fetched from its public source the first time its study runs.
+# comes from its public source, fetched by the download step below.
 #
 # ``ssl_example`` keeps its own paths, set by ``DATADIR``, ``CACHEDIR``
 # and ``SAVEDIR`` at the top of ``defaults.py``: all three sit under
 # ``~/.cache/neuralset`` and are independent of the ``DATA_DIR`` you
 # configured for ``neuralbench``. Repoint them before the first run
-# unless your home directory can take close to a terabyte:
-# ``Stieger2021Continuous`` alone is ~600 GB downloaded plus ~280 GB once
-# MOABB converts it.
+# unless your home directory can take ~1.1 TB: ``Stieger2021Continuous``
+# alone is ~600 GB downloaded plus ~280 GB once MOABB converts it, and
+# ``Gifford2022Large`` adds ~210 GB.
 #
-# Nothing else is needed to start them downloading -- but they are large,
-# and the first run does two slow things before the first gradient step:
+# Training reads what is already on disk and never fetches, so download
+# the corpus first -- once per machine:
 #
-# 1. **Download** each dataset into ``DATADIR`` (once per machine).
+# .. code-block:: bash
+#
+#    python -m ssl_example.grids.download
+#
+# Two slow steps therefore precede the first gradient step:
+#
+# 1. **Download** each dataset into ``DATADIR`` (the command above).
 # 2. **Preprocess and cache** it into ``CACHEDIR``: resampling,
 #    filtering and scaling run once per configuration, and every later
 #    run and every grid job reads the cache instead of redoing them.
@@ -205,13 +212,17 @@ than it ships with.
 # repository at all -- the example is a starting point, and there are
 # three ways past it:
 #
-# - **Keep the loop, change the model.** Any ``neuraltrain`` model
-#   config drops into the same ``MaeModule`` by setting
-#   ``brain_model_config``.
+# - **Keep the loop, change the encoder's shape.** ``MaeModule`` is
+#   written against ``MaeEncoder`` -- it calls that encoder's patching
+#   and token methods, and ``brain_model_config`` is typed to it -- so
+#   vary its fields (``dim``, ``patch_size``,
+#   ``transformer_config.depth``) rather than swapping in another
+#   ``neuraltrain`` model.
 # - **Add your own model to** ``neuraltrain``. A new architecture is a
 #   ``BaseBrainModelConfig`` subclass with a ``build`` method, after
-#   which it is available to this example and to ``neuralbench`` by
-#   name, exactly as ``MaeEncoder`` is.
+#   which ``neuralbench`` can run it by name, exactly as ``MaeEncoder``
+#   is. Pretraining it here also means adapting ``mae_module.py``,
+#   which reconstructs the patches ``MaeEncoder`` produces.
 # - **Train wherever you like.** Nothing about the competition requires
 #   ``neuraltrain``, ``neuralset``, or PyTorch Lightning. Train in your
 #   own codebase, with your own data pipeline and objective, and bring
@@ -294,9 +305,9 @@ than it ships with.
 # accept any channel count and any window length, and take channel
 # identity from a ``channel_positions`` argument to ``forward`` rather
 # than from a montage fixed at construction. It needs no classifier
-# head -- ``neuralbench`` wraps it in a probe sized to each task, the
-# same frozen-backbone linear probe ``mae.yaml`` configures, so the two
-# routes produce comparable scores.
+# head -- ``neuralbench`` wraps it in a probe sized to each task, and
+# defaults to the same frozen-backbone ``linear_probe_mean`` preset that
+# ``-w`` selects above, so the two routes produce comparable scores.
 #
 # The encoder above meets those requirements, so either route works for
 # it. The YAML route additionally pins the preprocessing a checkpoint was
