@@ -28,6 +28,52 @@
 pip install neuralbench
 ```
 
+## Install with uv
+
+[uv](https://docs.astral.sh/uv/) is a drop-in alternative to `pip` and every
+route on this page has a `uv` equivalent, with no `neuralbench`-side
+configuration. It also fetches its own CPython, which is the easy way out if
+the system Python is older than 3.12:
+
+```bash
+# 1. Get uv (or `pip install uv`, if your network blocks astral.sh)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Create and activate a Python 3.12 environment
+uv venv --python 3.12 .venv
+source .venv/bin/activate
+
+# 3. Install, with the optional extras from below
+uv pip install 'neuralbench[wandb]' 'moabb>=1.7.1' 'eegdash>=0.8.2'
+
+# ... or from a monorepo checkout, editable for development
+uv pip install ./neuralbench-repo
+uv pip install -e 'neuralbench-repo/.[dev]'
+
+# 4. Check it landed
+python -c "import importlib.metadata as m; print(m.version('neuralbench'))"
+neuralbench --help
+```
+
+For the driver-matched `torch` described above, use uv's `--torch-backend`
+rather than the `--index-url` from the `pip` recipe:
+
+```bash
+uv pip install --torch-backend=cu126 --reinstall-package torch \
+  --reinstall-package torchvision --reinstall-package torchaudio \
+  torch torchvision torchaudio
+```
+
+Both give you the same `+cu126` build, but `--index-url` *replaces* PyPI in uv
+instead of adding to it, so every transitive dependency gets resolved from the
+PyTorch mirror too -- which quietly downgrades `numpy`, `setuptools` and
+`filelock`. `--torch-backend=auto` picks the build matching the detected
+driver.
+
+One difference to know about: uv does not read `pip.conf`. If your packages
+come from an internal mirror configured there, pass `--extra-index-url` or set
+`UV_EXTRA_INDEX_URL` explicitly.
+
 ## Install from source
 
 From the monorepo root:

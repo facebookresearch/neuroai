@@ -8,6 +8,14 @@ Mental imagery classification
 | **Split**: PredefinedSplit, session 1 held out as test
 | **Epoch window**: ``start = 3.0 s``, ``duration = 4.0 s`` (aligned with the imagery period of the paradigm)
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   Cued mental tasks, split cross-session, make this the closest paradigm
+   match to :doc:`Track 2 -- BCI decoding
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`
+   among the public datasets.
+
 Usage
 ~~~~~
 

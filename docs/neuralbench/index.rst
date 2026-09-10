@@ -124,7 +124,7 @@ comparison figures and tables from the stored results (no retraining):
 
       Starter kit for the `2026 multi-track challenge
       <https://neural-interfaces26.github.io/>`_: EEG-to-Image, BCI
-      command decoding, sleep onset, and EMG-to-Pose.
+      decoding, sleep onset, and EMG-to-Pose.
 
 ----
 
