@@ -32,8 +32,12 @@ class MyDemoStudy2026(studies.Study):
         for session in range(2):
             yield {"subject": f"sub-{session:02d}"}
 
-    def _download(self) -> None:
-        # Write the two raw .fif files neuralset will open below.
+    def _download(self, overwrite: bool = False) -> None:
+        # Write the two raw .fif files neuralset will open below. Every
+        # ``_download`` must accept ``overwrite`` -- ``Study.download`` (and the
+        # ``neuralfetch download`` CLI) forwards it verbatim. Honor it by
+        # re-fetching/repairing when True and skipping already-complete work
+        # when False.
         info = mne.create_info(8, sfreq=100.0, ch_types="eeg")
         for subject in ("sub-00", "sub-01"):
             data = np.random.randn(8, 5000) * 1e-6
