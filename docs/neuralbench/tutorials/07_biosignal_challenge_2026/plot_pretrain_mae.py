@@ -70,6 +70,18 @@ entry: the encoder is small and the corpus is four datasets.
 # 3. Pretrain the encoder
 # -----------------------
 #
+# The loop it runs is `MAE <https://arxiv.org/abs/2111.06377>`_ on EEG: each
+# window is cut into time patches one channel at a time, so a token is one
+# channel over one patch; a random ``mask_ratio`` of those tokens is swapped
+# for a learned mask token; and a linear head reconstructs the hidden patches
+# from the encoder's output, scored on those patches alone. Only the encoder
+# is kept. `MAEEG <https://arxiv.org/abs/2211.02625>`_ applies that objective
+# to EEG at this scale, and `ST-EEGFormer
+# <https://openreview.net/forum?id=5Xwm8e6vbh>`_ takes it to a foundation
+# model -- it won last year's :doc:`edition of this challenge
+# </neuralbench/auto_examples/eeg_challenge/plot_eeg_challenge_2025>`, which
+# makes it a useful model for where to take the template below.
+#
 # The real run finishes on a line reading ``Pretrained encoder:
 # <SAVEDIR>/ssl_example.main.Experiment.run,1/<uid>/encoder.ckpt``. The
 # ``<uid>`` is a hash of the config, so copy that path rather than reconstruct
