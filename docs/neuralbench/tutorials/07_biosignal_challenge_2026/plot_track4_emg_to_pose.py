@@ -1,24 +1,48 @@
 """
-Track 4 -- EMG-to-Pose (cross-user and cross-stage regression)
-===============================================================
+Track 4 -- EMG-to-Pose (cross-user regression)
+================================================
 
-Given 16-channel surface EMG (sEMG) recorded from a wristband, predict
-the corresponding trajectory of 20 hand-joint angles. The competition
-combines two shifts, so a model has to survive changes in anatomy,
-device placement, and hand kinematics at once.
+Given 16-channel surface EMG (sEMG) recorded from a wristband during
+everyday movement, predict the corresponding trajectory of 20 hand-joint
+angles. The competition tests **cross-user** generalisation, and adds two
+more held-out axes on top, so a model has to survive changes in anatomy,
+wristband placement and kinematic context at once.
 
-- **Shift**: held-out users, movement stages, and user-stage
-  combinations.
-- **Headline metric**: mean angular error (lower is better). The task
-  trains and logs radians; the competition and the paper report the
+- **Shift**: held-out users, held-out movement stages, and unseen
+  combinations of known users and stages.
+- **Headline metric**: mean absolute angular error (lower is better). The
+  task trains and logs radians; the competition and the paper report the
   same quantity in degrees.
 - **Data**: ``emg2pose`` / NM000281 (193 participants, 25,253
-  recordings, 370 hours, 29 movement stages, 2 kHz).
+  recordings, 370 hours, 29 movement stages, 2 kHz). The hidden evaluation
+  cohort follows the same protocol, pairing 16-channel wrist sEMG with
+  20 UmeTrack joint angles.
 """
 
 # %%
-# NeuralBench mapping
-# -------------------
+# New to NeuralBench? Start here
+# ------------------------------
+#
+# This page is a track guide, not an introduction to the ecosystem. If you
+# arrived straight from the competition website:
+#
+# - :doc:`Challenge overview <plot_overview>` -- what NeuralBench is, how it
+#   relates to the competition, and the baseline numbers for all four tracks.
+# - :doc:`Installation </neuralbench/install>` and the :doc:`quickstart
+#   </neuralbench/auto_examples/quickstart/01_run_first_task>` -- get a task
+#   running on a 1.5 GB dataset before you download anything large.
+# - `Official Track 4 guide <https://neural-interfaces26.github.io/tracks.html>`__
+#   -- registration, rules, data access, prizes, leaderboard. Authoritative
+#   on every competition matter; this page only covers the code.
+# - :doc:`How to Submit a Model <plot_submission_guide>`.
+#
+# Note that this is the one track on another device: its tasks live under
+# ``neuralbench emg``, not ``neuralbench eeg``, which also means it is
+# aggregated separately by ``--plot-cached``.
+
+# %%
+# Where to find this task in NeuralBench
+# --------------------------------------
 #
 # The matching task in NeuralBench is :doc:`/neuralbench/tasks/emg/pose`.
 #
@@ -27,35 +51,97 @@ device placement, and hand kinematics at once.
 #   with motion-capture hand pose).
 # - **Model**: ``VEMG2Pose``, the paper's regression baseline.
 # - **Target**: a dense 20-joint angle trajectory for each 5-s window.
+# - **Test split**: the paper scores three held-out sets separately, and this
+#   task keeps the ``user_stage`` one -- unseen combinations of known users
+#   and stages -- so a single ``test/mae`` means something.
 # - **Headline metric key**: ``test/mae`` (radians; x57.29578 for
 #   degrees).
+#
+# **What the config is.** A NeuralBench task is one ``config.yaml``, and
+# nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
+# the study to load, how to split it, what the target is, the loss, and the
+# metrics. Reading it is the fastest way to know exactly what the baseline
+# does.
 #
 # .. dropdown:: Show ``tasks/emg/pose/config.yaml``
 #
 #    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/emg/pose/config.yaml
 #       :language: yaml
+#
+# **How to change it**, in increasing order of effort:
+#
+# - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
+#   adaptation strategy (frozen probe, LoRA, full fine-tuning) without
+#   touching any file. ``-m neuropose`` and ``-m sensingdynamics`` select the
+#   paper's other two regression baselines.
+# - This task ships no ``datasets/`` variants -- emg2pose is the only corpus
+#   registered for it -- so there is nothing to select with ``--dataset``.
+# - Anything else -- window length, learning rate, the split -- is a config
+#   edit. From Python, pass dotted keys to
+#   :func:`~neuralbench.evaluate_model` (``overrides={"data.duration":
+#   2.0}``). From a source checkout (``pip install -e``), edit
+#   ``config.yaml`` directly, or add a ``datasets/*.yaml`` variant and select
+#   it with ``--dataset``. Both routes are described in :doc:`Adding a New
+#   Task </neuralbench/auto_examples/adding_task/create_new_task>`.
 
 # %%
 # Reproducing the baseline
 # ------------------------
 #
 # emg2pose is served through EEG-Dash, which the base install does not
-# pull, so install it first: ``pip install 'eegdash>=0.8.2'``. The full
-# release is ~340 GB under ``DATA_DIR``.
+# pull, so install it first: ``pip install 'eegdash>=0.8.2'``.
+#
+# Every command below passes ``-m vemg2pose``, ``--download`` and
+# ``--prepare`` included. That is not decoration: the model config widens
+# ``data.duration`` to 5.895 s, adding the 1790 samples of TDS left context
+# the model needs to emit the 10000 frames emg2pose scores. Preparing the
+# cache without it caches 5.0 s windows the training run cannot use.
 #
 # .. code-block:: bash
 #
-#    # 1. Download emg2pose / NM000281
+#    # 1. Download emg2pose / NM000281 into DATA_DIR: ~330 GB across 76k files,
+#    #    hours over a typical link. One-off per machine, and safe to interrupt
+#    #    and re-run.
 #    neuralbench emg pose -m vemg2pose --download
 #
-#    # 2. Prepare the preprocessing cache
+#    # 2. Preprocess into CACHE_DIR -- window the 25k recordings and pair them
+#    #    with the joint-angle trajectories once, so every later run reads the
+#    #    cache instead. Budget ~440 GB: more than the raw download, because
+#    #    the 20 joint angles are cached as a second 2 kHz pass (~230 GB)
+#    #    alongside the EMG (~185 GB). <<TIME_PREPARE_T4>>
 #    neuralbench emg pose -m vemg2pose --prepare
 #
-#    # 3. Quick local sanity check
+#    # 3. Sanity check before you queue anything: runs locally on 2 epochs and
+#    #    a data subset. <<TIME_DEBUG_T4>>
 #    neuralbench emg pose -m vemg2pose --debug
 #
-#    # 4. Full paper regression baseline
+#    # 4. Full paper regression baseline. <<TIME_RUN_T4>>
 #    neuralbench emg pose -m vemg2pose
+#
+# Step 4 prints the test-metric dictionary at the end -- ``test/mae`` in
+# radians, so multiply by 57.29578 to compare with the paper's degrees -- and
+# caches it under ``SAVE_DIR``; re-running with ``--plot-cached`` turns those
+# cached metrics into comparison plots and CSV tables without retraining.
+
+# %%
+# Evaluating a model of your own
+# ------------------------------
+#
+# A model that lives in your own codebase needs no YAML here:
+# :func:`~neuralbench.evaluate_model` takes the built instance, wraps it in a
+# probe sized to the task, and returns the scores as a DataFrame.
+#
+# .. code-block:: python
+#
+#    from neuralbench import check_model, evaluate_model
+#
+#    print(check_model(my_model, "emg", "pose"))  # shapes only, seconds
+#    scores = evaluate_model(my_model, "emg", "pose", name="my-fm", debug=True)
+#
+# See :doc:`Evaluating your own model
+# </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>` for what
+# ``forward`` has to accept, the adaptation presets, and how to fan the runs
+# out to SLURM.
 
 # %%
 # Scope and data handling
@@ -64,8 +150,6 @@ device placement, and hand kinematics at once.
 # NeuralBench implements the paper's ``regression_vemg2pose`` setting.
 # The autoregressive tracking setting, which also conditions on an initial
 # pose and previous predictions, is outside this task's scope.
-# ``-m neuropose`` and ``-m sensingdynamics`` select the paper's other two
-# regression baselines.
 #
 # The paper split comes from the BIDS ``scans.tsv``, falling back to the
 # upstream ``emg2pose_metadata.csv`` on releases whose ``scans.tsv`` omits it.

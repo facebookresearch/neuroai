@@ -7,6 +7,14 @@ Image decoding
 | **Objective**: :bdg-dark:`Retrieval`
 | **Split**: Predefined
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This task backs :doc:`Track 1 -- EEG-to-Image
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track1_eeg_to_image>`
+   of the challenge, whose page has the commands, timings, and competition
+   data notes for it.
+
 Usage
 ~~~~~
 

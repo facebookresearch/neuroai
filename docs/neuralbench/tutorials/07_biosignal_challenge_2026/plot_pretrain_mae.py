@@ -109,9 +109,9 @@ than it ships with.
 # and ``SAVEDIR`` at the top of ``defaults.py``: all three sit under
 # ``~/.cache/neuralset`` and are independent of the ``DATA_DIR`` you
 # configured for ``neuralbench``. Repoint them before the first run
-# unless your home directory can take ~1.1 TB: ``Stieger2021Continuous``
-# alone is ~600 GB downloaded plus ~280 GB once MOABB converts it, and
-# ``Gifford2022Large`` adds ~210 GB.
+# unless your home directory can take well over 1 TB:
+# ``Stieger2021Continuous`` alone is ~640 GB downloaded plus ~300 GB once
+# MOABB converts it, and ``Gifford2022Large`` adds ~220 GB.
 #
 # Training reads what is already on disk and never fetches, so download
 # the corpus first -- once per machine:
@@ -201,7 +201,9 @@ than it ships with.
 # - **More data**: add any study from the :doc:`NeuralFetch catalog
 #   </neuralfetch/index>` to ``STUDIES``. Unlabelled EEG is the one
 #   resource pretraining scales with, so this matters more than any
-#   architecture choice, and a new montage needs no code change.
+#   architecture choice, and a new montage needs no code change. The
+#   competition also points at `EEGDash <https://eegdash.org/>`_ for several
+#   hundred further EEG corpora through a BIDS-first streaming interface.
 # - **A bigger encoder**: raise ``brain_model_config.dim`` and
 #   ``transformer_config.depth``. Copy any change to ``dim`` or
 #   ``patch_size`` into ``mae.yaml`` as well -- see the warning below.
@@ -328,7 +330,7 @@ than it ships with.
 # ----------
 #
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
-# - :doc:`Track 2 -- BCI command decoding <plot_track2_eeg_to_bci>`
+# - :doc:`Track 2 -- BCI decoding <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
 # - :doc:`Track 4 -- EMG-to-Pose <plot_track4_emg_to_pose>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`

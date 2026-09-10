@@ -2,40 +2,98 @@
 Overview: EEG/EMG Foundation Challenge 2026
 ============================================
 
-The `EEG/EMG Foundation Challenge 2026
-<https://neural-interfaces26.github.io/>`_ is a competition on shift-robust
-decoding of biosignals, and the multi-modal successor to the 2025 EEG
-Foundation Challenge. It runs as part of the Brain and Body Foundation Model
-workshop; the website has the submission window, the rules, and the prizes.
+If you landed here from the competition website, start with the three boxes
+below: they say what NeuralBench is, what the challenge is, and why one
+documentation site covers both.
+
+.. grid:: 1 1 2 2
+   :gutter: 3
+
+   .. grid-item-card:: :fas:`flask` What is NeuralBench?
+      :class-card: sd-shadow-sm
+
+      An open-source benchmark suite for NeuroAI models, developed at Meta
+      FAIR and documented on this site. One CLI and one Python API download a
+      dataset, preprocess it, train a model on it, and report a metric --
+      across dozens of brain-modelling tasks on EEG, MEG, fMRI and EMG. It is
+      a research tool that exists independently of any competition.
+
+   .. grid-item-card:: :fas:`trophy` What is the challenge?
+      :class-card: sd-shadow-sm
+
+      A competition on shift-robust decoding of biosignals, hosted and
+      operated by Yneuro, Inria and UC San Diego, with a $20,000 prize pool.
+      Four tracks, submissions from 21 September to 21 November 2026 on
+      Codabench, winners announced at the Brain & Body Workshop at NeurIPS
+      2026. The `competition website
+      <https://neural-interfaces26.github.io/>`_ is the authoritative source
+      for all of that.
+
+.. admonition:: How the two fit together
+   :class: important
+
+   The challenge uses NeuralBench as its **starter kit**. Every track maps
+   onto a NeuralBench task, so ``neuralbench <device> <task>`` reproduces
+   that track's baseline on public data today, and the 2026 competition
+   corpora are released through NeuralBench when submissions open on
+   21 September 2026.
+
+   The two are not interchangeable. NeuralBench gives you the data pipeline,
+   the baselines, and a number to beat; **scoring happens on Codabench**,
+   against labels that stay confidential, and the numbers on these pages are
+   sanity checks rather than leaderboard entries. Nothing in the rules
+   requires you to train with NeuralBench either -- see
+   :doc:`Training a model <plot_pretrain_mae>` for the
+   bring-your-own-model route.
 
 The competition is organised as **four tracks**, each isolating one kind of
 distribution shift:
 
 1. **Track 1 -- EEG-to-Image** (cross-stimulus): retrieve the image a
    subject is viewing from a single EEG epoch, ranked against held-out
-   candidates. Headline metric: **Top-5 accuracy** (higher is better).
-2. **Track 2 -- BCI command decoding** (cross-session): decode one of
-   three cued mental commands (motor imagery, mental calculation, word
-   association) from short EEG windows, training on early sessions and
-   scoring on later ones without recalibration. Headline metric:
-   **balanced accuracy** (higher is better).
-3. **Track 3 -- Sleep onset** (cross-device): predict the latency from
-   recording start to the first N2 epoch, on consumer wearable
-   EEG rather than clinical polysomnography. Headline metric: **binned
-   MAE (bMAE) in seconds** (lower is better) -- the absolute error
-   averaged inside time-to-onset bins and then across bins with equal
-   weight, so late onsets count as much as early ones.
-4. **Track 4 -- EMG-to-Pose** (cross-user and cross-stage): regress
-   20 hand-joint angle trajectories from 16-channel wrist surface EMG.
-   Headline metric: **mean angular error** (lower is better), logged in
-   radians here and reported in degrees by the competition.
+   candidates in a frozen DINOv2 embedding space. Headline metric:
+   **Top-5 retrieval accuracy** (higher is better).
+2. **Track 2 -- BCI decoding** (cross-session): decode one of three cued
+   mental commands (motor imagery, mental calculation, word association)
+   from short EEG windows, training on a user's earlier sessions and
+   scoring on their later ones without recalibration. Headline metric:
+   **balanced accuracy**, averaged over subject-session-context cells
+   (higher is better).
+3. **Track 3 -- Sleep onset** (cross-user): predict the seconds remaining
+   until the first stable N2 epoch, from four-channel wearable EEG recorded
+   at home, on sleepers never seen in training. Headline metric: **binned
+   MAE (bMAE) in seconds** (lower is better) -- the absolute error averaged
+   inside four time-to-onset ranges and then across them with equal weight,
+   so long latencies count as much as short ones.
+4. **Track 4 -- EMG-to-Pose** (cross-user): regress 20 hand-joint angle
+   trajectories from 16-channel wrist sEMG, on users and movement stages
+   never seen during training. Headline metric: **mean absolute angular
+   error**, reported in degrees by the competition and logged in radians
+   here (lower is better).
 
-All four tracks accept both task-specific models and foundation
-models.
-
-This starter kit shows how to reproduce a baseline for each track with
-NeuralBench, using publicly available reference datasets.
+All four tracks accept both task-specific models and foundation models, and
+all four are scored under the same reproducibility audit -- the organisers
+re-run the top three submissions of each track.
 """
+
+# %%
+# Your first hour, in order
+# -------------------------
+#
+# 1. :doc:`Install NeuralBench </neuralbench/install>` and let the first run
+#    prompt you for ``DATA_DIR``, ``CACHE_DIR`` and ``SAVE_DIR``.
+# 2. Run the :doc:`quickstart
+#    </neuralbench/auto_examples/quickstart/01_run_first_task>` on the 1.5 GB
+#    MNE sample dataset, to confirm the install trains at all before you
+#    download anything large.
+# 3. Pick your track below and read its page. Each one names the matching
+#    NeuralBench task and the exact commands that reproduce its baseline.
+# 4. Register for that track on Codabench, from the `competition website
+#    <https://neural-interfaces26.github.io/>`_.
+# 5. Start the track's ``--download`` early -- it is the long pole, measured
+#    in hours (see `Budgeting the first download`_).
+# 6. Iterate on your model, then read :doc:`How to Submit a Model
+#    <plot_submission_guide>`.
 
 # %%
 # Starter kit pages
@@ -43,7 +101,7 @@ NeuralBench, using publicly available reference datasets.
 #
 # - :doc:`Training a model -- masked prediction on EEG <plot_pretrain_mae>`
 # - :doc:`Track 1 -- EEG-to-Image <plot_track1_eeg_to_image>`
-# - :doc:`Track 2 -- BCI command decoding <plot_track2_eeg_to_bci>`
+# - :doc:`Track 2 -- BCI decoding <plot_track2_eeg_to_bci>`
 # - :doc:`Track 3 -- Sleep onset <plot_track3_sleep_onset>`
 # - :doc:`Track 4 -- EMG-to-Pose <plot_track4_emg_to_pose>`
 # - :doc:`How to Submit a Model <plot_submission_guide>`
@@ -53,8 +111,9 @@ NeuralBench, using publicly available reference datasets.
 # then score it on. Each track page follows the same shape:
 #
 # 1. What the track measures (data, shift, headline metric).
-# 2. The matching ``neuralbench`` task and CLI commands.
-# 3. Where the official competition data diverges from the default.
+# 2. Where to find the task in ``neuralbench``, and how to change it.
+# 3. The commands that reproduce its baseline, with what each one costs.
+# 4. Where the official competition data diverges from the default.
 
 # %%
 # Representative results
@@ -107,45 +166,65 @@ NeuralBench, using publicly available reference datasets.
 # the task logs ``val/mae`` in radians: multiply by 180 / pi to compare.
 
 # %%
-# Budgeting the first download
-# -----------------------------
+# Budgeting disk and the first download
+# --------------------------------------
 #
 # ``--download`` is a one-off step per machine, but not a small one, and
 # the track pages put it first for that reason: the default corpora run
 # from a few gigabytes to several hundred, and the upstream server is
-# usually slower than your disk. Check free space on ``DATA_DIR`` before
-# starting one, and run it somewhere you can leave going for hours.
+# usually slower than your disk. Check free space before starting one, and
+# run it somewhere you can leave going for hours.
 #
-# Footprints measured under ``DATA_DIR`` after a full download:
+# Budget for **both** directories. ``--download`` fills ``DATA_DIR``;
+# ``--prepare`` then writes a separate preprocessing cache under
+# ``CACHE_DIR``, which is not the small one of the two -- for Track 4 it is
+# larger than the raw data. Point them at different filesystems if only one
+# of them is large.
+#
+# Both columns are measured after a full download and prepare of the
+# default dataset:
 #
 # .. list-table::
 #    :header-rows: 1
-#    :widths: 20 35 45
+#    :widths: 16 30 27 27
 #
 #    * - Track
 #      - Default dataset
-#      - Disk under ``DATA_DIR``
+#      - ``DATA_DIR`` (raw)
+#      - ``CACHE_DIR`` (prepared)
 #    * - 1 -- Image
 #      - ``Gifford2022Large``
-#      - ~210 GB
+#      - ~220 GB
+#      - ~13 GB
 #    * - 2 -- BCI
 #      - ``Stieger2021Continuous``
-#      - ~600 GB, plus ~280 GB for the copy MOABB converts on first read
+#      - ~940 GB
+#      - ~96 GB
 #    * - 3 -- Sleep onset
 #      - ``Kemp2000Analysis``
-#      - ~7 GB
+#      - ~8 GB
+#      - ~18 GB
 #    * - 4 -- EMG pose
 #      - ``Salter2024Emg2pose``
-#      - ~340 GB
+#      - ~330 GB
+#      - ~440 GB
 #
-# Among Track 1's alternatives, ``Xu2024Alljoined`` is ~24 GB and
-# ``Xu2025Alljoined`` (Alljoined-1.6M) ~250 GB. Track 2's
-# ``tangermann2012`` is under 1 GB, small enough to exercise the whole
-# pipeline before committing to a default.
+# Two entries need a footnote. ``Stieger2021Continuous`` ends up on disk
+# three times over -- the NEMAR original, the copy MOABB converts on first
+# read, and a second converted tree -- which is where the ~940 GB comes
+# from rather than any one copy being that large. And Track 4's cache
+# exceeds its raw data because the 20 joint angles are cached as a second
+# 2 kHz pass (~230 GB) alongside the EMG itself (~185 GB).
 #
-# ``--prepare`` then writes a separate preprocessing cache under
-# ``CACHE_DIR``, so the two directories are worth pointing at different
-# filesystems if only one of them is large.
+# These figures are larger than the archive sizes the competition website
+# lists, which describe the compressed upstream releases rather than what
+# lands on your disk after download and conversion.
+#
+# Among Track 1's alternatives, ``Xu2024Alljoined`` is ~25 GB,
+# ``Grootswagers2022Human`` ~75 GB and ``Xu2025Alljoined``
+# (Alljoined-1.6M) ~270 GB. Track 2's ``tangermann2012`` is under 1 GB,
+# small enough to exercise the whole pipeline before committing to a
+# default.
 
 # %%
 # Collecting and plotting your results
@@ -215,17 +294,20 @@ NeuralBench, using publicly available reference datasets.
 # 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
 #    sessions, Graz + BrainHero).** Track 2 currently uses
 #    ``Stieger2021Continuous`` (4 motor-imagery classes, cross-subject)
-#    as the closest analog.
+#    as its default analog, and ``Scherer2015Individually`` for the
+#    cross-session, multi-command side of the task.
 # 2. **Muse sleep-onset training set (~1000 subjects).** The Track 3
 #    page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and the
 #    additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
 #    datasets -- with the same ``SleepOnsetTargetExtractor`` + ``bmae``
-#    metric the competition will use.
-# 3. **Hidden evaluation sets.** Tracks 1-3 are scored against hidden
-#    test sets (the Alljoined evaluation cohort, later Graz/BrainHero
-#    sessions, and the Muse cohort). Track 4 uses EMG2Pose's published
-#    held-out user and stage split. The numbers above are sanity checks,
-#    not leaderboard scores.
+#    metric the competition will use. Note that these are clinical
+#    polysomnography, so the starter kit adds a device gap the competition
+#    itself does not have: there, training and evaluation are both Muse.
+# 3. **Hidden evaluation sets.** All four tracks are scored against labels
+#    that stay confidential (the Alljoined evaluation cohort, later
+#    Graz/BrainHero sessions, the Muse evaluation cohort, and the EMG2Pose
+#    evaluation cohort). The numbers above are sanity checks, not
+#    leaderboard scores.
 #
 # Each item will be folded into the relevant track page once it lands.
 # If you spot something out of date, or anything else in this starter

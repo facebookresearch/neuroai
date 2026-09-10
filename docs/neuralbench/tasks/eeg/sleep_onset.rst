@@ -7,6 +7,14 @@ Sleep onset prediction
 | **Objective**: :bdg-success:`Regression`
 | **Split**: Leave-subjects-out
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This task backs :doc:`Track 3 -- Sleep onset
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track3_sleep_onset>`
+   of the challenge, whose page has the commands, timings, and competition
+   data notes for it.
+
 Usage
 ~~~~~
 
