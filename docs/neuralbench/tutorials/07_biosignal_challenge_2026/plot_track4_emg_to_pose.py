@@ -2,6 +2,11 @@
 Track 4 -- EMG-to-Pose (cross-user regression)
 ================================================
 
+.. image:: /_static/challenge_2026_track4_emg_to_pose.gif
+   :alt: 20 hand-joint angles regressed from 16-channel wrist sEMG
+   :target: https://neural-interfaces26.github.io/tracks.html
+   :width: 100%
+
 Given 16-channel surface EMG (sEMG) recorded from a wristband during
 everyday movement, predict the corresponding trajectory of 20 hand-joint
 angles. The competition tests **cross-user** generalisation, and adds two

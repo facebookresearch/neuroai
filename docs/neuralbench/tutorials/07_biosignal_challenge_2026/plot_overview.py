@@ -22,10 +22,9 @@ documentation site covers both.
       :class-card: sd-shadow-sm
 
       A competition on shift-robust decoding of biosignals, hosted and
-      operated by Yneuro, Inria and UC San Diego, with a $20,000 prize pool.
-      Four tracks, submissions from 21 September to 21 November 2026 on
-      Codabench, winners announced at the Brain & Body Workshop at NeurIPS
-      2026. The `competition website
+      operated by Yneuro, Inria and UC San Diego. Four tracks, submissions
+      from 21 September to 21 November 2026 on Codabench, winners announced
+      at the Brain & Body Workshop at NeurIPS 2026. The `competition website
       <https://neural-interfaces26.github.io/>`_ is the authoritative source
       for all of that.
 
@@ -91,7 +90,7 @@ re-run the top three submissions of each track.
 # 4. Register for that track on Codabench, from the `competition website
 #    <https://neural-interfaces26.github.io/>`_.
 # 5. Start the track's ``--download`` early -- it is the long pole, measured
-#    in hours (see `Budgeting the first download`_).
+#    in hours (see `Budgeting disk and the first download`_).
 # 6. Iterate on your model, then read :doc:`How to Submit a Model
 #    <plot_submission_guide>`.
 

@@ -2,6 +2,11 @@
 Track 1 -- EEG-to-Image (cross-stimulus retrieval)
 ====================================================
 
+.. image:: /_static/challenge_2026_track1_eeg_to_image.gif
+   :alt: EEG epochs ranked against a held-out image gallery in DINOv2 space
+   :target: https://neural-interfaces26.github.io/tracks.html
+   :width: 100%
+
 Given EEG recorded while a participant views a natural image, decode
 the image identity. The competition tests **cross-stimulus**
 generalisation: training images and test images do not overlap, so the

@@ -2,6 +2,11 @@
 Track 3 -- Sleep onset (cross-user latency prediction)
 =======================================================
 
+.. image:: /_static/challenge_2026_track3_sleep_onset.gif
+   :alt: Seconds to first stable N2 predicted from wearable EEG
+   :target: https://neural-interfaces26.github.io/tracks.html
+   :width: 100%
+
 Given continuous four-channel wearable EEG recorded at home, predict the
 seconds remaining until the first stable N2 epoch. The competition tests
 **cross-user** generalisation: training and evaluation use the same Muse

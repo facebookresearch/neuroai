@@ -2,6 +2,11 @@
 Track 2 -- BCI decoding (cross-session)
 =========================================
 
+.. image:: /_static/challenge_2026_track2_bci_decoding.gif
+   :alt: Three cued mental commands decoded on an unseen later session
+   :target: https://neural-interfaces26.github.io/tracks.html
+   :width: 100%
+
 Given short EEG windows recorded while a user performs one of three
 cued mental commands (kinesthetic motor imagery, mental calculation, or
 word association), decode the active command. The competition tests
