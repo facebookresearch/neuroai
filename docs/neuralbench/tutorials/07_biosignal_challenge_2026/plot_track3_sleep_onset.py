@@ -3,7 +3,7 @@ Track 3 -- Sleep onset (cross-device latency prediction)
 =========================================================
 
 Given a continuous wearable EEG recording, predict the latency
-(in seconds, from recording start) to the first stable N2 epoch. The
+(in seconds, from recording start) to the first N2 epoch. The
 competition tests **cross-device** generalisation: the seed corpora are
 clinical polysomnography, while the evaluation set is consumer-grade
 home-wearable EEG with its own channels and montage. Precise timing
@@ -14,12 +14,15 @@ per-epoch hypnogram reconstruction.
   sleepers.
 - **Headline metric**: ``bMAE`` in seconds -- onset error averaged with
   equal weight over four time-to-onset bins, so long and short sleep
-  onsets count the same (lower is better). Tolerance rates within
-  30 / 60 / 300 s are reported as diagnostics.
+  onsets count the same (lower is better). The competition additionally
+  reports tolerance rates within 30 / 60 / 300 s; the starter kit logs
+  ``bMAE`` and the usual regression metrics, not those rates.
 - **Data**: continuous Muse wearable EEG, ~1000 training subjects,
-  hidden evaluation set of the same order of magnitude. The reference
-  onset is the first annotated N2 event (or equivalently the first
-  non-Wake epoch satisfying a fixed persistence rule).
+  hidden evaluation set of the same order of magnitude. The onset that
+  ``AddSleepOnsetTargets`` extracts is the earliest annotated N2 event
+  of the recording; it applies no persistence or non-Wake-continuity
+  rule, so check the competition's definition before reshaping the
+  target to match it.
 
 .. note::
    The Muse training set is released through NeuralBench when

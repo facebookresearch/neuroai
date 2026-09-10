@@ -19,7 +19,7 @@ update = {
     "infra": {
         "cluster": "auto",
         "folder": SAVEDIR,
-        "slurm_partition": "learnfair",
+        "slurm_partition": "learnfair",  # replace with a partition you can submit to
         "timeout_min": 120,
         "gpus_per_node": 1,
         "cpus_per_task": 10,
