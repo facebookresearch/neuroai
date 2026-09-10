@@ -45,3 +45,28 @@ def test_conformer(fake_input, use_default_config):
 
     # Check shape of the output
     assert out.shape == (batch_size, n_times, n_in_channels)
+
+
+def test_conformer_uses_lengths():
+    x = torch.randn(2, 12, 4)
+    lengths = torch.tensor([7, 12])
+    model = _conformer.Conformer(
+        num_heads=2,
+        num_layers=1,
+        ffn_dim=8,
+        dropout=0.0,
+        depthwise_conv_kernel_size=3,
+    ).build(dim=x.shape[-1])
+
+    masks = []
+
+    def capture_mask(module, args, kwargs):
+        masks.append(kwargs["key_padding_mask"])
+
+    model.conformer_layers[0].self_attn.register_forward_pre_hook(
+        capture_mask, with_kwargs=True
+    )
+    model(x, lengths=lengths)
+
+    expected = torch.arange(x.shape[1]).expand(x.shape[0], -1) >= lengths.unsqueeze(1)
+    torch.testing.assert_close(masks[0], expected)
