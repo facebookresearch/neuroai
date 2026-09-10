@@ -1,6 +1,6 @@
 [project]
 name = "neuraltrain"
-version = "0.3.0"
+version = "0.3.1"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]

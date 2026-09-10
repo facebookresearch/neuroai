@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-10
+
 - `neuralbench`: adaptation wrappers (`-w`) apply to every model whose config ships a `downstream_model_wrapper`, not just the published foundation models, so a locally pretrained `mae` encoder is linear-probed as documented instead of silently fine-tuned end to end (#249).
 - `neuralbench`: the GPU capability check warns rather than aborting when the driver is too old for the installed torch, so `--download`, `--prepare` and `--plot-cached` still run on such a host (#249).
 - `neuralbench`: `load_config` creates the directories a hand-written `config.json` names, and reports the `/tmp` fallback it takes when no config exists and stdin is not a terminal (#249).

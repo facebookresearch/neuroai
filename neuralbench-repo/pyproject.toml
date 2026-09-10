@@ -1,7 +1,7 @@
 [project]
 name = "neuralbench"
 readme = "README.md"
-version = "0.3.0"
+version = "0.3.1"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -19,9 +19,9 @@ dependencies = [
   "cloudpickle",
   # Siblings release in lockstep; stay within the release line.
   # Study catalog: registered through an entry point, never imported directly
-  "neuralfetch[quickstart]~=0.3.0",
-  "neuralset~=0.3.0",
-  "neuraltrain~=0.3.0",
+  "neuralfetch[quickstart]~=0.3.1",
+  "neuralset~=0.3.1",
+  "neuraltrain~=0.3.1",
   "exca",
   "lightning>=2.0.8",
   "peft>=0.13",
