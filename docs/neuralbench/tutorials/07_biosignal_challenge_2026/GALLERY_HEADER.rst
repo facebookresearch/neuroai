@@ -1,22 +1,56 @@
-EEG/EMG Foundation Challenge 2026
-=================================
+🏆 EEG/EMG Foundation Challenge 2026
+=====================================
 
 Starter kit for the `EEG/EMG Foundation Challenge 2026
-<https://neural-interfaces26.github.io/>`_, a competition on shift-robust
-decoding of biosignals running as part of the Brain and Body Foundation
-Model workshop. Each of its four tracks holds one kind of distribution
-shift fixed:
+<https://neural-interfaces26.github.io/>`_, whose four tracks ask one question
+each: does your model still work on a new stimulus, a new session, or a new
+person? The challenge runs from 21 September to 21 November 2026, and its
+winners are announced at the Brain & Body Workshop at NeurIPS 2026.
 
-.. image:: /_static/challenge_2026_tracks.png
-   :alt: The four tracks of the EEG/EMG Foundation Challenge 2026
-   :target: https://neural-interfaces26.github.io/
-   :width: 100%
+.. grid:: 1 2 2 2
+   :gutter: 3
 
-Start with the overview, then read the training page for how to
-pretrain a brain model and evaluate it, and jump to the track(s)
-you plan to submit to for their data, shift, and headline metric. The
-`competition website <https://neural-interfaces26.github.io/>`_ has the
-registration form, the submission window, the rules, and the prizes.
+   .. grid-item-card:: Track 1 -- EEG-to-Image
+      :link: plot_track1_eeg_to_image
+      :link-type: doc
+      :img-top: /_static/challenge_2026_track1_eeg_to_image.gif
+      :class-card: sd-shadow-sm
+
+      **Cross-stimulus.** Retrieve the viewed image from one EEG epoch,
+      against a gallery of images the model never trained on.
+
+   .. grid-item-card:: Track 2 -- BCI decoding
+      :link: plot_track2_eeg_to_bci
+      :link-type: doc
+      :img-top: /_static/challenge_2026_track2_bci_decoding.gif
+      :class-card: sd-shadow-sm
+
+      **Cross-session.** Decode one of three cued mental commands on a day
+      the user was not calibrated on.
+
+   .. grid-item-card:: Track 3 -- Sleep onset
+      :link: plot_track3_sleep_onset
+      :link-type: doc
+      :img-top: /_static/challenge_2026_track3_sleep_onset.gif
+      :class-card: sd-shadow-sm
+
+      **Cross-user.** Predict seconds to first stable N2 from wearable EEG,
+      on sleepers never seen in training.
+
+   .. grid-item-card:: Track 4 -- EMG-to-Pose
+      :link: plot_track4_emg_to_pose
+      :link-type: doc
+      :img-top: /_static/challenge_2026_track4_emg_to_pose.gif
+      :class-card: sd-shadow-sm
+
+      **Cross-user.** Regress 20 hand-joint angles from wrist sEMG, on new
+      users and new movement stages.
+
+Read the :doc:`overview <plot_overview>` first if you are new here: it explains
+what NeuralBench is, how it relates to the challenge, and what the baseline
+numbers are. Then jump to the track you plan to submit to. The `competition
+website <https://neural-interfaces26.github.io/>`_ owns registration, the
+submission window, the rules, and the prizes.
 
 .. note::
    These pages assume ``neuralbench`` is already installed and
