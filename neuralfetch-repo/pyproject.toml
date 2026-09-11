@@ -60,20 +60,13 @@ extend = "../pyproject.toml"
   plugins = ['pydantic.mypy']
   show_error_codes = true
 [[tool.mypy.overrides]]
-  module = [
-  'mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets', 'mne.utils', 'mne_bids', 'mne_bids.*',
-  'exca', 'exca.*',
-  'scipy.*', 'nibabel', 'h5py',
-  'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack',
-  'synapseclient', 'synapseutils',
-  'moviepy',
-  'hcp_utils',
-  'nilearn',
+  module = ['mne', 'mne.io', 'mne.io.constants', 'mne.io.fiff', 'mne.datasets',
+  'mne.utils', 'mne_bids', 'mne_bids.*', 'exca', 'exca.*', 'scipy.*', 'nibabel', 'h5py',
+  'osfclient', 'boto3', 'botocore', 'openneuro', 'pyunpack', 'synapseclient',
+  'synapseutils', 'datalad', 'datalad.*', 'moviepy', 'hcp_utils', 'nilearn',
   'moabb.datasets.utils', 'moabb.datasets.base', 'moabb.datasets.bnci.*', 'pymatreader',
-  'praatio', 'praatio.*',
-  'sklearn.*', 'pooch', 'matio', 'matio.*',
-  'globus_sdk', 'globus_sdk.*',
-  ]
+  'praatio', 'praatio.*', 'sklearn.*', 'pooch', 'matio', 'matio.*',
+  'globus_sdk', 'globus_sdk.*']
   ignore_missing_imports = true
 
 [tool.pydantic-mypy]

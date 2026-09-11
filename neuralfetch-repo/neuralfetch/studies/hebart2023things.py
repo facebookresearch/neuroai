@@ -390,7 +390,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
                 dset_dir=self.path,
                 repo_url="https://github.com/OpenNeuroDatasets/ds004192.git",
                 threads=4,
-                folders=[download.Wildcard(folder="sub-*")],
+                include=["sub-*"],
             ).download(overwrite=overwrite)
             self._write_test_categories()
 
