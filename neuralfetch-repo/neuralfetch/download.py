@@ -1447,7 +1447,7 @@ class Openneuro(BaseDownload):
     speed up datasets with many files when network bandwidth allows.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.4.0",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.7.1",)
     nworkers: int = 5
 
     def _download(self, overwrite: bool = False) -> None:

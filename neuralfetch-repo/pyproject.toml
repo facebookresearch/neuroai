@@ -23,7 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 all = ["neuralset[all]", "matplotlib"]
 quickstart = [
-  "openneuro-py>=2026.4.0",
+  "openneuro-py>=2026.7.1",
   "praatio",
   "pyunpack",
   "boto3",
