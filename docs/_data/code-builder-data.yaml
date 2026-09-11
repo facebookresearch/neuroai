@@ -221,13 +221,15 @@ axes:
         pip_packages: ["transformers", "torchvision", "julius", "moviepy"]
         event_type: Video
         is_classification: false
-        # Default model: MCG-NJU/videomae-base. Tied to upstream transformers'
-        # ImagesKwargs validation; covered by L0/L1/L2 — L3 skipped via
-        # `l3_skip` until the kwargs validator settles upstream.
+        # Default model: MCG-NJU/videomae-base, a native video model that
+        # encodes `num_frames` frames per clip (16 matches the model config).
+        # Tied to upstream transformers' ImagesKwargs validation; covered by
+        # L0/L1/L2 — L3 skipped via `l3_skip` until the kwargs validator
+        # settles upstream.
         l3_skip: "videomae+transformers ImagesKwargs(text=) compat — upstream"
         kwargs:
           - 'frequency="native"'
-          - "use_audio=False"
+          - "num_frames=16"
           - 'aggregation="trigger"'
 
       classification:
