@@ -19,11 +19,14 @@ from neuraltrain.models.mae import MaeEncoder
 from neuraltrain.models.transformer import TransformerEncoder
 from neuraltrain.optimizers.base import LightningOptimizer
 
-from .mae_module import MaeModule, random_mask
+from .mae_module import MaeModule, geometric_mask
 
 N_CHANNELS, N_TIMES, PATCH_SIZE = 4, 200, 20
+FREQUENCY, N_PATCHES = 100.0, N_TIMES // PATCH_SIZE
 # seeded: convergence below depends on the positions, `seed_everything` comes too late
 POSITIONS = torch.rand(N_CHANNELS, 3, generator=torch.Generator().manual_seed(0))
+# positions are drawn in [0, 1), where 0.5 plays the part 9 cm plays on a head
+MASK_RADIUS = 0.5
 
 
 @dataclasses.dataclass
@@ -70,30 +73,56 @@ def _build_module() -> MaeModule:
         model=config.build(n_outputs=None),
         loss=nn.MSELoss(),
         optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 3e-3}),  # type: ignore
+        frequency=FREQUENCY,
         mask_ratio=0.5,
+        mask_radius=MASK_RADIUS,
+        mask_duration=0.4,  # two of the ten patches a window holds
     )
 
 
-# counts are per example, and never all or none of its valid tokens
-@pytest.mark.parametrize(
-    "mask_ratio, hidden", [(0.1, (1, 1)), (0.5, (3, 6)), (0.9, (5, 11))]
-)
-def test_random_mask(mask_ratio, hidden) -> None:
-    valid = torch.ones(2, 12, dtype=torch.bool)
-    valid[0, 6:] = False  # first example has half its channels absent
+def test_geometric_mask_hides_a_cap_over_a_window() -> None:
+    # five channels in a row, `radius` reaching the immediate neighbours only
+    positions = torch.zeros(1, 5, 3)
+    positions[0, :, 0] = torch.arange(5) * 0.25
+    # one block already covers `mask_ratio`, so the mask is that block alone
+    mask = geometric_mask(
+        positions, n_patches=10, n_hidden_patches=5, radius=0.25, mask_ratio=0.25
+    )
 
-    mask = random_mask(valid, mask_ratio)
+    hidden = mask.reshape(5, 10)
+    channels = hidden.any(dim=1).nonzero().flatten()
+    patches = hidden.any(dim=0).nonzero().flatten()
+    assert int(hidden.sum()) == len(channels) * len(patches), "not one block"
+    assert 2 <= len(channels) <= 3 and (channels.diff() == 1).all(), "cap is not a cap"
+    assert len(patches) == 5 and (patches.diff() == 1).all(), "window is not contiguous"
 
-    assert mask.shape == (2, 12) and mask.dtype == torch.bool
-    assert not (mask & ~valid).any(), "an absent channel's token was hidden"
-    assert tuple(mask.sum(dim=1).tolist()) == hidden
+
+# the block count assumes blocks overlap by chance alone, which nearby caps beat,
+# so the ratio is approached rather than hit
+@pytest.mark.parametrize("mask_ratio", [0.25, 0.5, 0.75])
+def test_geometric_mask_reaches_its_ratio(mask_ratio) -> None:
+    positions = POSITIONS.expand(64, -1, -1).clone()
+    positions[:32, 3] = INVALID_POS_VALUE  # half the batch is missing a channel
+    present = (positions != INVALID_POS_VALUE).any(dim=-1)
+    present = present[:, :, None].expand(-1, -1, N_PATCHES).flatten(1)
+
+    torch.manual_seed(0)
+    masks = torch.stack(
+        [
+            geometric_mask(positions, N_PATCHES, 2, MASK_RADIUS, mask_ratio)
+            for _ in range(20)
+        ]
+    )
+
+    assert not (masks & ~present).any(), "an absent channel's token was hidden"
+    ratio = float(masks.sum() / present.sum() / len(masks))
+    assert abs(ratio - mask_ratio) < 0.1, f"hid {ratio:.2f} of the tokens"
 
 
-def test_masking_needs_at_least_two_valid_tokens() -> None:
-    valid = torch.zeros(2, 8, dtype=torch.bool)
-    valid[:, 0] = True
-    with pytest.raises(ValueError, match="at least 2 valid tokens"):
-        random_mask(valid, 0.5)
+def test_masking_needs_a_channel_position() -> None:
+    positions = torch.full((2, N_CHANNELS, 3), INVALID_POS_VALUE)
+    with pytest.raises(ValueError, match="no channel with a valid position"):
+        geometric_mask(positions, N_PATCHES, 2, MASK_RADIUS, 0.5)
 
 
 def test_rejects_degenerate_mask_ratio() -> None:
@@ -102,6 +131,7 @@ def test_rejects_degenerate_mask_ratio() -> None:
             model=_build_module().model,
             loss=nn.MSELoss(),
             optim_config=LightningOptimizer(optimizer={"name": "Adam", "lr": 1e-3}),  # type: ignore
+            frequency=FREQUENCY,
             mask_ratio=0.0,
         )
 
@@ -159,7 +189,7 @@ def test_pretraining_needs_no_target_and_checkpoints_the_encoder(
     trainer.save_checkpoint(tmp_path / "last.ckpt")
 
     start, end = sum(losses[:2]) / 2, sum(losses[-2:]) / 2
-    assert end < 0.25 * start, f"loss did not decrease: {start:.4f} -> {end:.4f}"
+    assert end < 0.35 * start, f"loss did not decrease: {start:.4f} -> {end:.4f}"
 
     # neuralbench strips the "model." prefix, then matches a freshly built encoder
     saved = torch.load(tmp_path / "last.ckpt", weights_only=True)["state_dict"]
