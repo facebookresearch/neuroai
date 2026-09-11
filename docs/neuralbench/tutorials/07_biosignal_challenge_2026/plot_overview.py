@@ -278,13 +278,12 @@ re-run the top three submissions of each track.
 # named on the track page. The rest is there to keep you honest about what
 # produced it -- parameter counts, peak memory, and training time.
 #
-# Where you read it depends on the backend, which surprises most newcomers.
-# Submitted to SLURM, the command returns as soon as the grid is queued: the
-# terminal shows the config banner and nothing else, while each job's output
-# goes to ``<SAVE_DIR>/<experiment>/logs/<user>/<jobid>_<n>``. Running
-# in-process -- ``--debug``, or ``CLUSTER: null`` -- puts the same output in
-# front of you as it happens, which is why the track pages open with a debug
-# run.
+# Where you read it depends on the backend. Submitted to SLURM, the command
+# returns as soon as the grid is queued: the terminal shows the config banner
+# and nothing else, while each job's output goes to
+# ``<SAVE_DIR>/<experiment>/logs/<user>/<jobid>_<n>``. Running in-process --
+# ``--debug``, or ``CLUSTER: null`` -- puts the same output in front of you as
+# it happens, which is why the track pages open with a debug run.
 #
 # Every run caches that dictionary under ``SAVE_DIR``.
 # After the experiments you care about have finished, re-invoke the
