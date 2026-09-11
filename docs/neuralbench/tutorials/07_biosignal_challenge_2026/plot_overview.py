@@ -257,10 +257,12 @@ re-run the top three submissions of each track.
 #   which is how a nominally 45-second sanity check becomes a 45-minute one.
 
 # %%
+# .. _reading-results:
+#
 # Collecting and plotting your results
 # -------------------------------------
 #
-# A finished run prints Lightning's test-metric table and returns the same
+# Each finished job logs Lightning's test-metric table and returns the same
 # numbers as a dictionary, which is what lands on disk. From a real
 # ``sleep_onset`` job:
 #
@@ -275,6 +277,14 @@ re-run the top three submissions of each track.
 # The headline metric each track is scored on is one key of that dictionary,
 # named on the track page. The rest is there to keep you honest about what
 # produced it -- parameter counts, peak memory, and training time.
+#
+# Where you read it depends on the backend, which surprises most newcomers.
+# Submitted to SLURM, the command returns as soon as the grid is queued: the
+# terminal shows the config banner and nothing else, while each job's output
+# goes to ``<SAVE_DIR>/<experiment>/logs/<user>/<jobid>_<n>``. Running
+# in-process -- ``--debug``, or ``CLUSTER: null`` -- puts the same output in
+# front of you as it happens, which is why the track pages open with a debug
+# run.
 #
 # Every run caches that dictionary under ``SAVE_DIR``.
 # After the experiments you care about have finished, re-invoke the
