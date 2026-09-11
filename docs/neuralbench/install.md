@@ -130,6 +130,25 @@ tracking described below:
 pip install 'neuralbench[wandb]'
 ```
 
+(pretrained-weights)=
+## Pretrained model weights
+
+Foundation-model checkpoints are pulled from the HuggingFace Hub the first
+time a model is built and read from the local hub cache afterwards. Most need
+no account, but **REVE is gated**: every `-m reve` run fails until you have
+accepted its terms.
+
+1. Create a HuggingFace account, or log in at <https://huggingface.co>.
+2. Accept the data usage terms on the
+   [`brain-bzh/reve-base` model page](https://huggingface.co/brain-bzh/reve-base).
+3. Authenticate with `hf auth login` -- or set `HF_TOKEN` in the environment,
+   which is the easier route on a cluster.
+
+`neuralbench` passes the hub's refusal through untranslated, so without this a
+run stops on a raw `huggingface_hub` error when it builds the model. Submitted
+to SLURM, that message goes to the job log rather than your terminal, so it is
+worth spending a minute on `-m reve --debug` before queueing anything.
+
 ## First-run configuration
 
 The first time you run `neuralbench`, you will be prompted to set three

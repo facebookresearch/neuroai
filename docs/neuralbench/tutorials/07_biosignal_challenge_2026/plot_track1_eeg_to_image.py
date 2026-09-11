@@ -2,7 +2,7 @@
 Track 1 -- EEG-to-Image (cross-stimulus retrieval)
 ====================================================
 
-.. image:: /_static/challenge_2026_track1_eeg_to_image.gif
+.. image:: https://neural-interfaces26.github.io/exports/eeg-to-image.gif
    :alt: EEG epochs ranked against a held-out image gallery in DINOv2 space
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%
@@ -107,20 +107,36 @@ concepts.
 #    neuralbench eeg image --prepare
 #
 #    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
-#    #    seed, always in-process. ~2 min on one V100 with the cache warm.
-#    neuralbench eeg image --debug
+#    #    seed, always in-process, so progress lands in your terminal. ~2 min
+#    #    on one V100 with the cache warm. Name the model you actually plan to
+#    #    run -- a bare --debug takes the config default, which is EEGNet.
+#    neuralbench eeg image -m eegnet --debug
 #
-#    # 4. Full baseline -- task-specific model (EEGNet). ~2.5 h per seed, and
+#    # 4. Same check for the foundation model. REVE's weights are gated on the
+#    #    HuggingFace Hub, so this needs an account and an accepted licence;
+#    #    it is the cheapest place to discover that, because a queued run
+#    #    reports the failure into a job log instead of your terminal.
+#    neuralbench eeg image -m reve --debug
+#
+#    # 5. Full baseline -- task-specific model (EEGNet). ~2.5 h per seed, and
 #    #    the default grid is three seeds (concurrent on SLURM).
 #    neuralbench eeg image -m eegnet
 #
-#    # 5. Full baseline -- foundation model (REVE), fine-tuned end to end.
-#    #    ~5.5 h per seed.
+#    # 6. Full baseline -- foundation model (REVE), fine-tuned end to end.
+#    #    ~5.5 h per seed. ~69M parameters against EEGNet's ~1.5k, all of them
+#    #    trainable here, so this one wants a datacentre GPU rather than a
+#    #    laptop; it also preprocesses at 200 Hz against the 120 Hz default,
+#    #    warming a second cache.
 #    neuralbench eeg image -m reve
 #
-# Steps 4 and 5 print the test-metric dictionary at the end and cache it under
-# ``SAVE_DIR``; re-running the same command with ``--plot-cached`` turns those
-# cached metrics into comparison plots and CSV tables without retraining.
+# :ref:`pretrained-weights` has the HuggingFace steps, and no run has a CPU
+# fallback -- ``--debug`` included.
+#
+# Steps 5 and 6 cache the test-metric dictionary under ``SAVE_DIR``, and
+# re-running the same command with ``--plot-cached`` turns those cached
+# metrics into comparison plots and CSV tables without retraining. On SLURM
+# they return as soon as the grid is queued, so the numbers appear in the job
+# logs rather than your terminal; see :ref:`reading-results`.
 
 # %%
 # Evaluating a model of your own

@@ -251,10 +251,10 @@ class TinyFm(nn.Module):
 # from ``channel_positions`` on every call.
 #
 # .. note::
-#    The weights are pulled from the Hugging Face hub at build time, so the
-#    first build needs a Hugging Face account: run ``huggingface-cli login``, or
-#    set ``HF_TOKEN`` in the environment, beforehand.  Later builds read them
-#    from the local hub cache and need no network.
+#    The weights are pulled from the Hugging Face hub at build time, and REVE's
+#    are gated, so the first build needs an account and an accepted licence:
+#    see :ref:`pretrained-weights`.  Later builds read them from the local hub
+#    cache and need no network.
 #
 # .. code-block:: python
 #

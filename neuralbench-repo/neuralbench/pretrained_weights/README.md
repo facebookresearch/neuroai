@@ -31,7 +31,7 @@ Steps:
 1. Create a HuggingFace account or log in at `https://huggingface.co`.
 2. Read and accept the data usage terms on the [model repository](https://huggingface.co/collections/brain-bzh/reve).
 3. Make sure the HuggingFace hub package is installed in your environment, e.g. `pip install huggingface-hub`.
-4. Follow the [instructions](https://huggingface.co/docs/huggingface_hub/v0.16.3/quick-start#login) to get an access token and to log in.
+4. Authenticate with `hf auth login`, or set `HF_TOKEN` in the environment ([docs](https://huggingface.co/docs/huggingface_hub/quick-start#login)).
 
 The pretrained weights should now be available to load when creating the REVE model with the `from_pretrained()` method.
 
@@ -41,5 +41,5 @@ The pretrained weights for LUNA require manual downloading from HuggingFace. Thi
 
 ```bash
 cd neuralbench-repo/neuralbench/pretrained_weights
-huggingface-cli download PulpBio/LUNA --include "LUNA_*" --local-dir .
+hf download PulpBio/LUNA --include "LUNA_*" --local-dir .
 ```

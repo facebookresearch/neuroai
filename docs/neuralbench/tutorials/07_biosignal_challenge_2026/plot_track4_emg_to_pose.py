@@ -2,7 +2,7 @@
 Track 4 -- EMG-to-Pose (cross-user regression)
 ================================================
 
-.. image:: /_static/challenge_2026_track4_emg_to_pose.gif
+.. image:: https://neural-interfaces26.github.io/exports/emg-to-pose.gif
    :alt: 20 hand-joint angles regressed from 16-channel wrist sEMG
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%
@@ -117,17 +117,20 @@ wristband placement and kinematic context at once.
 #    neuralbench emg pose -m vemg2pose --prepare
 #
 #    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
-#    #    seed, always in-process. ~1 min on one V100 with the cache warm.
+#    #    seed, always in-process, so progress lands in your terminal. ~1 min
+#    #    on one V100 with the cache warm.
 #    neuralbench emg pose -m vemg2pose --debug
 #
 #    # 4. Full paper regression baseline. ~2.5 h per seed, and the default grid
 #    #    is three seeds (concurrent on SLURM). ``-m neuropose`` is ~4 h.
 #    neuralbench emg pose -m vemg2pose
 #
-# Step 4 prints the test-metric dictionary at the end -- ``test/mae`` in
-# radians, so multiply by 57.29578 to compare with the paper's degrees -- and
-# caches it under ``SAVE_DIR``; re-running with ``--plot-cached`` turns those
-# cached metrics into comparison plots and CSV tables without retraining.
+# Step 4 caches the test-metric dictionary under ``SAVE_DIR`` -- ``test/mae``
+# in radians, so multiply by 57.29578 to compare with the paper's degrees --
+# and re-running with ``--plot-cached`` turns those cached metrics into
+# comparison plots and CSV tables without retraining. On SLURM it returns as
+# soon as the grid is queued, so the numbers appear in the job logs rather
+# than your terminal; see :ref:`reading-results`.
 
 # %%
 # Evaluating a model of your own
