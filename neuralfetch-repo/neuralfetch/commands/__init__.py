@@ -26,15 +26,16 @@ _COMMANDS = ("download", "study_info", "export_bids")
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(prog="neuralfetch")
-    subs = parser.add_subparsers(dest="command", required=True)
+    subs = parser.add_subparsers(required=True)
     for name in _COMMANDS:
         mod = importlib.import_module(f"neuralfetch.commands.{name}")
-        sub = subs.add_parser(mod.NAME, help=mod.HELP, description=mod.__doc__)
+        sub = subs.add_parser(
+            mod.NAME,
+            help=mod.HELP,
+            description=mod.__doc__,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
         mod.add_arguments(sub)
         sub.set_defaults(func=mod.run)
     args = parser.parse_args(argv)
     args.func(args)
-
-
-if __name__ == "__main__":
-    main()

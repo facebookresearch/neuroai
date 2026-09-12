@@ -6,14 +6,12 @@
 
 """Download a registered study's raw dataset.
 
-Usage::
-
+Usage:
     neuralfetch download Grootswagers2022Human
     neuralfetch download --list
-
-The download runner lives in :mod:`neuralfetch.utils.runner`; this module is
-argparse glue only.
 """
+
+# The download runner lives in neuralfetch.utils.runner; this module is argparse glue.
 
 from __future__ import annotations
 

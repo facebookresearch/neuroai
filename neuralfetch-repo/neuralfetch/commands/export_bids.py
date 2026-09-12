@@ -6,8 +6,7 @@
 
 """Export a study to a BIDS directory tree.
 
-Usage::
-
+Usage:
     neuralfetch export-bids Grootswagers2022Human \\
         --output-dir ~/bids/Grootswagers2022Human \\
         --device Eeg --task thingseeg
@@ -26,10 +25,9 @@ Usage::
         --output-dir ~/bids/Grootswagers2022Human \\
         --device Eeg --task thingseeg \\
         --anonymize-daysback 365
-
-The export logic lives in :mod:`neuralfetch.utils.bids`; this module is argparse
-glue only.
 """
+
+# The export logic lives in neuralfetch.utils.bids; this module is argparse glue.
 
 from __future__ import annotations
 

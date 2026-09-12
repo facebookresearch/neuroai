@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Study data utilities (moved from neuralset.studies.utils)."""
+"""Study data helpers: events annotation, file scanning, and dataset acquisition."""
 
 import logging
 import os

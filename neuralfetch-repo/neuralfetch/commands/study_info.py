@@ -6,14 +6,12 @@
 
 """Compute (or update) StudyInfo for a downloaded study.
 
-Usage::
-
+Usage:
     neuralfetch study-info Grootswagers2022Human
     neuralfetch study-info Grootswagers2022Human --update
-
-The StudyInfo helpers live in :mod:`neuralfetch.utils`; this module is argparse
-glue only.
 """
+
+# The StudyInfo helpers live in neuralfetch.utils; this module is argparse glue.
 
 from __future__ import annotations
 
