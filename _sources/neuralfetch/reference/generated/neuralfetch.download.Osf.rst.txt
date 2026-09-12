@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Osf
+========================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Osf
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

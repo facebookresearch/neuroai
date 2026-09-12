@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.losses.base.BaseTorchLoss
+=====================================
+
+.. currentmodule:: neuraltrain.losses.base
+
+.. autopydantic_model:: BaseTorchLoss
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

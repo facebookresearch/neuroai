@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.utils.bids.BidsExporter
+===================================
+
+.. currentmodule:: neuralfetch.utils.bids
+
+.. autopydantic_model:: BidsExporter
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

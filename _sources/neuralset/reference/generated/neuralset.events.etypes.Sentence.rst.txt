@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Sentence
+================================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Sentence
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

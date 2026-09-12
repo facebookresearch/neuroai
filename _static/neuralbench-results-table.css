@@ -1,0 +1,361 @@
+/* ================================================================
+   NeuralBench interactive results table – scoped under
+   #neuralbench-results-table so nothing leaks into other pages.
+   ================================================================ */
+
+#neuralbench-results-table {
+  margin: 1.5rem 0 2rem;
+  font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+}
+
+/* ---- Controls bar ---- */
+
+.nrt-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.nrt-filter-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-foreground-secondary, #555);
+  white-space: nowrap;
+}
+
+.nrt-select {
+  margin-left: 0.25rem;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-primary, #333);
+  cursor: pointer;
+}
+
+.nrt-select:focus {
+  outline: 2px solid var(--color-brand-primary, #448aff);
+  outline-offset: 1px;
+}
+
+/* View toggle (Scores / Ranks) */
+
+.nrt-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 0.4rem;
+}
+
+.nrt-toggle-btn {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: none;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-secondary, #555);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nrt-toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--color-foreground-border, #ccc);
+}
+
+.nrt-toggle-btn.nrt-active {
+  background: var(--color-brand-primary, #448aff);
+  color: #fff;
+}
+
+.nrt-toggle-btn:hover:not(.nrt-active) {
+  background: var(--color-background-hover, #f0f0f0);
+}
+
+/* Full-view toggle button — sits at the right edge of the controls bar */
+
+.nrt-fullscreen-btn {
+  margin-left: auto;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-primary, #333);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.nrt-fullscreen-btn:hover {
+  background: var(--color-background-hover, #f0f0f0);
+}
+
+.nrt-fullscreen-btn.nrt-active {
+  background: var(--color-brand-primary, #448aff);
+  color: #fff;
+  border-color: var(--color-brand-primary, #448aff);
+}
+
+/* ---- Table ---- */
+
+.nrt-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-foreground-border, #ddd);
+  border-radius: 8px;
+}
+
+.nrt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.nrt-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.nrt-table th,
+.nrt-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-foreground-border, #eee);
+}
+
+/* Task / device / metric columns */
+
+.nrt-th-task,
+.nrt-th-device,
+.nrt-th-metric {
+  text-align: left;
+  font-weight: 600;
+  background: var(--color-background-secondary, #f7f7f7);
+  color: var(--color-foreground-primary, #333);
+  vertical-align: bottom;
+  padding-bottom: 0.6rem;
+}
+
+.nrt-td-task {
+  font-weight: 500;
+}
+
+.nrt-td-task a {
+  color: var(--color-brand-content, #448aff);
+  text-decoration: none;
+}
+
+.nrt-td-task a:hover {
+  text-decoration: underline;
+}
+
+.nrt-td-device {
+  text-align: center;
+}
+
+.nrt-td-metric {
+  color: var(--color-foreground-muted, #888);
+  font-size: 0.75rem;
+}
+
+/* Device badges */
+
+.nrt-badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.nrt-badge-eeg  { background: #e3f2fd; color: #1565c0; }
+.nrt-badge-meg  { background: #f3e5f5; color: #7b1fa2; }
+.nrt-badge-fmri { background: #e8f5e9; color: #2e7d32; }
+
+/* Model column headers – rotated 90 degrees for compactness */
+
+.nrt-th-model {
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0.3rem 0.1rem 0.4rem;
+  background: var(--color-background-secondary, #f7f7f7);
+  cursor: pointer;
+  user-select: none;
+  min-width: 2.2rem;
+  position: relative;
+  height: 8.5rem;
+}
+
+.nrt-th-model:hover {
+  background: var(--color-background-hover, #eef);
+}
+
+.nrt-model-label {
+  display: block;
+  position: absolute;
+  bottom: 0.35rem;
+  left: 50%;
+  transform-origin: center bottom;
+  transform: translateX(-50%) rotate(-90deg) translateX(50%);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nrt-sort-arrow {
+  font-size: 0.6rem;
+}
+
+.nrt-th-model.nrt-sorted .nrt-model-label {
+  color: var(--color-brand-primary, #448aff);
+}
+
+/* Category colour accents on header bottom border */
+
+.nrt-cat-classic  { border-bottom: 3px solid #1976d2; }
+.nrt-cat-foundation { border-bottom: 3px solid #e65100; }
+.nrt-cat-baseline { border-bottom: 3px solid #9e9e9e; }
+
+/* Value cells */
+
+.nrt-td-value {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s;
+  cursor: default;
+}
+
+.nrt-td-value.nrt-best {
+  font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--color-foreground-primary, #333);
+}
+
+/* Average rank row */
+
+.nrt-avg-row {
+  border-top: 2px solid var(--color-foreground-border, #bbb);
+}
+
+.nrt-avg-label {
+  font-weight: 600;
+  font-style: italic;
+  color: var(--color-foreground-secondary, #555);
+}
+
+.nrt-avg-val {
+  font-weight: 600;
+  background: transparent !important;
+}
+
+/* ---- Pagination ---- */
+
+.nrt-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.nrt-page-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-primary, #333);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.nrt-page-btn:hover:not(:disabled) {
+  background: var(--color-background-hover, #f0f0f0);
+}
+
+.nrt-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nrt-page-info {
+  color: var(--color-foreground-muted, #888);
+}
+
+/* ---- Dark mode overrides ---- */
+
+body[data-theme="dark"] .nrt-badge-eeg  { background: #1a3a5c; color: #90caf9; }
+body[data-theme="dark"] .nrt-badge-meg  { background: #3a1a4c; color: #ce93d8; }
+body[data-theme="dark"] .nrt-badge-fmri { background: #1a3a2c; color: #a5d6a7; }
+
+body[data-theme="dark"] .nrt-select,
+body[data-theme="dark"] .nrt-toggle-btn:not(.nrt-active),
+body[data-theme="dark"] .nrt-page-btn {
+  background: var(--color-background-secondary, #2a2a2a);
+  color: var(--color-foreground-primary, #ddd);
+  border-color: var(--color-foreground-border, #555);
+}
+
+body[data-theme="dark"] .nrt-toggle-btn:hover:not(.nrt-active),
+body[data-theme="dark"] .nrt-page-btn:hover:not(:disabled) {
+  background: var(--color-background-hover, #3a3a3a);
+}
+
+body[data-theme="dark"] .nrt-th-model:hover {
+  background: var(--color-background-hover, #333);
+}
+
+/* Auto dark mode fallback (Furo may not set data-theme) */
+
+@media (prefers-color-scheme: dark) {
+  .nrt-badge-eeg  { background: #1a3a5c; color: #90caf9; }
+  .nrt-badge-meg  { background: #3a1a4c; color: #ce93d8; }
+  .nrt-badge-fmri { background: #1a3a2c; color: #a5d6a7; }
+}
+
+/* ---- Fullscreen ("Full view") mode --------------------------------- */
+
+#neuralbench-results-table.nrt-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  margin: 0;
+  padding: 1rem 1.5rem 1.25rem;
+  background: var(--color-background-primary, #fff);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#neuralbench-results-table.nrt-fullscreen .nrt-controls {
+  flex: 0 0 auto;
+}
+
+#neuralbench-results-table.nrt-fullscreen .nrt-table-wrap {
+  flex: 1 1 auto;
+  max-height: none;
+  overflow: auto;
+}
+
+#neuralbench-results-table.nrt-fullscreen .nrt-pagination {
+  flex: 0 0 auto;
+}
+
+body.nrt-fullscreen-lock {
+  overflow: hidden;
+}
+
+body[data-theme="dark"] #neuralbench-results-table.nrt-fullscreen {
+  background: var(--color-background-primary, #131416);
+}
+
+@media (prefers-color-scheme: dark) {
+  #neuralbench-results-table.nrt-fullscreen {
+    background: var(--color-background-primary, #131416);
+  }
+}

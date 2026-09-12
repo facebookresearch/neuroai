@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.Wav2VecBert
+======================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: Wav2VecBert
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.base.BaseBrainDecodeModel
+============================================
+
+.. currentmodule:: neuraltrain.models.base
+
+.. autopydantic_model:: BaseBrainDecodeModel
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

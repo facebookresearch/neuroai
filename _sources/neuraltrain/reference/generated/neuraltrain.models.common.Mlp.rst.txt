@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.common.Mlp
+=============================
+
+.. currentmodule:: neuraltrain.models.common
+
+.. autopydantic_model:: Mlp
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

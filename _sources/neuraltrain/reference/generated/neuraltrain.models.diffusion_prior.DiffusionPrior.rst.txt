@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.diffusion\_prior.DiffusionPrior
+==================================================
+
+.. currentmodule:: neuraltrain.models.diffusion_prior
+
+.. autopydantic_model:: DiffusionPrior
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

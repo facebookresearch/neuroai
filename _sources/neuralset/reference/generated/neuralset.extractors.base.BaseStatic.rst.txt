@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.base.BaseStatic
+====================================
+
+.. currentmodule:: neuralset.extractors.base
+
+.. autopydantic_model:: BaseStatic
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

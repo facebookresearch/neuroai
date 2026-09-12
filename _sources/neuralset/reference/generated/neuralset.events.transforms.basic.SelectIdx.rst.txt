@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.basic.SelectIdx
+===========================================
+
+.. currentmodule:: neuralset.events.transforms.basic
+
+.. autopydantic_model:: SelectIdx
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

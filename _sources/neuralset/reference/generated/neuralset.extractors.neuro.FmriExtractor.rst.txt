@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.FmriExtractor
+========================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: FmriExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.SentenceTransformer
+=============================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: SentenceTransformer
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

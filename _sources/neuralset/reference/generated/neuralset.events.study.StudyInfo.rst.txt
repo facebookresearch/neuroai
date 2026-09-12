@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.study.StudyInfo
+================================
+
+.. currentmodule:: neuralset.events.study
+
+.. autopydantic_model:: StudyInfo
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

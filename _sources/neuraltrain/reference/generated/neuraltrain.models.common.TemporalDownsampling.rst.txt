@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.common.TemporalDownsampling
+==============================================
+
+.. currentmodule:: neuraltrain.models.common
+
+.. autopydantic_model:: TemporalDownsampling
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

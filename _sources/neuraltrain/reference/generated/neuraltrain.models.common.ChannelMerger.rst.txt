@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.common.ChannelMerger
+=======================================
+
+.. currentmodule:: neuraltrain.models.common
+
+.. autopydantic_model:: ChannelMerger
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

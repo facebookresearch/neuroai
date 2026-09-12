@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.metrics.base.BaseMetric
+===================================
+
+.. currentmodule:: neuraltrain.metrics.base
+
+.. autopydantic_model:: BaseMetric
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
