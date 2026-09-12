@@ -19,6 +19,8 @@ data:
     n_spatial_dims: 3
     # same montage as pretraining; also resolves bipolar derivations
     layout_or_montage_name: standard_1020
+    # head-frame metres, as pretraining: the position embedding is not scale-free
+    normalize: false
 brain_model_config:
   =replace=: true
   name: MaeEncoder
