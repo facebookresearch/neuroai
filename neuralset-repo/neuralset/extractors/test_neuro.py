@@ -682,6 +682,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "event_types",
         "scale_factor",
         "bipolar_ref",
+        "car_ref",
         "infra",  # for version
         "fill_non_finite",
     }
@@ -1538,6 +1539,109 @@ def test_bipolar_ref_validation() -> None:
     with pytest.raises(ValueError, match="equal length"):
         ns.extractors.EegExtractor(
             bipolar_ref=(["Fp1", "F7"], ["F7"]),
+        )
+
+
+def test_car_ieeg_global() -> None:
+    """Global CAR makes the cross-channel mean zero at every timepoint."""
+    ch_names = ["A1", "A2", "B1", "B2"]
+    sfreq = 100.0
+    data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(picks=("seeg",), car_ref=True)
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+    np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
+    assert not np.allclose(result.data, 0.0)
+
+
+def test_car_ieeg_multi_picks_per_channel_type() -> None:
+    """With picks=("seeg", "ecog"), CAR references each channel type to its own average."""
+    seeg_names = ["A1", "A2", "A3"]
+    ecog_names = ["G1", "G2", "G3", "G4"]
+    ch_names = seeg_names + ecog_names
+    ch_types = ["seeg"] * len(seeg_names) + ["ecog"] * len(ecog_names)
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2))
+    # Offset the two groups in opposite directions: a single global average
+    # would leave a non-zero residual mean in each subset; correct per-type
+    # CAR must zero each subset independently.
+    data[: len(seeg_names)] += 5.0
+    data[len(seeg_names) :] -= 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types=ch_types)
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), car_ref=True)
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+
+    seeg_idx = [result.ch_names.index(n) for n in seeg_names]
+    ecog_idx = [result.ch_names.index(n) for n in ecog_names]
+    np.testing.assert_allclose(result.data[seeg_idx].sum(axis=0), 0.0, atol=1e-5)
+    np.testing.assert_allclose(result.data[ecog_idx].sum(axis=0), 0.0, atol=1e-5)
+
+
+def test_car_ieeg_picks_includes_absent_type() -> None:
+    """Regression guard: per-type CAR loop must skip channel types absent from raw."""
+    ch_names = ["A1", "A2", "A3"]
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2)) + 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="seeg")
+    raw = mne.io.RawArray(data, info)
+
+    # picks includes both seeg and ecog; raw has only seeg → ecog iteration must be skipped.
+    extractor = ns.extractors.IeegExtractor(picks=("seeg", "ecog"), car_ref=True)
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+    np.testing.assert_allclose(result.data.sum(axis=0), 0.0, atol=1e-5)
+
+
+def test_car_meg_raises() -> None:
+    """car_ref=True on MegExtractor raises at construction."""
+    with pytest.raises(ValueError, match="car_ref is not supported for MEG"):
+        ns.extractors.MegExtractor(car_ref=True)
+
+
+def test_car_emg_raises() -> None:
+    """car_ref=True on EmgExtractor raises at construction."""
+    with pytest.raises(ValueError, match="car_ref is not supported for EMG"):
+        ns.extractors.EmgExtractor(car_ref=True)
+
+
+def test_car_fnirs_raises() -> None:
+    """car_ref=True on FnirsExtractor raises at construction."""
+    with pytest.raises(ValueError, match="car_ref is not supported for fNIRS"):
+        ns.extractors.FnirsExtractor(car_ref=True)
+
+
+def test_car_mutex_with_bipolar_ref() -> None:
+    """car_ref and bipolar_ref are mutually exclusive on the base extractor."""
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        ns.extractors.EegExtractor(
+            car_ref=True,
+            bipolar_ref=(["Fp1"], ["F7"]),
+        )
+
+
+def test_car_no_eligible_types_raises() -> None:
+    """car_ref=True on a raw with no CAR-eligible channel types raises a clear error."""
+    ch_names = ["M1", "M2"]
+    sfreq = 100.0
+    data = np.zeros((len(ch_names), int(sfreq * 2)))
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types="misc")
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.EegExtractor(picks=tuple(ch_names), car_ref=True)
+    with pytest.raises(ValueError, match="no CAR-eligible channel types"):
+        extractor._preprocess_raw(
+            raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
         )
 
 
