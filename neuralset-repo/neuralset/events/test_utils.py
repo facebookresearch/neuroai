@@ -80,7 +80,7 @@ def test_expand_bids_fmri(tmp_path: Path) -> None:
 
 
 def test_validated_parquet_no_nullable_dtypes(tmp_path: Path) -> None:
-    """ValidatedParquet round-trip must produce np.nan, not pd.NA.
+    """ValidatedParquet load must produce np.nan, not pd.NA.
 
     The parent class reads with dtype_backend="numpy_nullable", turning
     float64 into Float64. On Float64, diff() produces pd.NA (not np.nan)
