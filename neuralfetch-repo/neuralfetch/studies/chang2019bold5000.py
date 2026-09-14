@@ -78,8 +78,6 @@ class Chang2019Bold5000(study.Study):
         "Preprocessed BOLD data (in MNI152NLin2009aSym) for"
         "4 participants watching still images in 3T fMRI"
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2025.2.0",)
-
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=510,
         num_subjects=4,

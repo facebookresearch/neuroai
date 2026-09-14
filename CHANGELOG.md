@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from the post-release audit — the pretraining corpus needs an explicit `ssl_example.grids.download` step and `moabb`, `MaeModule` takes no other `neuraltrain` model, freezing comes from `linear_probe_mean` rather than `mae.yaml`, `install.md` lists the six config keys that have no default, Track 3's target is the earliest annotated N2 event, and emg2pose is ~340 GB (#251).
+
 ## [0.3.1] - 2026-09-10
 
 - `neuralbench`: adaptation wrappers (`-w`) apply to every model whose config ships a `downstream_model_wrapper`, not just the published foundation models, so a locally pretrained `mae` encoder is linear-probed as documented instead of silently fine-tuned end to end (#249).

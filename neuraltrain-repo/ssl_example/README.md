@@ -58,45 +58,54 @@ as it will during evaluation.
 **1. Install neuraltrain**
 
 See the [README](../README.md) for installation instructions. The encoder needs
-the `models` extra:
+the `models` extra, and `Stieger2021Continuous` needs `moabb`:
 
 ```
-pip install 'neuraltrain-repo/.[lightning,models]'
+pip install 'neuraltrain-repo/.[lightning,models]' 'moabb>=1.7.1'
 ```
 
 **2. Check the wiring**
 
-The four datasets are downloaded on first use and then preprocessed into a
-cache, which takes a while, so start with the debug config. It swaps them for
-one small bundled recording and runs a single batch:
+Downloading and preprocessing the four datasets takes a while, so start with
+the debug config. It swaps them for one small recording, which MNE fetches on
+first use, and runs a single batch:
 
 ```
 python -m ssl_example.grids.test_run
 ```
 
-**3. Run the real thing**
+**3. Download the datasets**
+
+Training reads what is on disk and never fetches, so download the corpus first
+-- once per machine, and it is ~1.1 TB:
+
+```
+python -m ssl_example.grids.download
+```
+
+**4. Run the real thing**
 
 ```
 python -m ssl_example.grids.defaults
 ```
 
-This downloads the four datasets on first use, caches their preprocessed form,
-and prints the path of the pretrained encoder when it finishes. Set
+This caches the preprocessed form of the four datasets and prints the path of
+the pretrained encoder when it finishes. Set
 `wandb_config` to `None` in `grids/defaults.py` to train without Weights &
 Biases. To pretrain on fewer datasets, or on your own, edit `STUDIES` in the
 same file.
 
-**4. Run example grid**
+**5. Run example grid**
 
 ```
 python -m ssl_example.grids.run_grid
 ```
 
-**5. Evaluate the pretrained encoder**
+**6. Evaluate the pretrained encoder**
 
 Pretraining is only worth as much as the representations it leaves behind, so
 score the encoder on a downstream `neuralbench` task by pointing `--checkpoint`
-at the file from step 3:
+at the file from step 4:
 
 ```
 neuralbench eeg motor_imagery -m mae --checkpoint <path>/encoder.ckpt \

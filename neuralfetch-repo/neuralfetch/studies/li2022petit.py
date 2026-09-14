@@ -88,7 +88,7 @@ class Li2022Petit(study.Study):
         "listening to 'The Little Prince' audiobook in their native language "
         "(French, English, Chinese)."
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py", "praatio")
+    requirements: tp.ClassVar[tuple[str, ...]] = ("praatio",)
     dataset_id: tp.ClassVar[str] = "ds003643"
     TR_FMRI_S: tp.ClassVar[float] = 2.0
 

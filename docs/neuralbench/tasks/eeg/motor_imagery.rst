@@ -7,6 +7,14 @@ Motor imagery classification
 | **Objective**: :bdg-info:`Multiclass classification`
 | **Split**: Leave-subjects-out
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This task is the default starter-kit baseline for :doc:`Track 2 -- BCI
+   decoding
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`,
+   whose page has the commands, timings, and competition data notes for it.
+
 Usage
 ~~~~~
 

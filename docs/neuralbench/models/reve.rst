@@ -74,4 +74,4 @@ Known limitations
 
 * **Pretrained weights require registration** --- Access to the ``brain-bzh``
   checkpoints on HuggingFace requires agreeing to the authors' data usage
-  terms.
+  terms; :ref:`pretrained-weights` has the steps.

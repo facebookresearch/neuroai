@@ -13,6 +13,25 @@ authoritative source for all three.
 """
 
 # %%
+# New to NeuralBench? Start here
+# ------------------------------
+#
+# - :doc:`Challenge overview <plot_overview>` -- what NeuralBench is, how it
+#   relates to the competition, and the baseline numbers for all four tracks.
+# - :doc:`Installation </neuralbench/install>` and the :doc:`quickstart
+#   </neuralbench/auto_examples/quickstart/01_run_first_task>` -- get a task
+#   running on a 1.5 GB dataset before you download anything large.
+# - `Official rules and track guides
+#   <https://neural-interfaces26.github.io/tracks.html>`__ -- registration,
+#   data access, prizes, leaderboard. Authoritative on every competition
+#   matter; these pages only cover the code.
+# - The track page you are submitting to: :doc:`Track 1 -- EEG-to-Image
+#   <plot_track1_eeg_to_image>`, :doc:`Track 2 -- BCI decoding
+#   <plot_track2_eeg_to_bci>`, :doc:`Track 3 -- Sleep onset
+#   <plot_track3_sleep_onset>`, :doc:`Track 4 -- EMG-to-Pose
+#   <plot_track4_emg_to_pose>`.
+
+# %%
 # Overview
 # --------
 #

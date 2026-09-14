@@ -15,14 +15,64 @@
     --index-url https://download.pytorch.org/whl/cu126
   ```
 
-  CPU-only workflows (`--download`, `--prepare`, `--plot-cached`) need none of
-  this.
+  Every training run needs a working GPU, `--debug` included: there is no CPU
+  fallback, so a mismatched driver stops the quick sanity check each task page
+  opens with. `--download` and `--plot-cached` need none of this, and neither
+  does `--prepare` for most tasks -- but one whose target extractor runs a
+  vision or audio model, as `eeg image` embeds its stimuli with DINOv2, uses
+  the GPU to build that cache.
 
 ## Install from PyPI
 
 ```bash
 pip install neuralbench
 ```
+
+## Install with uv
+
+[uv](https://docs.astral.sh/uv/) is a drop-in alternative to `pip` and every
+route on this page has a `uv` equivalent, with no `neuralbench`-side
+configuration. It also fetches its own CPython, which is the easy way out if
+the system Python is older than 3.12:
+
+```bash
+# 1. Get uv (or `pip install uv`, if your network blocks astral.sh)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Create and activate a Python 3.12 environment
+uv venv --python 3.12 .venv
+source .venv/bin/activate
+
+# 3. Install, with the optional extras from below
+uv pip install 'neuralbench[wandb]' 'moabb>=1.7.1' 'eegdash>=0.8.2'
+
+# ... or from a monorepo checkout, editable for development
+uv pip install ./neuralbench-repo
+uv pip install -e 'neuralbench-repo/.[dev]'
+
+# 4. Check it landed
+python -c "import importlib.metadata as m; print(m.version('neuralbench'))"
+neuralbench --help
+```
+
+For the driver-matched `torch` described above, use uv's `--torch-backend`
+rather than the `--index-url` from the `pip` recipe:
+
+```bash
+uv pip install --torch-backend=cu126 --reinstall-package torch \
+  --reinstall-package torchvision --reinstall-package torchaudio \
+  torch torchvision torchaudio
+```
+
+Both give you the same `+cu126` build, but `--index-url` *replaces* PyPI in uv
+instead of adding to it, so every transitive dependency gets resolved from the
+PyTorch mirror too -- which quietly downgrades `numpy`, `setuptools` and
+`filelock`. `--torch-backend=auto` picks the build matching the detected
+driver.
+
+One difference to know about: uv does not read `pip.conf`. If your packages
+come from an internal mirror configured there, pass `--extra-index-url` or set
+`UV_EXTRA_INDEX_URL` explicitly.
 
 ## Install from source
 
@@ -72,12 +122,32 @@ both up front:
 pip install 'moabb>=1.7.1' 'eegdash>=0.8.2'
 ```
 
-`wandb` is the only extra of the package itself, for the optional experiment
+`wandb` is the package's only runtime extra -- `dev` and `docs` exist for
+working on `neuralbench` itself -- and it enables the optional experiment
 tracking described below:
 
 ```bash
 pip install 'neuralbench[wandb]'
 ```
+
+(pretrained-weights)=
+## Pretrained model weights
+
+Foundation-model checkpoints are pulled from the HuggingFace Hub the first
+time a model is built and read from the local hub cache afterwards. Most need
+no account, but **REVE is gated**: every `-m reve` run fails until you have
+accepted its terms.
+
+1. Create a HuggingFace account, or log in at <https://huggingface.co>.
+2. Accept the data usage terms on the
+   [`brain-bzh/reve-base` model page](https://huggingface.co/brain-bzh/reve-base).
+3. Authenticate with `hf auth login` -- or set `HF_TOKEN` in the environment,
+   which is the easier route on a cluster.
+
+`neuralbench` passes the hub's refusal through untranslated, so without this a
+run stops on a raw `huggingface_hub` error when it builds the model. Submitted
+to SLURM, that message goes to the job log rather than your terminal, so it is
+worth spending a minute on `-m reve --debug` before queueing anything.
 
 ## First-run configuration
 
@@ -90,6 +160,25 @@ paths:
 
 The configuration is stored in `~/.neuralbench/config.json` by default, and the
 three directories are created if they do not exist.
+
+A config file you write yourself has to define everything the prompt would have
+written. These six keys have no default, and a missing one fails with a bare
+`KeyError`:
+
+```json
+{
+  "USER": "your-username",
+  "ENTITY_NAME": "your-username",
+  "PROJECT_NAME": "neuralbench",
+  "DATA_DIR": "/path/to/data",
+  "CACHE_DIR": "/path/to/cache",
+  "SAVE_DIR": "/path/to/results"
+}
+```
+
+`USER`, `ENTITY_NAME` and `PROJECT_NAME` only label runs and W&B entries, so
+any string does. Every remaining key -- `CLUSTER`, `SLURM_PARTITION`,
+`SLURM_CONSTRAINT`, `N_CPUS`, `WANDB_HOST` -- is optional.
 
 The prompt needs a terminal. Where stdin is not one -- a SLURM batch script,
 `nohup`, CI, some notebooks -- `neuralbench` skips it, prints a notice, and
@@ -111,7 +200,8 @@ key in `~/.neuralbench/config.json`:
   caches locally when `CLUSTER` is `null`.
 - **`"slurm"`** -- always submit to SLURM.
 
-For example, to run the full benchmark locally without SLURM, set:
+For example, to run the full benchmark locally without SLURM, add this
+alongside the required keys above:
 
 ```json
 {
