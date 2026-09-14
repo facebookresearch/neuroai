@@ -107,6 +107,10 @@ class _TokenSpan:
     idx: int
     sent: tp.Any
 
+    def __len__(self) -> int:
+        # gap resolution ends a span with idx + len(tok), as on a spacy Token
+        return len(self.text)
+
 
 class TextWordMatcher:
     """Match annotated words to character positions in a spaCy-parsed text.
