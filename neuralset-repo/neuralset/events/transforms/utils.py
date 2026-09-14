@@ -121,7 +121,7 @@ class TextWordMatcher:
     """
 
     _PUNCT_RE = re.compile(r"^[\W_]+|[\W_]+$", re.UNICODE)
-    _CONTRACTION_SUFFIX_RE = re.compile(r"^(?:n't|'re|'ve|'ll|'d|'m)$")
+    _CONTRACTION_SUFFIX_RE = re.compile(r"^(?:n't|'re|'ve|'ll|'d|'m|'s)$")
     _FR_ELISION_PREFIX_RE = re.compile(r"^(?:qu|[jldsmntc])'$", re.IGNORECASE)
 
     def __init__(self, text: str, language: str = "") -> None:
