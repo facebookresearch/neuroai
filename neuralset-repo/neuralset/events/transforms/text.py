@@ -29,11 +29,26 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+_PUNCT_CHECKPOINT = "oliverguhr/fullstop-punctuation-multilang-large"
+
+
 @lru_cache
 def _get_punct_model() -> tp.Any:
+    """Punctuation restoration model, reusing only the package's decoding."""
     from deepmultilingualpunctuation import PunctuationModel
+    from transformers import pipeline
 
-    return PunctuationModel()
+    class _Pinned(PunctuationModel):  # type: ignore[misc]
+        # upstream builds its pipeline with grouped_entities, dropped in transformers 5
+        def __init__(self) -> None:
+            self.pipe = pipeline(
+                "token-classification",
+                _PUNCT_CHECKPOINT,
+                aggregation_strategy="none",
+                device=0 if torch.cuda.is_available() else -1,
+            )
+
+    return _Pinned()
 
 
 class EnsureTexts(EventsTransform):
