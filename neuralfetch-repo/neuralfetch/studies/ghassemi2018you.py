@@ -280,9 +280,11 @@ class Ghassemi2018You(study.Study):
             summarize_labels=False,
         )
         mne_annots = convert_wfdb_anns_to_mne_annotations(annots)
-        annots_df = mne_annots.to_data_frame()
-        start = annots_df.loc[0, "onset"]  # Assumes annots start at time 0
-        annots_df["start"] = (annots_df["onset"] - start).dt.total_seconds()
+        # Onsets are seconds from the start of the record (WFDB sample / fs).
+        # Scoring starts minutes into a Challenge 2018 record, so the first
+        # annotation is not at time 0 and must not be subtracted.
+        annots_df = mne_annots.to_data_frame(time_format=None)
+        annots_df["start"] = annots_df["onset"].astype(float)
 
         # Handle sleep stage events
         stage_mask = annots_df.description.isin(["W", "N1", "N2", "N3", "R"])
