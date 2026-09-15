@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralset`: `HuggingFaceText.add_special_tokens` wraps the input in the model's special tokens, which context the forward pass without joining the pooled embedding. A context-free single word is otherwise a length-1 sequence attending only to itself, which converges to one vector whatever the token: on XLM-R, 89 single-token Dutch words embedded identically. Defaults to `False`, leaving existing embeddings and cache uids untouched (#265).
 - docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from the post-release audit — the pretraining corpus needs an explicit `ssl_example.grids.download` step and `moabb`, `MaeModule` takes no other `neuraltrain` model, freezing comes from `linear_probe_mean` rather than `mae.yaml`, `install.md` lists the six config keys that have no default, Track 3's target is the earliest annotated N2 event, and emg2pose is ~340 GB (#251).
 
 ## [0.3.1] - 2026-09-10
