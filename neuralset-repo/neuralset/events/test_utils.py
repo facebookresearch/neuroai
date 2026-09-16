@@ -5,10 +5,12 @@
 # LICENSE file in the root directory of this source tree.
 
 import typing as tp
+import warnings
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 from exca import cachedict
 
 from neuralset import segments
@@ -126,3 +128,79 @@ def test_mixed_type_column_parquet(tmp_path: Path) -> None:
         writer["test"] = events
     loaded = cd["test"]
     assert set(loaded["foo"].astype(str)) == {"1", "x"}
+
+
+def _stimuli(starts: tp.Sequence[float], durations: tp.Sequence[float]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "type": "Stimulus",
+            "timeline": "t0",
+            "start": list(starts),
+            "duration": list(durations),
+        }
+    )
+
+
+def test_warn_overlapping_durations() -> None:
+    """Durations far longer than the event spacing are a unit error (ds004357)."""
+    # 50 ms apart, each claiming 16 s: milliseconds stored in a seconds column
+    starts = [i * 0.05 for i in range(60)]
+    with pytest.warns(UserWarning, match="overlap the next same-type event"):
+        utils._warn_overlapping_durations(_stimuli(starts, [16.0] * 60))
+
+    # same spacing, honest durations: quiet
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        utils._warn_overlapping_durations(_stimuli(starts, [0.016] * 60))
+
+
+def test_warn_overlapping_durations_allows_tiling() -> None:
+    """Contiguous fixed-length segments end as the next begins, so never overlap."""
+    starts = [i * 3.0 for i in range(40)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        utils._warn_overlapping_durations(_stimuli(starts, [3.0] * 40))
+
+
+def test_warn_whole_number_durations() -> None:
+    """One whole-second duration across irregular events is a count (ds004579).
+
+    The overlap check cannot see this case: the bogus 1 s sits just under the
+    ~1.1 s event spacing, so nothing visibly overlaps.
+    """
+    rng = np.random.default_rng(0)
+    starts = np.cumsum(rng.uniform(0.05, 4.0, size=80))
+    events = _stimuli(starts, [1.0] * 80)
+    with pytest.warns(UserWarning, match="whole-number duration"):
+        utils._warn_whole_number_durations(events)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        utils._warn_overlapping_durations(events)
+
+
+def test_warn_whole_number_durations_quiet_cases() -> None:
+    rng = np.random.default_rng(0)
+    irregular = np.cumsum(rng.uniform(0.05, 4.0, size=80))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # a count is never fractional, so a 2 ms trigger is not suspicious
+        utils._warn_whole_number_durations(_stimuli(irregular, [0.002] * 80))
+        # regular spacing: a block design, not a unit error
+        block = [i * 6.0 for i in range(40)]
+        utils._warn_whole_number_durations(_stimuli(block, [6.0] * 40))
+        # a mix of durations is not a single pasted constant
+        mixed = [1.0 if i % 2 else 0.002 for i in range(80)]
+        utils._warn_whole_number_durations(_stimuli(irregular, mixed))
+
+
+def test_check_event_durations_reports_context() -> None:
+    """Callers that read a file name it, so the warning points at the source."""
+    rng = np.random.default_rng(0)
+    starts = np.cumsum(rng.uniform(0.05, 4.0, size=80))
+    with pytest.warns(UserWarning, match="whole-number duration") as record:
+        utils.check_event_durations(_stimuli(starts, [1.0] * 80), context="sub-01.tsv")
+    assert "Source: sub-01.tsv" in str(record[0].message)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        utils.check_event_durations(_stimuli(starts, [0.25] * 80))

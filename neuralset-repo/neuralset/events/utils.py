@@ -298,6 +298,124 @@ def _propagate_bids(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _warn_overlapping_durations(
+    df: pd.DataFrame,
+    ratio: float = 2.0,
+    min_pairs: int = 10,
+    context: str | None = None,
+) -> None:
+    """Warn when same-type events swallow the events that follow them.
+
+    BIDS defines the ``_events.tsv`` ``duration`` column in seconds, but
+    datasets ship sample counts or milliseconds in it (OpenNeuro ds004579
+    stores a marker size of 1 *data point* as ``1``; ds004357 stores 16 *ms*
+    as ``16``). A range check cannot see this -- the values stay far below the
+    recording length -- but the events end up overlapping each other by large
+    multiples, which a correct annotation of a single event stream does not do.
+
+    Grouped by ``type`` because hierarchical annotations legitimately nest
+    across types (``Phoneme`` inside ``Word`` inside ``Audio``); the signal is
+    same-type events overlapping *one another*. Tiled designs, where each event
+    ends as the next begins, stay quiet.
+    """
+    cols = ["type", "start", "duration"]
+    if any(c not in df.columns for c in cols):
+        return
+    keys = ["timeline", "type"] if "timeline" in df.columns else ["type"]
+    suspects: list[str] = []
+    for key, group in df.groupby(keys, sort=False, dropna=False):
+        group = group.sort_values("start")
+        gap = group["start"].shift(-1) - group["start"]
+        # Simultaneous events (gap == 0) overlap by definition and say nothing
+        # about the units; the last event of a group has no successor.
+        usable = gap > 0
+        if int(usable.sum()) < min_pairs:
+            continue
+        ratios = (group["duration"][usable] / gap[usable]).dropna()
+        if ratios.empty:
+            continue
+        if float((ratios > 1).mean()) > 0.5 and float(ratios.median()) > ratio:
+            etype = key[-1] if isinstance(key, tuple) else key
+            suspects.append(f"{etype} (median {ratios.median():.4g}x the gap)")
+    if suspects:
+        msg = (
+            f"Found {len(suspects)} event group(s) whose durations overlap the "
+            f"next same-type event by more than {ratio}x: {'; '.join(suspects[:5])}"
+            ". A uniform overlap usually means the source 'duration' is in "
+            "samples or milliseconds rather than seconds."
+        )
+        if context:
+            msg += f" Source: {context}"
+        warnings.warn(msg)
+
+
+def _warn_whole_number_durations(
+    df: pd.DataFrame,
+    gap_cv: float = 0.5,
+    min_events: int = 20,
+    context: str | None = None,
+) -> None:
+    """Warn when one whole-number duration is applied to irregularly timed events.
+
+    Complements :func:`_warn_overlapping_durations`, which only sees units that
+    are wrong by enough to make events swallow their successors. OpenNeuro
+    ds004579 is wrong by 500x (a marker size of 1 *data point* stored as ``1``)
+    yet lands just under the ~1.1 s event spacing, so no overlap test can see
+    it. What gives it away is that the single value is a whole number while the
+    events it annotates are spaced irregularly -- the fingerprint of a count
+    pasted into a seconds column.
+
+    Tiled designs (fixed-length segments or blocks, where the gap is as regular
+    as the duration) are excluded via ``gap_cv``, and fractional constants such
+    as a 2 ms trigger are ignored because a count would not be fractional.
+    """
+    cols = ["type", "start", "duration"]
+    if any(c not in df.columns for c in cols):
+        return
+    keys = ["timeline", "type"] if "timeline" in df.columns else ["type"]
+    suspects: list[str] = []
+    for key, group in df.groupby(keys, sort=False, dropna=False):
+        nonzero = group["duration"][group["duration"] > 0].dropna()
+        if len(nonzero) < min_events or nonzero.nunique() != 1:
+            continue
+        value = float(nonzero.iloc[0])
+        if value < 1 or value != round(value):
+            continue
+        group = group.sort_values("start")
+        gap = group["start"].shift(-1) - group["start"]
+        gap = gap[gap > 0].dropna()
+        if len(gap) < 2 or not gap.mean():
+            continue
+        if float(gap.std() / gap.mean()) <= gap_cv:
+            continue  # regular spacing: a tiled/block design, not a unit error
+        etype = key[-1] if isinstance(key, tuple) else key
+        suspects.append(f"{etype} (every event {value:g}s)")
+    if suspects:
+        msg = (
+            f"Found {len(suspects)} event group(s) where a single whole-number "
+            f"duration is applied to irregularly spaced events: "
+            f"{'; '.join(suspects[:5])}. Verify the source units -- a count of "
+            "samples or milliseconds stored in a seconds column looks like this."
+        )
+        if context:
+            msg += f" Source: {context}"
+        warnings.warn(msg)
+
+
+def check_event_durations(df: pd.DataFrame, context: str | None = None) -> None:
+    """Warn when the ``duration`` column does not look like seconds.
+
+    Runs both unit heuristics: :func:`_warn_overlapping_durations` catches
+    values inflated enough that events swallow their successors, and
+    :func:`_warn_whole_number_durations` catches a lone whole-number duration
+    pasted across irregularly spaced events. ``standardize_events`` calls this
+    on every study as a backstop; callers that read a specific file (e.g. a
+    BIDS ``_events.tsv``) should pass it as *context* so the warning names it.
+    """
+    _warn_overlapping_durations(df, context=context)
+    _warn_whole_number_durations(df, context=context)
+
+
 def standardize_events(
     events: pd.DataFrame,
     auto_fill: bool = True,
@@ -354,6 +472,7 @@ def standardize_events(
             types = null["type"].unique()
             msg = f"Found {len(null)} event(s) with null duration (types: {types})"
             warnings.warn(msg)
+        check_event_durations(df)
     else:
         df = events
     for col in ("start", "duration"):

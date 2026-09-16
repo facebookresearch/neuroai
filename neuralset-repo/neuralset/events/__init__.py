@@ -11,4 +11,5 @@ from .etypes import Event as Event
 from .etypes import EventTypesHelper as EventTypesHelper
 from .study import EventsTransform as EventsTransform
 from .study import Study as Study
+from .utils import check_event_durations as check_event_durations
 from .utils import standardize_events as standardize_events
