@@ -6,9 +6,10 @@
 
 import logging
 import typing as tp
+from pathlib import Path
 
-import mne
 import pandas as pd
+from mne_bids import BIDSPath
 
 from neuralfetch import download
 from neuralset.events import study
@@ -17,26 +18,27 @@ logger = logging.getLogger(__name__)
 
 
 class Singh2021Timing(study.Study):
-    url: tp.ClassVar[str] = (
-        "https://huggingface.co/datasets/jalauer/Singh2021Timing/tree/main/data"
-    )
+    url: tp.ClassVar[str] = "https://openneuro.org/datasets/ds004579/versions/1.0.0"
     """Singh2021Timing: EEG responses during an interval timing task in Parkinson's disease.
 
-    EEG recordings from 83 Parkinson's disease patients and 37 healthy controls
-    during a peak-interval timing task with 3-second and 7-second target intervals.
-    A subset of 9 PD patients completed sessions both ON and OFF dopaminergic
-    medication.
+    EEG recordings from Parkinson's disease patients and healthy controls during a
+    peak-interval timing task with 3-second and 7-second target intervals. Sourced
+    from the authors' OpenNeuro release (ds004579), which is BIDS-compliant with
+    EEGLAB ``.set``/``.fdt`` recordings and ``_events.tsv`` sidecars.
 
     Experimental Design:
         - EEG recordings (63-channel, 500 Hz)
-        - 120 participants (83 PD, 37 controls), 138 timelines
+        - 139 recordings (94 Parkinson's disease, 45 healthy controls)
         - 80 trials per session (40 per interval type)
         - Paradigm: peak-interval timing task with visual distractors
 
     Notes:
         - Population includes Parkinson's disease patients and healthy controls.
-        - 9 PD participants have two sessions (ON/OFF medication) recorded under
-          different subject IDs (see _SUBJECT_ALIASES).
+        - BIDS uses numeric ``sub-XXX`` identifiers; the original diagnosis/subject
+          label (e.g. ``PD1005``, ``Control1025``) is kept in ``participants.tsv``
+          under the ``EEG`` column and exposed as ``subject_label``.
+        - Single-session only: the 9 PD dual-session recordings of the earlier
+          Hugging Face mirror are not part of ds004579.
     """
 
     bibtex: tp.ClassVar[str] = """
@@ -56,140 +58,133 @@ class Singh2021Timing(study.Study):
         langid={english},
         keywords={Neurophysiology,Neuroscience},
     }
-        url = {https://huggingface.co/datasets/jalauer/Singh2021Timing/tree/main/data},
 
     @misc{singh2021_data,
-        url={https://huggingface.co/datasets/jalauer/Singh2021Timing/tree/main/data}
+        title={Interval Timing Task},
+        author={Singh, Arun and Cole, Rachel and Espinoza, Arturo and Wessel, Jan R. and Cavanagh, Jim and Narayanan, Nandakumar},
+        publisher={OpenNeuro},
+        doi={10.18112/openneuro.ds004579.v1.0.0},
+        url={https://openneuro.org/datasets/ds004579/versions/1.0.0}
     }
     """
-    licence: tp.ClassVar[str] = "PDDL-1.0"
+    licence: tp.ClassVar[str] = "CC0-1.0"
     description: tp.ClassVar[str] = (
-        "EEG recordings in 83 Parkinson's disease patients and 37 controls during interval timing."
+        "EEG recordings in 94 Parkinson's disease patients and 45 controls during "
+        "interval timing."
     )
-    _SUBJECT_RUNS: tp.ClassVar[dict[str, tp.Iterable[int]]] = {
-        "Control": set(range(1025, 1420, 10)) - set((1045, 1165, 1355)),
-        "PD": (
-            set(range(1005, 1870, 10))
-            | set(
-                [
-                    2445,
-                    2515,
-                    2565,
-                    2625,
-                    2815,
-                    2835,
-                    2845,
-                    2845,
-                    2855,
-                    2865,
-                    3445,
-                    3515,
-                    3565,
-                    3625,
-                ]
-            )
-        )
-        - set((1205, 1255, 1345, 1355, 1495, 1545, 1805, 1825)),
+    _TASK: tp.ClassVar[str] = "IntervalTiming"
+    _FREQUENCY: tp.ClassVar[int] = 500
+    # ``_events.tsv`` "value" markers -> integer codes. The markers are the raw
+    # BrainVision triggers, so "Stimulus/S  1" of the original recordings reads
+    # as "S  1" here.
+    _CODE_MAPPING: tp.ClassVar[dict[str, int]] = {
+        "S  1": 1,
+        "S  2": 2,
+        "S  3": 3,
+        "S  4": 4,
+        "S  5": 5,
+        "S  6": 6,
+        "S  7": 7,
+        "S255": 8,
+        "boundary": 9,
+        "R  3": 10,
     }
-    # There are 9 PD subjects with two sessions, but recorded under a different subject name in
-    # session 2 (see README in url above)
-    _SUBJECT_ALIASES: tp.ClassVar[dict[str, str]] = {
-        "PD1815": "PD2815",
-        "PD1835": "PD2835",
-        "PD1845": "PD2845",
-        "PD1855": "PD2855",
-        "PD1865": "PD2865",
-        "PD3445": "PD2445",
-        "PD3515": "PD2515",
-        "PD3565": "PD2565",
-        "PD3625": "PD2625",
+    _DESCRIPTION_MAPPING: tp.ClassVar[dict[str, str]] = {
+        "S  1": "short_interval_instruction",  # 1 s
+        "S  2": "long_inverval_instruction",  # 1 s
+        "S  3": "interval_start",  # Start of interval (blue rectangle shown)
+        # Lasts 8-10 s for short intervals and 18-20 s for long intervals
+        "S  4": "spacebar_press",  # XXX Replace with Button event of right duration
+        "S  5": "spacebar_release",
+        "S  6": "distracting_vowel",
+        # XXX Interval end is not available in the dataset
+        "S  7": "trial_feedback",  # On 15% of the trials
+        "S255": "end_of_last_trial",
+        # Not described in the dataset README
+        "boundary": "unknown",  # BrainVision "New Segment/"
+        "R  3": "unknown",  # BrainVision "Response/R  3"
     }
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=138,
-        num_subjects=129,
-        num_events_in_query=882,  # query=1st timeline
+        num_timelines=139,
+        num_subjects=139,
+        num_events_in_query=1760,
         event_types_in_query={"Eeg", "Stimulus"},
-        data_shape=(63, 733750),
-        frequency=500,
+        data_shape=(63, 793440),
+        frequency=500.0,
     )
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        # v2: source moved from a third-party Hugging Face mirror to the authors'
+        # OpenNeuro release, changing subject ids, file formats and event parsing.
+        self.version = "v2"
+
     def _download(self, overwrite: bool = False) -> None:
-        # https://predict.cs.unm.edu/downloads.php d014
-        # Unable to use original dataset on PRED+ct.
-        # Files shared here rely on Sharepoint
-        # and cannot be programmatically downloaded there.
-        # Alternate source found on Hugging Face, not uploaded by original authors.
-        # https://huggingface.co/jalauer/datasets
-        hf_org = "jalauer"
-        hf_repo = "Singh2021Timing"
-        hg = download.Huggingface(org=hf_org, study=hf_repo, dset_dir=self.path)
-        if hg.get_success_file().exists() and not overwrite:
-            return
-        hg.download(overwrite=overwrite)
+        # The lab's own distribution (https://narayanan.lab.uiowa.edu/datasets)
+        # relies on Sharepoint and cannot be fetched programmatically.
+        download.Openneuro(study="ds004579", dset_dir=self.path).download(
+            overwrite=overwrite
+        )
+
+    def _bids_root(self) -> Path:
+        return self.path / "download"
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
-        for diagnosis, subjects in self._SUBJECT_RUNS.items():
-            for subject in sorted(subjects):
-                sub_id = f"{diagnosis}{subject}"
-                sessions = [1, 2] if sub_id in self._SUBJECT_ALIASES else [1]
-                for session in sessions:
-                    yield dict(subject=sub_id, session=session, diagnosis=diagnosis)
+        participants = pd.read_csv(self._bids_root() / "participants.tsv", sep="\t")
+        diagnosis_map = {"PD": "parkinsons", "Control": "control"}
+        missing = []
+        for row in participants.itertuples():
+            subject = str(row.participant_id).removeprefix("sub-")
+            if not self._eeg_path(subject).fpath.exists():
+                missing.append(subject)
+                continue
+            yield dict(
+                subject=subject,
+                subject_label=str(row.EEG),
+                diagnosis=diagnosis_map.get(row.GROUP, row.GROUP),
+            )
+        if missing:
+            logger.warning(
+                "Skipped %d of %d participants with no recording on disk; "
+                "the download may be incomplete",
+                len(missing),
+                len(participants),
+            )
+            logger.debug("Participants without a recording: %s", ", ".join(missing))
+
+    def _eeg_path(self, subject: str) -> BIDSPath:
+        return BIDSPath(
+            subject=subject,
+            task=self._TASK,
+            root=self._bids_root(),
+            datatype="eeg",
+            suffix="eeg",
+            extension=".set",
+        )
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        tl = timeline
-        subject = (
-            self._SUBJECT_ALIASES.get(tl["subject"], tl["subject"])
-            if tl["session"] == 2
-            else tl["subject"]
-        )
-        basename = self.path / "download" / "data" / subject
+        eeg_path = self._eeg_path(timeline["subject"])
+        events_path = eeg_path.copy().update(suffix="events", extension=".tsv")
 
-        # extract annotations
-        events = mne.read_annotations(basename.with_suffix(".vmrk")).to_data_frame(
-            time_format=None
-        )
+        events = pd.read_csv(events_path.fpath, sep="\t")
         events.rename(columns={"onset": "start"}, inplace=True)
         events["type"] = "Stimulus"
-        events["code"] = events.description.map(
-            {
-                "Stimulus/S  1": 1,
-                "Stimulus/S  2": 2,
-                "Stimulus/S  3": 3,
-                "Stimulus/S  4": 4,
-                "Stimulus/S  5": 5,
-                "Stimulus/S  6": 6,
-                "Stimulus/S  7": 7,
-                "Stimulus/S255": 8,
-                "New Segment/": 9,
-                "Response/R  3": 10,
-            }
-        )
-        events["description"] = events.description.map(
-            {
-                "Stimulus/S  1": "short_interval_instruction",  # 1 s
-                "Stimulus/S  2": "long_inverval_instruction",  # 1 s
-                "Stimulus/S  3": "interval_start",  # Start of interval (blue rectangle shown)
-                # Lasts 8-10 s for short intervals and 18-20 s for long intervals
-                "Stimulus/S  4": "spacebar_press",  # XXX Replace with Button event of right duration
-                "Stimulus/S  5": "spacebar_release",
-                "Stimulus/S  6": "distracting_vowel",
-                # XXX Interval end is not available in the dataset
-                "Stimulus/S  7": "trial_feedback",  # On 15% of the trials
-                "Stimulus/S255": "end_of_last_trial",
-                # Not described in README.md
-                "New Segment/": "unknown",
-                "Response/R  3": "unknown",
-            }
-        )
+        events["code"] = events["value"].map(self._CODE_MAPPING)
+        events["description"] = events["value"].map(self._DESCRIPTION_MAPPING)
+        # The sidecar "duration" is every marker's BrainVision size field -- a
+        # count of *data points* -- written unconverted into a column BIDS
+        # defines in seconds, so it reads 1.0 for every event. Convert it back
+        # (1 sample, i.e. 2 ms), then time the instruction cues, which are the
+        # only events the paradigm really does show for a second.
+        durations = pd.to_numeric(events["duration"], errors="coerce")
+        events["duration"] = durations.fillna(0.0) / self._FREQUENCY
         events.loc[
-            (
-                (events.type == "Stimulus")
-                & events.description.str.endswith("interval_instruction")
-            ),
+            events.description.str.endswith("interval_instruction", na=False),
             "duration",
         ] = 1.0
+        events = events[["type", "start", "duration", "code", "description"]]
 
-        eeg = dict(type="Eeg", filepath=basename.with_suffix(".vhdr"), start=0)
+        eeg = dict(type="Eeg", filepath=eeg_path.fpath, start=0)
         events = pd.concat([pd.DataFrame([eeg]), events], ignore_index=True)
         return events
