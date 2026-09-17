@@ -288,6 +288,11 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         Batch size for the language model.
     contextualized: bool
         True by default, the context of the event is used to compute the embeddings.
+    add_special_tokens: bool
+        False by default. Wraps the input in the model's special tokens, which
+        anchor attention without entering the pooled embedding. A context-free
+        single word needs them: alone it is a length-1 sequence that attends only
+        to itself, and converges to one vector whatever the token.
 
     Note
     ----
@@ -313,6 +318,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     # extractor attributes
     batch_size: int = 32
     contextualized: bool = True
+    add_special_tokens: bool = False
 
     _max_length: int | None = pydantic.PrivateAttr(None)
     hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
@@ -420,12 +426,14 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                         raise ValueError(msg)
                     inputs = self.tokenizer(
                         text,
-                        add_special_tokens=False,
+                        add_special_tokens=self.add_special_tokens,
                         return_tensors="pt",
                         padding=True,
                         truncation=True,  # beware to have set truncation_side="left" in init
                         max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
+                        return_special_tokens_mask=self.add_special_tokens,
                     ).to(device)
+                special_tokens_mask = inputs.pop("special_tokens_mask", None)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
@@ -435,18 +443,17 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 n_layers, n_batch, n_tokens, n_dims = hidden_states.shape  # noqa
 
                 # attention_mask is the model's truth, hoisted to one device sync per batch
-                n_pads_per_row: list[int] = (
-                    (inputs["attention_mask"] == 0).sum(dim=1).tolist()
-                )
+                keep_per_row = inputs["attention_mask"].bool()
+                if special_tokens_mask is not None:
+                    keep_per_row &= special_tokens_mask == 0
+                keep_per_row = keep_per_row.cpu()
 
-                # -- for each target word, remove padding, and select target tokens
+                # -- for each target word, drop what is not text, and select target tokens
                 for i, target_word in enumerate(target_words):
                     # select batch element
                     hidden_state = hidden_states[:, i]  # n_layers x tokens x embd
 
-                    n_pads = n_pads_per_row[i]
-                    if n_pads > 0:
-                        hidden_state = hidden_state[:, :-n_pads]
+                    hidden_state = hidden_state[:, keep_per_row[i]]
 
                     # select tokens that belong to the target word
                     if self.contextualized:

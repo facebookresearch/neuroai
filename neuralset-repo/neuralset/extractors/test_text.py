@@ -369,3 +369,36 @@ def test_batched_target_slice_excludes_pads() -> None:
     )
     np.testing.assert_allclose(short_batched, short_alone, rtol=1e-3, atol=1e-3)
     np.testing.assert_allclose(long_batched, long_alone, rtol=1e-3, atol=1e-3)
+
+
+def test_special_tokens_reach_the_model_but_stay_out_of_the_pooling() -> None:
+    """They context the forward pass without joining the average.
+
+    A context-free single word is otherwise a length-1 sequence attending only
+    to itself, which converges to one vector whatever the token.
+    """
+    kwargs: dict[str, tp.Any] = dict(
+        contextualized=False,
+        model_name="google-t5/t5-small",
+        layers=1.0,
+        token_aggregation="mean",
+        aggregation="trigger",
+        device="cpu",
+    )
+    plain = text.HuggingFaceText(**kwargs)
+    special = text.HuggingFaceText(**kwargs, add_special_tokens=True)
+    assert len(special.tokenizer("water")["input_ids"]) == 2, "t5 appends one </s>"
+
+    word = etypes.Word(text="water", start=0, duration=1, timeline="x")
+    pooled = np.asarray(list(special._get_data([word]))[0]).ravel()
+
+    inputs = special.tokenizer("water", return_tensors="pt")
+    with torch.no_grad():
+        states = special.model(**inputs, output_hidden_states=True).hidden_states
+    word_only = states[-1][0, 0].numpy()
+    word_and_eos = states[-1][0].mean(0).numpy()
+
+    np.testing.assert_allclose(pooled, word_only, rtol=1e-4, atol=1e-4)
+    assert not np.allclose(pooled, word_and_eos, atol=1e-4)
+    # the </s> is in the forward pass, so the word's own vector moves
+    assert not np.allclose(np.asarray(list(plain._get_data([word]))[0]).ravel(), pooled)
