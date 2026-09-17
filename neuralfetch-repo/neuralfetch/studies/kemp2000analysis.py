@@ -78,6 +78,13 @@ class Kemp2000Analysis(study.Study):
     _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
     def _download(self, overwrite: bool = False) -> None:
+        if self._recordings_path != self._mirror_path and not overwrite:
+            # `print`, as the download backends do: this module mutes its logger.
+            print(
+                f"Reading the Sleep-EDF copy already at {self._recordings_path}; "
+                "pass overwrite=True to fetch it again from the S3 mirror."
+            )
+            return
         download.Physionet(
             study=self._PHYSIONET_STUDY,
             dset_dir=self.path,
@@ -86,7 +93,7 @@ class Kemp2000Analysis(study.Study):
         ).download(overwrite=overwrite)
 
     @property
-    def _recordings_path(self) -> Path:
+    def _mirror_path(self) -> Path:
         return (
             self.path
             / "download"
@@ -94,6 +101,20 @@ class Kemp2000Analysis(study.Study):
             / self._PHYSIONET_VERSION
             / "sleep-cassette"
         )
+
+    @property
+    def _recordings_path(self) -> Path:
+        """Folder holding the PSG/hypnogram pairs.
+
+        Before we moved to the S3 mirror, ``mne.datasets.sleep_physionet`` wrote
+        them to a flat ``physionet-sleep-data`` folder; a copy fetched back then
+        is read where it lies rather than downloaded a second time.
+        """
+        mirror = self._mirror_path
+        if any(mirror.glob("*-PSG.edf")):
+            return mirror
+        legacy = self.path / "physionet-sleep-data"
+        return legacy if any(legacy.glob("*-PSG.edf")) else mirror
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         folder = self._recordings_path
