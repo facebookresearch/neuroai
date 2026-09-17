@@ -130,7 +130,7 @@ def test_mixed_type_column_parquet(tmp_path: Path) -> None:
     assert set(loaded["foo"].astype(str)) == {"1", "x"}
 
 
-def _stimuli(starts: tp.Sequence[float], durations: tp.Sequence[float]) -> pd.DataFrame:
+def _stimuli(starts: tp.Iterable[float], durations: tp.Iterable[float]) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "type": "Stimulus",
