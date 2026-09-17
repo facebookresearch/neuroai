@@ -115,8 +115,10 @@ supports it poorly.
 #
 # .. code-block:: bash
 #
-#    # 1. Download Sleep-EDF into DATA_DIR: ~8 GB, minutes rather than hours.
-#    #    One-off per machine, and safe to interrupt and re-run.
+#    # 1. Download Sleep-EDF into DATA_DIR: ~7 GB from PhysioNet's S3 mirror,
+#    #    about 4 minutes on a fast link rather than the hours the
+#    #    physionet.org web host takes. One-off per machine, and safe to
+#    #    interrupt and re-run.
 #    neuralbench eeg sleep_onset --download
 #
 #    # 2. Preprocess into CACHE_DIR -- resample, filter, scale, and cut the
@@ -132,10 +134,10 @@ supports it poorly.
 #    #    run -- a bare --debug takes the config default, which is EEGNet.
 #    neuralbench eeg sleep_onset -m eegnet --debug
 #
-#    # 4. Same check for the foundation model. REVE's weights are gated on the
-#    #    HuggingFace Hub, so this needs an account and an accepted licence;
-#    #    it is the cheapest place to discover that, because a queued run
-#    #    reports the failure into a job log instead of your terminal.
+#    # 4. Same check for the foundation model. The first build pulls REVE's
+#    #    weights from the HuggingFace Hub, which needs network access but no
+#    #    account; doing it here rather than in a queued run keeps any failure
+#    #    in your terminal instead of a job log.
 #    neuralbench eeg sleep_onset -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~6 min per seed, and
@@ -149,7 +151,7 @@ supports it poorly.
 #    #    warming a second cache.
 #    neuralbench eeg sleep_onset -m reve
 #
-# :ref:`pretrained-weights` has the HuggingFace steps, and no run has a CPU
+# :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
 # fallback -- ``--debug`` included.
 #
 # Steps 5 and 6 cache the test-metric dictionary under ``SAVE_DIR`` --
@@ -206,7 +208,7 @@ supports it poorly.
 #
 # .. code-block:: bash
 #
-#    # Sleep-EDF Expanded (the default), ~8 GB raw + ~18 GB cache
+#    # Sleep-EDF Expanded (the default), ~7 GB raw + ~18 GB cache
 #    neuralbench eeg sleep_onset
 #
 #    # PhysioNet/CinC Challenge 2018: 994 labelled subjects, by far the most

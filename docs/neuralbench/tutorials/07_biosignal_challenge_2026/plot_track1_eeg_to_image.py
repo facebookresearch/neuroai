@@ -91,6 +91,12 @@ concepts.
 # Reproducing the baseline
 # ------------------------
 #
+# .. tip::
+#    The default corpus is a ~220 GB download. ``--dataset xu2024alljoined``
+#    (Alljoined-1, ~25 GB) runs the same pipeline end to end on a fraction of
+#    that, which is the cheaper way to find out whether your setup works
+#    before committing to the default.
+#
 # .. code-block:: bash
 #
 #    # 1. Download THINGS-EEG2 into DATA_DIR: ~220 GB, hours over a typical
@@ -112,10 +118,10 @@ concepts.
 #    #    run -- a bare --debug takes the config default, which is EEGNet.
 #    neuralbench eeg image -m eegnet --debug
 #
-#    # 4. Same check for the foundation model. REVE's weights are gated on the
-#    #    HuggingFace Hub, so this needs an account and an accepted licence;
-#    #    it is the cheapest place to discover that, because a queued run
-#    #    reports the failure into a job log instead of your terminal.
+#    # 4. Same check for the foundation model. The first build pulls REVE's
+#    #    weights from the HuggingFace Hub, which needs network access but no
+#    #    account; doing it here rather than in a queued run keeps any failure
+#    #    in your terminal instead of a job log.
 #    neuralbench eeg image -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~2.5 h per seed, and
@@ -129,7 +135,7 @@ concepts.
 #    #    warming a second cache.
 #    neuralbench eeg image -m reve
 #
-# :ref:`pretrained-weights` has the HuggingFace steps, and no run has a CPU
+# :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
 # fallback -- ``--debug`` included.
 #
 # Steps 5 and 6 cache the test-metric dictionary under ``SAVE_DIR``, and

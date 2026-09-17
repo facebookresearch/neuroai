@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralfetch`: `Kemp2000Analysis` downloads Sleep-EDF from PhysioNet's `physionet-open` S3 mirror, as the other PhysioNet studies already do, instead of the `physionet.org` web host, which served it at 51 KB/s against the mirror's 31 MB/s on the host we measured — minutes for the ~7 GB corpus rather than tens of hours. Recordings live under `download/sleep-edfx/1.0.0/sleep-cassette/` rather than `physionet-sleep-data/`, so an existing copy is re-downloaded once.
+- docs: REVE's `brain-bzh` checkpoints are public, so the starter kit, `install.md` and the model page no longer ask for a HuggingFace account, an accepted licence or a token.
+- docs: each EEG/EMG Foundation Challenge 2026 track page opens with a cheaper way in than its default corpus — `xu2024alljoined` for Track 1, `tangermann2012` for Track 2, and `--download --debug` for Track 4.
 - docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from the post-release audit — the pretraining corpus needs an explicit `ssl_example.grids.download` step and `moabb`, `MaeModule` takes no other `neuraltrain` model, freezing comes from `linear_probe_mean` rather than `mae.yaml`, `install.md` lists the six config keys that have no default, Track 3's target is the earliest annotated N2 event, and emg2pose is ~340 GB (#251).
 
 ## [0.3.1] - 2026-09-10

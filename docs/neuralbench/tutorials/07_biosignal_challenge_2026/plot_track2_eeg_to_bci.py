@@ -99,12 +99,20 @@ recalibration allowed.
 # MOABB, which the base install does not pull, so install it first:
 # ``pip install 'moabb>=1.7.1'``.
 #
+# .. tip::
+#    ``--dataset tangermann2012`` is the one to reach for first: BCI
+#    Competition IV-2a is 9 subjects of 22-channel four-class MI in under
+#    1 GB, and the whole download-prepare-train loop runs in well under an
+#    hour (~15 min to prepare, ~2 min per training seed) against a well-known
+#    published baseline -- worth doing before committing ~940 GB and a day to
+#    ``Stieger2021Continuous``.
+#
 # .. code-block:: bash
 #
 #    # 1. Download Stieger2021Continuous into DATA_DIR: ~640 GB, plus ~300 GB
 #    #    for the copy MOABB converts on first read. Budget ~940 GB and hours
 #    #    of transfer. One-off per machine, and safe to interrupt and re-run.
-#    #    Start on tangermann2012 (below, <1 GB) if that is too much for now.
+#    #    Start on tangermann2012 (above, <1 GB) if that is too much for now.
 #    neuralbench eeg motor_imagery --download
 #
 #    # 2. Preprocess into CACHE_DIR (~96 GB) -- resample, filter, scale, and
@@ -120,10 +128,10 @@ recalibration allowed.
 #    #    -- a bare --debug takes the config default, which is EEGNet.
 #    neuralbench eeg motor_imagery -m eegnet --debug
 #
-#    # 4. Same check for the foundation model. REVE's weights are gated on the
-#    #    HuggingFace Hub, so this needs an account and an accepted licence;
-#    #    it is the cheapest place to discover that, because a queued run
-#    #    reports the failure into a job log instead of your terminal.
+#    # 4. Same check for the foundation model. The first build pulls REVE's
+#    #    weights from the HuggingFace Hub, which needs network access but no
+#    #    account; doing it here rather than in a queued run keeps any failure
+#    #    in your terminal instead of a job log.
 #    neuralbench eeg motor_imagery -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~30 min per seed, and
@@ -137,7 +145,7 @@ recalibration allowed.
 #    #    warming a second cache.
 #    neuralbench eeg motor_imagery -m reve
 #
-# :ref:`pretrained-weights` has the HuggingFace steps, and no run has a CPU
+# :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
 # fallback -- ``--debug`` included.
 #
 # Steps 5 and 6 cache the test-metric dictionary under ``SAVE_DIR``, and
@@ -145,13 +153,6 @@ recalibration allowed.
 # metrics into comparison plots and CSV tables without retraining. On SLURM
 # they return as soon as the grid is queued, so the numbers appear in the job
 # logs rather than your terminal; see :ref:`reading-results`.
-#
-# ``--dataset tangermann2012`` is the one to reach for first: BCI
-# Competition IV-2a is 9 subjects of 22-channel four-class MI in under
-# 1 GB, and the whole download-prepare-train loop runs in well under an
-# hour (~15 min to prepare, ~2 min per training seed) against a well-known
-# published baseline -- worth doing before committing ~940 GB and a day to
-# ``Stieger2021Continuous``.
 
 # %%
 # Evaluating a model of your own

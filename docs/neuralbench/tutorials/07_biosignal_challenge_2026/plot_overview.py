@@ -89,8 +89,9 @@ re-run the top three submissions of each track.
 #    NeuralBench task and the exact commands that reproduce its baseline.
 # 4. Register for that track on Codabench, from the `competition website
 #    <https://neural-interfaces26.github.io/>`_.
-# 5. Start the track's ``--download`` early -- it is the long pole, measured
-#    in hours (see `Budgeting disk and the first download`_).
+# 5. Start the track's ``--download`` early -- on the default corpus it is
+#    the long pole, measured in hours, so start on the smaller dataset the
+#    track page names (see `Budgeting disk and the first download`_).
 # 6. Iterate on your model, then read :doc:`How to Submit a Model
 #    <plot_submission_guide>`.
 
@@ -201,7 +202,7 @@ re-run the top three submissions of each track.
 #      - ~96 GB
 #    * - 3 -- Sleep onset
 #      - ``Kemp2000Analysis``
-#      - ~8 GB
+#      - ~7 GB
 #      - ~18 GB
 #    * - 4 -- EMG pose
 #      - ``Salter2024Emg2pose``
@@ -225,11 +226,14 @@ re-run the top three submissions of each track.
 # warms two caches rather than reusing one. Budget per model family you
 # intend to run, not per track.
 #
-# Among Track 1's alternatives, ``Xu2024Alljoined`` is ~25 GB,
-# ``Grootswagers2022Human`` ~75 GB and ``Xu2025Alljoined``
-# (Alljoined-1.6M) ~270 GB. Track 2's ``tangermann2012`` is under 1 GB,
-# small enough to exercise the whole pipeline before committing to a
-# default.
+# Every track page opens with a cheaper way in, and none of them needs the
+# default corpus to exercise the pipeline end to end. Among Track 1's
+# alternatives, ``Xu2024Alljoined`` is ~25 GB, ``Grootswagers2022Human``
+# ~75 GB and ``Xu2025Alljoined`` (Alljoined-1.6M) ~270 GB. Track 2's
+# ``tangermann2012`` is under 1 GB, and Track 4's ``--download --debug``
+# fetches three subjects instead of 193. Track 3 needs no shortcut at all:
+# Sleep-EDF is ~7 GB and a few minutes off PhysioNet's S3 mirror, which is
+# why it is the track to try first.
 
 # %%
 # How much wall-clock to expect

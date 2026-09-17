@@ -10,8 +10,8 @@ from pathlib import Path
 
 import mne
 import pandas as pd
-from mne.datasets import sleep_physionet
 
+from neuralfetch import download
 from neuralset.events import study
 
 logger = logging.getLogger(__name__)
@@ -74,41 +74,29 @@ class Kemp2000Analysis(study.Study):
         x for x in range(83) if x not in [39, 68, 69, 78, 79]
     ]
     url: tp.ClassVar[str] = "https://physionet.org/files/sleep-edfx/1.0.0/sleep-cassette/"
-    SUBJECTS_REC_1: tp.ClassVar[list[int]] = [
-        x for x in SUBJECTS if x not in [36, 39, 52, 68, 69, 78, 79]
-    ]
-    SUBJECTS_REC_2: tp.ClassVar[list[int]] = [
-        x for x in SUBJECTS if x not in [13, 39, 68, 69, 78, 79]
-    ]
+    _PHYSIONET_STUDY: tp.ClassVar[str] = "sleep-edfx"
+    _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
     def _download(self, overwrite: bool = False) -> None:
-        """
-        Leverages mne.datasets.fetch_dataset method to download.
-        - The reported download link: https://physionet.org/physiobank/database/sleep-edfx/sleep-cassette/
+        download.Physionet(
+            study=self._PHYSIONET_STUDY,
+            dset_dir=self.path,
+            version=self._PHYSIONET_VERSION,
+            include=["sleep-cassette"],  # sleep-telemetry is a different cohort
+        ).download(overwrite=overwrite)
 
-        Option to download through S3:
-        aws s3 sync --no-sign-request s3://physionet-open/sleep-edfx/1.0.0/ DESTINATION
-
-        Option to download with wget:
-        folder = self.path / "physionet-sleep-data"
-        download_url = "https://physionet.org/files/sleep-edfx/1.0.0/sleep-cassette/"
-        subprocess.run((f"wget -r -N -c -np -P {folder} {download_url}"), shell=True)
-        """
-        sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_1,
-            recording=[1],
-            path=self.path,
-            force_update=overwrite,
-        )
-        sleep_physionet.age.fetch_data(
-            subjects=self.SUBJECTS_REC_2,
-            recording=[2],
-            path=self.path,
-            force_update=overwrite,
+    @property
+    def _recordings_path(self) -> Path:
+        return (
+            self.path
+            / "download"
+            / self._PHYSIONET_STUDY
+            / self._PHYSIONET_VERSION
+            / "sleep-cassette"
         )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        folder = self.path / "physionet-sleep-data"
+        folder = self._recordings_path
         for subject in self.SUBJECTS:
             subject_str = f"{subject:02}"
             for session in [1, 2]:
@@ -137,7 +125,7 @@ class Kemp2000Analysis(study.Study):
                 )
 
     def _get_filenames(self, timeline: dict[str, tp.Any]) -> tuple[Path, Path | None]:
-        study_path = self.path / "physionet-sleep-data"
+        study_path = self._recordings_path
         eeg_file = (
             study_path
             / f"SC4{timeline['subject']}{timeline['session']}{timeline['suffix']}-PSG.edf"

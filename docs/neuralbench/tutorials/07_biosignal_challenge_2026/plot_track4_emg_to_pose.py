@@ -96,6 +96,14 @@ wristband placement and kinematic context at once.
 # emg2pose is served through EEG-Dash, which the base install does not
 # pull, so install it first: ``pip install 'eegdash>=0.8.2'``.
 #
+# .. tip::
+#    This task ships no smaller dataset variant, but ``Salter2024Emg2pose``
+#    scopes its download to the study query, so ``--download --debug`` fetches
+#    only the three subjects the debug run uses instead of all 193. Following
+#    it with a plain ``--debug``, which builds its own cache in-process,
+#    exercises the whole path before you commit to the ~330 GB corpus;
+#    ``--prepare`` and the full runs need all of it.
+#
 # Every command below passes ``-m vemg2pose``, ``--download`` and
 # ``--prepare`` included. That is not decoration: the model config widens
 # ``data.duration`` to 5.895 s, adding the 1790 samples of TDS left context
