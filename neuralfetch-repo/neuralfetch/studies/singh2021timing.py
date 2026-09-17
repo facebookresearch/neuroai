@@ -139,10 +139,11 @@ class Singh2021Timing(study.Study):
             if not self._eeg_path(subject).fpath.exists():
                 missing.append(subject)
                 continue
+            group = str(row.GROUP)
             yield dict(
                 subject=subject,
                 subject_label=str(row.EEG),
-                diagnosis=diagnosis_map.get(row.GROUP, row.GROUP),
+                diagnosis=diagnosis_map.get(group, group),
             )
         if missing:
             logger.warning(
