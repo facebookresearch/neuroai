@@ -67,7 +67,7 @@ runs:
         uv pip install \
           --config-settings editable_mode=strict \
           -e neuralset-repo/.[dev,all] \
-          -e neuralfetch-repo/. \
+          -e neuralfetch-repo/.[dev] \
           -e neuraltrain-repo/.[lightning,dev,models,metrics] \
           -e neuralbench-repo/.[dev,wandb,models] \
           'transformers==4.57.6'
