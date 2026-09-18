@@ -47,6 +47,21 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    seed: int | list[int] | None = None,
+    wandb_paper_summary: bool = False,
+    multi_task: bool = False,
+    gpus: str | None = None,
+    official_source_root: str | None = None,
+    text_data_dir: str | None = None,
+    output_dir: str = "outputs",
+    workers: int = 4,
+    batch_size: int = 8,
+    text_batch_size: int = 16,
+    epochs: int = 5,
+    gradient_accumulation_steps: int = 1,
+    log_interval: int = 10,
+    learning_rate: float = 5e-4,
+    no_text_loss: bool = False,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -112,6 +127,45 @@ def run_benchmark(
     if plot_cached and (force or retry or prepare):
         raise ValueError(
             "Cannot use force, retry, or prepare flags when plotting cached results."
+        )
+
+    selected_models = [model] if isinstance(model, str) else list(model or [])
+    from neuralbench.instruction_models import load_backend
+
+    instruction_backend = (
+        load_backend(selected_models[0]) if len(selected_models) == 1 else None
+    )
+    if instruction_backend is not None:
+        if grid or plot_cached or downstream_wrapper is not None:
+            raise ValueError(
+                "Instruction models use their native adaptation protocol and do not "
+                "use the encoder grid, cached plots, or downstream wrappers."
+            )
+        selected_seed = seed[0] if isinstance(seed, list) else (seed or 1337)
+        return instruction_backend.run_from_neuralbench(
+            device=device,
+            task=task,
+            checkpoint=checkpoint,
+            dataset=dataset,
+            debug=debug,
+            force=force,
+            retry=retry,
+            prepare=prepare,
+            download=download,
+            multi_task=multi_task,
+            gpus=gpus,
+            official_source_root=official_source_root,
+            text_data_dir=text_data_dir,
+            output_dir=output_dir,
+            workers=workers,
+            batch_size=batch_size,
+            text_batch_size=text_batch_size,
+            epochs=epochs,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            log_interval=log_interval,
+            learning_rate=learning_rate,
+            seed=selected_seed,
+            no_text_loss=no_text_loss,
         )
 
     configs = build_experiment_configs(
@@ -250,6 +304,50 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        nargs="+",
+        default=None,
+        help=(
+            "Override the seed grid. Use one value to run a single seed "
+            "(e.g. --seed 33), or multiple values to run a smaller seed list."
+        ),
+    )
+    parser.add_argument(
+        "--wandb-paper-summary",
+        action="store_true",
+        help=(
+            "After all selected seeds finish, upload a quiet W&B summary run "
+            "with mean/std test metrics for manuscript tables."
+        ),
+    )
+    parser.add_argument(
+        "--multi-task",
+        action="store_true",
+        help="For instruction models, jointly tune the configured multi-task suite.",
+    )
+    parser.add_argument(
+        "--gpus",
+        type=str,
+        default=None,
+        help="Comma-separated GPU IDs for instruction-model DDP, e.g. 0,1,2,3.",
+    )
+    parser.add_argument("--official-source-root", type=str, default=None)
+    parser.add_argument("--text-data-dir", type=str, default=None)
+    parser.add_argument("--output-dir", type=str, default="outputs")
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--text-batch-size", type=int, default=16)
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--gradient-accumulation-steps", type=int, default=1)
+    parser.add_argument("--log-interval", type=int, default=10)
+    parser.add_argument("--learning-rate", type=float, default=5e-4)
+    parser.add_argument(
+        "--no-text-loss",
+        action="store_true",
+        help="Disable the auxiliary text loss for instruction models.",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -278,6 +376,21 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            seed=args.seed,
+            wandb_paper_summary=args.wandb_paper_summary,
+            multi_task=args.multi_task,
+            gpus=args.gpus,
+            official_source_root=args.official_source_root,
+            text_data_dir=args.text_data_dir,
+            output_dir=args.output_dir,
+            workers=args.workers,
+            batch_size=args.batch_size,
+            text_batch_size=args.text_batch_size,
+            epochs=args.epochs,
+            gradient_accumulation_steps=args.gradient_accumulation_steps,
+            log_interval=args.log_interval,
+            learning_rate=args.learning_rate,
+            no_text_loss=args.no_text_loss,
         )
     except Exception:
         if not args.pdb:

@@ -42,6 +42,15 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 [project.optional-dependencies]
+    models = [
+        "huggingface_hub",
+        "safetensors",
+    ]
+    neurolm = [
+        "einops",
+        "h5py",
+        "tiktoken",
+    ]
     wandb = [
         "wandb>=0.15.11",
     ]
@@ -77,6 +86,7 @@ dependencies = [
 
 [project.scripts]
 neuralbench = "neuralbench:run_benchmark_cli"
+neuralbench-neurolm = "neuralbench.instruction_models.backends.neurolm.cli:main"
 
 [tool.ruff]
 extend = "../pyproject.toml"
