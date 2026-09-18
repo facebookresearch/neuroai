@@ -135,9 +135,7 @@ pip install 'neuralbench[wandb]'
 
 Foundation-model checkpoints are pulled from the HuggingFace Hub the first
 time a model is built, and read from the local hub cache on every build after
-that. All of them are public -- `-m reve` included -- so no account, token or
-accepted licence is needed, and the only requirement is network access on that
-first build.
+that, so that first build is the only one needing network access.
 
 Where compute nodes have no outbound network, build the model once somewhere
 that does, and point `HF_HOME` at a filesystem the jobs can read.

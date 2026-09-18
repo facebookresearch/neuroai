@@ -119,9 +119,9 @@ concepts.
 #    neuralbench eeg image -m eegnet --debug
 #
 #    # 4. Same check for the foundation model. The first build pulls REVE's
-#    #    weights from the HuggingFace Hub, which needs network access but no
-#    #    account; doing it here rather than in a queued run keeps any failure
-#    #    in your terminal instead of a job log.
+#    #    weights from the HuggingFace Hub, which needs network access; doing
+#    #    it here rather than in a queued run keeps any failure in your
+#    #    terminal instead of a job log.
 #    neuralbench eeg image -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~2.5 h per seed, and

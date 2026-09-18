@@ -115,10 +115,8 @@ supports it poorly.
 #
 # .. code-block:: bash
 #
-#    # 1. Download Sleep-EDF into DATA_DIR: ~7 GB from PhysioNet's S3 mirror,
-#    #    about 4 minutes on a fast link rather than the hours the
-#    #    physionet.org web host takes. One-off per machine, and safe to
-#    #    interrupt and re-run.
+#    # 1. Download Sleep-EDF into DATA_DIR: ~7 GB, about 4 minutes on a fast
+#    #    link. One-off per machine, and safe to interrupt and re-run.
 #    neuralbench eeg sleep_onset --download
 #
 #    # 2. Preprocess into CACHE_DIR -- resample, filter, scale, and cut the
@@ -135,9 +133,9 @@ supports it poorly.
 #    neuralbench eeg sleep_onset -m eegnet --debug
 #
 #    # 4. Same check for the foundation model. The first build pulls REVE's
-#    #    weights from the HuggingFace Hub, which needs network access but no
-#    #    account; doing it here rather than in a queued run keeps any failure
-#    #    in your terminal instead of a job log.
+#    #    weights from the HuggingFace Hub, which needs network access; doing
+#    #    it here rather than in a queued run keeps any failure in your
+#    #    terminal instead of a job log.
 #    neuralbench eeg sleep_onset -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~6 min per seed, and

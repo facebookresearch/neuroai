@@ -232,8 +232,8 @@ re-run the top three submissions of each track.
 # ~75 GB and ``Xu2025Alljoined`` (Alljoined-1.6M) ~270 GB. Track 2's
 # ``tangermann2012`` is under 1 GB, and Track 4's ``--download --debug``
 # fetches three subjects instead of 193. Track 3 needs no shortcut at all:
-# Sleep-EDF is ~7 GB and a few minutes off PhysioNet's S3 mirror, which is
-# why it is the track to try first.
+# Sleep-EDF is ~7 GB and a few minutes to fetch, which is why it is the
+# track to try first.
 
 # %%
 # How much wall-clock to expect

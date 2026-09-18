@@ -252,9 +252,8 @@ class TinyFm(nn.Module):
 #
 # .. note::
 #    The weights are pulled from the Hugging Face hub at build time, so the
-#    first build needs network access but no account -- see
-#    :ref:`pretrained-weights`.  Later builds read them from the local hub
-#    cache and need no network.
+#    first build needs network access -- see :ref:`pretrained-weights`.
+#    Later builds read them from the local hub cache and need no network.
 #
 # .. code-block:: python
 #
