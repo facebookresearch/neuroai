@@ -107,6 +107,9 @@ class Experiment(pydantic.BaseModel):
     # Model
     brain_model_config: MaeEncoder
     mask_ratio: float = 0.5
+    # a block hides a cap of `mask_radius` metres over `mask_duration` seconds
+    mask_radius: float = 0.09
+    mask_duration: float = 2.0
     # Loss
     loss: BaseLoss
     # Optimization
@@ -180,11 +183,21 @@ class Experiment(pydantic.BaseModel):
         )
 
     def _build_mae_module(self) -> MaeModule:
+        neuro = self.data.segmenter.extractors["input"]
+        assert isinstance(neuro, ns.extractors.MneRaw)  # as in `Data.build`
+        if not isinstance(neuro.frequency, float):
+            raise ValueError(
+                "`mask_duration` is in seconds, so the input extractor needs an "
+                "explicit `frequency`: pooled studies do not share a native one."
+            )
         return MaeModule(
             model=self.brain_model_config.build(n_outputs=None),
             loss=self.loss.build(),
             optim_config=self.optim,
+            frequency=neuro.frequency,
             mask_ratio=self.mask_ratio,
+            mask_radius=self.mask_radius,
+            mask_duration=self.mask_duration,
         )
 
     @staticmethod

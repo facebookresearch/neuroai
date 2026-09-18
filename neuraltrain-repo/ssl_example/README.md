@@ -10,22 +10,25 @@ The example pools four public EEG datasets -- image viewing
 (`Gifford2022Large`), motor imagery (`Stieger2021Continuous`), sleep
 (`Kemp2000Analysis`) and resting state (`Miltiadous2023Dice`), together some 240
 subjects -- and pretrains a small [MAE](https://arxiv.org/abs/2111.06377)-style
-encoder on all of them at once. Each window is split into time patches, half of
-them are replaced by a learned mask token, and a single linear layer
-reconstructs the hidden ones from the encoder's output. The loss is a plain MSE
-over the hidden patches only; scoring the visible ones too would reward copying
-the input. No labels or events are used, so the training signal comes entirely
-from the recordings themselves.
+encoder on all of them at once. Each window is split into time patches, and
+blocks of them are replaced by a learned mask token -- each block a 9 cm cap of
+scalp over two seconds of signal, drawn until half the window is hidden -- which
+a single linear layer reconstructs from the encoder's output. Hiding caps rather
+than scattered tokens leaves a hidden patch no visible neighbour to interpolate
+from. The loss is a plain MSE over the hidden patches only; scoring the visible
+ones too would reward copying the input. No labels or events are used, so the
+training signal comes entirely from the recordings themselves.
 
 Those four datasets share no montage -- they range from a 63-channel cap to
 Sleep-EDF's two bipolar derivations -- so a channel is never identified by its
 index. One token is one channel over one time patch, and it carries a Fourier
-embedding of that channel's 3D position on the head alongside the embedding of
-its time patch. Channels a recording does not have are zero-padded by the
-extractor, arrive with invalid positions, and have their tokens dropped from
-the attention and excluded from the reconstruction targets. That is also what
-lets one checkpoint score on a downstream task with a montage of its own; the
-cost is a sequence of `n_channels * n_patches` tokens.
+embedding of that channel's 3D position on the head -- in MNE head-frame metres,
+which is also what makes the mask radius a distance on the scalp -- alongside
+the embedding of its time patch. Channels a recording does not have are
+zero-padded by the extractor, arrive with invalid positions, and have their
+tokens dropped from the attention and excluded from the reconstruction targets.
+That is also what lets one checkpoint score on a downstream task with a montage
+of its own; the cost is a sequence of `n_channels * n_patches` tokens.
 
 The model is **encoder-only**: the original MAE encodes just the visible patches
 and restores the rest with a transformer decoder, which is cheaper per step and

@@ -21,6 +21,68 @@ entry: the encoder is small and the corpus is four datasets.
 """
 
 # %%
+# What masked prediction does
+# ---------------------------
+#
+# The model learns by hiding part of its input and reconstructing it:
+#
+# 1. Each window of EEG is cut into **time patches** of ``patch_size``
+#    samples, one channel at a time, so a token is one channel over one
+#    patch rather than all channels at once.
+# 2. Blocks of those tokens are replaced by a learned **mask token**,
+#    each block a ``mask_radius`` cap of scalp over ``mask_duration`` of
+#    signal, and enough of them are drawn to hide ``mask_ratio`` of the
+#    window. The encoder then reads the whole sequence.
+# 3. A single **linear layer** reconstructs the hidden patches from the
+#    encoder's output, and the loss is the reconstruction error on those
+#    patches only.
+#
+# Hiding caps rather than scattered tokens is what makes step 3 hard: a
+# lone hidden patch sits between visible ones on the same channel and on
+# its neighbours, so interpolating them is enough to score well on it.
+#
+# Nothing in that loop uses labels or events, so the training signal
+# comes from the recording itself -- which is what lets pretraining use
+# far more data than any single labelled task can offer. Only the
+# **encoder** is kept at the end.
+#
+# The original `MAE <https://arxiv.org/abs/2111.06377>`_ differs at step
+# 2 and 3: it feeds the encoder only the visible patches and restores the
+# rest with a transformer **decoder**, which is cheaper per step. The
+# example is encoder-only, so building that decoder is left to you and is
+# a natural first thing to try.
+
+# %%
+# One encoder, many montages
+# --------------------------
+#
+# Pretraining is worth doing across datasets, and EEG datasets rarely
+# agree on their channels: the ones below range from a 63-channel cap to
+# Sleep-EDF's two bipolar derivations. An encoder whose first layer is
+# sized from a channel count cannot span them.
+#
+# So a channel is never identified by its index here. Every token carries
+# a Fourier embedding of its channel's **3D position on the head**, in
+# MNE head-frame metres, alongside the sin-cos embedding of its time
+# patch. Two datasets that both record Cz describe it the same way, a
+# montage the encoder has never seen is just a set of positions it has
+# not visited, and ``mask_radius`` is a distance on the scalp.
+#
+# That also settles what to do about *missing* channels. Pooling studies
+# makes the channel axis the union of every montage, and each recording
+# is zero-padded wherever it lacks a channel. Those padded channels come
+# back with invalid positions, and their tokens are **dropped from the
+# attention** rather than read as signal -- they are also never chosen as
+# reconstruction targets, since predicting padding teaches nothing.
+#
+# The cost is sequence length: one token per channel *and* patch means
+# the encoder attends over ``n_channels * n_patches`` positions, so the
+# window length and the montage size now both set the compute bill.
+#
+# The payoff applies downstream too: one checkpoint scores on a task with
+# a montage it never saw during pretraining.
+
+# %%
 # 1. Install, and download the corpus
 # -----------------------------------
 #

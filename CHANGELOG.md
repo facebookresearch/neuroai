@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuraltrain`/`neuralbench`: `ssl_example` pretrains by hiding blocks — a 9 cm cap of scalp over 2 s of signal — instead of tokens picked independently, which a model can undo by interpolating from the visible patches that surround each hidden one. Channel positions become MNE head-frame metres (`normalize: false`) in both `ssl_example/grids/defaults.py` and `mae.yaml`, so that a mask radius is a distance on the scalp; the default min-max normalisation is per recording, so it also gave Cz different coordinates in each study. An `mae` checkpoint pretrained before this change reads the normalised positions and has to be pretrained again (#252).
 - docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from the post-release audit — the pretraining corpus needs an explicit `ssl_example.grids.download` step and `moabb`, `MaeModule` takes no other `neuraltrain` model, freezing comes from `linear_probe_mean` rather than `mae.yaml`, `install.md` lists the six config keys that have no default, Track 3's target is the earliest annotated N2 event, and emg2pose is ~340 GB (#251).
 
 ## [0.3.1] - 2026-09-10

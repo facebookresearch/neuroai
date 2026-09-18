@@ -6,35 +6,64 @@
 
 """Lightning module for self-supervised masked-prediction pretraining."""
 
+import math
 import typing as tp
 
 import lightning.pytorch as pl
 import torch
 from torch import nn
 
+from neuraltrain.models.common import INVALID_POS_VALUE
 from neuraltrain.models.mae import MaeEncoderModel
 from neuraltrain.optimizers import LightningOptimizer
 
 
-def random_mask(valid: torch.Tensor, mask_ratio: float) -> torch.Tensor:
-    """Pick a ``mask_ratio`` fraction of each example's ``valid`` tokens to hide.
+def geometric_mask(
+    channel_positions: torch.Tensor,
+    n_patches: int,
+    n_hidden_patches: int,
+    radius: float,
+    mask_ratio: float,
+) -> torch.Tensor:
+    """Hide caps of *radius* on the scalp over *n_hidden_patches* consecutive patches.
 
-    Returns boolean ``(B, N)`` flags, ``True`` on hidden positions.  Invalid
-    tokens are never hidden, and every example keeps at least one token of each
-    kind whatever the ratio rounds to.
+    Returns boolean ``(B, C * n_patches)`` flags, ``True`` on hidden positions,
+    in the token order of :meth:`MaeEncoderModel.valid_tokens`.  Blocks are
+    centred on a channel drawn at random and so overlap: their count comes from
+    ``1 - (1 - f) ** n_blocks = mask_ratio``, ``f`` being the share of tokens one
+    block hides.  Channels a recording lacks neither centre a block nor join one.
+
+    *radius* is in the unit of *channel_positions*, i.e. metres for the head
+    frame ``ns.extractors.ChannelPositions`` returns with ``normalize=False``.
     """
-    n_valid = valid.sum(dim=1, keepdim=True)
-    if int(n_valid.min()) < 2:
+    device = channel_positions.device
+    present = (channel_positions != INVALID_POS_VALUE).any(dim=-1)  # (B, C)
+    if not present.any(dim=1).all():
         raise ValueError(
-            f"masking needs at least 2 valid tokens to leave one of each kind, "
-            f"got {int(n_valid.min())}: shorten patch_size, lengthen the input "
-            f"window, or check that channel positions are not all invalid."
+            "an example has no channel with a valid position: check that the "
+            "montage of `channel_positions` names the channels of every study."
         )
-    # invalid rank last -> the fraction is taken from valid tokens only
-    scores = torch.rand_like(valid, dtype=torch.float).masked_fill(~valid, torch.inf)
-    ranks = scores.argsort(dim=1).argsort(dim=1)
-    n_hidden = (n_valid * mask_ratio).round().long().clamp(min=1)
-    return ranks < torch.minimum(n_hidden, n_valid - 1)
+    n_hidden_patches = min(n_hidden_patches, n_patches)
+
+    caps = torch.cdist(channel_positions, channel_positions) <= radius
+    caps &= present[:, None, :] & present[:, :, None]  # (B, C centres, C)
+    # what one block hides on average, over the channels it may be centred on
+    covered = caps.sum(dim=(1, 2)) / present.sum(dim=1) ** 2
+    f = covered * n_hidden_patches / n_patches
+    n_blocks = (math.log1p(-mask_ratio) / torch.log1p(-f)).ceil().long().clamp(min=1)
+
+    n_drawn = int(n_blocks.max())
+    centres = torch.multinomial(present.float(), n_drawn, replacement=True)
+    channels = caps.gather(1, centres[..., None].expand(-1, -1, caps.shape[-1]))
+    # examples needing fewer blocks than the batch's worst case drop the extra ones
+    channels &= (torch.arange(n_drawn, device=device) < n_blocks[:, None])[..., None]
+
+    starts = torch.randint(n_patches - n_hidden_patches + 1, centres.shape, device=device)
+    windows = starts[..., None] + torch.arange(n_hidden_patches, device=device)
+    times = torch.zeros(centres.shape + (n_patches,), dtype=torch.bool, device=device)
+    times.scatter_(2, windows, True)
+
+    return (channels[..., None] & times[:, :, None, :]).any(dim=1).flatten(1)
 
 
 class MaeModule(pl.LightningModule):
@@ -47,6 +76,10 @@ class MaeModule(pl.LightningModule):
     linear layer.  Only ``model`` outlives pretraining; the mask token and that
     layer are scaffolding.
 
+    What is hidden is a cap of scalp over a window of time rather than tokens
+    scattered over the montage, so a hidden patch has no visible neighbour to
+    interpolate from and reconstructing it asks for more than local smoothness.
+
     Parameters
     ----------
     model :
@@ -56,8 +89,15 @@ class MaeModule(pl.LightningModule):
         ``loss(estimate, target)`` on ``(n_hidden, patch_size)`` tensors.
     optim_config :
         Optimizer configuration.
+    frequency :
+        Sampling rate of the input, in Hz: what turns ``mask_duration`` into a
+        number of time patches.
     mask_ratio :
         Fraction of each example's channel-time patches hidden from the encoder.
+    mask_radius :
+        Radius of the hidden scalp caps, in the unit of the channel positions.
+    mask_duration :
+        Duration of the hidden time windows, in seconds.
     x_name, channel_positions_name :
         Batch keys holding the neuro input and its channel positions.
     """
@@ -67,7 +107,10 @@ class MaeModule(pl.LightningModule):
         model: MaeEncoderModel,
         loss: nn.Module,
         optim_config: LightningOptimizer,
+        frequency: float,
         mask_ratio: float = 0.5,
+        mask_radius: float = 0.09,
+        mask_duration: float = 2.0,
         x_name: str = "input",
         channel_positions_name: str = "channel_positions",
     ) -> None:
@@ -78,6 +121,10 @@ class MaeModule(pl.LightningModule):
         self.loss = loss
         self.optim_config = optim_config
         self.mask_ratio = mask_ratio
+        self.mask_radius = mask_radius
+        self.n_hidden_patches = max(
+            1, round(mask_duration * frequency / model.patch_size)
+        )
         self.x_name = x_name
         self.channel_positions_name = channel_positions_name
 
@@ -91,7 +138,13 @@ class MaeModule(pl.LightningModule):
         patches = self.model.patchify(x)
         n_patches = patches.shape[2]
         valid = self.model.valid_tokens(channel_positions, n_patches)
-        hidden = random_mask(valid, self.mask_ratio)
+        hidden = geometric_mask(
+            channel_positions,
+            n_patches,
+            n_hidden_patches=self.n_hidden_patches,
+            radius=self.mask_radius,
+            mask_ratio=self.mask_ratio,
+        )
 
         tokens = self.model.patch_tokens(patches)
         # substitute before positions: a hidden token keeps its place, loses content

@@ -86,6 +86,11 @@ default_config = {
         "channel_positions": {
             "n_spatial_dims": 3,
             "layout_or_montage_name": "standard_1020",
+            # head-frame metres, so `mask_radius` is a distance on the scalp.
+            # Normalising instead rescales each recording to its own extent,
+            # which would put Sleep-EDF's two electrodes at the corners of the
+            # cube the 63-channel caps span.
+            "normalize": False,
             # positions are padded to the channel union of the studies, which is
             # not part of the cache key: kept on disk, they would be served at the
             # width of whichever study set filled the cache first. Recomputing
@@ -105,6 +110,8 @@ default_config = {
         # `channel_emb_config` left at its default: naming it resets n_dims to 2
     },
     "mask_ratio": 0.5,
+    "mask_radius": 0.09,  # metres
+    "mask_duration": 2.0,  # seconds, i.e. half the window
     # the module scores the hidden patches only, so a plain MSE is the MAE loss
     "loss": {"name": "MSELoss"},
     "optim": {
