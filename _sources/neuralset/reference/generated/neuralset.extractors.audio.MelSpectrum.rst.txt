@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.MelSpectrum
+======================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: MelSpectrum
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

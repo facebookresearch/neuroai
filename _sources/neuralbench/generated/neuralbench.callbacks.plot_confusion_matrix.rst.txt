@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.callbacks.plot\_confusion\_matrix
+=============================================
+
+.. currentmodule:: neuralbench.callbacks
+
+.. autofunction:: plot_confusion_matrix
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

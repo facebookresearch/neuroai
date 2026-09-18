@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Audio
+=============================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Audio
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

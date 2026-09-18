@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Zenodo
+===========================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Zenodo
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

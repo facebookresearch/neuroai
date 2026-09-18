@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.utils.compute\_class\_weights\_from\_dataset
+========================================================
+
+.. currentmodule:: neuralbench.utils
+
+.. autofunction:: compute_class_weights_from_dataset
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

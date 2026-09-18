@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.utils.load\_checkpoint
+==================================
+
+.. currentmodule:: neuralbench.utils
+
+.. autofunction:: load_checkpoint
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

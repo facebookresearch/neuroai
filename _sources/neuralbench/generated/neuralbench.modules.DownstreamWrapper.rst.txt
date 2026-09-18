@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.modules.DownstreamWrapper
+=====================================
+
+.. currentmodule:: neuralbench.modules
+
+.. autopydantic_model:: DownstreamWrapper
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

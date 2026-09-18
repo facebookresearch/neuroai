@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.labram.NtLabram
+==================================
+
+.. currentmodule:: neuraltrain.models.labram
+
+.. autopydantic_model:: NtLabram
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.Whisper
+==================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: Whisper
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
