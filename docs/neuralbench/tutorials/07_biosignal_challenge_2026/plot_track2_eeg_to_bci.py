@@ -18,10 +18,11 @@ recalibration allowed.
   contexts), within the same user.
 - **Headline metric**: balanced accuracy averaged over
   subject-session-context cells (higher is better).
-- **Data**: 20 subjects, 6 sessions each, 64 channels at 500 Hz,
-  ~80 hours in total. Sessions 1-3 of the 10 evaluation subjects are
-  released as labelled calibration; sessions 4-6 are the hidden test
-  set. The 10 training subjects have all 6 sessions released.
+- **Data**: 20 subjects, 6 sessions each, 47 channels (43 EEG, 2 EMG,
+  2 EOG) at 500 Hz, ~80 hours in total. Sessions 1-3 of the 10
+  evaluation subjects are released as labelled calibration; sessions
+  4-6 are the hidden test set. The 10 training subjects have all 6
+  sessions released.
 
 .. note::
    The official Track 2 corpus (Graz / BrainHero, 3 classes: MI / Calc
