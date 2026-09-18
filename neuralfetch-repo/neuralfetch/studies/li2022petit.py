@@ -10,6 +10,7 @@ import zipfile
 import pandas as pd
 
 from neuralfetch import download
+from neuralfetch.utils import textgrid
 from neuralset.events import study
 from neuralset.events.etypes import Event
 
@@ -143,8 +144,6 @@ class Li2022Petit(study.Study):
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
         """Load events"""
-        from praatio import textgrid as ptg
-
         tl = timeline
         dl = self.path / "download"
         # word events
@@ -156,10 +155,11 @@ class Li2022Petit(study.Study):
                 f"Missing TextGrid for {self.__class__.__name__}: {txt_grid}. "
                 "Please run study.download() first."
             )
-        tg = ptg.openTextgrid(str(txt_grid), includeEmptyIntervals=False)
-        keys = tg.tierNames
-        if len(keys) > 1:
-            raise RuntimeError(f"Only one key should be in textgrid, got {keys}")
+        tiers = textgrid.read_tiers_lenient(txt_grid)
+        if len(tiers) > 1:
+            raise RuntimeError(
+                f"Only one key should be in textgrid, got {[n for n, _ in tiers]}"
+            )
         # fixes to match text and annotations
         repl = {
             "three_hundred_twenty-five": "325",
@@ -175,17 +175,13 @@ class Li2022Petit(study.Study):
         }
         wordseq: list[dict[str, tp.Any]] = []
         duplicated = "it the this that i i. they we he she you now and but so there five twenty phew good".split()
-        for interval in tg.getTier(keys[0]).entries:
-            # praatio hands back the raw label, and some intervals are padded
-            # (e.g. " of" in lppEN_section1); strip once so the skip test, the
-            # merge test and the emitted text all agree.
-            label = interval.label.strip()
+        for start, end, label in tiers[0][1]:  # labels arrive stripped
             if label in ("", "#", "sil"):
                 continue
             # duplicated words happen a lot (when missing new sentence character), merge them
             if label in duplicated and wordseq:
                 if wordseq[-1]["text"] == label:
-                    wordseq[-1]["duration"] = interval.end - wordseq[-1]["start"]
+                    wordseq[-1]["duration"] = end - wordseq[-1]["start"]
                     continue
             # add word
             text = (
@@ -196,8 +192,8 @@ class Li2022Petit(study.Study):
             wordseq.append(
                 {
                     "text": text,
-                    "start": interval.start,
-                    "duration": interval.end - interval.start,
+                    "start": start,
+                    "duration": end - start,
                 }
             )
 
