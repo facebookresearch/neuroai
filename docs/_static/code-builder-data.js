@@ -262,7 +262,7 @@ window.CB_DATA = {
           "l3_skip": "videomae+transformers ImagesKwargs(text=) compat \u2014 upstream",
           "kwargs": [
             "frequency=\"native\"",
-            "use_audio=False",
+            "num_frames=16",
             "aggregation=\"trigger\""
           ]
         },
