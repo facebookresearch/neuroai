@@ -16,6 +16,7 @@ import typing as tp
 import urllib.request
 import zipfile
 from abc import abstractmethod
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path, PurePosixPath
 
 import mne
@@ -189,6 +190,78 @@ def download_file(
     logger.debug(f"Download complete: {destination}")
 
 
+def _extract_members(
+    zip_path: str, destination: str, members: list[str], password: str | None
+) -> None:
+    """Worker: extract a slice of members with its own ZipFile handle."""
+    with zipfile.ZipFile(zip_path) as zip_ref:
+        if password:
+            zip_ref.setpassword(password.encode())
+        for name in members:
+            zip_ref.extract(name, destination)
+
+
+def _fast_extractall(
+    zip_ref: zipfile.ZipFile,
+    zip_path: Path,
+    destination: Path,
+    password: str | None,
+) -> None:
+    """Extract every member, avoiding CPython's ~0.4 MB/s pure-Python ZipCrypto.
+
+    Password-protected zips (e.g. THINGS-images) decrypt byte-by-byte in Python
+    and take hours single-threaded. Prefer a native ``7z``/``unzip`` (C ZipCrypto,
+    multi-threaded); otherwise fan the members out over processes so the decrypt
+    cost scales with the core count. Plain zips fall through to ``extractall``.
+    """
+    members = [i.filename for i in zip_ref.infolist() if not i.is_dir()]
+
+    if password:
+        native = _native_unzip(zip_path, destination, password)
+        if native:
+            return
+        # Pre-create dirs serially so workers don't race on os.makedirs.
+        for info in zip_ref.infolist():
+            target = destination / info.filename
+            (target if info.is_dir() else target.parent).mkdir(
+                parents=True, exist_ok=True
+            )
+        workers = min(len(members), os.cpu_count() or 4) or 1
+        if workers > 1:
+            chunk = (len(members) + workers - 1) // workers
+            slices = [members[i : i + chunk] for i in range(0, len(members), chunk)]
+            with ProcessPoolExecutor(max_workers=workers) as ex:
+                for fut in [
+                    ex.submit(_extract_members, str(zip_path), str(destination), s, password)
+                    for s in slices
+                ]:
+                    fut.result()
+            return
+
+    zip_ref.extractall(destination)
+
+
+def _native_unzip(zip_path: Path, destination: Path, password: str) -> bool:
+    """Extract with a native C archiver if one is on PATH; return success.
+
+    The THINGS licence password is public (not a secret), so passing it on the
+    command line is acceptable here.
+    """
+    if shutil.which("7z") or shutil.which("7za"):
+        exe = shutil.which("7z") or shutil.which("7za")
+        cmd = [exe, "x", f"-p{password}", "-aoa", "-mmt=on", f"-o{destination}", str(zip_path)]
+    elif shutil.which("unzip"):
+        cmd = ["unzip", "-o", "-q", "-P", password, str(zip_path), "-d", str(destination)]
+    else:
+        return False
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
+        return True
+    except (subprocess.CalledProcessError, OSError) as exc:
+        logger.warning(f"Native unzip failed ({exc}); falling back to Python.")
+        return False
+
+
 def extract_zip(
     zip_path: PathLike,
     destination: PathLike | None = None,
@@ -254,9 +327,9 @@ def extract_zip(
                         target.parent.mkdir(parents=True, exist_ok=True)
                         target.write_bytes(zip_ref.read(info.filename))
             else:
-                zip_ref.extractall(destination)
+                _fast_extractall(zip_ref, zip_path, destination, password)
         else:
-            zip_ref.extractall(destination)
+            _fast_extractall(zip_ref, zip_path, destination, password)
 
     logger.debug("Extraction complete")
 
