@@ -70,6 +70,32 @@ concepts.
 #
 #    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/image/config.yaml
 #       :language: yaml
+
+# %%
+# Split and model selection
+# --------------------------
+#
+# **Split.** This is the one track whose split is *not* subject-level, and
+# that is deliberate: Track 1 measures generalisation to unseen **images**,
+# not unseen people. ``PredefinedSplit`` reuses THINGS-EEG2's own
+# train/test partition, whose test images are concepts disjoint from the
+# training images, then holds out 20 % of the training recording-sessions
+# as validation (``valid_split_by: timeline``, seed 33). All **10
+# participants appear in train, validation and test**. Of the 80
+# recording-sessions, 40 are the dataset's test sessions and the remaining
+# 40 split into 32 train and 8 validation.
+#
+# **Model selection.** The checkpoint with the highest
+# **``val/batch_top5_acc``** is kept, over at most 40 epochs with early
+# stopping after 5 epochs without improvement.
+#
+# Note the mismatch, which is specific to this track: ``batch_top5_acc``
+# ranks each EEG epoch against the other 63 items *in its batch*, whereas
+# the headline ``test/full_retrieval/top5_acc_subject-agg`` ranks against
+# every candidate in the test set. The batch-level number reads far higher
+# and is not comparable. Full-set retrieval is computed by a callback that
+# runs on test only, so the batch-level proxy is what is available at
+# checkpoint time.
 #
 # **How to change it**, in increasing order of effort:
 #

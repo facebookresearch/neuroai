@@ -34,8 +34,8 @@ winners are announced at the Brain & Body Workshop at NeurIPS 2026.
       :img-top: https://neural-interfaces26.github.io/exports/sleep-onset.gif
       :class-card: sd-shadow-sm
 
-      **Cross-user.** Predict seconds to first stable N2 from wearable EEG,
-      on sleepers never seen in training.
+      **Cross-night, cross-user.** Predict seconds to the first N2 epoch
+      from wearable EEG, on seen and unseen sleepers alike.
 
    .. grid-item-card:: Track 4 -- EMG-to-Pose
       :link: plot_track4_emg_to_pose

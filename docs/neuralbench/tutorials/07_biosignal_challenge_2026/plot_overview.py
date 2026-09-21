@@ -58,12 +58,13 @@ distribution shift:
    scoring on their later ones without recalibration. Headline metric:
    **balanced accuracy**, averaged over subject-session-context cells
    (higher is better).
-3. **Track 3 -- Sleep onset** (cross-user): predict the seconds remaining
-   until the first stable N2 epoch, from four-channel wearable EEG recorded
-   at home, on sleepers never seen in training. Headline metric: **binned
-   MAE (bMAE) in seconds** (lower is better) -- the absolute error averaged
-   inside four time-to-onset ranges and then across them with equal weight,
-   so long latencies count as much as short ones.
+3. **Track 3 -- Sleep onset** (cross-night, cross-user): predict the
+   seconds remaining until the first N2 epoch, from four-channel wearable
+   EEG recorded at home. The evaluation cohort holds both sleepers seen
+   in training and sleepers never seen in training. Headline
+   metric: **binned MAE (bMAE) in seconds** (lower is better) -- the
+   absolute error computed inside four time-to-onset ranges and then
+   combined across them.
 4. **Track 4 -- EMG-to-Pose** (cross-user): regress 20 hand-joint angle
    trajectories from 16-channel wrist sEMG, on users and movement stages
    never seen during training. Headline metric: **mean absolute angular
@@ -112,8 +113,9 @@ re-run the top three submissions of each track.
 #
 # 1. What the track measures (data, shift, headline metric).
 # 2. Where to find the task in ``neuralbench``, and how to change it.
-# 3. The commands that reproduce its baseline, with what each one costs.
-# 4. Where the official competition data diverges from the default.
+# 3. Its exact split and the metric that selects the final checkpoint.
+# 4. The commands that reproduce its baseline, with what each one costs.
+# 5. Where the official competition data diverges from the default.
 
 # %%
 # Representative results
@@ -351,13 +353,15 @@ re-run the top three submissions of each track.
 # datasets, so three pieces are still missing here:
 #
 # 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
-#    sessions, Graz + BrainHero).** Track 2 currently uses
-#    ``Stieger2021Continuous`` (4 motor-imagery classes, cross-subject)
-#    as its default analog, and ``Scherer2015Individually`` for the
-#    cross-session, multi-command side of the task.
-# 2. **Muse sleep-onset training set (~1000 subjects).** The Track 3
-#    page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and the
-#    additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
+#    sessions, Graz + BrainHero).** Track 2 currently defaults to
+#    ``Dreyer2023Large`` (2 motor-imagery classes, held-out subjects),
+#    which is also what Codabench scores against during warm-up; it uses
+#    ``Stieger2021Continuous`` for the larger four-class corpus and
+#    ``Scherer2015Individually`` for the cross-session, multi-command side
+#    of the task.
+# 2. **Muse sleep-onset training set.** More details to come. The
+#    Track 3 page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and
+#    the additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
 #    datasets -- with the same ``SleepOnsetTargetExtractor`` + ``bmae``
 #    metric the competition will use. Note that these are clinical
 #    polysomnography, so the starter kit adds a device gap the competition

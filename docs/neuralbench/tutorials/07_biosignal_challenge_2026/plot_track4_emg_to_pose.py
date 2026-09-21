@@ -72,6 +72,33 @@ wristband placement and kinematic context at once.
 #
 #    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/emg/pose/config.yaml
 #       :language: yaml
+
+# %%
+# Split and model selection
+# --------------------------
+#
+# **Split.** The emg2pose paper's own train / validation / test partition
+# is used verbatim: ``PredefinedSplit`` reads the ``split`` column the
+# study carries from the upstream metadata rather than drawing folds here,
+# so nothing is randomised and ``valid_split_by`` is left unset. Test users
+# are held out from training, so this is a cross-user split.
+#
+# The paper scores three held-out sets separately, and a pooled ``test/mae``
+# over all three would match none of them. The task therefore keeps only
+# the ``user_stage`` set at test time -- unseen combinations of known users
+# and known movement stages -- via
+# ``query: "split != 'test' or generalization == 'user_stage'"``.
+# Validation keeps both of its scenarios. The competition's own evaluation
+# is broader, covering held-out users and held-out stages as well, so the
+# starter-kit number is a proxy for one of the three axes rather than all
+# of them.
+#
+# **Model selection.** The checkpoint with the lowest **``val/mae``** is
+# kept -- validation mean absolute angular error in radians, the same
+# quantity as the headline ``test/mae``. This track trains longer than the
+# EEG ones: at most 100 epochs, with early stopping after 20 epochs without
+# improvement. (The paper allows 500 epochs with patience 50; the task caps
+# it to fit inside SLURM's two-day limit.)
 #
 # **How to change it**, in increasing order of effort:
 #

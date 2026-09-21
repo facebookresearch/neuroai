@@ -3,33 +3,38 @@ Track 3 -- Sleep onset (cross-user latency prediction)
 =======================================================
 
 .. image:: https://neural-interfaces26.github.io/exports/sleep-onset.gif
-   :alt: Seconds to first stable N2 predicted from wearable EEG
+   :alt: Seconds to the first N2 epoch predicted from wearable EEG
    :target: https://neural-interfaces26.github.io/tracks.html
    :width: 100%
 
 Given continuous four-channel wearable EEG recorded at home, predict the
-seconds remaining until the first stable N2 epoch. The competition tests
-**cross-user** generalisation: training and evaluation use the same Muse
-headband, the same home protocol and the same target, but the sleepers in
-the evaluation cohort are never seen in training. Precise onset timing
-replaces full hypnogram reconstruction because a sparse wearable montage
-supports it poorly.
+seconds remaining until the **first N2 epoch** -- the first epoch scored
+N2, not the start of a run of consecutive N2 epochs. The competition tests
+generalisation across nights and across sleepers on one consumer device:
+training and evaluation use the same Muse headband, the same home protocol
+and the same target. Precise onset timing replaces full hypnogram
+reconstruction because a sparse wearable montage supports it poorly.
 
-- **Shift**: seen sleepers -> unseen sleepers, on one consumer device.
-  Night-to-night variation, motion artifacts, impedance changes and channel
-  dropout come with the home setting.
-- **Headline metric**: ``bMAE`` in seconds -- onset error averaged with
-  equal weight over four time-to-onset ranges, so long and short
-  latencies count the same (lower is better). The competition additionally
-  reports tolerance rates within 30 / 60 / 300 s; the starter kit logs
-  ``bMAE`` and the usual regression metrics, not those rates.
-- **Data**: continuous Muse wearable EEG, ~1000 training subjects with
-  ``n2_onset`` annotations, and a separate hidden evaluation cohort of the
-  same order of magnitude recorded with the same hardware and protocol.
-  The onset that ``AddSleepOnsetTargets`` extracts is the earliest
-  annotated N2 event of the recording; it applies no persistence or
-  non-Wake-continuity rule, so check the competition's definition of
-  *stable* N2 before reshaping the target to match it.
+- **Shift**: nights and sleepers, on one consumer device. The evaluation
+  cohort contains **both sleepers seen in training and sleepers never seen
+  in training**, so a model has to hold up on new nights from familiar
+  people as well as on new people. Night-to-night variation, motion
+  artifacts, impedance changes and channel dropout come with the home
+  setting.
+- **Headline metric**: ``bMAE`` in seconds -- onset error computed inside
+  four time-to-onset ranges and then combined across them (lower is
+  better). The competition additionally reports tolerance rates within
+  30 / 60 / 300 s; the starter kit logs ``bMAE`` and the usual regression
+  metrics, not those rates. The exact weighting applied across the four
+  ranges is still being settled; ``neuralbench.metrics.BinnedMAE``
+  currently weights them equally, and the Codabench scorer is
+  authoritative if the two disagree.
+- **Data**: continuous Muse wearable EEG sampled at **128 Hz**, with
+  ``n2_onset`` annotations on the training cohort and a separate hidden
+  evaluation cohort recorded with the same hardware and protocol. More
+  details to come on the cohort size. The onset that
+  ``AddSleepOnsetTargets`` extracts is the earliest annotated N2 event of
+  the recording, which is exactly the competition's definition.
 
 .. note::
    The Muse training set is released through NeuralBench when
@@ -87,6 +92,28 @@ supports it poorly.
 #
 #    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/sleep_onset/config.yaml
 #       :language: yaml
+
+# %%
+# Split and model selection
+# --------------------------
+#
+# **Split.** Participant-level 60 / 20 / 20, drawn by ``SklearnSplit`` with
+# ``split_by: subject``. Every recording from a participant lands in exactly
+# one fold, so no sleeper is shared between train, validation and test --
+# the starter kit's test score therefore measures generalisation to people
+# the model has never seen. Both split seeds are fixed at 33, so the
+# partition is identical on every machine and every run. On Sleep-EDF's 78
+# participants that resolves to **46 train / 16 validation / 16 test**.
+#
+# Note that this is *stricter* than the competition's own evaluation, whose
+# hidden cohort mixes seen and unseen sleepers. A starter-kit number is
+# therefore a conservative proxy for the leaderboard.
+#
+# **Model selection.** The checkpoint with the lowest **``val/bmae``** is
+# kept -- validation binned MAE in seconds, the same quantity as the
+# headline ``test/bmae``, just on the validation fold. Training runs for at
+# most 40 epochs and stops early after 7 epochs without improvement; only
+# that single best checkpoint is scored on test.
 #
 # **How to change it**, in increasing order of effort:
 #
