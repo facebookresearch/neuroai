@@ -21,14 +21,27 @@ reconstruction because a sparse wearable montage supports it poorly.
   people as well as on new people. Night-to-night variation, motion
   artifacts, impedance changes and channel dropout come with the home
   setting.
-- **Headline metric**: ``bMAE`` in seconds -- onset error computed inside
-  four time-to-onset ranges and then combined across them (lower is
-  better). The competition additionally reports tolerance rates within
-  30 / 60 / 300 s; the starter kit logs ``bMAE`` and the usual regression
-  metrics, not those rates. The exact weighting applied across the four
-  ranges is still being settled; ``neuralbench.metrics.BinnedMAE``
-  currently weights them equally, and the Codabench scorer is
-  authoritative if the two disagree.
+- **Headline metric**: binned onset error in seconds, lower is better, but
+  the binning is weighted differently in each phase. Both phases split the
+  error by *true* time to onset into [0, 40), [40, 90), [90, 300) and
+  [300, 600] s.
+
+  - *Sealed Muse phase*: **W-bMAE**. The four ranges carry severity
+    weights of **10x, 5x, 3x and 1x**, so an error close to onset costs
+    far more than one ten minutes out. W-bMAE is then computed separately
+    over seen subjects (new nights from people in the training set) and
+    unseen subjects, and the ranking score is the **macro-average of those
+    two**, weighting night-to-night and inter-person generalisation
+    equally.
+  - *Current Sleep-EDF warm-up*: **unweighted bMAE** plus plain MAE. This
+    is a temporary proxy. It switches to the Muse W-bMAE scheme when the
+    Muse warm-up data lands, and the Codabench scorer and this start kit
+    are due to be updated together at that point.
+
+  ``neuralbench.metrics.BinnedMAE`` implements the unweighted form, so
+  ``val/bmae`` and ``test/bmae`` here match the warm-up scorer today and
+  not the sealed one. Nothing in the start kit computes the severity
+  weights or the seen/unseen macro-average.
 - **Data**: continuous Muse wearable EEG sampled at **128 Hz**, with
   ``n2_onset`` annotations on the training cohort and a separate hidden
   evaluation cohort recorded with the same hardware and protocol. More
@@ -105,15 +118,23 @@ reconstruction because a sparse wearable montage supports it poorly.
 # partition is identical on every machine and every run. On Sleep-EDF's 78
 # participants that resolves to **46 train / 16 validation / 16 test**.
 #
-# Note that this is *stricter* than the competition's own evaluation, whose
-# hidden cohort mixes seen and unseen sleepers. A starter-kit number is
-# therefore a conservative proxy for the leaderboard.
+# That 16-participant test partition *is* the current Codabench warm-up
+# evaluation set: the scorer runs on the same Sleep-EDF subset this split
+# produces at random state 33. A ``test/bmae`` here and a warm-up
+# leaderboard score are therefore the same measurement, which makes this
+# the one track where a local number should line up with the board.
+#
+# The sealed phase is a different story. Its Muse cohort mixes seen and
+# unseen sleepers, while this split holds every sleeper out, so the sealed
+# score is not something the starter kit can approximate.
 #
 # **Model selection.** The checkpoint with the lowest **``val/bmae``** is
 # kept -- validation binned MAE in seconds, the same quantity as the
-# headline ``test/bmae``, just on the validation fold. Training runs for at
+# warm-up ``test/bmae``, just on the validation fold. Training runs for at
 # most 40 epochs and stops early after 7 epochs without improvement; only
-# that single best checkpoint is scored on test.
+# that single best checkpoint is scored on test. Note this selects on the
+# unweighted metric; when the sealed W-bMAE weights arrive, a model tuned
+# this way will be under-weighting the near-onset range that matters most.
 #
 # **How to change it**, in increasing order of effort:
 #

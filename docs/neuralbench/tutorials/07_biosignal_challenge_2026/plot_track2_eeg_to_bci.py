@@ -52,8 +52,16 @@ recalibration allowed.
 # Where to find this task in NeuralBench
 # --------------------------------------
 #
-# The default starter-kit baseline is
+# The starter-kit baseline is
 # :doc:`/neuralbench/tasks/eeg/motor_imagery`.
+#
+# The task's own default dataset is ``Stieger2021Continuous``: 62 subjects
+# of 4-class MI, and the corpus the published NeuralBench Track 2 baseline
+# numbers come from. It is also a ~640 GB download (~940 GB once MOABB has
+# converted it), and it is not what Codabench scores against.
+#
+# So these pages build against the **recommended warm-up configuration**
+# instead, selected with an explicit flag:
 #
 # - **CLI**: ``neuralbench eeg motor_imagery --dataset dreyer2023``
 # - **Dataset**: ``Dreyer2023Large`` (87 subjects, 27-channel EEG,
@@ -65,14 +73,11 @@ recalibration allowed.
 #   choice.
 # - **Headline metric key**: ``test/bal_acc``.
 #
-# .. note::
-#    ``neuralbench eeg motor_imagery`` with no ``--dataset`` flag runs
-#    ``Stieger2021Continuous`` instead: 62 subjects of 4-class MI, and the
-#    dataset the published NeuralBench Track 2 baseline numbers come from.
-#    It is a far larger download (~640 GB, and ~940 GB once MOABB has
-#    converted it) and is listed under `Starter-kit analogs`_ below. Prefer
-#    ``--dataset dreyer2023`` unless you specifically want to reproduce the
-#    published four-class numbers.
+# .. important::
+#    ``--dataset dreyer2023`` is required. Dropping it does not fall back
+#    to the warm-up corpus -- it runs ``Stieger2021Continuous``, a
+#    different task (4 classes, not 2) on a very much larger download.
+#    Every command on this page carries the flag for that reason.
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
 # nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
@@ -122,20 +127,30 @@ recalibration allowed.
 # leak a person across folds. Every subject therefore appears in exactly one
 # fold, and the partition is identical on every machine.
 #
-# **Split (default ``Stieger2021Continuous``).** Subject-level 60 / 20 / 20
-# drawn by ``SklearnSplit`` with ``split_by: subject`` and both seeds fixed
-# at 33, which on 62 subjects resolves to **36 train / 13 validation /
-# 13 test**.
+# That part-B test partition is the current Codabench warm-up evaluation
+# set, so a ``test/bal_acc`` from this configuration and a warm-up
+# leaderboard score measure the same thing.
 #
-# Either way the starter-kit shift is *cross-subject*, while the
-# competition's is *cross-session within subject*. See
-# `Adapting to the competition setup`_ for what changes.
+# **Split (task default ``Stieger2021Continuous``).** Subject-level
+# 60 / 20 / 20 drawn by ``SklearnSplit`` with ``split_by: subject`` and both
+# seeds fixed at 33, which on 62 subjects resolves to **36 train /
+# 13 validation / 13 test**.
+#
+# Either way the starter-kit shift is *cross-subject*, while the sealed
+# phase's is *cross-session within subject*. See `Adapting to the
+# competition setup`_ for what changes.
 #
 # **Model selection.** The checkpoint with the highest **``val/bal_acc``**
 # is kept -- validation balanced (macro-averaged) accuracy, the same
 # quantity as the headline ``test/bal_acc``, just on the validation fold.
 # Training runs for at most 40 epochs and stops early after 5 epochs
 # without improvement; only that single best checkpoint is scored on test.
+#
+# The warm-up scorer also ranks on balanced accuracy, but pooled over all
+# evaluation windows. The sealed phase instead averages it over
+# subject-session-context cells, so that every cell counts equally
+# regardless of how many windows it holds -- a different number from the
+# same predictions.
 
 # %%
 # Reproducing the baseline
@@ -239,11 +254,11 @@ recalibration allowed.
 #      - Dataset
 #      - What it gives you
 #    * - ``neuralbench eeg motor_imagery --dataset dreyer2023``
-#      - ``Dreyer2023Large`` (starter-kit default)
+#      - ``Dreyer2023Large`` (recommended warm-up configuration)
 #      - 87 subjects of 2-class MI, split on held-out subjects, and the
 #        corpus Codabench scores against during warm-up.
 #    * - ``neuralbench eeg motor_imagery``
-#      - ``Stieger2021Continuous``
+#      - ``Stieger2021Continuous`` (task default)
 #      - The most data by far (62 subjects, 615 h) for the motor-imagery
 #        class, cross-subject, and the source of the published baseline
 #        numbers.

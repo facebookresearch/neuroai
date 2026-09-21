@@ -80,18 +80,21 @@ wristband placement and kinematic context at once.
 # **Split.** The emg2pose paper's own train / validation / test partition
 # is used verbatim: ``PredefinedSplit`` reads the ``split`` column the
 # study carries from the upstream metadata rather than drawing folds here,
-# so nothing is randomised and ``valid_split_by`` is left unset. Test users
-# are held out from training, so this is a cross-user split.
+# so nothing is randomised and ``valid_split_by`` is left unset.
 #
-# The paper scores three held-out sets separately, and a pooled ``test/mae``
-# over all three would match none of them. The task therefore keeps only
-# the ``user_stage`` set at test time -- unseen combinations of known users
-# and known movement stages -- via
+# The paper scores three held-out scenarios separately -- unseen users,
+# unseen movement stages, and unseen *combinations* of the two -- and a
+# pooled ``test/mae`` over all three would match none of them. The task
+# therefore keeps only the third at test time, via
 # ``query: "split != 'test' or generalization == 'user_stage'"``.
-# Validation keeps both of its scenarios. The competition's own evaluation
-# is broader, covering held-out users and held-out stages as well, so the
-# starter-kit number is a proxy for one of the three axes rather than all
-# of them.
+# Validation keeps both of its scenarios.
+#
+# So this is **not** a held-out-user split. Both the users and the movement
+# stages in the test set appear elsewhere in the data; what the model has
+# never seen is a given user performing a given stage. That is also exactly
+# the partition Codabench scores during warm-up, so a ``test/mae`` here and
+# a warm-up leaderboard score measure the same thing -- after converting
+# radians to the degrees Codabench reports.
 #
 # **Model selection.** The checkpoint with the lowest **``val/mae``** is
 # kept -- validation mean absolute angular error in radians, the same

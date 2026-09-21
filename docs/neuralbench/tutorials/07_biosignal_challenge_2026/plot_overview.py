@@ -61,10 +61,12 @@ distribution shift:
 3. **Track 3 -- Sleep onset** (cross-night, cross-user): predict the
    seconds remaining until the first N2 epoch, from four-channel wearable
    EEG recorded at home. The evaluation cohort holds both sleepers seen
-   in training and sleepers never seen in training. Headline
-   metric: **binned MAE (bMAE) in seconds** (lower is better) -- the
-   absolute error computed inside four time-to-onset ranges and then
-   combined across them.
+   in training and sleepers never seen in training. Headline metric:
+   **W-bMAE in seconds** (lower is better) -- absolute error computed
+   inside four time-to-onset ranges, weighted 10x / 5x / 3x / 1x from the
+   nearest range outwards, then macro-averaged over seen and unseen
+   subjects. The current Sleep-EDF warm-up scores the *unweighted* bMAE
+   instead, which is what this starter kit computes.
 4. **Track 4 -- EMG-to-Pose** (cross-user): regress 20 hand-joint angle
    trajectories from 16-channel wrist sEMG, on users and movement stages
    never seen during training. Headline metric: **mean absolute angular
@@ -353,12 +355,14 @@ re-run the top three submissions of each track.
 # datasets, so three pieces are still missing here:
 #
 # 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
-#    sessions, Graz + BrainHero).** Track 2 currently defaults to
-#    ``Dreyer2023Large`` (2 motor-imagery classes, held-out subjects),
-#    which is also what Codabench scores against during warm-up; it uses
-#    ``Stieger2021Continuous`` for the larger four-class corpus and
-#    ``Scherer2015Individually`` for the cross-session, multi-command side
-#    of the task.
+#    sessions, Graz + BrainHero).** The task still defaults to
+#    ``Stieger2021Continuous`` (4 motor-imagery classes), which is also
+#    what the published baseline numbers come from. Add
+#    ``--dataset dreyer2023`` for the **recommended warm-up
+#    configuration**: ``Dreyer2023Large``, 2 classes on held-out subjects,
+#    the corpus Codabench currently scores against.
+#    ``Scherer2015Individually`` covers the cross-session, multi-command
+#    side of the task.
 # 2. **Muse sleep-onset training set.** More details to come. The
 #    Track 3 page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and
 #    the additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG

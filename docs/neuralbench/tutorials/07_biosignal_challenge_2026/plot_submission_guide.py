@@ -8,9 +8,9 @@ EEG/EMG Foundation Challenge 2026.
 Submissions are handled on `Codabench <https://www.codabench.org/>`_, with
 a separate registration for each track you enter. The `competition website
 <https://neural-interfaces26.github.io/>`_ and each track's Codabench
-*Participation* tab are authoritative on every submission matter; this page
-summarises them and shows how a NeuralBench-trained model fits the
-contract.
+*Get Started* and *Track description* tabs are authoritative on every
+submission matter; this page summarises them and shows how a
+NeuralBench-trained model fits the contract.
 """
 
 # %%
@@ -36,17 +36,10 @@ contract.
 # Register first
 # --------------
 #
-# Registration is per track, and **every member of a team registers
-# individually**:
-#
-# 1. Create a `Codabench account
-#    <https://www.codabench.org/accounts/signup>`__ and sign in.
-# 2. Open the track's Codabench page, accept the terms, and click
-#    **Register**. The request shows as *pending* at first.
-# 3. Complete the `registration form <https://forms.gle/p3t2V25nuQtVXyj9A>`__
-#    once, selecting every track you registered for. The email address on
-#    the form must match your Codabench account -- that is what approves
-#    the registration automatically.
+# You cannot submit to a track until you are registered for it, and
+# registration is per track. Each Codabench competition carries the
+# procedure under **Get Started -> Registration Guide**, which is
+# authoritative and not repeated here:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -63,21 +56,41 @@ contract.
 #    * - Track 4 -- EMG-to-Pose
 #      - `competitions/17984 <https://www.codabench.org/competitions/17984/>`__
 #
-# Teams additionally nominate a leader, who creates one `Codabench
-# organization <https://www.codabench.org/profiles/organization/create/>`__
-# and adds the other members. Each person may belong to only one team.
-# Submission quotas stay individual -- everyone submits from their own
-# account -- but the submissions are attributed to the team.
+# Two points catch people out, so they are worth knowing before you start:
+# every member of a team registers individually, and approval is matched on
+# the email address you type into the registration form, which must be the
+# one on your Codabench account.
 
 # %%
 # What a submission is
 # --------------------
 #
-# A zipped folder containing a ``submission.py`` plus whatever weight files
-# your model needs. Evaluation is **inference-only**: the model must arrive
-# fully trained, and nothing is installed at submission time -- the
-# evaluation image already carries torch, scikit-learn, benchopt and the
-# data stack.
+# A ZIP holding a ``submission.py`` plus whatever weight files your model
+# needs, **every file at the root of the archive**. A nested directory is
+# the single most common ingestion failure.
+#
+# .. code-block:: text
+#
+#    my_submission.zip
+#    |-- submission.py   # required: all Python inference code
+#    |-- weights.pt      # trained parameters, any name or format
+#    +-- ...             # optional non-Python artifacts
+#
+# Evaluation is inference-only: the model arrives fully trained, and
+# Codabench mounts the extracted files read-only. During ``load_model`` and
+# ``predict`` a submission must not train, must not download competition
+# data, and must not write into its own directory.
+#
+# .. warning::
+#    **Nothing is installed at submission time.** ``submission.py`` may
+#    import only what the worker image already carries, pinned in the
+#    competition's `requirements.txt
+#    <https://github.com/neural-interfaces26/2026-competition/blob/main/requirements.txt>`__.
+#    Declaring a benchopt ``requirements`` list does not change the worker
+#    image. A package of your own is not an option -- additional Python
+#    modules are not supported either, so the architecture and any
+#    model-specific preprocessing have to live inside ``submission.py``
+#    itself.
 #
 # ``submission.py`` defines ``class Solver(CompetSolver)``, a `benchopt
 # <https://benchopt.github.io>`__ solver. Inside it you write plain
@@ -89,17 +102,16 @@ contract.
 #   ``meta["device"]``, and returns an object exposing ``predict(X)``.
 # - ``predict(X)`` receives a torch batch ``X`` of shape ``(B, C, T)``,
 #   already on ``meta["device"]``, and returns the track's output.
-# - ``fit(self, model, train_loader)`` (optional) trains the model. It
-#   never runs on the server, but it is how you train locally against the
+# - ``fit(self, model, train_loader)`` (optional) trains the model. The
+#   server never calls it, but it is how you train locally against the
 #   exact competition data and evaluation.
-# - ``save_model(self, model, path)`` (optional) writes the trained weights
-#   into ``path``. Implement it and a local training run ends by zipping
-#   your solver together with those files into
-#   ``outputs/submission_<track>.zip``, ready to upload.
+# - ``save_model(self, model, path)`` (optional) writes the trained
+#   weights. Implement both and a local training run assembles the
+#   submission folder for you -- see `Test locally, then upload`_.
 #
-# ``meta`` is a plain dict: ``sfreq``, ``ch_names``, ``chs_info``,
-# ``n_chans``, ``n_times``, ``device``, ``submission_dir``, and the track's
-# output size.
+# ``meta`` is a plain dict the platform builds and passes in:
+# ``submission_dir``, ``device``, ``n_chans``, ``n_times``, ``sfreq``,
+# ``ch_names``, ``chs_info``, and the track's output-size key.
 #
 # .. list-table::
 #    :header-rows: 1
@@ -108,7 +120,7 @@ contract.
 #    * - Track
 #      - ``predict(X)`` returns
 #      - Output size
-#      - Ranking metric
+#      - Sealed ranking metric
 #    * - 1 -- EEG-to-Image
 #      - image embeddings ``(B, D)``
 #      - ``meta["n_outputs"]`` = D
@@ -120,7 +132,7 @@ contract.
 #    * - 3 -- Sleep onset
 #      - seconds to onset ``(B,)``, float
 #      - ``meta["n_outputs"]`` = 1
-#      - binned MAE
+#      - weighted binned MAE
 #    * - 4 -- EMG-to-Pose
 #      - joint angles ``(B, n_joints, T)``, degrees
 #      - ``meta["n_joints"]``
@@ -139,26 +151,60 @@ contract.
 #
 #    class Solver(CompetSolver):
 #        name = "MyModel"
-#        # torch and scikit-learn come with the evaluation environment;
-#        # declare only your own extras.
-#        requirements = ["pip::my-model-pkg"]
 #
 #        def load_model(self, meta):
-#            model = build_my_model(
+#            # MyModel has to be defined in this same file.
+#            model = MyModel(
 #                n_chans=meta["n_chans"], n_times=meta["n_times"],
 #            )
-#            state = torch.load(meta["submission_dir"] / "weights.pt",
-#                               map_location=meta["device"])
+#            state = torch.load(
+#                meta["submission_dir"] / "weights.pt",
+#                map_location=meta["device"],
+#                weights_only=True,
+#            )
 #            model.load_state_dict(state)
 #            return model.to(meta["device"]).eval()
+
+# %%
+# What changes between the two phases
+# -----------------------------------
+#
+# The submission contract is stable across phases; the data is not, and for
+# three of the four tracks neither is the task.
+#
+# .. list-table::
+#    :header-rows: 1
+#    :widths: 30 35 35
+#
+#    * -
+#      - Warm-up
+#      - Sealed final
+#    * - Evaluation data
+#      - public proxy corpus
+#      - held-out cohort, never released
+#    * - Task and ranking metric
+#      - public proxy; Tracks 1-3 differ from sealed
+#      - the specification in the table above
+#    * - ZIP format, ``meta`` keys, tensor contract
+#      - as documented
+#      - identical, though runtime values differ
+#
+# Concretely, as of this writing: Track 2 warms up on a **two-class**
+# motor-imagery proxy ranked by balanced accuracy pooled over windows,
+# where the sealed phase is three-class and averages over
+# subject-session-context cells. Track 3 warms up on **unweighted** bMAE
+# where the sealed phase applies severity weights and a seen/unseen
+# macro-average. Track 4 uses the same task and metric in both phases, on
+# different data. Each track's Codabench **Track description** tab is
+# authoritative on the current warm-up specification, which changes as the
+# 2026 corpora are released.
 #
 # .. warning::
 #    Only the *data* is hidden -- the loading, scoring and model-facing code
-#    is public and identical in both phases. So one rule keeps a submission
-#    valid on data you never see: **use only** ``meta`` **and the batches
-#    you are given**. A solver that reads a dataset name, a file path, a
-#    subject id, or a hard-coded channel count may work during warm-up and
-#    break on the sealed cohort.
+#    is public. So one rule keeps a submission valid on data you never see:
+#    **use only** ``meta`` **and the batches you are given**. A solver that
+#    reads a dataset name, a file path, a subject id, or a hard-coded
+#    channel count may work during warm-up and break on the sealed cohort.
 
 # %%
 # Going from a NeuralBench run to a submission
@@ -168,16 +214,24 @@ contract.
 # evaluation image does not import it. What crosses the boundary is the
 # trained weights plus enough code to rebuild the architecture.
 #
-# Every full NeuralBench run keeps exactly one checkpoint -- the best one
-# under the track's validation metric (see the *Split and model selection*
-# section on each track page) -- written as ``best.ckpt`` under the run's
-# folder in ``SAVE_DIR``, with ``save_weights_only=True``. To turn that into
-# a submission:
+# A run checkpoints the best epoch under the track's validation metric (see
+# the *Split and model selection* section on each track page) to
+# ``best.ckpt`` in the run's ``SAVE_DIR`` folder, with
+# ``save_weights_only=True``.
 #
-# 1. Locate ``best.ckpt`` for the run you want.
-# 2. Strip the Lightning wrapper: the state dict is under the
-#    ``"state_dict"`` key, and its parameter names carry the module prefix
-#    the ``pl_module`` added.
+# .. important::
+#    That file is **deleted once the test phase has read it**. A run
+#    driven from the CLI therefore leaves metrics but no weights. To keep
+#    them, set ``Experiment.delete_checkpoints_on_exit = False``, which
+#    means driving the experiment from Python -- there is no CLI flag. The
+#    field is part of the cache uid, so flipping it gives a fresh run
+#    rather than reusing a cached one.
+#
+# With the checkpoint in hand:
+#
+# 1. Load it and take the state dict from the ``"state_dict"`` key.
+# 2. Strip the Lightning wrapper: the parameter names carry the module
+#    prefix the ``pl_module`` added.
 # 3. Save the bare tensors next to your ``submission.py`` as, say,
 #    ``weights.pt``, and rebuild the same architecture inside
 #    ``load_model``.
@@ -199,42 +253,51 @@ contract.
 # Test locally, then upload
 # --------------------------
 #
-# The starting kit for submission is the benchopt benchmark itself, one per
-# track (linked from the track's Codabench *Participation* tab). From a
-# checkout:
+# A failed upload still costs one of the day's submissions, so check the
+# contract locally first. The starting kit is the benchopt benchmark
+# itself, one directory per track, in the `competition repository
+# <https://github.com/neural-interfaces26/2026-competition>`__:
 #
 # .. code-block:: bash
 #
-#    benchopt install tracks/<track>          # CPU env (add --gpu for CUDA)
-#    benchopt run tracks/<track> -d Simulated # zero-download smoke test
+#    benchopt install tracks/<track>   # add --gpu if you need CUDA
+#    cp my_submission/submission.py tracks/<track>/solvers/my_submission.py
+#    COMPET_SUBMISSION_DIR="$PWD/my_submission" \
+#        benchopt run tracks/<track> -d Simulated -s MyModel
 #
-# ``Simulated`` needs no download and no data stack, so it is the fastest
-# way to check that your solver loads and predicts the right shape. To try
-# a submission, drop your files into the track's ``solvers/`` folder:
+# ``MyModel`` is your ``Solver.name``. ``COMPET_SUBMISSION_DIR`` is what
+# points ``meta["submission_dir"]`` at your weights. ``Simulated`` needs no
+# download, so this is a seconds-long contract check -- not a score. Its
+# dimensions are smaller than the real task, so a fixed-size checkpoint may
+# not even load; validate those on the public track data instead. Selectors
+# are case-insensitive globs, so ``-s MyModel -s "eegnet*"`` puts your
+# solver next to the track's own baselines in one run.
 #
-# .. code-block:: bash
-#
-#    cp my_submission/* tracks/<track>/solvers/
-#    benchopt run tracks/<track> -d Simulated -s my-solver
-#
-# ``benchopt test tracks/<track> --skip-install`` is the rehearsal for the
-# sealed phase: it runs your solver against a differently shaped dataset,
-# the closest local stand-in for data it has never seen.
-#
-# To train on the real data, ``benchopt prepare tracks/<track>`` downloads
-# it once, then
+# If you implement ``fit`` and ``save_model``, benchopt will also package
+# the submission for you. Train on the real data with:
 #
 # .. code-block:: bash
 #
-#    benchopt run tracks/<track> -s my-solver -o "[training=True]"
+#    benchopt prepare tracks/<track>
+#    benchopt run tracks/<track> -s MyModel -o "<objective>[training=True]"
 #
-# trains your solver through ``fit`` and evaluates it exactly as the
-# platform does. This is also how the baselines shipped in ``solvers/`` are
-# trained.
+# where ``<track>`` and ``<objective>`` are ``image_decoding`` /
+# ``Image-decoding``, ``bci_decoding`` / ``BCI-decoding``, ``sleep_onset``
+# / ``Sleep-onset``, and ``emg_pose`` / ``EMG-pose``. The run writes a
+# ready-to-upload folder at ``tracks/<track>/outputs/<model-name>/``,
+# holding ``submission.py`` and its weights.
 #
-# When it passes, zip the folder and upload it on the track's **My
-# Submissions** tab, then confirm that evaluation succeeds and your score
-# reaches the leaderboard.
+# Either way, zip the **contents** of that folder rather than the folder
+# itself:
+#
+# .. code-block:: bash
+#
+#    zip -j my_submission.zip submission.py weights.pt
+#
+# Then upload on the track's **My Submissions** tab, select the active
+# phase, and wait for *Finished*. If ingestion fails, read the **first**
+# error in the log: a later complaint about a missing ``results.parquet``
+# usually just means inference had already failed.
 
 # %%
 # Timeline and submission limits
