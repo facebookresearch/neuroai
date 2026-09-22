@@ -50,6 +50,9 @@ class BaseExtractor(base.NamedModel, base._Module):
         Event type name(s) this extractor operates on (e.g. ``"Audio"`` or
         ``("Image", "Text")``).  Must be set as a class-level default in
         every concrete subclass.
+    query : str, optional
+        Pandas query applied after ``event_types`` selection and before
+        segment-window and aggregation selection.
     aggregation : str
         Strategy for combining values when multiple matching events fall
         inside the same segment:
@@ -73,6 +76,7 @@ class BaseExtractor(base.NamedModel, base._Module):
 
     event_types: str | tuple[str, ...] = ""
     # eg: event_types: str | tuple[str, ...] = ("Image", "Text")
+    query: base.Query | None = None
 
     aggregation: tp.Literal[
         "single",
@@ -155,7 +159,26 @@ class BaseExtractor(base.NamedModel, base._Module):
 
     def _exclude_from_cache_uid(self) -> list[str]:
         # extractor convention from inheriting cache uid exclusion list
-        return ["aggregation", "allow_missing"]
+        return ["aggregation", "allow_missing", "query"]
+
+    def _query_events(self, obj: tp.Any) -> list[Event]:
+        """Extract matching events and apply the extractor query if configured."""
+        if self.query is None:
+            return self._event_types_helper.extract(obj)
+
+        from neuralset.events.utils import extract_events, query_with_index
+
+        if isinstance(obj, pd.DataFrame):
+            events_df = obj.loc[obj.type.isin(self._event_types_helper.names), :]
+            return extract_events(query_with_index(events_df, self.query))
+
+        events = self._event_types_helper.extract(obj)
+        if not events:
+            return []
+        events_df = pd.DataFrame([event.to_dict() for event in events])
+        events_df.index = pd.RangeIndex(len(events))
+        selected = query_with_index(events_df, self.query)
+        return [events[int(index)] for index in selected.index]
 
     def prepare(
         self, obj: pd.DataFrame | tp.Sequence[Event] | tp.Sequence[Segment]
@@ -176,7 +199,7 @@ class BaseExtractor(base.NamedModel, base._Module):
             several objects, prefer passing a list of events or segments over
             a DataFrame to avoid redundant conversion overhead.
         """
-        events = self._event_types_helper.extract(obj)
+        events = self._query_events(obj)
         if self.frequency == "native" and events and hasattr(events[0], "frequency"):
             freqs = set(e.frequency for e in events)  # type: ignore
             cls = self.__class__.__name__
@@ -318,7 +341,7 @@ class BaseExtractor(base.NamedModel, base._Module):
             events = [trigger]
 
         # make sure events is list[Event]
-        ns_events = self._event_types_helper.extract(events)
+        ns_events = self._query_events(events)
         if ns_events and len(timelines := {e.timeline for e in ns_events}) > 1:
             msg = f"Multiple timelines {timelines} in events passed to extractor {self!r}: {ns_events}"
             raise ValueError(msg)
@@ -482,7 +505,7 @@ class EventField(BaseStatic):
         self,
         obj: pd.DataFrame | tp.Sequence[Event] | tp.Sequence[Segment],
     ) -> set[tp.Any]:
-        events = self._event_types_helper.extract(obj)
+        events = self._query_events(obj)
         if not events:
             raise ValueError(f"No events found for {self.name}")
         return set(e._get_field_or_extra(self.event_field) for e in events)
@@ -624,7 +647,7 @@ class LabelEncoder(EventField):
             else:
                 self._missing_default = torch.tensor([-1], dtype=torch.long)
 
-        events = self._event_types_helper.extract(obj)
+        events = self._query_events(obj)
         self(
             events[0],
             events[0].start,
