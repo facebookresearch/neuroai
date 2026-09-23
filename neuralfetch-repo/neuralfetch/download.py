@@ -75,8 +75,10 @@ def success_writer(
     succeeds.
 
     When ``overwrite`` is True an existing marker is reported as absent (the
-    yielded value is False), so callers re-run the guarded work; the marker
-    itself is preserved on disk.
+    yielded value is False), so callers re-run the guarded work.  The marker is
+    cleared before the block runs and only rewritten once it returns, so a
+    re-run that dies partway never leaves behind a marker claiming the work
+    finished.
 
     Examples
     --------
@@ -89,9 +91,11 @@ def success_writer(
     ./test.txt
     """
     success_fname = Path(str(Path(fname).with_suffix("")) + suffix)
-    marker_exists = success_fname.exists()
-    yield marker_exists and not overwrite
-    if not marker_exists:
+    already_done = success_fname.exists() and not overwrite
+    if not already_done:
+        success_fname.unlink(missing_ok=True)
+    yield already_done
+    if not already_done:
         with open(success_fname, "w") as f:
             f.write(success_msg)
 

@@ -102,6 +102,50 @@ def test_success_writer(tmp_path: Path, suffix: str, success_msg: str) -> None:
         assert success
 
 
+def test_success_writer_reruns_on_overwrite(tmp_path: Path) -> None:
+    """overwrite re-runs the block and refreshes the marker."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+    success_fname.write_text("stale")
+
+    with download.success_writer(fname, overwrite=True) as already_done:
+        assert not already_done
+        assert not success_fname.exists()
+
+    assert success_fname.read_text() == "done"
+
+
+def test_success_writer_drops_marker_when_overwrite_fails(tmp_path: Path) -> None:
+    """A re-run that dies partway must not leave the marker behind."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+    success_fname.write_text("done")
+
+    with pytest.raises(RuntimeError):
+        with download.success_writer(fname, overwrite=True):
+            raise RuntimeError("boom")
+
+    assert not success_fname.exists()
+
+    # The next plain call therefore re-runs instead of skipping the work.
+    with download.success_writer(fname) as already_done:
+        assert not already_done
+    assert success_fname.exists()
+
+
+def test_success_writer_keeps_marker_when_first_run_fails(tmp_path: Path) -> None:
+    """The pre-existing no-marker behaviour is unchanged."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+
+    with pytest.raises(RuntimeError):
+        with download.success_writer(fname) as already_done:
+            assert not already_done
+            raise RuntimeError("boom")
+
+    assert not success_fname.exists()
+
+
 def test_temp_mne_data_uses_env_only(tmp_path: Path) -> None:
     """temp_mne_data sets/restores MNE_DATA via env vars only."""
     old_val = os.environ.get("MNE_DATA")
