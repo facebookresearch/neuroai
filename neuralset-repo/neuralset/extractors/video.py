@@ -165,7 +165,7 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
             if event.type == "Video":
-                sub = ta.with_start(event.start).overlap(start=start, duration=duration)
+                sub = ta.copy(start=event.start).overlap(start=start, duration=duration)
             elif event.type == "Image":
                 sub = ta
             else:
@@ -184,7 +184,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
         self, events: tp.Sequence[evts.Image | evts.Video]
     ) -> tp.Iterator[nsbase.TimedArray]:
         # read all media events
-        logging.getLogger("neuralset").setLevel(logging.DEBUG)
         self._warn_if_config_num_frames_mismatch()
         T = 1 / self.frequency if self.clip_duration is None else self.clip_duration
         subtimes = [k / self.num_frames * T for k in reversed(range(self.num_frames))]

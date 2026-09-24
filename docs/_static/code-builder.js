@@ -345,7 +345,7 @@
       lines.push("# 1. " + stu.comment);
       // Pass the *parent* studies dir; Study.download() resolves the
       // study-name subfolder. The Study's infra caches the merged events
-      // DataFrame and propagates the folder to infra_timelines so each
+      // DataFrame and propagates the folder to timelines.infra so each
       // timeline's events are also cached. In local mode we reuse the
       // single `infra` variable (same `{"folder": CACHE}`); in slurm mode
       // we pin the Study to local caching to avoid spawning a Slurm job
@@ -432,7 +432,7 @@
       }
 
       // `infra: {folder: $CACHE}` caches the merged events DataFrame
-      // and propagates the folder to infra_timelines so each timeline
+      // and propagates the folder to timelines.infra so each timeline
       // is also cached. Same `$CACHE` placeholder as the extractor
       // MapInfras.
       var yamlSections = [

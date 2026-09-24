@@ -83,8 +83,10 @@ class Xu2024Alljoined(study.Study):
         frequency=512.0,
     )
 
-    def _download(self) -> None:
-        download.Osf(study="kqgs8", dset_dir=self.path, folder="xu2024").download()
+    def _download(self, overwrite: bool = False) -> None:
+        download.Osf(study="kqgs8", dset_dir=self.path, folder="xu2024").download(
+            overwrite=overwrite
+        )
 
     @staticmethod
     def _get_fname(

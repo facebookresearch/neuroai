@@ -14,18 +14,22 @@ import inspect
 import logging
 import typing as tp
 
-import numpy as np
 import torch
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchinfo import summary
 
-from neuraltrain.models.base import BaseBrainDecodeModel, BaseModelConfig
+from neuraltrain.losses import BaseLoss
+from neuraltrain.losses.base import BaseTorchLoss
+from neuraltrain.models.base import (
+    BaseBrainModelConfig,
+    BaseModelConfig,
+    BrainModelBuildContext,
+)
 from neuraltrain.models.common import ChannelMerger
-from neuraltrain.models.dummy_predictor import DummyPredictor
 
+from .baselines import BaseFitOnceModelConfig, FitOnceBuildContext
 from .modules import DownstreamWrapper
-from .sklearn_baseline import SklearnBaseline
 from .utils import (
     get_neuro_and_targets_from_dataset,
     get_targets_from_dataset,
@@ -35,74 +39,27 @@ from .utils import (
 LOGGER = logging.getLogger(__name__)
 
 
-def build_braindecode_model(
-    brain_model_config: BaseBrainDecodeModel,
-    downstream_model_wrapper: DownstreamWrapper | None,
-    train_loader: DataLoader,
-    n_in_channels: int,
-    n_times: int,
-    n_outputs: int,
-) -> torch.nn.Module:
-    """Build a braindecode model, handling channel name extraction.
-
-    Some braindecode models (REVE, BENDR, LaBraM) require explicit channel
-    name information via ``chs_info``.  Model-specific adaptation (e.g.
-    temporal embedding resizing for LaBraM) is handled by the model
-    config's own ``build()`` method.
-
-    When *downstream_model_wrapper* is set, ``n_outputs`` is not passed to
-    the model (the wrapper's probe handles output projection).
-    """
-    build_kwargs: dict[str, tp.Any] = {}
-    _needs_ch_names = getattr(brain_model_config, "chs_info_required", False)
-    if downstream_model_wrapper is None:
-        assert brain_model_config.__class__.__name__ != "BIOT", (
-            "BIOT requires a downstream_model_wrapper"
-        )
-        build_kwargs["n_outputs"] = n_outputs
-    if _needs_ch_names:
-        neuro_extractor = train_loader.dataset.extractors["neuro"]  # type: ignore[attr-defined]
-        ch_names = list(neuro_extractor._channels.keys())
-        assert len(ch_names) == n_in_channels, (
-            f"Expected {n_in_channels} channels, but got {len(ch_names)} channel names."
-        )
-        build_kwargs["chs_info"] = [{"ch_name": name} for name in ch_names]
-
-    if brain_model_config.from_pretrained_name is not None:
-        n_adapter_chans = (
-            downstream_model_wrapper.n_adapter_target_channels
-            if downstream_model_wrapper is not None
-            else None
-        )
-        build_kwargs["n_chans"] = (
-            n_adapter_chans if n_adapter_chans is not None else n_in_channels
-        )
-        if getattr(brain_model_config, "needs_n_times", False):
-            build_kwargs["n_times"] = n_times
-    else:
-        build_kwargs.update(n_chans=n_in_channels, n_times=n_times)
-
-    return brain_model_config.build(**build_kwargs)
-
-
 def build_dummy_batch(
     brain_model: torch.nn.Module,
     batch: tp.Any,
     downstream_model_wrapper: DownstreamWrapper | None,
-) -> tuple[dict[str, torch.Tensor | None], str]:
+    ch_names: list[str] | None = None,
+) -> tuple[dict[str, tp.Any], str]:
     """Build a single-sample dummy batch from *batch* for lazy-layer init and model summary.
 
     Returns the dummy batch dict and the name of the primary input parameter.
     """
     forward_sig = inspect.signature(brain_model.forward)
     input_name = list(forward_sig.parameters.keys())[0]
-    dummy_batch: dict[str, torch.Tensor | None] = {
+    dummy_batch: dict[str, tp.Any] = {
         input_name: batch.data["neuro"][:1].to("cpu"),
     }
     if "subject_ids" in forward_sig.parameters:
         dummy_batch["subject_ids"] = batch.data["subject_id"][:1].to("cpu")
     if "channel_positions" in forward_sig.parameters:
         dummy_batch["channel_positions"] = batch.data["channel_positions"][:1].to("cpu")
+    if ch_names is not None and "ch_names" in forward_sig.parameters:
+        dummy_batch["ch_names"] = ch_names
 
     # ChannelMerger-based adapters need channel_positions and subject_ids
     # even if the inner model doesn't require them.
@@ -121,7 +78,7 @@ def build_dummy_batch(
 
 def init_lazy_layers(
     brain_model: torch.nn.Module,
-    dummy_batch: dict[str, torch.Tensor | None],
+    dummy_batch: dict[str, tp.Any],
     input_name: str,
     downstream_model_wrapper: DownstreamWrapper | None,
 ) -> None:
@@ -163,8 +120,8 @@ def build_brain_model(
     train_loader: DataLoader,
     val_loader: DataLoader | None = None,
     wandb_logger: WandbLogger | None = None,
-    loss: tp.Any = None,
-) -> tuple[torch.nn.Module, int, int]:
+    loss: BaseLoss | None = None,
+) -> tuple[torch.nn.Module, int, int, list[str] | None]:
     """Build, initialise and optionally wrap a brain model.
 
     This is the main entry point that orchestrates braindecode/generic model
@@ -172,16 +129,19 @@ def build_brain_model(
     downstream wrapping, and model summary logging.
 
     ``val_loader`` is only consumed by the fit-once baselines
-    (:class:`~neuralbench.sklearn_baseline.SklearnBaseline` and
-    :class:`~neuraltrain.models.dummy_predictor.DummyPredictor`) which have no
+    (:class:`~neuralbench.baselines.SklearnBaseline` and
+    :class:`~neuralbench.baselines.DummyPredictor`) which have no
     early-stopping-style use for it.  When provided, they are fit on the
     concatenation of the train and val splits so they see the same pool of
     labelled data as the DL models (which get val via early stopping).
 
-    Returns ``(model, n_total_params, n_trainable_params)``.
+    Returns ``(model, n_total_params, n_trainable_params, ch_names)``, the last
+    being the names of the channels the model receives (``None`` when the
+    dataset does not name them, or when a channel adapter reshapes them), for
+    models that read channel identity by name rather than by position.
     """
     batch = next(iter(train_loader))
-    n_in_channels, n_times = batch.data["neuro"].shape[1:]
+    n_spatial_locations, n_temporal_samples = batch.data["neuro"].shape[1:]
     LOGGER.info(f"Neuro shape: {batch.data['neuro'].shape}")
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
@@ -198,25 +158,67 @@ def build_brain_model(
         leaf is not None and not hasattr(leaf, "n_classes") and hasattr(leaf, "extractor")
     ):
         leaf = leaf.extractor
-    n_outputs = (
-        leaf.n_classes
-        if leaf is not None and hasattr(leaf, "n_classes")
-        else feat.shape[-1]
-    )
+    if leaf is not None and hasattr(leaf, "n_classes"):
+        n_outputs = leaf.n_classes
+    elif feat.ndim == 3 and feat.shape[1] > 1:
+        # A dense target keeps the extractor's channel-major ``(B, C, T)``
+        # layout, so the head is as wide as its channel axis; ``_run_step``
+        # transposes it to meet a time-major prediction.
+        n_outputs = feat.shape[1]
+    else:
+        n_outputs = feat.shape[-1]
 
-    # 1) Build the brain model
-    if isinstance(brain_model_config, BaseBrainDecodeModel):
-        brain_model = build_braindecode_model(
-            brain_model_config,
-            downstream_model_wrapper,
-            train_loader,
-            n_in_channels,
-            n_times,
-            n_outputs,
+    # Derive sampling rate / channel names from the neuro extractor so models
+    # that need them (frequency: Green/FreqBandNet/CoSpectra; ch_names:
+    # LaBraM/REVE) get data-correct values instead of hardcoded config ones.
+    frequency: float | None = None
+    ch_names: list[str] | None = None
+    mesh: str | None = None
+    neuro_extractor = getattr(train_loader.dataset, "extractors", {}).get("neuro")
+    if neuro_extractor is not None:
+        freq = getattr(neuro_extractor, "frequency", None)
+        if isinstance(freq, (int, float)) and not isinstance(freq, bool):
+            frequency = float(freq)
+        if hasattr(neuro_extractor, "_channels"):
+            ch_names = list(neuro_extractor._channels.keys())
+        # Surface-sampled data (e.g. fMRI on fsaverage) exposes a mesh
+        # resolution that surface models need; carry its enum name as a string.
+        mesh_attr = getattr(neuro_extractor, "mesh_resolution", None)
+        if mesh_attr is not None:
+            mesh = mesh_attr.name if hasattr(mesh_attr, "name") else str(mesh_attr)
+
+    # The dataset channel names always describe the adapter's *input*, so the
+    # downstream wrapper needs them for name-matched adapter init (identity /
+    # bipolar) regardless of any adapter reshaping below.
+    dataset_ch_names = ch_names
+
+    # A channel adapter changes the spatial size the model sees: use the
+    # adapter's output width and clear ch_names (its outputs no longer map to
+    # dataset channel names).
+    if downstream_model_wrapper is not None:
+        adapter_target = downstream_model_wrapper.n_adapter_target_channels
+        if adapter_target is not None:
+            n_spatial_locations = adapter_target
+            ch_names = None
+
+    # CTC sequence tasks (e.g. emg/typing) carry a blank-token index on the
+    # loss; derive the scalar here so the context stays free of the loss
+    # config object (only DummyPredictor's CTC baseline consumes it).
+    ctc_blank_idx: int | None = None
+    if isinstance(loss, BaseTorchLoss) and type(loss).__name__ == "CTCLoss":
+        ctc_blank_idx = int(loss.kwargs.get("blank", 0))
+
+    # BIOT produces no standalone classification output suitable for the
+    # benchmark; it must be paired with a downstream wrapper.
+    if downstream_model_wrapper is None:
+        assert type(brain_model_config).__name__ != "BIOT", (
+            "BIOT requires a downstream_model_wrapper"
         )
-    elif isinstance(brain_model_config, DummyPredictor):
-        # TODO: share computations with compute_class_weights_from_dataset and/or target_scaler
-        LOGGER.info("Preparing DummyPredictor model...")
+
+    # Lazy fit-data materializers for the fit-once baselines, closing over the
+    # (train, val) loaders so neuraltrain needn't depend on neuralbench's
+    # dataset utils; only the baselines that need the full pool invoke them.
+    def _load_targets() -> torch.Tensor:
         y_train = get_targets_from_dataset(train_loader.dataset)  # type: ignore[arg-type]
         n_train = int(y_train.shape[0])
         if val_loader is not None:
@@ -228,63 +230,61 @@ def build_brain_model(
                 int(y_val.shape[0]),
                 int(y_fit.shape[0]),
             )
-        else:
-            y_fit = y_train
-            LOGGER.info("DummyPredictor: fitting on N_train = %d targets.", n_train)
-        # CTC sequence tasks (e.g. emg/typing) need a per-frame sequence
-        # emitter rather than a single constant row; signal this to the
-        # DummyPredictor via the loss's blank index so it builds a
-        # most-frequent-character CTC baseline.
-        ctc_blank: int | None = None
-        if loss is not None and type(loss).__name__ == "CTCLoss":
-            ctc_blank = int(loss.kwargs.get("blank", 0))
-        brain_model = brain_model_config.build(
-            y_train=y_fit, blank_idx=ctc_blank, n_classes=n_outputs
-        )
-    elif isinstance(brain_model_config, SklearnBaseline):
-        LOGGER.info(
-            "Preparing SklearnBaseline model (%s)...",
-            type(brain_model_config).__name__,
-        )
+            return y_fit
+        LOGGER.info("DummyPredictor: fitting on N_train = %d targets.", n_train)
+        return y_train
+
+    def _load_neuro_targets() -> tuple[torch.Tensor, torch.Tensor]:
         X_train, y_train = get_neuro_and_targets_from_dataset(train_loader.dataset)  # type: ignore[arg-type]
-        X_train_np = X_train.cpu().numpy()
-        y_train_np = y_train.cpu().numpy()
-        X_fit_np: np.ndarray
-        y_fit_np: np.ndarray
         if val_loader is not None:
-            X_val, y_val_tensor = get_neuro_and_targets_from_dataset(
-                val_loader.dataset  # type: ignore[arg-type]
-            )
-            X_val_np = X_val.cpu().numpy()
-            y_val_np = y_val_tensor.cpu().numpy()
+            X_val, y_val = get_neuro_and_targets_from_dataset(val_loader.dataset)  # type: ignore[arg-type]
             LOGGER.info(
                 "SklearnBaseline: fitting on N_train + N_val = %d + %d = %d trials.",
-                X_train_np.shape[0],
-                X_val_np.shape[0],
-                X_train_np.shape[0] + X_val_np.shape[0],
+                int(X_train.shape[0]),
+                int(X_val.shape[0]),
+                int(X_train.shape[0] + X_val.shape[0]),
             )
-            X_fit_np = np.concatenate([X_train_np, X_val_np], axis=0)
-            y_fit_np = np.concatenate([y_train_np, y_val_np], axis=0)
-        else:
-            LOGGER.info(
-                "SklearnBaseline: fitting on N_train = %d trials.",
-                X_train_np.shape[0],
-            )
-            X_fit_np = X_train_np
-            y_fit_np = y_train_np
-        brain_model = brain_model_config.build(
-            X_train=X_fit_np,
-            y_train=y_fit_np,
+            return torch.cat([X_train, X_val], dim=0), torch.cat([y_train, y_val], dim=0)
+        LOGGER.info(
+            "SklearnBaseline: fitting on N_train = %d trials.", int(X_train.shape[0])
+        )
+        return X_train, y_train
+
+    # 1) Build the brain model. Fit-once baselines get the richer
+    # FitOnceBuildContext (lazy fit-data materializers + CTC blank index);
+    # all other models get the general context.
+    assert isinstance(brain_model_config, BaseBrainModelConfig), (
+        f"{type(brain_model_config).__name__} is not a BaseBrainModelConfig; "
+        "only brain-model configs can be built by the neuralbench factory."
+    )
+    resolved_n_outputs = None if downstream_model_wrapper is not None else n_outputs
+    ctx: BrainModelBuildContext
+    if isinstance(brain_model_config, BaseFitOnceModelConfig):
+        ctx = FitOnceBuildContext(
+            n_spatial_locations=int(n_spatial_locations),
+            n_temporal_samples=int(n_temporal_samples),
+            n_outputs=resolved_n_outputs,
+            frequency=frequency,
+            ch_names=ch_names,
+            mesh=mesh,
+            ctc_blank_idx=ctc_blank_idx,
+            load_targets=_load_targets,
+            load_neuro_targets=_load_neuro_targets,
         )
     else:
-        brain_model = brain_model_config.build(
-            n_in_channels=n_in_channels,
-            n_outputs=(None if downstream_model_wrapper is not None else n_outputs),
+        ctx = BrainModelBuildContext(
+            n_spatial_locations=int(n_spatial_locations),
+            n_temporal_samples=int(n_temporal_samples),
+            n_outputs=resolved_n_outputs,
+            frequency=frequency,
+            ch_names=ch_names,
+            mesh=mesh,
         )
+    brain_model = brain_model_config.build_from_context(ctx)
 
     # 2) Initialize lazy layers
     dummy_batch, input_name = build_dummy_batch(
-        brain_model, batch, downstream_model_wrapper
+        brain_model, batch, downstream_model_wrapper, ch_names
     )
     init_lazy_layers(brain_model, dummy_batch, input_name, downstream_model_wrapper)
 
@@ -295,21 +295,21 @@ def build_brain_model(
     # 4) Wrap for downstream task
     if downstream_model_wrapper is not None:
         LOGGER.info("Wrapping brain model for downstream task...")
-        input_channel_names: list[str] | None = None
-        neuro_extractor = getattr(train_loader.dataset, "extractors", {}).get("neuro")
-        if neuro_extractor is not None and hasattr(neuro_extractor, "_channels"):
-            input_channel_names = list(neuro_extractor._channels.keys())
         brain_model = downstream_model_wrapper.build(
             brain_model,
             dummy_batch,
             n_outputs,
-            input_channel_names=input_channel_names,
+            input_channel_names=dataset_ch_names,
         )
 
-    # 5) Log model summary
+    # 5) Log model summary. torchinfo adds up the memory of everything in
+    # ``input_data``, so anything that is not a tensor (``ch_names``) has to
+    # reach the forward as a keyword argument instead.
     model_summary = summary(
         brain_model,
-        input_data=dummy_batch,
+        input_data={k: v for k, v in dummy_batch.items() if isinstance(v, torch.Tensor)},
+        **{k: v for k, v in dummy_batch.items() if not isinstance(v, torch.Tensor)},
+        col_names=("output_size", "num_params", "trainable"),
         row_settings=("hide_recursive_layers",),
         verbose=0,
     )
@@ -317,7 +317,13 @@ def build_brain_model(
     n_total_params: int = model_summary.total_params
     n_trainable_params: int = model_summary.trainable_params
     if wandb_logger is not None:
-        wandb_logger.experiment.config["n_total_params"] = n_total_params
-        wandb_logger.experiment.config["n_trainable_params"] = n_trainable_params
+        # Not experiment.config[...]: outside rank zero that attribute is a dummy
+        # method, so assigning to it raises TypeError under DDP.
+        wandb_logger.log_hyperparams(
+            {
+                "n_total_params": n_total_params,
+                "n_trainable_params": n_trainable_params,
+            }
+        )
 
-    return brain_model, n_total_params, n_trainable_params
+    return brain_model, n_total_params, n_trainable_params, ch_names

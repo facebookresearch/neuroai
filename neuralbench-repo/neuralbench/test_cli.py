@@ -10,6 +10,7 @@ import warnings
 from collections.abc import Callable
 
 import pytest
+import torch
 from exca import ConfDict
 
 import neuralset as ns
@@ -19,10 +20,17 @@ from .cli import run_benchmark
 from .experiment_config import (
     _apply_prepare_overlay,
     _warn_slurm_partition,
+    _warn_unsupported_gpu,
     prepare_task_configs,
 )
 from .main import Data
-from .registry import ALL_DATASETS, ALL_TASKS, DEFAULTS_DIR, load_yaml_config
+from .registry import (
+    ALL_DATASETS,
+    ALL_TASKS,
+    DEFAULTS_DIR,
+    _resolve_task_dir,
+    load_yaml_config,
+)
 
 
 def test_build_all_datasets() -> None:
@@ -77,6 +85,31 @@ def test_cluster_config_wires_all_infra_clusters(
     assert raw["infra"]["cluster"] == cluster
     assert raw["data"]["neuro"]["infra"]["cluster"] == cluster
     assert raw["data"]["target"]["infra"]["cluster"] == cluster
+
+
+@pytest.mark.parametrize("cluster", [None, "slurm"])
+def test_task_configs_do_not_override_infra_cluster(
+    patch_config: Callable[..., None], cluster: str | None
+) -> None:
+    """No task config may hardcode *.infra.cluster, overriding the user config."""
+    patch_config(CLUSTER=cluster)
+    defaults = load_yaml_config(DEFAULTS_DIR / "config.yaml")
+    assert defaults is not None
+    base = ConfDict(defaults)
+    for device, tasks in ALL_DATASETS.items():
+        for task_name in tasks:
+            merged = base.copy()
+            task_dir = _resolve_task_dir(device, task_name)
+            task_cfg = load_yaml_config(task_dir / "config.yaml")
+            if task_cfg is None:
+                continue
+            merged.update(task_cfg)
+            flat = merged.flat()
+            for key, value in flat.items():
+                if key.endswith("infra.cluster"):
+                    assert value == cluster, (
+                        f"{device}/{task_name}: {key} is {value!r}, expected {cluster!r}"
+                    )
 
 
 @pytest.mark.parametrize("cluster", [None, "auto", "slurm"])
@@ -156,6 +189,40 @@ def test_warn_slurm_partition_fires_without_partition(
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/srun")
     with pytest.warns(UserWarning, match="SLURM is available"):
         _warn_slurm_partition(debug=False)
+
+
+@pytest.mark.parametrize(
+    "capability,arch_list,remedy",
+    [
+        ((6, 0), ["sm_75", "sm_80", "sm_90"], "--index-url"),
+        ((12, 0), ["sm_50", "sm_60", "sm_90"], "--upgrade"),
+        ((9, 0), ["sm_75", "sm_80", "sm_90"], None),
+        ((8, 6), ["sm_80", "compute_80"], None),
+    ],
+)
+def test_warn_unsupported_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+    capability: tuple[int, int],
+    arch_list: list[str],
+    remedy: str | None,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    monkeypatch.setattr(torch.cuda, "get_arch_list", lambda: arch_list)
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda index=None: capability
+    )
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda index=None: "TestGPU")
+    if remedy is None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            _warn_unsupported_gpu()
+        return
+    with pytest.warns(UserWarning, match="not built for") as record:
+        _warn_unsupported_gpu()
+    assert len(record) == 1, "identical GPUs must warn once, not once per device"
+    message = str(record[0].message)
+    assert remedy in message, f"remedy must suit sm_{capability[0]}{capability[1]}"
 
 
 def test_run_benchmark_cli_help_smoke(

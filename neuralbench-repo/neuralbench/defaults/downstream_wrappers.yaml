@@ -3,90 +3,70 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
-# Downstream wrapper configs for evaluation of a pretrained model.
 #
-# Other strategies to implement:
-# - Attentive probe
-# - Frozen + linear probe, then finetune
-# - PEFT, LoRA, etc.
+# Downstream adaptation-strategy presets, selected via ``-w`` (e.g.
+# ``-w linear_probe_flatten lora_r4_flatten finetune_mean``).
+#
+# Each preset is a multi-key overlay merged into the assembled config;
+# ``downstream_model_wrapper`` is partial-merged, so model-specific fields such
+# as ``lora_target_modules`` are inherited from the model YAML.
 
-identity_freeze:
-  aggregation: null
-  probe_config: null
-  layers_to_unfreeze: "last"
-identity_finetune:
-  aggregation: null
-  probe_config: null
-cls_linear_finetune:
-  model_output_key: c_out
-  aggregation: first
-avg_linear_finetune:
-  model_output_key: c_out
-  aggregation: mean
-conv_linear_finetune:
-  model_output_key: z
-  aggregation: 4
-flatten_linear_freeze:
-  model_output_key: null
-  aggregation: flatten
-  layers_to_unfreeze: [""]
-cls_linear_freeze:
-  model_output_key: c_out
-  aggregation: first
-  layers_to_unfreeze: [""]
-avg_linear_freeze:
-  model_output_key: c_out
-  aggregation: mean
-  layers_to_unfreeze: [""]
-conv_linear_freeze:
-  model_output_key: z
-  aggregation: 4
-  layers_to_unfreeze: [""]
-cls_mlp_freeze:
-  model_output_key: c_out
-  aggregation: first
-  layers_to_unfreeze: [""]
-  probe_config:
-    name: Mlp
-    hidden_sizes:
-      - 512
-      - -1  # Last value will be overwritten
-avg_mlp_freeze:
-  model_output_key: c_out
-  aggregation: mean
-  layers_to_unfreeze: [""]
-  probe_config:
-    name: Mlp
-    hidden_sizes:
-      - 512
-      - -1  # Last value will be overwritten
-conv_mlp_freeze:
-  model_output_key: z
-  aggregation: 4
-  layers_to_unfreeze: [""]
-  probe_config:
-    name: Mlp
-    hidden_sizes:
-      - 512
-      - -1  # Last value will be overwritten
-avg_linear_finetune_attention:
-  model_output_key: c_out
-  aggregation: mean
-  layers_to_unfreeze:
-    - to_q
-    - to_k
-    - to_v
-    - to_out
-  strict_matching: false
-flatten_mlp_finetune:  # For CBraMod
-  model_output_key: null
-  aggregation: flatten
-  probe_config:
-    name: Mlp
-    activation_layer: elu
-    dropout: 0.1
-    hidden_sizes:
-      - 800  # 4 * 200
-      - 200
-      - -1  # Last value will be overwritten
+# --- Frozen-backbone probing (linear or attentive head) ----------------------
+# High LR / no weight decay, since few params train.  The optimizer anchor below
+# is reused by every frozen-backbone preset, LoRA included.
+linear_probe_flatten:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: flatten
+    probe_config: linear
+  lightning_optimizer_config: &head_only_optimizer
+    optimizer:
+      lr: 5.0e-4
+      kwargs:
+        weight_decay: 0.0
+    scheduler:
+      kwargs:
+        max_lr: 5.0e-4
+linear_probe_mean:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: mean
+    probe_config: linear
+  lightning_optimizer_config: *head_only_optimizer
+attentive_probe:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: null
+    probe_config: attention
+  lightning_optimizer_config: *head_only_optimizer
+
+# --- LoRA: frozen backbone + low-rank adapters on attention projections -------
+# ``lora_alpha = 2 * r``; ``target_modules`` comes from each model's YAML.
+lora_r4_flatten:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: flatten
+    probe_config: linear
+    lora_config: {r: 4, lora_alpha: 8, lora_dropout: 0.1, bias: none}
+  lightning_optimizer_config: *head_only_optimizer
+lora_r32_flatten:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: flatten
+    probe_config: linear
+    lora_config: {r: 32, lora_alpha: 64, lora_dropout: 0.1, bias: none}
+  lightning_optimizer_config: *head_only_optimizer
+
+# --- Full fine-tune: train all weights + probe head, default optimizer -------
+finetune_mean:
+  downstream_model_wrapper:
+    layers_to_unfreeze: null
+    layers_to_freeze: null
+    aggregation: mean
+    probe_config: linear
+finetune_flatten:
+  downstream_model_wrapper:
+    layers_to_unfreeze: null
+    layers_to_freeze: null
+    aggregation: flatten
+    probe_config: linear

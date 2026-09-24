@@ -18,12 +18,16 @@ import numpy as np
 import torch
 from sklearn.utils import compute_class_weight
 from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 import neuralset as ns
 from neuralset.dataloader import SegmentDataset
 from neuralset.events import etypes
 from neuralset.extractors import LabelEncoder
 from neuralset.utils import warn_once
+
+from .metrics import _assign_bins
 
 LOGGER = logging.getLogger(__name__)
 
@@ -232,8 +236,11 @@ def load_checkpoint(
     keys_to_remove = []
     for k, v in stripped_state_dict.items():
         if model_dict[k].size() != v.size():
-            logger.info(
-                f"Size mismatch for {k}, checkpoint has shape {v.size()} and current model has shape {model_dict[k].size()}."
+            logger.warning(
+                f"Size mismatch for {k}: checkpoint has shape {v.size()}, model has "
+                f"{model_dict[k].size()}. Keeping the randomly initialised weights; "
+                f"check that the model config matches the one the checkpoint was "
+                f"trained with."
             )
             keys_to_remove.append(k)
     for k in keys_to_remove:
@@ -244,6 +251,39 @@ def load_checkpoint(
     logger.info(f"Loaded model hash: {model_hash(brain_model)}")
 
     return brain_model
+
+
+def finite_target_fraction(
+    dataset: SegmentDataset,
+    target: ns.extractors.BaseExtractor,
+    batch_size: int,
+    num_workers: int,
+) -> np.ndarray:
+    """Fraction of each segment's target frames that carry a usable label."""
+    # Target-only dataset: extracting neuro here as well would double the read.
+    probe = SegmentDataset(
+        extractors={"target": target},
+        segments=dataset.segments,
+        pad_duration=dataset.pad_duration,
+    )
+    loader = DataLoader(
+        probe,
+        batch_size=batch_size,
+        collate_fn=probe.collate_fn,
+        num_workers=num_workers,
+        shuffle=False,
+    )
+    # Streams instead of reusing ``get_targets_from_dataset``: a dense target
+    # (emg/pose: 20 x 11790 floats a segment) will not fit a split in RAM.
+    fractions = []
+    for batch in tqdm(loader, desc="Screening targets"):
+        finite = torch.isfinite(batch.data["target"])
+        # A frame counts only where every channel resolved, as ``BrainModule``
+        # masks it; a target without a time axis is all-or-nothing.
+        if finite.ndim == 3:
+            finite = finite.all(dim=1)
+        fractions.append(finite.flatten(start_dim=1).float().mean(dim=1))
+    return torch.cat(fractions).numpy()
 
 
 def get_targets_from_dataset(dataset: SegmentDataset) -> torch.Tensor:
@@ -381,17 +421,14 @@ def _compute_regression_bin_weights(
 ) -> torch.Tensor:
     """Compute per-sample inverse-frequency weights from a regression target tensor.
 
-    Targets are bucketised into ``len(bin_edges) - 1`` bins defined by
-    ``bin_edges``.  Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
-    ``i < n_bins - 1``; the top bin is closed on the right
-    (``[bin_edges[-2], bin_edges[-1]]``) so that targets exactly at
-    ``bin_edges[-1]`` (e.g. the cap value in ``AddSleepOnsetTargets``) are
-    counted in the top bin.  This matches the bin semantics of
-    :class:`~neuralbench.metrics.BinnedMAE`.
+    Targets are binned by :func:`~neuralbench.metrics._assign_bins`, so
+    stratification matches :class:`~neuralbench.metrics.BinnedMAE`.
 
     Targets falling outside ``[bin_edges[0], bin_edges[-1]]`` receive a weight
     of ``0`` (they are effectively excluded from sampling) and do not
-    contribute to any bin's count.
+    contribute to any bin's count.  The upper edge itself is in range, which
+    closes the top bin so that targets exactly at ``bin_edges[-1]`` (e.g. the
+    cap value in ``AddSleepOnsetTargets``) are counted there.
 
     Each sample's weight is ``1 / count_in_its_bin`` so that, in expectation,
     every populated bin contributes the same total mass to a weighted sampler.
@@ -417,9 +454,8 @@ def _compute_regression_bin_weights(
             f"bin_edges must have length >= 2, got {len(bin_edges)}: {list(bin_edges)}"
         )
 
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
     n_bins = len(bin_edges) - 1
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
 
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).to(dtype=torch.float32)
@@ -462,8 +498,7 @@ def make_regression_bin_sampler(
     weights = _compute_regression_bin_weights(targets, bin_edges)
 
     n_bins = len(bin_edges) - 1
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).tolist()
     bin_labels = [

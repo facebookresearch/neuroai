@@ -14,6 +14,14 @@ Core
    Experiment
    BenchmarkAggregator
 
+.. currentmodule:: neuralbench.data
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   get_default_dataloaders
+
 .. currentmodule:: neuralbench.pl_module
 
 .. autosummary::
@@ -22,17 +30,23 @@ Core
 
    BrainModule
 
-CLI
----
+Running the benchmark
+---------------------
 
-.. currentmodule:: neuralbench.cli
+Three entry points onto the same experiments -- the ``neuralbench`` command, the
+same selections from Python, and one model you built over a selection.  They are
+compared in the :doc:`quickstart <auto_examples/quickstart/index>`.
+
+.. currentmodule:: neuralbench
 
 .. autosummary::
    :toctree: generated/
    :nosignatures:
 
-   run_benchmark
    run_benchmark_cli
+   run_benchmark
+   check_model
+   evaluate_model
 
 Events Transforms
 -----------------

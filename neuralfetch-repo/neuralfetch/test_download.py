@@ -7,9 +7,11 @@
 """Offline tests for download backends — no network access required."""
 
 import os
+import sys
+import types
 import typing as tp
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -34,6 +36,7 @@ _EXTRA_KWARGS: dict[str, dict[str, tp.Any]] = {
     "Physionet": {"version": "1.0.0"},
     "Donders": {"study_id": "DSC_123"},
     "Datalad": {"repo_url": "https://example.com/repo.git"},
+    "Gin": {"repo_url": "https://gin.g-node.org/test/repo.git"},
     "Synapse": {"study_id": "syn123"},
     "Zenodo": {"record_id": "12345"},
     "Huggingface": {"org": "abc"},
@@ -97,6 +100,50 @@ def test_success_writer(tmp_path: Path, suffix: str, success_msg: str) -> None:
     # Run a second time
     with download.success_writer(fname, suffix, success_msg) as success:
         assert success
+
+
+def test_success_writer_reruns_on_overwrite(tmp_path: Path) -> None:
+    """overwrite re-runs the block and refreshes the marker."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+    success_fname.write_text("stale")
+
+    with download.success_writer(fname, overwrite=True) as already_done:
+        assert not already_done
+        assert not success_fname.exists()
+
+    assert success_fname.read_text() == "done"
+
+
+def test_success_writer_drops_marker_when_overwrite_fails(tmp_path: Path) -> None:
+    """A re-run that dies partway must not leave the marker behind."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+    success_fname.write_text("done")
+
+    with pytest.raises(RuntimeError):
+        with download.success_writer(fname, overwrite=True):
+            raise RuntimeError("boom")
+
+    assert not success_fname.exists()
+
+    # The next plain call therefore re-runs instead of skipping the work.
+    with download.success_writer(fname) as already_done:
+        assert not already_done
+    assert success_fname.exists()
+
+
+def test_success_writer_keeps_marker_when_first_run_fails(tmp_path: Path) -> None:
+    """The pre-existing no-marker behaviour is unchanged."""
+    fname = tmp_path / "test.txt"
+    success_fname = tmp_path / "test_success.txt"
+
+    with pytest.raises(RuntimeError):
+        with download.success_writer(fname) as already_done:
+            assert not already_done
+            raise RuntimeError("boom")
+
+    assert not success_fname.exists()
 
 
 def test_temp_mne_data_uses_env_only(tmp_path: Path) -> None:
@@ -169,6 +216,136 @@ def test_dryad_missing_token_raises(tmp_path: Path) -> None:
         )
 
 
+def _make_gin(tmp_path: Path, **kwargs: tp.Any) -> download.Gin:
+    """Factory that builds a Gin instance rooted at *tmp_path*."""
+    defaults: dict[str, tp.Any] = {
+        "study": "test",
+        "dset_dir": tmp_path / "study",
+        "repo_url": "https://gin.g-node.org/CUBRIC/WAND.git",
+    }
+    defaults.update(kwargs)
+    return download.Gin(**defaults)
+
+
+def test_gin_https_base_strips_dot_git_and_appends_branch(tmp_path: Path) -> None:
+    """`_https_base` derives the GIN raw URL prefix from `repo_url` + `branch`."""
+    gin_master = _make_gin(tmp_path)
+    assert gin_master._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
+    gin_main = _make_gin(tmp_path, branch="main")
+    assert gin_main._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/main"
+    # `.git` suffix is optional in the input
+    gin_bare = _make_gin(tmp_path, repo_url="https://gin.g-node.org/CUBRIC/WAND")
+    assert gin_bare._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
+
+
+def test_gin_read_pointer_key_unlocked_pointer(tmp_path: Path) -> None:
+    """An unlocked in-tree pointer file parses to its annex key."""
+    key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+    pointer = tmp_path / "sub-001.meg4"
+    pointer.write_text(f"/annex/objects/{key}\n")
+    assert download.Gin._read_pointer_key(pointer) == key
+
+
+def test_gin_read_pointer_key_locked_symlink(tmp_path: Path) -> None:
+    """A locked symlink into ``.git/annex/objects/...`` resolves to its key."""
+    key = "SHA256E-s100--abc"
+    target = f"../../../.git/annex/objects/Wp/g8/{key}/{key}"
+    symlink = tmp_path / "sub-001.res4"
+    symlink.symlink_to(target)
+    assert download.Gin._read_pointer_key(symlink) == key
+
+
+def test_gin_read_pointer_key_rejects_non_pointers(tmp_path: Path) -> None:
+    """Regular files, oversize ASCII, and non-annex symlinks return None."""
+    real = tmp_path / "real.bin"
+    real.write_bytes(b"\x00\x01\x02real binary data")
+    assert download.Gin._read_pointer_key(real) is None
+
+    big = tmp_path / "oversize.txt"
+    big.write_bytes(b"/annex/objects/foo\n" + b"x" * 1024)
+    assert download.Gin._read_pointer_key(big) is None
+
+    elsewhere = tmp_path / "elsewhere.lnk"
+    elsewhere.symlink_to("../somewhere/else.bin")
+    assert download.Gin._read_pointer_key(elsewhere) is None
+
+
+def test_gin_download_invokes_clone_register_and_get(tmp_path: Path) -> None:
+    """End-to-end ``Gin._download`` wires clone -> registerurl -> annex get.
+
+    ``datalad.api.clone`` is stubbed to materialise the WAND-like directory
+    structure with one pointer file, and datalad's ``AnnexRepo`` is mocked, so
+    the test stays offline and does not require ``datalad`` to be installed.
+    """
+    gin = _make_gin(
+        tmp_path,
+        include=["sub-*/ses-01/meg"],
+        threads=3,
+    )
+
+    pointer_rel = Path("sub-00395/ses-01/meg/sub-00395_ses-01_task-resting.meg4")
+    repo_root = gin._dl_dir / gin.repo_name
+    pointer_abs = repo_root / pointer_rel
+    annex_key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+
+    def fake_clone(source: str, path: tp.Any) -> tp.Any:
+        # `datalad clone` populates the working tree; emulate that by writing
+        # the pointer file under the expected repo root.
+        Path(path).mkdir(parents=True, exist_ok=True)
+        pointer_abs.parent.mkdir(parents=True, exist_ok=True)
+        pointer_abs.write_text(f"/annex/objects/{annex_key}\n")
+        return MagicMock()
+
+    annex = MagicMock()
+    clone_mock = MagicMock(side_effect=fake_clone)
+    annex_cls = MagicMock(return_value=annex)
+
+    # Inject fake ``datalad`` modules so the test runs whether or not datalad is
+    # installed (CI does not install it). ``_download`` does
+    # ``import datalad.api as dlad`` (resolved via ``datalad.api``) and
+    # ``from datalad.support.annexrepo import AnnexRepo``.
+    fake_api = types.ModuleType("datalad.api")
+    fake_api.clone = clone_mock  # type: ignore[attr-defined]
+    fake_datalad = types.ModuleType("datalad")
+    fake_datalad.api = fake_api  # type: ignore[attr-defined]
+    fake_annexrepo = types.ModuleType("datalad.support.annexrepo")
+    fake_annexrepo.AnnexRepo = annex_cls  # type: ignore[attr-defined]
+    fake_support = types.ModuleType("datalad.support")
+    fake_support.annexrepo = fake_annexrepo  # type: ignore[attr-defined]
+    fake_modules = {
+        "datalad": fake_datalad,
+        "datalad.api": fake_api,
+        "datalad.support": fake_support,
+        "datalad.support.annexrepo": fake_annexrepo,
+    }
+
+    with patch.dict(sys.modules, fake_modules):
+        gin._download()
+
+    # 0. clone was invoked into download/<repo_name>/, AnnexRepo built on it
+    clone_mock.assert_called_once()
+    assert clone_mock.call_args.kwargs["path"] == repo_root
+    annex_cls.assert_called_once_with(str(repo_root))
+
+    # 1. registerurl invoked with key + correct GIN HTTPS URL
+    expected_url = (
+        "https://gin.g-node.org/CUBRIC/WAND/raw/master/" + pointer_rel.as_posix()
+    )
+    register_calls = [
+        c for c in annex.call_annex.call_args_list if c.args[0][:1] == ["registerurl"]
+    ]
+    assert len(register_calls) == 1
+    assert register_calls[0].args[0] == ["registerurl", annex_key, expected_url]
+
+    # 2. AnnexRepo.get invoked from the web special remote (via --from web,
+    #    since datalad's remote= only accepts git remotes) with jobs + the file
+    annex.get.assert_called_once()
+    get_args, get_kwargs = annex.get.call_args
+    assert pointer_rel.as_posix() in get_args[0]
+    assert get_kwargs["options"] == ["--from", "web"]
+    assert get_kwargs["jobs"] == 3
+
+
 def test_globus_missing_credentials_raises(tmp_path: Path) -> None:
     """Globus raises RuntimeError at construction when credentials env vars are missing."""
     env = {
@@ -195,7 +372,7 @@ def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
         dset_dir=tmp_path / "study",
     )
 
-    def mock_s3_download(self: download.S3) -> None:
+    def mock_s3_download(self: download.S3, overwrite: bool = False) -> None:
         assert self.prefix == "eegmat/1.0.0"
         assert self.output_dir == self._dl_dir / "eegmat" / "1.0.0"
         out_dir = tp.cast(Path, self.output_dir)
@@ -316,3 +493,151 @@ def test_nsd_data_access_agreement(tmp_path: Path, study_name: str) -> None:
             url = mock_browser.call_args[0][0]
             assert "__other_option__" in url
             assert "Researcher" in url
+
+
+# ---------------------------------------------------------------------------
+# Unified selective-download matcher (include / exclude)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "patterns,relpath,expected",
+    [
+        (["sub-01"], "sub-01/eeg/x.set", True),  # bare folder selects its subtree
+        (["sub-*"], "sub-01/eeg/x.set", True),  # glob folder selects subtree
+        (["sub-02"], "sub-01/eeg/x.set", False),
+        (["sub-1/**/*run-01*"], "sub-1/ses-a/func/x_run-01_bold.nii", True),
+        (["*.set"], "sub-01/eeg/x.set", True),  # '*' spans '/'
+        (["derivatives"], "sub-01/eeg/x.set", False),
+        (["/sub-01/"], "sub-01/eeg/x.set", True),  # leading/trailing slashes ignored
+        ([], "anything/at/all", False),  # empty pattern list never matches
+    ],
+)
+def test_globs_match(patterns: list[str], relpath: str, expected: bool) -> None:
+    assert download._globs_match(patterns, relpath) is expected
+
+
+def _s3(tmp_path: Path, **kwargs: tp.Any) -> download.S3:
+    return download.S3(study="s", dset_dir=tmp_path / "s", bucket="b", **kwargs)
+
+
+def test_selects_empty_include_matches_everything(tmp_path: Path) -> None:
+    assert _s3(tmp_path)._selects("sub-01/eeg/x.set") is True
+
+
+def test_selects_include_only(tmp_path: Path) -> None:
+    obj = _s3(tmp_path, include=["sub-01"])
+    assert obj._selects("sub-01/eeg/x.set") is True
+    assert obj._selects("sub-02/eeg/x.set") is False
+
+
+def test_selects_exclude_beats_include(tmp_path: Path) -> None:
+    obj = _s3(tmp_path, include=["sub-*"], exclude=["*/derivatives/*", "sub-02"])
+    assert obj._selects("sub-01/eeg/x.set") is True
+    assert obj._selects("sub-02/eeg/x.set") is False  # excluded by name
+    assert obj._selects("sub-01/derivatives/y.tsv") is False  # excluded by subpath
+
+
+def test_reject_selection_filters(tmp_path: Path) -> None:
+    with pytest.raises(NotImplementedError, match="selective downloading"):
+        _s3(tmp_path, include=["sub-01"])._reject_selection_filters()
+    with pytest.raises(NotImplementedError, match="selective downloading"):
+        _s3(tmp_path, exclude=["sub-01"])._reject_selection_filters()
+    # no filters -> no raise
+    _s3(tmp_path)._reject_selection_filters()
+
+
+# ---------------------------------------------------------------------------
+# Per-backend selection wiring
+# ---------------------------------------------------------------------------
+
+
+def test_s3_resolve_prefix_filters(tmp_path: Path) -> None:
+    """S3._resolve_prefix keeps only keys whose dataset-relative path selects."""
+    obj = _s3(tmp_path, prefix="ds/1.0.0", include=["sub-01"])
+    keys = [
+        "ds/1.0.0/sub-01/eeg/a.set",
+        "ds/1.0.0/sub-02/eeg/b.set",
+        "ds/1.0.0/README",
+    ]
+    bucket = MagicMock()
+    bucket.objects.filter.return_value = [MagicMock(key=k) for k in keys]
+
+    jobs = obj._resolve_prefix(bucket, skip_existing=False)
+    rels = sorted(str(p.relative_to(obj._out).as_posix()) for _, p in jobs)
+    assert rels == ["sub-01/eeg/a.set"]
+
+
+def _datalad(tmp_path: Path, **kwargs: tp.Any) -> download.Datalad:
+    return download.Datalad(
+        study="s",
+        dset_dir=tmp_path / "s",
+        repo_url="https://example.com/ds004192.git",
+        **kwargs,
+    )
+
+
+def test_datalad_selected_paths_filters(tmp_path: Path) -> None:
+    obj = _datalad(tmp_path, include=["sub-01"])
+    repo_root = obj._dl_dir / obj.repo_name
+    for rel in [
+        "sub-01/eeg/a.set",
+        "sub-02/eeg/b.set",
+        "dataset_description.json",
+        ".git/config",
+    ]:
+        p = repo_root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("x")
+    assert obj._selected_paths(repo_root) == [str(repo_root / "sub-01" / "eeg" / "a.set")]
+
+
+def test_datalad_selected_paths_no_filter_returns_dot(tmp_path: Path) -> None:
+    obj = _datalad(tmp_path)
+    assert obj._selected_paths(obj._dl_dir / obj.repo_name) == ["."]
+
+
+@pytest.mark.parametrize("name", ["Dandi", "Synapse", "Eegdash", "Donders"])
+def test_backend_rejects_selection_filters(name: str, tmp_path: Path) -> None:
+    """Backends with no native filter raise NotImplementedError when include set."""
+    cls = getattr(download, name)
+    extra = _EXTRA_KWARGS.get(name, {})
+    env = _ENV_VARS.get(name, {})
+    with patch.dict(os.environ, env):
+        obj = cls(study="s", dset_dir=tmp_path / name, include=["sub-01"], **extra)
+    with pytest.raises(NotImplementedError, match="selective downloading"):
+        obj._download()
+
+
+# ---------------------------------------------------------------------------
+# #1751 / neuroai#51 regression: never write a success marker on failure
+# ---------------------------------------------------------------------------
+
+
+def test_download_does_not_mark_success_on_failure(tmp_path: Path) -> None:
+    obj = _s3(tmp_path)
+    with (
+        patch.object(type(obj), "_check_requirements"),
+        patch.object(obj, "_download", side_effect=RuntimeError("boom")),
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            obj.download()
+    assert not obj.get_success_file().exists()
+
+
+def test_datalad_missing_binary_raises_no_marker(tmp_path: Path) -> None:
+    """#1751: a missing datalad install must error, not warn + mark success.
+
+    With the move to ``datalad.api``, ``_check_requirements`` raises before
+    ``_download`` runs, so no success marker is written over an empty folder.
+    """
+    obj = _datalad(tmp_path)
+    with patch.object(
+        download.Datalad,
+        "_check_requirements",
+        side_effect=ModuleNotFoundError("No module named 'datalad'"),
+    ):
+        with pytest.raises(ModuleNotFoundError):
+            obj.download()
+    assert not obj.get_success_file().exists()
+    assert list(obj._dl_dir.iterdir()) == []

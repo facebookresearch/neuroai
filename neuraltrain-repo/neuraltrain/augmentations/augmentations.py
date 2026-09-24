@@ -11,6 +11,42 @@ import torch
 from torch import nn
 
 
+class BandRotationConfig(pydantic.BaseModel):
+    """Configuration for braindecode's ``BandRotation`` augmentation.
+
+    Parameters
+    ----------
+    probability : float
+        Probability of applying the augmentation to a given example.
+    num_bands : int
+        Number of electrode bands, e.g. 1 for a single wristband.
+    electrodes_per_band : int
+        Electrodes per band.
+    band_offsets : tuple of int
+        Circular channel rolls to sample from uniformly, one per band.
+    max_temporal_jitter : int
+        Maximum sample shift applied to band 1; requires ``num_bands >= 2``.
+    """
+
+    probability: float
+    num_bands: int = 2
+    electrodes_per_band: int = 16
+    band_offsets: tuple[int, ...] = (-1, 0, 1)
+    max_temporal_jitter: int = 0
+    model_config = pydantic.ConfigDict(protected_namespaces=(), extra="forbid")
+
+    def build(self) -> nn.Module:
+        from braindecode.augmentation import BandRotation
+
+        return BandRotation(
+            probability=self.probability,
+            num_bands=self.num_bands,
+            electrodes_per_band=self.electrodes_per_band,
+            band_offsets=self.band_offsets,
+            max_temporal_jitter=self.max_temporal_jitter,
+        )
+
+
 class ChannelsDropoutConfig(pydantic.BaseModel):
     """Configuration for braindecode's ``ChannelsDropout`` augmentation.
 

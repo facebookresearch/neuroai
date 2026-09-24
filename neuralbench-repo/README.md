@@ -68,6 +68,24 @@ neuralbench fmri image --debug          # fMRI image retrieval in debug mode
 neuralbench emg typing -m emg2qwerty --debug   # EMG → keystroke CTC decoding (emg2qwerty)
 ```
 
+## Three ways to run it
+
+The CLI, `run_benchmark()` and `evaluate_model()` launch the same experiments, from the same YAML configs and against the same cache. Which one you want depends on where your model lives and what you want handed back:
+
+- **`neuralbench eeg <task>`** — run or reproduce the benchmark with a model registered in this repo. Results land in the results folder; `--plot-cached` turns them into figures and tables.
+- **`run_benchmark(device="eeg", task=...)`** — the same selections from a script or notebook, launched the same way.
+- **`evaluate_model(model, "eeg", ...)`** — a `torch.nn.Module` you built, weights and all, with no config in this repo. One instance serves every task in the selection, and the results come back as a DataFrame.
+
+```python
+from neuralbench import check_model, evaluate_model
+
+print(check_model(my_model, "eeg", "motor_imagery"))  # shapes only: seconds, no data
+scores = evaluate_model(my_model, "eeg", "motor_imagery", name="my-fm", debug=True)
+```
+
+> [!TIP]
+> The [quickstart tutorials](https://facebookresearch.github.io/neuroai/neuralbench/auto_examples/quickstart/index.html) compare the three side by side, one tutorial each.
+
 ## Running the full EEG benchmark
 
 To run all 36 EEG tasks end-to-end:
@@ -83,7 +101,7 @@ Use `-m all_classic`, `-m all_fm`, or `-m all_classic all_fm` to evaluate across
 See the [full EEG benchmark guide](https://facebookresearch.github.io/neuroai/neuralbench/full_benchmark.html) for prerequisites, resource requirements (~3.3 TB disk, 1 GPU with 32 GB VRAM per job), dataset variant options, and computational considerations.
 
 > [!IMPORTANT]
-> A handful of datasets cannot be fetched automatically and require a one-time manual step (creating an account, accepting a license agreement, or submitting an application form). The affected tasks are `pathology`, `artifact`, and `clinical_event` (TUH EEG Corpus); `image` and `meg/image` (THINGS-images); `emotion` (FACED on Synapse); `video` (SEED-DV); `fmri/image` (NSD); `motor_imagery` and `mental_arithmetic` (Shin2017OpenA and Shin2017OpenB); `eeg/typing` / `meg/typing` (Levy2025Brain, not yet publicly released); and `speech` (Brennan2019 on Deep Blue Data: the legacy `urlretrieve`-based downloader is currently blocked by Cloudflare's bot challenge, so the v1 files must be fetched manually via Globus until upstream restores anonymous HTTP access). See the [Datasets requiring manual download](https://facebookresearch.github.io/neuroai/neuralbench/full_benchmark.html#manual-download-datasets) section of the benchmark guide for the exact steps for each one.
+> A handful of datasets cannot be fetched automatically and require a one-time manual step (creating an account, accepting a license agreement, or submitting an application form). The affected tasks are `pathology`, `artifact`, and `clinical_event` (TUH EEG Corpus); `image` and `meg/image` (THINGS-images); `emotion` (FACED on Synapse); `video` (SEED-DV); `fmri/image` (NSD); `motor_imagery` and `mental_arithmetic` (Shin2017OpenA and Shin2017OpenB); and `speech` (Brennan2019 on Deep Blue Data: the legacy `urlretrieve`-based downloader is currently blocked by Cloudflare's bot challenge, so the v1 files must be fetched manually via Globus until upstream restores anonymous HTTP access). See the [Datasets requiring manual download](https://facebookresearch.github.io/neuroai/neuralbench/full_benchmark.html#manual-download-datasets) section of the benchmark guide for the exact steps for each one.
 
 ## Weights & Biases setup
 

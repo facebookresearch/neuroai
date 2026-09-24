@@ -494,7 +494,11 @@ class ImageSimilarity(torchmetrics.Metric):
         elif model_name == "efficientnet":
             net = tvmodels.efficientnet_b1(weights=True)
         elif model_name == "swav":
-            net = torch.hub.load("facebookresearch/swav:main", "resnet50")
+            # skips torch.hub's fork check, an unauthenticated GitHub API call
+            # rate-limited per IP; the repo and ref here are fixed, not input
+            net = torch.hub.load(
+                "facebookresearch/swav:main", "resnet50", skip_validation=True
+            )
 
         self.net = net.float().eval()
 
@@ -610,7 +614,7 @@ class ImageSimilarity(torchmetrics.Metric):
         self,
         ground_truth: np.ndarray | torch.Tensor,
         predictions: np.ndarray | torch.Tensor,
-    ) -> tp.Tuple[np.ndarray, np.ndarray]:
+    ) -> tp.Tuple[float, float]:
         if isinstance(ground_truth, torch.Tensor):
             ground_truth = ground_truth.cpu()
         if isinstance(predictions, torch.Tensor):

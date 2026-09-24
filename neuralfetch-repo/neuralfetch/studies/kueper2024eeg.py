@@ -109,9 +109,9 @@ class Kueper2024Eeg(study.Study):
         "BY74D": {"date": ["20230424"], "runs": list(range(1, 11))},
     }
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         zenodo = download.Zenodo(study="EEG", dset_dir=self.path, record_id="8345429")
-        zenodo.download()
+        zenodo.download(overwrite=overwrite)
 
     def _get_basename(self, timeline: dict[str, tp.Any]):
         tl = timeline

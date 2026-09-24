@@ -14,11 +14,6 @@ from neuralset.events import study
 
 
 class Test2023Meg(study.Study):
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        # sequential: no need to spawn processes for test data
-        self.infra_timelines.cluster = None
-
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=3,
         num_subjects=3,
@@ -28,7 +23,7 @@ class Test2023Meg(study.Study):
         frequency=100,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

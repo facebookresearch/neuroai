@@ -63,7 +63,7 @@ class Alvarez2022Haaglanden(study.Study):
         frequency=256,
     )
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self.path.mkdir(exist_ok=True, parents=True)
         physionet = download.Physionet(
             study="hmc-sleep-staging",

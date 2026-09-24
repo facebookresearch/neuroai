@@ -91,7 +91,9 @@ def test_wrapper_mapping():
 def test_build_classification():
     """With n_outputs, build returns a wrapper with classification output."""
     cfg = NtLuna(kwargs=_TINY_LUNA_KWARGS)
-    model = cfg.build(n_chans=_N_CHANS, n_times=_N_TIMES, n_outputs=_N_OUTPUTS)
+    model = cfg.build(
+        n_spatial_locations=_N_CHANS, n_temporal_samples=_N_TIMES, n_outputs=_N_OUTPUTS
+    )
 
     assert isinstance(model, _LunaEncoderWrapper)
 
@@ -110,7 +112,9 @@ def test_build_encoder_only(n_times):
     embed_dim = _TINY_LUNA_KWARGS["embed_dim"]
 
     cfg = NtLuna(kwargs=_TINY_LUNA_KWARGS)
-    model = cfg.build(n_chans=_N_CHANS, n_times=n_times)
+    model = cfg.build(
+        n_spatial_locations=_N_CHANS, n_temporal_samples=n_times, n_outputs=None
+    )
 
     assert isinstance(model, _LunaEncoderWrapper)
     assert isinstance(model.model.final_layer, torch.nn.Identity)

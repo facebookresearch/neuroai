@@ -24,10 +24,12 @@ data:
   target:
     =replace=: true
     name: EventField
-    event_types: Keystroke
+    event_types: Stimulus
     event_field: reaction_time
     aggregation: trigger
-  trigger_event_type: Keystroke
+  # The contrast change; `filter_reaction_time` drops the `trial` and `feedback`
+  # Stimulus subtypes, which carry no `reaction_time`.
+  trigger_event_type: Stimulus
   start: 0.5
   duration: 2.0
   summary_columns: [release]

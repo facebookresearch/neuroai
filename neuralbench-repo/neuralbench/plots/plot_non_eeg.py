@@ -54,8 +54,8 @@ def _task_configs_valid(task_configs: list[tp.Any]) -> bool:
     """Return True when *task_configs* deserialize cleanly into experiments.
 
     Used to skip tasks whose required study isn't installed in the current
-    environment (e.g. private datasets like ``Levy2025BrainMeg`` that
-    aren't shipped with the public ``neuralfetch``). Constructs a
+    environment (e.g. datasets that aren't shipped with the public
+    ``neuralfetch``). Constructs a
     throwaway :class:`BenchmarkAggregator` purely to trigger pydantic /
     exca discriminator resolution; the instance is discarded.
     """

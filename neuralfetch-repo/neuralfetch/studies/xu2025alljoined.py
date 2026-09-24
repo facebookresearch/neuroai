@@ -40,6 +40,7 @@ class Xu2025Alljoined(study.Study):
     Notes:
         - Successor to Alljoined (xu2024.py) with ~10x more data.
         - Subject 8 has mislabeled files (sessions 1/3/4); handled in code.
+        - Markers sharing an onset are dropped as ambiguous; handled in code.
         - Image stimuli are extracted from a zip archive during download.
     """
 
@@ -67,7 +68,16 @@ class Xu2025Alljoined(study.Study):
     licence: tp.ClassVar[str] = "CC-BY-NC-SA-4.0"
     description: tp.ClassVar[str] = "20 participants watching static images in EEG."
 
-    def _download(self, overwrite=False) -> None:
+    _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
+        num_timelines=1520,
+        num_subjects=20,
+        num_events_in_query=1072,
+        event_types_in_query={"Eeg", "Image"},
+        data_shape=(32, 76032),
+        frequency=256.0,
+    )
+
+    def _download(self, overwrite: bool = False) -> None:
         accept = os.environ.get("ALLJOINED_ACCEPT_LICENCE", "").lower() in (
             "1",
             "true",
@@ -179,6 +189,10 @@ class Xu2025Alljoined(study.Study):
         # extract annotations
         events_df = raw.annotations.to_data_frame(time_format=None)
         events_df.rename(columns={"onset": "start"}, inplace=True)
+        # the marker stream stalls and flushes several markers on one timestamp
+        # (29/1525 recordings, 160 markers): the evoking image is unrecoverable
+        collided = events_df["start"].duplicated(keep=False)
+        events_df = events_df[~collided].reset_index(drop=True)
         # stimulus presentation defined in the study as 100ms
         events_df["duration"] = 0.1
         events_df["type"] = "Image"

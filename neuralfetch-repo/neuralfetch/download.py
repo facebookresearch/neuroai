@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import contextlib
+import fnmatch
 import json
 import logging
 import os
@@ -15,14 +16,13 @@ import typing as tp
 import urllib.request
 import zipfile
 from abc import abstractmethod
-from glob import glob
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import mne
 import pydantic
 from tqdm import tqdm
 
-from neuralset.base import BaseModel, PathLike, _Module
+from neuralset.base import PathLike, _Module
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +65,20 @@ def ensure_study_symlink(studies_root: Path, link_name: str, target_name: str) -
 
 @contextlib.contextmanager
 def success_writer(
-    fname: str | Path, suffix: str = "_success.txt", success_msg: str = "done"
+    fname: str | Path,
+    suffix: str = "_success.txt",
+    success_msg: str = "done",
+    overwrite: bool = False,
 ):
     """Look for a file ending with ``suffix`` indicating ``fname`` has
     already been processed and create it after the encapsulated block
     succeeds.
+
+    When ``overwrite`` is True an existing marker is reported as absent (the
+    yielded value is False), so callers re-run the guarded work.  The marker is
+    cleared before the block runs and only rewritten once it returns, so a
+    re-run that dies partway never leaves behind a marker claiming the work
+    finished.
 
     Examples
     --------
@@ -82,9 +91,11 @@ def success_writer(
     ./test.txt
     """
     success_fname = Path(str(Path(fname).with_suffix("")) + suffix)
-    file_exists = success_fname.exists()
-    yield file_exists
-    if not file_exists:
+    already_done = success_fname.exists() and not overwrite
+    if not already_done:
+        success_fname.unlink(missing_ok=True)
+    yield already_done
+    if not already_done:
         with open(success_fname, "w") as f:
             f.write(success_msg)
 
@@ -344,6 +355,29 @@ def run_parallel(
             future.result()
 
 
+def _globs_match(patterns: list[str], relpath: str) -> bool:
+    """True if *relpath* matches any of *patterns* (openneuro-py glob semantics).
+
+    ``relpath`` is a dataset-relative POSIX path. ``*``/``?``/``**`` follow
+    ``fnmatch`` semantics (``*`` spans ``/`` as well, matching openneuro-py's
+    documented behaviour, so a pattern like ``sub-1/**/*run-01*`` keeps working).
+    A pattern that names a directory (e.g. ``sub-01`` or ``sub-*``) also selects
+    everything beneath it: each ancestor prefix of ``relpath`` is tested, so
+    ``sub-01`` matches ``sub-01/eeg/x.set``.
+    """
+    rel = relpath.strip("/")
+    parts = PurePosixPath(rel).parts
+    candidates = [rel]
+    # ancestor directory prefixes -> a folder pattern selects its whole subtree
+    for i in range(1, len(parts)):
+        candidates.append("/".join(parts[:i]))
+    for pattern in patterns:
+        pat = pattern.strip("/")
+        if any(fnmatch.fnmatchcase(cand, pat) for cand in candidates):
+            return True
+    return False
+
+
 class BaseDownload(_Module):
     """Abstract base class for all neuralfetch download backends.
 
@@ -351,6 +385,14 @@ class BaseDownload(_Module):
     method wraps ``_download`` with idempotency checks via a *success file*:
     once a dataset has been downloaded successfully, subsequent calls are
     no-ops unless ``overwrite=True`` is passed.
+
+    Selective downloading is unified across backends via the ``include`` and
+    ``exclude`` glob fields (dataset-relative POSIX globs). ``include`` empty
+    means "everything"; ``exclude`` is applied after ``include`` and wins.
+    Backends map these onto their native selection mechanism where possible
+    (see :meth:`_selects`); backends with no usable native filter raise
+    ``NotImplementedError`` when either field is set (see
+    :meth:`_reject_selection_filters`).
 
     Parameters
     ----------
@@ -367,8 +409,33 @@ class BaseDownload(_Module):
     study: str
     dset_dir: PathLike
     folder: str = "download"
+    # dataset-relative POSIX globs; empty ``include`` means everything and
+    # ``exclude`` is applied after ``include`` (exclude wins).
+    include: list[str] = []
+    exclude: list[str] = []
 
     _dl_dir: Path = pydantic.PrivateAttr()
+
+    def _selects(self, relpath: PathLike | str) -> bool:
+        """True if a dataset-relative path passes the include/exclude filter."""
+        rel = str(relpath).strip("/")
+        if self.exclude and _globs_match(self.exclude, rel):
+            return False
+        if not self.include:
+            return True
+        return _globs_match(self.include, rel)
+
+    def _reject_selection_filters(self) -> None:
+        """Raise if include/exclude is set on a backend with no native filter.
+
+        Prevents the silent "filter ignored, whole dataset downloaded" failure
+        mode.
+        """
+        if self.include or self.exclude:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not support selective downloading; "
+                "remove the include/exclude filters or use a backend that does."
+            )
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -392,18 +459,21 @@ class BaseDownload(_Module):
         self._check_requirements()
         print(f"Downloading {Path(self.dset_dir).name} to {self._dl_dir}...")
 
-        self._download()
+        self._download(overwrite=overwrite)
         self.get_success_file().write_text("success")
         print("Done! Consider running giving read/write permissions to everyone:")
         print(f"chmod -R 777 {self._dl_dir}")  # we should do this on FAIR cluster
 
     @abstractmethod
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        """Perform the actual transfer.
+
+        ``overwrite`` requests a *forced* re-transfer: implementations must
+        re-fetch/re-verify files rather than trusting mere on-disk existence
+        (e.g. clear ``skip_existing`` guards, pass ``force_download``), so that
+        a corrupted or partial download is repaired.
+        """
         raise NotImplementedError
-
-
-class Wildcard(BaseModel):
-    folder: str
 
 
 class S3(BaseDownload):
@@ -465,8 +535,12 @@ class S3(BaseDownload):
             return Path(self.output_dir)
         return self._dl_dir
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import boto3
+
+        # ``overwrite`` forces re-transfer of every object, even those already
+        # present locally.
+        skip_existing = self.skip_existing and not overwrite
 
         session_kwargs: dict[str, tp.Any] = {}
         if self.profile:
@@ -491,26 +565,30 @@ class S3(BaseDownload):
         bucket = s3.Bucket(self.bucket)
 
         if self.files_with_destinations:
-            jobs = self._resolve_mapped()
+            jobs = self._resolve_mapped(skip_existing)
         else:
-            jobs = self._resolve_prefix(bucket)
+            jobs = self._resolve_prefix(bucket, skip_existing)
 
         self._download_parallel(bucket, jobs)
 
-    def _resolve_mapped(self) -> list[tuple[str, Path]]:
+    def _resolve_mapped(self, skip_existing: bool) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for s3_key, local_rel in self.files_with_destinations:
+            if not self._selects(local_rel):
+                continue
             local_path = (
                 Path(local_rel)
                 if Path(local_rel).is_absolute()
                 else self._out / local_rel
             )
-            if self.skip_existing and local_path.exists():
+            if skip_existing and local_path.exists():
                 continue
             jobs.append((s3_key, local_path))
         return jobs
 
-    def _resolve_prefix(self, bucket: tp.Any) -> list[tuple[str, Path]]:
+    def _resolve_prefix(
+        self, bucket: tp.Any, skip_existing: bool
+    ) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         for obj in bucket.objects.filter(Prefix=self.prefix):
             rel = obj.key
@@ -518,8 +596,10 @@ class S3(BaseDownload):
                 rel = obj.key[len(self.prefix) :].lstrip("/")
             if not rel:
                 continue
+            if not self._selects(rel):
+                continue
             target = self._out / rel
-            if self.skip_existing and target.exists():
+            if skip_existing and target.exists():
                 continue
             jobs.append((obj.key, target))
         return jobs
@@ -550,37 +630,39 @@ class Dandi(BaseDownload):
     requirements: tp.ClassVar[tuple[str, ...]] = ("dandi",)
     version: str = "draft"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        self._reject_selection_filters()
         import dandi.download  # type: ignore[import-not-found,import-untyped]
 
         url = f"https://dandiarchive.org/dandiset/{self.study}/{self.version}"
-        dandi.download.download([url], output_dir=str(self._dl_dir), existing="skip")
+        existing = "overwrite" if overwrite else "skip"
+        dandi.download.download([url], output_dir=str(self._dl_dir), existing=existing)
 
 
 class Datalad(BaseDownload):
     """Download datasets via DataLad and git-annex.
 
-    Clones a git-annex repository and optionally retrieves a subset of
-    directories.  A password-free SSH key is required for git operations.
+    Clones a git-annex repository into ``download/<repo_name>/`` and fetches
+    its content with the ``datalad`` Python API. Selective downloading uses the
+    inherited ``include``/``exclude`` globs; with no filters the whole dataset
+    is fetched. A password-free SSH key is required for git operations.
 
     Parameters
     ----------
     repo_url : str
         URL of the DataLad repository to clone.
     threads : int
-        Number of parallel download threads for ``datalad get`` (default: 1).
-    folders : list of str or Wildcard
-        Directories or glob patterns to retrieve after cloning.  When empty,
-        all content is retrieved via ``datalad get "*"``.
+        Number of parallel ``datalad get`` jobs (default: 1).
+    include, exclude : list of str
+        Dataset-relative POSIX globs selecting a subset to fetch. See
+        :class:`BaseDownload`.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("datalad-installer",)
+    requirements: tp.ClassVar[tuple[str, ...]] = ("datalad", "datalad-installer")
     # url of the datalad repo to clone
     repo_url: str
     # number of threads used for the datalad operations
     threads: int = 1
-    # list of folders (or wildcards) to actually clone
-    folders: list[str | Wildcard] = []
 
     @pydantic.computed_field  # type: ignore
     @property
@@ -591,60 +673,203 @@ class Datalad(BaseDownload):
             repo_name = repo_name[:-4]
         return repo_name
 
-    def _datalad(self, cmd: str, path: Path | str) -> None:
-        # TODO: do not use subprocess
-        proc = subprocess.run(
-            cmd, cwd=str(path), capture_output=True, text=True, shell=True
-        )
-        if "install(error)" in proc.stdout:
-            logging.warning("Potential error in datalad clone:\n> %s", proc.stdout)
-        if proc.stderr:
-            # NOTE: stderr might be populated even in success case
-            logging.warning("Potential error in datalad clone:\n> %s", proc.stderr)
-            # raise RuntimeError(f"Clone Failed: {proc.stderr}")
+    def _selected_paths(self, repo_root: Path) -> list[str]:
+        """Resolve include/exclude into concrete paths for ``datalad get``.
 
-    def _dl_item(self, cur_path: Path | str) -> None:
-        threads_ = f" -J {self.threads}" if self.threads > 1 else ""
-        cmd = f'datalad get "{cur_path}"{threads_}'
-        self._datalad(cmd, self._dl_dir / self.repo_name)
-
-    def _download(self) -> None:
-        """Downloads data from datalab
-
-        Since this requires a git connection to handle, make sure that
-        git ssh-key is password free
-
-        Parameters
-            path: Path to store the dataset (will clone repo to that folder)
-            url: Url of the datalad repository
-            threads: Number of threads to parallelize dataset download
-            folders: List of folders to clone explicitly (otherwise everything is cloned).
-                Contains a tuple of str and bool. Bool defines if str is a glob
+        With no filters, returns ``["."]`` (fetch the whole dataset). Otherwise
+        walk the cloned working tree -- ``datalad clone`` populates the
+        directory structure and git-annex pointer files even before content is
+        fetched -- and return the files passing :meth:`_selects`. Broken annex
+        pointer symlinks (content not yet fetched) are treated as files.
         """
-        # clone repo
-        self._datalad(f"datalad clone {self.repo_url}", self._dl_dir)
-
-        # expand folders
-        folders = self.folders if self.folders else [Wildcard(folder="*")]
-
-        all_folders: list[Path] = []
-        for folder in folders:
-            if isinstance(folder, Wildcard):
-                all_folders += [
-                    Path(str(p))
-                    for p in glob(str(self._dl_dir / self.repo_name / folder.folder))
-                ]
-            else:
-                all_folders += [self._dl_dir / self.repo_name / folder]  # type: ignore
-        print(f"Loading {len(all_folders)} folders: ", all_folders)
-
-        # download
-        for item in tqdm(all_folders, desc=f"Downloading {self.study}", ncols=100):
-            if not item.is_dir():
+        if not self.include and not self.exclude:
+            return ["."]
+        selected: list[str] = []
+        for path in sorted(repo_root.rglob("*")):
+            if path.is_dir():  # real directories only; broken symlinks are files
                 continue
-            self._dl_item(item)
+            rel = path.relative_to(repo_root)
+            if rel.parts and rel.parts[0] in {".git", ".datalad"}:
+                continue
+            if self._selects(rel.as_posix()):
+                selected.append(str(path))
+        return selected
 
-        print("\nDownloaded Dataset")
+    def _download(self, overwrite: bool = False) -> None:
+        """Clone the repo and fetch the selected content via ``datalad.api``.
+
+        ``datalad get`` is idempotent and self-repairing, so ``overwrite`` needs
+        no special handling: re-running fetches any missing/broken content.
+        Requires a password-free git SSH key. If ``datalad`` is not installed
+        the import raises here (and ``_check_requirements`` earlier), so no
+        success marker is written over an empty folder.
+        """
+        import datalad.api as dlad
+
+        logging.getLogger("datalad").setLevel(logging.WARNING)
+        repo_root = self._dl_dir / self.repo_name
+        dataset = dlad.clone(source=self.repo_url, path=repo_root)
+
+        paths = self._selected_paths(repo_root)
+        logging.debug("datalad get %d path(s) under %s", len(paths), repo_root)
+        dataset.get(paths, jobs=self.threads)
+        logging.info("Downloaded dataset in %s", repo_root)
+
+
+class Gin(Datalad):
+    """Download datasets from G-Node Infrastructure (gin.g-node.org).
+
+    GIN-hosted repositories publish data via git-annex but their HTTPS
+    clone URL (``https://gin.g-node.org/<owner>/<repo>.git``) does not
+    expose ``.git/config`` to anonymous clients. As a result, the bare
+    ``datalad clone`` step run by :class:`Datalad` sets ``annex-ignore``
+    on the origin remote and every subsequent ``datalad get`` exits
+    successfully having done nothing -- the working tree stays full of
+    ~60-byte git-annex pointer files instead of real binary content.
+
+    This backend works around the limitation by:
+
+    1. Cloning the repo with the ``datalad`` API (same as :class:`Datalad`;
+       only pointer files are materialised).
+    2. Scanning the selected files (per the inherited ``include``/``exclude``
+       globs) for git-annex pointers, in either representation: unlocked
+       in-tree pointer files or locked symlinks into ``.git/annex/objects``.
+    3. Registering ``https://gin.g-node.org/<owner>/<repo>/raw/<branch>/<relpath>``
+       URLs against each annex key via datalad's ``AnnexRepo`` (``registerurl``).
+       GIN serves annexed content over plain HTTPS at that path.
+    4. Fetching the selected paths from the built-in ``web`` special remote via
+       ``AnnexRepo.get(..., options=["--from=web"])``.
+
+    Studies pass the same arguments as :class:`Datalad` (``repo_url``,
+    ``include``/``exclude``, ``threads``) and additionally set ``branch=`` when
+    the default branch is not ``master``. No other plumbing is required in the
+    study class.
+
+    Parameters
+    ----------
+    repo_url : str
+        Full HTTPS clone URL, e.g.
+        ``"https://gin.g-node.org/CUBRIC/WAND.git"``.
+    branch : str
+        Git branch served at ``/raw/<branch>/`` on GIN's HTTPS endpoint
+        (default ``"master"``; some repos use ``"main"``).
+    threads : int
+        Number of parallel ``git annex get`` jobs (default 1).
+    include, exclude : list of str
+        Dataset-relative POSIX globs selecting a subset to fetch. Restricts the
+        URL-registration scan as well, so we avoid registering the whole tree
+        when only a subset is requested. See :class:`BaseDownload`.
+    """
+
+    branch: str = "master"
+
+    @pydantic.computed_field  # type: ignore[prop-decorator]
+    @property
+    def _https_base(self) -> str:
+        """``https://...<repo>.git`` -> ``https://...<repo>/raw/<branch>``."""
+        base = self.repo_url
+        if base.endswith(".git"):
+            base = base[:-4]
+        return f"{base}/raw/{self.branch}"
+
+    @staticmethod
+    def _read_pointer_key(path: Path) -> str | None:
+        """Return the git-annex key for *path*, or None if it's not a pointer.
+
+        Handles both representations of an annexed file: an unlocked pointer
+        file (a small ASCII file whose first line is
+        ``"/annex/objects/<key>"``) and a locked symlink targeting
+        ``.git/annex/objects/.../<key>``.
+        """
+        if path.is_symlink():
+            target = os.readlink(path)
+            if "/.git/annex/objects/" in target:
+                # The annex key is the basename (also the parent dir name).
+                return Path(target).name
+            return None
+        try:
+            if path.stat().st_size > 256:
+                return None
+            with path.open("rb") as f:
+                head = f.read(256)
+        except OSError:
+            return None
+        if not head.startswith(b"/annex/objects/"):
+            return None
+        try:
+            first_line = head.split(b"\n", 1)[0].decode("ascii")
+        except UnicodeDecodeError:
+            return None
+        return first_line[len("/annex/objects/") :]
+
+    def _selected_pointers(self, repo_root: Path) -> list[tuple[str, Path]]:
+        """``(annex_key, repo-relative path)`` for every selected pointer file.
+
+        Walks the cloned working tree and keeps files whose dataset-relative
+        path passes :meth:`_selects` and that are git-annex pointers, in either
+        representation: unlocked in-tree pointer files or locked symlinks into
+        ``.git/annex/objects``.
+        """
+        pairs: list[tuple[str, Path]] = []
+        for path in sorted(repo_root.rglob("*")):
+            if path.is_dir():  # real directories only; broken symlinks are files
+                continue
+            rel = path.relative_to(repo_root)
+            if rel.parts and rel.parts[0] in {".git", ".datalad"}:
+                continue
+            if not self._selects(rel.as_posix()):
+                continue
+            key = self._read_pointer_key(path)
+            if key is None:
+                continue
+            pairs.append((key, rel))
+        return pairs
+
+    def _register_urls(self, annex: tp.Any, pairs: list[tuple[str, Path]]) -> int:
+        """Register a GIN web URL for every ``(key, relpath)`` pair. Returns count.
+
+        Uses datalad's ``AnnexRepo`` (``registerurl``) rather than a raw
+        ``git annex`` subprocess.
+        """
+        for key, rel in pairs:
+            url = f"{self._https_base}/{rel.as_posix()}"
+            annex.call_annex(["registerurl", key, url])
+        return len(pairs)
+
+    def _annex_get_web(self, annex: tp.Any, rels: list[Path]) -> None:
+        """Fetch the given repo-relative paths from git-annex's ``web`` remote.
+
+        Uses ``AnnexRepo.get`` (datalad renders its own download progress).
+        ``web`` is a git-annex special remote, not a git remote, so it is
+        passed via ``--from web`` (datalad's ``remote=`` only accepts git
+        remotes and would raise ``RemoteNotAvailableError`` for ``web``).
+        """
+        if not rels:
+            return
+        annex.get(
+            [rel.as_posix() for rel in rels],
+            options=["--from", "web"],
+            jobs=self.threads,
+        )
+
+    def _download(self, overwrite: bool = False) -> None:
+        import datalad.api as dlad
+        from datalad.support.annexrepo import AnnexRepo
+
+        logging.getLogger("datalad").setLevel(logging.WARNING)
+        repo_root = self._dl_dir / self.repo_name
+        # clone only materialises pointer files: GIN's HTTPS remote is
+        # annex-ignored, so datalad get would no-op (see class docstring).
+        dlad.clone(source=self.repo_url, path=repo_root)
+        annex = AnnexRepo(str(repo_root))
+
+        pairs = self._selected_pointers(repo_root)
+        print(f"Registering GIN web URLs for {len(pairs)} pointer files...", flush=True)
+        n_registered = self._register_urls(annex, pairs)
+        print(f"Registered {n_registered} GIN web URLs against annex keys", flush=True)
+
+        self._annex_get_web(annex, [rel for _, rel in pairs])
+        print("\nDownloaded Dataset", flush=True)
 
 
 class Donders(BaseDownload):
@@ -688,7 +913,10 @@ class Donders(BaseDownload):
         self._user = user
         self._password = password
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        self._reject_selection_filters()
+        # ``overwrite`` is best-effort for the Donders WebDAV mirror: wget
+        # already refetches over the existing tree.
         command = "wget -r -nH -np --cut-dirs=1"
         command += " --no-check-certificate -U Mozilla"
         command += f" --user={self._user} --password={self._password}"
@@ -785,10 +1013,16 @@ class Dryad(BaseDownload):
         files_resp = self._api_get(files_href)
         return files_resp.get("_embedded", {}).get("stash:files", [])
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         from urllib.parse import quote
 
         import requests as req
+
+        # The bulk endpoint returns a zip of the whole dataset with no way to
+        # filter, so selective downloads must go file-by-file.
+        if self.include or self.exclude:
+            self._download_individual_files(overwrite=overwrite)
+            return
 
         encoded = quote(f"doi:{self.doi}", safe="")
         api_url = f"{self._DRYAD_API}/datasets/{encoded}/download"
@@ -802,7 +1036,7 @@ class Dryad(BaseDownload):
                 )
             except req.exceptions.HTTPError as e:
                 if e.response is not None and e.response.status_code == 405:
-                    self._download_individual_files()
+                    self._download_individual_files(overwrite=overwrite)
                     return
                 raise e
             try:
@@ -814,14 +1048,16 @@ class Dryad(BaseDownload):
             if tmp.exists():
                 tmp.unlink()
 
-        self._download_individual_files()
+        self._download_individual_files(overwrite=overwrite)
 
-    def _download_individual_files(self) -> None:
+    def _download_individual_files(self, overwrite: bool = False) -> None:
         """Download each file in the dataset individually."""
         files = self._latest_version_files()
         print(f"Downloading {len(files)} files individually from Dryad...")
         for i, f in enumerate(files, 1):
             name = f.get("path", f"file_{i}")
+            if not self._selects(name):
+                continue
             dl_href = f.get("_links", {}).get("stash:download", {}).get("href")
             if not dl_href:
                 logger.warning(f"Skipping {name}: no download link")
@@ -830,7 +1066,10 @@ class Dryad(BaseDownload):
             dest = self._dl_dir / name
             is_zip = name.endswith(".zip")
             extracted_dir = self._dl_dir / Path(name).stem if is_zip else None
-            if dest.exists() or (extracted_dir is not None and extracted_dir.exists()):
+            already = dest.exists() or (
+                extracted_dir is not None and extracted_dir.exists()
+            )
+            if already and not overwrite:
                 print(f"  [{i}/{len(files)}] {name} already exists, skipping")
                 continue
             print(f"  [{i}/{len(files)}] Downloading {name}...")
@@ -866,19 +1105,31 @@ class Eegdash(BaseDownload):
         Root directory for the study.
     database : str
         EEGDash database to query (``"eegdash"``, ``"eegdash_staging"``, …).
+    subject : str | list[str] | None
+        Restrict the download to these BIDS subject labels; ``None`` fetches
+        the whole dataset. A list is sent to eegdash as an ``$in`` filter.
     """
 
     requirements: tp.ClassVar[tuple[str, ...]] = ("eegdash>=0.8.2",)
     database: str = "eegdash"
+    subject: str | list[str] | None = None
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
+        # ``overwrite`` is best-effort: eegdash's client manages its own cache
+        # and refetches missing recordings on demand. Path globs are not
+        # supported (use ``subject`` for subject-level selection).
+        self._reject_selection_filters()
         from eegdash import EEGDashDataset  # type: ignore[import-not-found]
 
+        kwargs: dict[str, tp.Any] = {}
+        if self.subject is not None:
+            kwargs["subject"] = self.subject
         EEGDashDataset(
             cache_dir=self._dl_dir,
             dataset=self.study,
             database=self.database,
             download=True,
+            **kwargs,
         ).download_all()
         logger.info("Downloaded %s", self.study)
 
@@ -894,31 +1145,83 @@ class Figshare(BaseDownload):
     study : str
         Figshare article ID (numeric string, e.g. ``"12345678"``).  Found
         in the article URL on figshare.com.
+    skip_existing : bool
+        If True (default), skip files that already exist locally and whose
+        MD5 matches the Figshare metadata.  Existing files with a mismatched
+        (or unverifiable) checksum are re-downloaded.
+    max_retries : int
+        Number of times to retry a file whose download is truncated or whose
+        checksum does not match (guards against expired presigned URLs that
+        return an error page instead of the file).
     """
 
-    def _download(self) -> None:
+    skip_existing: bool = True
+    max_retries: int = 3
+
+    @staticmethod
+    def _md5(path: Path) -> str:
+        import hashlib
+
+        h = hashlib.md5()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _download(self, overwrite: bool = False) -> None:
+        import hashlib
+
         import requests
 
-        item_ids = [self.study]
+        # ``overwrite`` re-downloads every file, including checksum-matching ones.
+        skip_existing = self.skip_existing and not overwrite
+
         BASE_URL = "https://api.figshare.com/v2"
-        api_call_headers = {"Authorization": "token ENTER-TOKEN"}
-
-        file_info = []
-
-        for i in item_ids:
-            # page_size set to arbitrary high value to return items
-            r = requests.get(f"{BASE_URL}/articles/{i}/files?page_size=1000")
-            file_metadata = json.loads(r.text)
-            for j in file_metadata:
-                j["item_id"] = i
-                file_info.append(j)
+        r = requests.get(f"{BASE_URL}/articles/{self.study}/files?page_size=1000")
+        r.raise_for_status()
+        file_info = json.loads(r.text)
 
         for k in tqdm(file_info):
-            response = requests.get(
-                f"{BASE_URL}/file/download/{k['id']}",
-                headers=api_call_headers,
-            )
-            open(self._dl_dir / k["name"], "wb").write(response.content)
+            if not self._selects(k["name"]):
+                continue
+            dest = self._dl_dir / k["name"]
+            expected_md5 = k.get("computed_md5") or k.get("supplied_md5")
+
+            if skip_existing and dest.exists():
+                if expected_md5 is None or self._md5(dest) == expected_md5:
+                    continue
+                logger.warning(
+                    "Checksum mismatch for existing %s; re-downloading.", k["name"]
+                )
+
+            last_err: str | None = None
+            for attempt in range(1, self.max_retries + 1):
+                response = requests.get(f"{BASE_URL}/file/download/{k['id']}")
+                # A failed/expired download often returns a small XML/HTML error
+                # page with a 2xx-on-redirect body; validate before trusting it.
+                if response.status_code != 200:
+                    last_err = f"HTTP {response.status_code}"
+                    continue
+                content = response.content
+                if (
+                    expected_md5 is not None
+                    and hashlib.md5(content).hexdigest() != expected_md5
+                ):
+                    last_err = (
+                        f"checksum mismatch (got {len(content)} bytes, "
+                        f"expected md5 {expected_md5})"
+                    )
+                    continue
+                tmp = dest.with_name(dest.name + ".part")
+                tmp.write_bytes(content)
+                tmp.replace(dest)
+                break
+            else:
+                raise RuntimeError(
+                    f"Failed to download {k['name']} from Figshare article "
+                    f"{self.study} after {self.max_retries} attempts: {last_err}. "
+                    "Refusing to save a corrupt file."
+                )
 
 
 globus_msg = """Globus authentication requires a service-account client ID and secret.
@@ -1029,7 +1332,7 @@ class Globus(BaseDownload):
         )
         return app
 
-    def _resolve_walk(self, tc: tp.Any) -> list[tuple[str, Path]]:
+    def _resolve_walk(self, tc: tp.Any, skip_existing: bool) -> list[tuple[str, Path]]:
         jobs: list[tuple[str, Path]] = []
         root = self.study.rstrip("/") or "/"
         stack: list[str] = [root]
@@ -1046,14 +1349,19 @@ class Globus(BaseDownload):
                     stack.append(full)
                 elif etype == "file":
                     rel = full[len(root) :].lstrip("/")
+                    if not self._selects(rel):
+                        continue
                     local_path = self._dl_dir / rel
-                    if self.skip_existing and local_path.exists():
+                    if skip_existing and local_path.exists():
                         continue
                     jobs.append((full, local_path))
         return jobs
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import globus_sdk
+
+        # ``overwrite`` forces re-transfer of files already on disk.
+        skip_existing = self.skip_existing and not overwrite
 
         app = self._build_app()
         tc = globus_sdk.TransferClient(app=app)
@@ -1072,7 +1380,7 @@ class Globus(BaseDownload):
             ).get_authorization_header()
         }
 
-        jobs = self._resolve_walk(tc)
+        jobs = self._resolve_walk(tc, skip_existing)
 
         if not jobs:
             print(f"Nothing to download for {self.study}")
@@ -1103,18 +1411,25 @@ class Huggingface(BaseDownload):
         Hugging Face organisation or user that owns the dataset
         (e.g. ``"BrainAI"`` or ``"openai"``).  Combined with *study* to
         form ``repo_id``.
+    include, exclude : list of str
+        Dataset-relative globs, forwarded natively to
+        ``snapshot_download`` as ``allow_patterns``/``ignore_patterns``.
+        See :class:`BaseDownload`.
     """
 
     requirements: tp.ClassVar[tuple[str, ...]] = ("huggingface_hub",)
     org: str
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         from huggingface_hub import snapshot_download
 
         snapshot_download(
             repo_id=f"{self.org}/{self.study}",
             repo_type="dataset",
             local_dir=self._dl_dir,
+            force_download=overwrite,
+            allow_patterns=self.include or None,
+            ignore_patterns=self.exclude or None,
         )
         print("\nDownloaded Dataset")
 
@@ -1122,15 +1437,13 @@ class Huggingface(BaseDownload):
 class Openneuro(BaseDownload):
     """Download datasets from OpenNeuro.
 
-    The ``include`` parameter follows the openneuro-py API: files and
-    directories to download. Only these files and directories will be
-    retrieved. Uses Unix path expansion (``*`` for any number of wildcard
-    characters and ``?`` for one wildcard character; e.g.
-    ``'sub-1_task-*.fif'``). As an example, if you would like to download
-    only subject '1' and run '01' files, you can do so via
-    ``'sub-1/**/*run-01*'``. The pattern ``**`` will match any files and
-    zero or more directories, subdirectories and symbolic links to
-    directories.
+    The inherited ``include``/``exclude`` globs map directly onto the
+    openneuro-py API (files and directories to download / skip). Uses Unix
+    path expansion (``*`` for any number of wildcard characters and ``?`` for
+    one; e.g. ``'sub-1_task-*.fif'``). As an example, to download only subject
+    '1' and run '01' files use ``include=['sub-1/**/*run-01*']``. The pattern
+    ``**`` matches any files and zero or more directories, subdirectories and
+    symbolic links to directories. See :class:`BaseDownload`.
 
     The ``nworkers`` parameter controls how many files are downloaded in
     parallel (forwarded to ``openneuro.download`` as
@@ -1138,20 +1451,40 @@ class Openneuro(BaseDownload):
     speed up datasets with many files when network bandwidth allows.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.4.0",)
-    excluded_patterns: list[str] = []
-    include: list[str] | None = None
+    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py>=2026.7.1",)
     nworkers: int = 5
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import openneuro as on
+
+        # openneuro-py re-verifies the size/hash of every file already on disk
+        # on each run and repairs any mismatch IN PLACE. That in-place mutation
+        # is only wanted for a forced re-download: on a plain resume
+        # (overwrite=False) we must never touch files that are already present.
+        # So once the target holds data, skip the download entirely; only let
+        # openneuro-py write for a fresh (empty) target or when overwrite forces
+        # a re-verify/repair.
+        if not overwrite and self._has_local_data():
+            return
 
         on.download(
             dataset=self.study,
             target_dir=self._dl_dir,
-            include=self.include,
+            include=self.include or None,
+            exclude=self.exclude or None,
             max_concurrent_downloads=self.nworkers,
         )
+
+    def _has_local_data(self) -> bool:
+        """True if the target dir already holds downloaded files.
+
+        Ignores the success marker written by :meth:`download` so a bare marker
+        never counts as data.
+        """
+        if not self._dl_dir.exists():
+            return False
+        marker = self.get_success_file()
+        return any(child != marker for child in self._dl_dir.iterdir())
 
 
 class Osf(BaseDownload):
@@ -1174,7 +1507,7 @@ class Osf(BaseDownload):
     storage_inds: list[int] = [0]  # In case of multiple storages, storages to download
     requirements: tp.ClassVar[tuple[str, ...]] = ("osfclient>=0.0.5",)
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         import osfclient  # noqa
 
         project = osfclient.OSF().project(self.study)
@@ -1187,9 +1520,12 @@ class Osf(BaseDownload):
                 if path.startswith("/"):
                     path = path[1:]
 
+                if not self._selects(path):
+                    continue
+
                 file_ = self._dl_dir / path
 
-                if file_.exists():
+                if file_.exists() and not overwrite:
                     continue
 
                 pbar.set_description(file_.name)
@@ -1209,7 +1545,7 @@ class Physionet(S3):
     bucket: str = "physionet-open"
     version: str
 
-    def _download(self, overwrite=False) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self.prefix = f"{self.study}/{self.version}"
         self.output_dir = self._dl_dir / self.study / self.version
 
@@ -1217,7 +1553,7 @@ class Physionet(S3):
         # - list only keys under <study>/<version> via `prefix`
         # - S3 strips that prefix from each key before writing
         # - write under download/<study>/<version>/
-        super()._download()
+        super()._download(overwrite=overwrite)
 
 
 synapse_msg = """Requires creating a Synapse account with 2FA.
@@ -1236,8 +1572,7 @@ How to generate a Synapse auth token:
 class Synapse(BaseDownload):
     """Download datasets from Synapse.
 
-    Requires `synapseclient`. Install with `pip install synapseclient`
-    or `pip install "neuralset[all]"`.
+    Requires `synapseclient`, which ships with `neuralfetch[quickstart]`.
     """
 
     study_id: str  # Project SynID
@@ -1255,9 +1590,12 @@ class Synapse(BaseDownload):
             )
         self._auth_token = token
 
-    def _download(self) -> None:
-        import synapseclient  # type: ignore[import-not-found]
-        import synapseutils  # type: ignore[import-not-found]
+    def _download(self, overwrite: bool = False) -> None:
+        # ``overwrite`` is best-effort: syncFromSynapse manages its own local
+        # cache and refetches changed/missing entities on each sync.
+        self._reject_selection_filters()
+        import synapseclient
+        import synapseutils
 
         syn = synapseclient.Synapse()
         syn.login(authToken=self._auth_token)
@@ -1298,6 +1636,8 @@ class Zenodo(BaseDownload):
             file_checksums = {}
             for file_info in data.get("files", []):
                 filename = file_info["key"]
+                if not self._selects(filename):
+                    continue
                 # Zenodo provides checksums in format "md5:xxxxx" or "sha256:xxxxx"
                 checksum_str = file_info["checksum"]
                 file_checksums[filename] = checksum_str
@@ -1310,7 +1650,7 @@ class Zenodo(BaseDownload):
                 f"Please check the record ID or provide dataset_fname/dataset_hash manually."
             ) from e
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         # TODO: Consider making the download async for multiple file downloads to occur
         # cf. openneuro-py implementation
 
@@ -1332,7 +1672,7 @@ class Zenodo(BaseDownload):
 
         for filename, file_hash in zipped_files.items():
             dest = self._dl_dir / Path(filename).stem
-            if dest.exists():
+            if dest.exists() and not overwrite:
                 continue
             tmp = self._dl_dir / f"temp_{filename}"
             download_file(
@@ -1345,7 +1685,7 @@ class Zenodo(BaseDownload):
 
         for filename, file_hash in info_files.items():
             dest = self._dl_dir / filename
-            if dest.exists():
+            if dest.exists() and not overwrite:
                 continue
             download_file(
                 f"{base_url}/files/{filename}",

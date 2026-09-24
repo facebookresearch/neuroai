@@ -96,7 +96,7 @@ class Brennan2019Hierarchical(study.Study):
             study="/bn/99/97/38/r/",
             dset_dir=self.path,
             collection_id="cc387c09-b0e5-422b-a384-0d96e7ffdc73",
-        ).download()
+        ).download(overwrite=overwrite)
 
         # Bumped from "success_extract": the v1 marker predates proc.zip
         # extraction, so existing caches must re-extract to get the .mat files.

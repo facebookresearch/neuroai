@@ -373,14 +373,25 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             "es": "spanish",
             "ja": "japanese",
             "zh": "chinese",
+            "nl": "dutch",
+            "de": "german",
+            "it": "italian",
+            "pt": "portuguese",
         }
-        language = _iso_to_lang.get(language, language)
+        language = _iso_to_lang.get(language.lower(), language.lower())
+        # Large ("_lg") models are used because only they ship static word
+        # vectors (``.vector``); the "_sm" models do not.  This set matches the
+        # languages handled by ``neuralset.extractors.text.WordFrequency``.
         defaults = dict(
             english="en_core_web_lg",
             french="fr_core_news_lg",
             spanish="es_core_news_lg",
             japanese="ja_core_news_lg",
             chinese="zh_core_web_lg",
+            dutch="nl_core_news_lg",
+            german="de_core_news_lg",
+            italian="it_core_news_lg",
+            portuguese="pt_core_news_lg",
         )
         if language not in defaults:
             raise ValueError(f"Language {language!r} not available: {defaults}")

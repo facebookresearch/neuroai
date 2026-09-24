@@ -122,6 +122,31 @@ def test_event_types_helper() -> None:
     assert len(extracted) == 1
 
 
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        ({}, "en_core_web_lg"),  # default -> English
+        ({"language": "dutch"}, "nl_core_news_lg"),
+        ({"language": "nl"}, "nl_core_news_lg"),  # ISO code
+        ({"language": "Dutch"}, "nl_core_news_lg"),  # case-insensitive
+        ({"language": "french"}, "fr_core_news_lg"),
+        ({"model": "custom_model"}, "custom_model"),  # explicit model wins
+    ],
+)
+def test_get_spacy_model_language_resolution(
+    mocker: tp.Any, kwargs: dict, expected: str
+) -> None:
+    """Language names/ISO codes resolve to the right (vector-bearing) spaCy model."""
+    loader = mocker.patch.object(utils, "_get_model", side_effect=lambda m: m)
+    assert utils.get_spacy_model(**kwargs) == expected
+    loader.assert_called_once_with(expected)
+
+
+def test_get_spacy_model_unknown_language() -> None:
+    with pytest.raises(ValueError, match="not available"):
+        utils.get_spacy_model(language="klingon")
+
+
 def test_train_test_split_by_group():
     n_examples, n_features = 100, 10
     X = np.random.rand(n_examples, n_features)

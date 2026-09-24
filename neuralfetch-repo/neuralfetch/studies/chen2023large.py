@@ -94,7 +94,7 @@ class Chen2023Large(study.Study):
         frequency=1000,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Data can also be downloaded manually after login at:
         https://www.synapse.org/Synapse:syn50614194
         """
@@ -102,7 +102,7 @@ class Chen2023Large(study.Study):
             study="Chen2023Large",
             study_id="syn50614194",
             dset_dir=self.path,
-        ).download()
+        ).download(overwrite=overwrite)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         for subj_ind in range(123):

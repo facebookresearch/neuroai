@@ -17,6 +17,7 @@ import seaborn as sns
 from neuralbench.plots._style import (
     add_watermark,
     apply_two_tone_labels,
+    base_name,
     bold_legend_titles,
     build_color_dict,
     build_grouped_legend_stacked,
@@ -120,6 +121,7 @@ def plot_core_rank_boxplot(
     output_dir: Path,
     *,
     watermark: str | None = None,
+    stem: str = "core_rank_boxplot",
 ) -> Path:
     """Box chart of per-task normalized ranks, sorted by mean, colored by group.
 
@@ -141,14 +143,19 @@ def plot_core_rank_boxplot(
 
     display_models = long_df["model_name"].unique().tolist()
     color_dict = build_color_dict(display_models)
-    palette = {m: color_dict.get(m, "#888888") for m in model_order}
+    # fallback so suffixed variants ("REVE (LoRA r32)") keep their group colour
+    base_color = build_color_dict(sorted({base_name(m) for m in display_models}))
+    palette = {
+        m: color_dict.get(m) or base_color.get(base_name(m), "#888888")
+        for m in model_order
+    }
 
-    # Sized for a portrait US-letter document with ~1" side margins:
-    # full usable width (~6.5") and at most ~33% of the 11" page height.
+    # Sized for a portrait US-letter document with ~1" side margins: full usable
+    # width (~6.5") and ~33% of the 11" page height at the usual 10-15 models.
     # The legend sits to the right of the axes and stacks the three
     # model groups in a single column.
     fig_width = 6.5
-    fig_height = 3.5
+    fig_height = max(3.5, 0.22 * n_models)
     with sns.axes_style("white"):
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
@@ -180,4 +187,4 @@ def plot_core_rank_boxplot(
     if watermark:
         add_watermark(fig, watermark)
 
-    return save_figure(fig, output_dir, "core_rank_boxplot")
+    return save_figure(fig, output_dir, stem)

@@ -110,7 +110,7 @@ class Fake2025Fmri(study.Study):
         fmri_spaces=("custom",),
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

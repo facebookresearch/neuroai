@@ -325,6 +325,7 @@ DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "eeg": CLASSIC_MODELS,
     "meg": CLASSIC_MODELS,
     "fmri": _cli_names(family="classic", device="fmri"),
+    "emg": _cli_names(family="classic", device="emg"),
 }
 DEVICE_FM_MODELS: dict[str, list[str]] = {
     "eeg": FM_MODELS,
@@ -341,7 +342,7 @@ DEVICE_FM_MODELS: dict[str, list[str]] = {
 #   the tangent-space dimension is C(C+1)/2 ≈ 37k-47k features; OAS shrinkage
 #   and the default ``max_fit_samples=20_000`` cap keep the linear head
 #   feasible.  Xdawn (per-class ERP filter, explodes on 29-way multiclass) and
-#   CoSpectra (sfreq-tuned narrowband spectral features) remain excluded.
+#   CoSpectra (frequency-tuned narrowband spectral features) remain excluded.
 # - fMRI has no classical pyriemann / covariance analogue that transfers
 #   meaningfully from a channel basis to a voxel basis, so only the constant
 #   predictors are kept.
@@ -537,8 +538,14 @@ def _validate_inputs(
     task: str | list[str],
     model: str | list[str] | None,
     downstream_wrapper: str | list[str] | None,
+    *,
+    allow_all: bool = True,
 ) -> None:
-    """Raise ``ValueError`` on invalid device / task / model names."""
+    """Raise ``ValueError`` on invalid device / task / model names.
+
+    *allow_all* accepts the ``"all"`` / ``"all_multi_dataset"`` task
+    aggregates, which only callers that expand them can handle.
+    """
     if device not in ALL_DEVICES:
         raise ValueError(f"Unknown device {device!r}. Choose from: {ALL_DEVICES}")
     tasks = [task] if isinstance(task, str) else task
@@ -548,7 +555,7 @@ def _validate_inputs(
             f"No tasks ship for device {device!r} yet. "
             f"Devices with tasks: {[d for d in ALL_DEVICES if TASKS.get(d) or UNVALIDATED_TASKS.get(d)]}"
         )
-    valid_tasks = {"all", "all_multi_dataset"} | device_tasks
+    valid_tasks = device_tasks | ({"all", "all_multi_dataset"} if allow_all else set())
     for t in tasks:
         if t not in valid_tasks:
             raise ValueError(

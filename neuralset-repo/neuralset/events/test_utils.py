@@ -53,24 +53,29 @@ def test_special_loader_kwargs(tmp_path: Path) -> None:
 
 def test_expand_bids_fmri(tmp_path: Path) -> None:
     """expand_bids_fmri resolves a BIDS glob into per-space Fmri dicts."""
-    from .test_etypes import FMRI_SHAPE_4D, _make_gifti, _make_nifti
+    from .test_etypes import FMRI_SHAPE_4D, _make_cifti, _make_gifti, _make_nifti
 
     base = "sub-01_ses-01_task-rest_run-1_"
     _make_nifti(tmp_path, base + "space-T1w_desc-preproc_bold.nii.gz")
     _make_nifti(tmp_path, base + "space-T1w_desc-brain_mask.nii.gz", FMRI_SHAPE_4D[:-1])
     _make_gifti(tmp_path, base + "hemi-L_space-fsaverage_bold.func.gii")
     _make_gifti(tmp_path, base + "hemi-R_space-fsaverage_bold.func.gii")
+    _make_cifti(tmp_path, base + "space-fsLR_den-91k_bold.dtseries.nii")
 
     result = utils.expand_bids_fmri(
         str(tmp_path / (base + "*")), preproc="deepprep", start=0, frequency=0.5
     )
     spaces = {r["space"] for r in result}
-    assert spaces == {"T1w", "fsaverage"}
+    assert spaces == {"T1w", "fsaverage", "fsLR"}
     vol = next(r for r in result if r["space"] == "T1w")
     assert "preproc_bold" in vol["filepath"]
     assert vol.get("mask_filepath") is not None
     surf = next(r for r in result if r["space"] == "fsaverage")
     assert "hemi-L" in surf["filepath"]
+    cifti = next(r for r in result if r["space"] == "fsLR")
+    assert cifti["filepath"].endswith("_bold.dtseries.nii")
+    assert "mask_filepath" not in cifti
+    assert cifti["spec"] == {"den": "91k"}
     assert all(r["preproc"] == "deepprep" for r in result)
 
 

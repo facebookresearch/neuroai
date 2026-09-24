@@ -42,6 +42,12 @@ class BrainModule(pl.LightningModule):
         A dictionary of retrieval metrics to compute on the full test set.
     target_scaler : nn.Module | None, optional
         A scaler to apply to the target values.
+    augmentation : nn.Module | None, optional
+        Augmentation applied to the neuro input during training only.
+    ch_names : list[str] | None, optional
+        Names of the channels the model receives, passed to every forward call
+        of a model that names ``ch_names`` -- models keyed by electrode name
+        (e.g. LaBraM) cannot get that from ``channel_positions``.
     """
 
     def __init__(
@@ -53,10 +59,14 @@ class BrainModule(pl.LightningModule):
         test_full_metrics: dict[str, Metric] | None = None,
         test_full_retrieval_metrics: dict[str, Metric] | None = None,
         target_scaler: StandardScaler | None = None,
+        augmentation: nn.Module | None = None,
+        ch_names: list[str] | None = None,
     ):
         super().__init__()
         self._infer_forward_params(model)
         self.model = model
+        self.augmentation = augmentation
+        self._ch_names = ch_names
 
         self.loss = loss
         self.target_scaler = target_scaler
@@ -90,7 +100,9 @@ class BrainModule(pl.LightningModule):
                 model.channel_adapter is not None and model._adapter_needs_positions
             )
             inner_model = model.wrapped_model
-        forward_sig = inspect.signature(inner_model.forward)
+        # PeftModel.forward is a (*args, **kwargs) delegator: unwrap for the real signature
+        sig_model = getattr(inner_model, "get_base_model", lambda: inner_model)()
+        forward_sig = inspect.signature(sig_model.forward)
         self._input_name = list(forward_sig.parameters.keys())[0]
         self._requires_subject = (
             "subject_ids" in forward_sig.parameters or adapter_needs_positions
@@ -100,6 +112,7 @@ class BrainModule(pl.LightningModule):
             or has_preprocessor
             or adapter_needs_positions
         )
+        self._requires_ch_names = "ch_names" in forward_sig.parameters
 
     @staticmethod
     def _update_metrics(
@@ -113,22 +126,25 @@ class BrainModule(pl.LightningModule):
             }
         )
 
-    def model_forward(self, batch: Batch) -> torch.Tensor:
-        inputs = {self._input_name: batch.data["neuro"]}
+    def _forward_inputs(self, batch: Batch) -> dict[str, tp.Any]:
+        neuro = batch.data["neuro"]
+        if self.augmentation is not None and self.training:
+            neuro = self.augmentation(neuro)
+        inputs: dict[str, tp.Any] = {self._input_name: neuro}
         if self._requires_subject:
             inputs["subject_ids"] = batch.data["subject_id"]
         if self._requires_channel_positions:
             inputs["channel_positions"] = batch.data["channel_positions"]
-        return self.model(**inputs)
+        if self._requires_ch_names and self._ch_names is not None:
+            inputs["ch_names"] = self._ch_names
+        return inputs
+
+    def model_forward(self, batch: Batch) -> torch.Tensor:
+        return self.model(**self._forward_inputs(batch))
 
     def model_forward_embedding(self, batch: Batch) -> torch.Tensor:
         """Forward pass returning the penultimate embedding (before the probe)."""
-        inputs = {self._input_name: batch.data["neuro"]}
-        if self._requires_subject:
-            inputs["subject_ids"] = batch.data["subject_id"]
-        if self._requires_channel_positions:
-            inputs["channel_positions"] = batch.data["channel_positions"]
-        return self.model(**inputs, return_embedding=True)
+        return self.model(**self._forward_inputs(batch), return_embedding=True)
 
     def _run_step(
         self, batch: Batch, step_name: str, batch_idx: int
@@ -158,7 +174,34 @@ class BrainModule(pl.LightningModule):
 
         y_pred = self.model_forward(batch)
 
+        metric_pred, metric_true = y_pred, y_true
+        loss_pred, loss_true = y_pred, y_true
+        metric_subjects = batch.data["subject_id"]
         if y_pred.ndim == 3 and y_true.ndim == 3:
+            # A dense prediction is time-major (B, T, C) -- braindecode's
+            # convention -- while an extracted target is channel-major (B, C, T).
+            y_true = y_true.transpose(1, 2)
+            if y_pred.shape[-1] != y_true.shape[-1]:
+                raise ValueError(
+                    f"Prediction carries {y_pred.shape[-1]} outputs per frame but "
+                    f"its target {y_true.shape[-1]}; the head is sized from the "
+                    f"target's channel axis in build_brain_model."
+                )
+            if y_pred.shape[1] > y_true.shape[1]:
+                raise ValueError(
+                    f"Prediction spans {y_pred.shape[1]} frames but its target "
+                    f"only {y_true.shape[1]}."
+                )
+            # Models that consume left context emit only the window's valid tail.
+            y_true = y_true[:, -y_pred.shape[1] :]
+            # NaN marks a frame the study could not label (e.g. unresolved
+            # inverse kinematics); it must reach neither the loss nor a metric.
+            valid = ~y_true.isnan().any(dim=-1)
+            metric_pred = loss_pred = y_pred[valid]
+            metric_true = loss_true = y_true[valid]
+            # Metric rows are frames, not windows: (B, 1) -> (B, T).
+            metric_subjects = metric_subjects.reshape(-1, 1).expand_as(valid)[valid]
+            y_pred = y_pred.masked_fill(~valid.unsqueeze(-1), torch.nan)
             y_pred = y_pred.reshape(y_pred.shape[0], -1)
             y_true = y_true.reshape(y_true.shape[0], -1)
 
@@ -180,8 +223,11 @@ class BrainModule(pl.LightningModule):
             loss = self.loss(
                 y_pred.transpose(0, 1), y_true, input_lengths, target_lengths
             )
+        elif loss_true.numel() == 0:
+            # Every frame unlabelled: a zero still attached to the graph.
+            loss = loss_pred.sum()
         else:
-            loss = self.loss(y_pred, y_true)
+            loss = self.loss(loss_pred, loss_true)
 
         # A loss may return a dict of named components with a ``"total"``
         # key (e.g. multi-term objectives); CTC and plain losses return a
@@ -199,14 +245,14 @@ class BrainModule(pl.LightningModule):
 
         # Just update metrics, don't compute or log yet
         for metric_name, metric in self.metrics.items():
-            if metric_name.startswith(step_name):
+            if metric_name.startswith(step_name) and metric_true.numel():
                 if isinstance(metric, GroupedMetric):
-                    metric.update(y_pred, y_true, batch.data["subject_id"])
+                    metric.update(metric_pred, metric_true, metric_subjects)
                 else:
                     if isinstance(metric, MultilabelConfusionMatrix):
-                        metric.update(y_pred, y_true.int())
+                        metric.update(metric_pred, metric_true.int())
                     else:
-                        metric.update(y_pred, y_true)
+                        metric.update(metric_pred, metric_true)
                 if "confusion_matrix" not in metric_name:
                     self.log(metric_name, metric, **log_kwargs)
 

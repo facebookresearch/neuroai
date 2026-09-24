@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torch.nn.functional import conv2d
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 
 EEG_FREQ_LIMS_HZ = [
     0.1,
@@ -23,14 +23,14 @@ EEG_FREQ_LIMS_HZ = [
 ]
 
 
-class FreqBandNet(BaseModelConfig):
+class FreqBandNet(BaseBrainModelConfig):
     """Parametrized filterbank feature extractor (sinc filters + power + log).
 
     Parameters
     ----------
-    sfreq : float or None
-        Sampling frequency of the input time series, in Hz.  Can also be
-        provided at build time.
+    frequency : float or None
+        Sampling frequency of the input time series, in Hz.  Falls back to the
+        build context's ``frequency`` when not set on the config.
     freq_lims_hz : list of float or None
         Bandpass cutoff frequencies used to initialize the sinc filters.
         ``len(freq_lims_hz) - 1`` filters are created.  Mutually exclusive
@@ -54,7 +54,7 @@ class FreqBandNet(BaseModelConfig):
         If set, append a linear output layer with this many units.
     """
 
-    sfreq: float | None = None
+    frequency: float | None = None
     freq_lims_hz: list[float] | None = EEG_FREQ_LIMS_HZ
     n_filters_conv: int | None = None
     conv_kernel_len: int = 65
@@ -71,19 +71,17 @@ class FreqBandNet(BaseModelConfig):
                 "Exactly one of freq_lims_hz and n_filters_conv must be specified."
             )
 
-    def build(
-        self,
-        n_in_channels: int | None = None,  # Unused; for compatibility with other models
-        n_outputs: int | None = None,
-        sfreq: float | None = None,
-    ) -> nn.Module:
-        sfreq = sfreq or self.sfreq
-        if sfreq is None:
-            raise ValueError("sfreq must be provided to build the model.")
+    def build(self, n_outputs: int | None, frequency: float | None = None) -> nn.Module:
+        # FreqBandNet uses only n_outputs and the sampling frequency; the
+        # spatial/temporal sizes are irrelevant to the filterbank.  The inner
+        # module keeps the signal-processing `sfreq` name.
+        resolved_freq = self.frequency if frequency is None else frequency
+        if resolved_freq is None:
+            raise ValueError("A sampling frequency must be provided to build the model.")
 
         return FreqBandNetModel(
             n_outputs=n_outputs or self.n_outputs,
-            sfreq=sfreq,
+            sfreq=resolved_freq,
             config=self,
         )
 

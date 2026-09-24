@@ -99,11 +99,13 @@ class Hollenstein2018Zuco(study.Study):
     # 13: control sentence offset
     url: tp.ClassVar[str] = "https://osf.io/q3zws/"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
-            if already_done:
+            if already_done and not overwrite:
                 return
-            download.Osf(study="q3zws", dset_dir=self.path, folder="download").download()
+            download.Osf(study="q3zws", dset_dir=self.path, folder="download").download(
+                overwrite=overwrite
+            )
 
             # Cleanup directory names
             dl_dir = self.path / "download"

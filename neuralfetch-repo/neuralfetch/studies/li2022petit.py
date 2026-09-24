@@ -88,7 +88,7 @@ class Li2022Petit(study.Study):
         "listening to 'The Little Prince' audiobook in their native language "
         "(French, English, Chinese)."
     )
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py", "praatio")
+    requirements: tp.ClassVar[tuple[str, ...]] = ("praatio",)
     dataset_id: tp.ClassVar[str] = "ds003643"
     TR_FMRI_S: tp.ClassVar[float] = 2.0
 
@@ -104,9 +104,9 @@ class Li2022Petit(study.Study):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        self.infra_timelines.version = "v3"
+        self.version = "v3"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """
         Data is available here:
         https://openneuro.org/datasets/ds003643/versions/2.0.5/
@@ -117,7 +117,7 @@ class Li2022Petit(study.Study):
         if path.name.lower() != self.__class__.__name__.lower():
             path = path / self.__class__.__name__
         client = download.Openneuro(study=dataset_id, dset_dir=path)
-        client.download()
+        client.download(overwrite=overwrite)
         # TODO when available, automate download of transcripts files
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
@@ -176,19 +176,20 @@ class Li2022Petit(study.Study):
         wordseq: list[dict[str, tp.Any]] = []
         duplicated = "it the this that i i. they we he she you now and but so there five twenty phew good".split()
         for interval in tg.getTier(keys[0]).entries:
-            if interval.label.strip() in ("", "#", "sil"):
+            # praatio hands back the raw label, and some intervals are padded
+            # (e.g. " of" in lppEN_section1); strip once so the skip test, the
+            # merge test and the emitted text all agree.
+            label = interval.label.strip()
+            if label in ("", "#", "sil"):
                 continue
             # duplicated words happen a lot (when missing new sentence character), merge them
-            if interval.label in duplicated and wordseq:
-                if wordseq[-1]["text"] == interval.label:
+            if label in duplicated and wordseq:
+                if wordseq[-1]["text"] == label:
                     wordseq[-1]["duration"] = interval.end - wordseq[-1]["start"]
                     continue
             # add word
             text = (
-                repl.get(interval.label, interval.label)
-                .replace("`", "'")
-                .replace("«", "")
-                .replace("»", "")
+                repl.get(label, label).replace("`", "'").replace("«", "").replace("»", "")
             )
             if not text:
                 continue
@@ -314,7 +315,7 @@ class Li2022PetitSample(Li2022Petit):
         "https://belcorentin.github.io/pi-aiche-dee/lpp_en_text.zip"
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download ultra-minimal dataset: EN057 section 1 only."""
         dataset_id = "ds003643"
         path = self.path
@@ -334,12 +335,12 @@ class Li2022PetitSample(Li2022Petit):
         client = download.Openneuro(
             study=dataset_id, dset_dir=path, include=include_patterns
         )
-        client.download()
+        client.download(overwrite=overwrite)
 
         # Download English transcripts from hosted location
-        self._download_transcripts(path)
+        self._download_transcripts(path, overwrite=overwrite)
 
-    def _download_transcripts(self, path: tp.Any) -> None:
+    def _download_transcripts(self, path: tp.Any, overwrite: bool = False) -> None:
         """Download English transcript files."""
         import requests
 
@@ -347,7 +348,7 @@ class Li2022PetitSample(Li2022Petit):
         transcripts_dir.mkdir(parents=True, exist_ok=True)
         zip_path = transcripts_dir / "lpp_en_text.zip"
 
-        if zip_path.exists():
+        if zip_path.exists() and not overwrite:
             return  # Already downloaded
 
         try:

@@ -12,11 +12,25 @@ defined here with the ``BaseMetric`` discriminated-union machinery from
 task YAML configs (e.g. ``name: BinnedMAE``).
 """
 
+from collections.abc import Sequence
+
 import torch
 import torchmetrics
 
 from neuraltrain.metrics.base import BaseMetric
 from neuraltrain.utils import convert_to_pydantic
+
+
+def _assign_bins(targets: torch.Tensor, bin_edges: Sequence[float]) -> torch.Tensor:
+    """Bin ``targets`` into ``[0, len(bin_edges) - 2]`` using a ``[lo, hi)`` convention.
+
+    Out-of-range targets land in the end bins; callers mask them separately.
+    """
+    inner_edges = torch.as_tensor(
+        list(bin_edges)[1:-1], device=targets.device, dtype=targets.dtype
+    )
+    # `right` is inverted w.r.t. numpy.searchsorted's `side`: right=True gives [lo, hi).
+    return torch.bucketize(targets, inner_edges, right=True)
 
 
 class BinnedMAE(torchmetrics.Metric):
@@ -75,15 +89,8 @@ class BinnedMAE(torchmetrics.Metric):
     def update(self, preds: torch.Tensor, target: torch.Tensor) -> None:
         t = target.flatten().to(self.sum_abs_err.dtype)
         e = (preds.flatten().to(self.sum_abs_err.dtype) - t).abs()
-        edges = torch.as_tensor(self.bin_boundaries, device=t.device, dtype=t.dtype)
-
-        # Assign each target to a bin index
-        # right=True ensures [lo, hi) binning convention.
-        # Values >= edges[-2] naturally return n_bins - 1, handling the last bin correctly.
-        bin_idx = torch.bucketize(t, edges[1:-1], right=True)
-
-        # Filter out-of-range targets
-        in_range = (t >= edges[0]) & (t <= edges[-1])
+        bin_idx = _assign_bins(t, self.bin_boundaries)
+        in_range = (t >= self.bin_boundaries[0]) & (t <= self.bin_boundaries[-1])
 
         if in_range.any():
             self.sum_abs_err.scatter_add_(0, bin_idx[in_range], e[in_range])

@@ -46,9 +46,7 @@ class Mne2013Sample(study.Study):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        self.infra_timelines.version = (
-            "v3"  # other option requires overriding _load_events
-        )
+        self.version = "v3"  # other option requires overriding _load_events
 
     def _download_root(self) -> Path:
         # raw downloads live under <study path>/download (package convention);
@@ -67,7 +65,7 @@ class Mne2013Sample(study.Study):
         root.mkdir(parents=True, exist_ok=True)
         return mne.datasets.sample.data_path(root, verbose=True)
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         """Download the MNE sample dataset.
 
         The dataset will be automatically downloaded by MNE-Python
@@ -148,11 +146,6 @@ class Fake2025Meg(Mne2013Sample):
     description: tp.ClassVar[str] = (
         """mne sample MEG dataset with additional fake events"""
     )
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        # sequential: no need to spawn processes for test data
-        self.infra_timelines.cluster = None
 
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=2,

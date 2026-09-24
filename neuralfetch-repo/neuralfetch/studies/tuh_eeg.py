@@ -127,7 +127,7 @@ class _BaseTuhEeg(study.Study):
     )
 
     # TODO: Add download method, requires authentication
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError("Dataset not available to download yet.")
         # self._create_symbolic_links()
 

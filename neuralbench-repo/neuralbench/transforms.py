@@ -161,7 +161,7 @@ class SimilaritySplit(_transf.EventsTransform):
                 max_duration=120.0,
             )(events)
 
-        elif self.stim_event_type == "Keystroke":  # Designed for Levy2025Brain
+        elif self.stim_event_type == "Keystroke":  # Designed for Levy2026Noninvasive
             # For the Typing dataset, we need to transfer the clusters from the sentences to the
             # keystroke events
             if "sentence" not in events.columns:

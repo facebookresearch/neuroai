@@ -1,7 +1,7 @@
 [project]
 name = "neuralbench"
 readme = "README.md"
-version = "0.2.2"
+version = "0.3.1"
 authors = [{name = "Meta FAIR"}]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -13,18 +13,28 @@ classifiers = [
 ]
 dependencies = [
   "adjustText",
-  "braindecode>=1.5.2",
-  "neuralset",
-  "neuraltrain",
+  # [hub]: braindecode stubs out from_pretrained unless huggingface_hub is
+  # installed, which every pretrained foundation model goes through
+  "braindecode[hub]>=1.8.1",
+  "cloudpickle",
+  # Siblings release in lockstep; stay within the release line.
+  # Study catalog: registered through an entry point, never imported directly
+  "neuralfetch[quickstart]~=0.3.1",
+  "neuralset~=0.3.1",
+  "neuraltrain~=0.3.1",
   "exca",
   "lightning>=2.0.8",
+  "peft>=0.13",
+  # peft imports EncoderDecoderCache (transformers>=4.43) but declares no floor
+  "transformers>=4.43",
   "pyriemann>=0.6",
   "seaborn",
   "torchinfo",
-  # Pinning torch version to ensure support for CUDA capability sm_60
-  "torch==2.6",
-  "torchaudio==2.6",
-  "torchvision==0.21",
+  "torch>=2.5.1",
+  "torchaudio>=2.5.1",
+  "torchvision>=0.20.1",
+  # mae.yaml builds neuraltrain's TransformerEncoder, kept behind its models extra
+  "x_transformers>=1.27.20",
 ]
 
 [project.urls]
@@ -32,18 +42,6 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 [project.optional-dependencies]
-    datasets = [
-        # Download
-        "boto3",
-        "botocore",
-        "gdown",
-        "openneuro-py>=2025.2.0",
-        "synapseclient",
-    ]
-    models = [
-        "huggingface_hub",
-        "safetensors",
-    ]
     wandb = [
         "wandb>=0.15.11",
     ]
@@ -97,7 +95,7 @@ namespaces = false
   plugins = ['pydantic.mypy']
   show_error_codes = true
 [[tool.mypy.overrides]]
-  module = ['pytest', 'setuptools', 'mne', 'torchvision', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'seaborn', 'seaborn.*', 'wandb', 'wandb.*', 'pyriemann', 'pyriemann.*', 'safetensors', 'safetensors.*', 'huggingface_hub']
+  module = ['pytest', 'setuptools', 'mne', 'cloudpickle', 'torchvision', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'seaborn', 'seaborn.*', 'wandb', 'wandb.*', 'pyriemann', 'pyriemann.*', 'safetensors', 'safetensors.*', 'huggingface_hub']
   ignore_missing_imports = true
 
 [tool.pydantic-mypy]

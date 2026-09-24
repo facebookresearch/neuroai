@@ -26,7 +26,7 @@ data:
     frequency: native
     infra:
       mode: cached
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       keep_in_ram: true
       slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
@@ -42,7 +42,7 @@ data:
     imsize: 518
     aggregation: trigger
     infra:
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       keep_in_ram: false
       timeout_min: 180
       gpus_per_node: 1

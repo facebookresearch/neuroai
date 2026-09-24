@@ -129,13 +129,15 @@ class Shirazi2024Hbn(study.Study):
     DUR_CONTRAST_CHANGE_TARGET: tp.ClassVar[float] = 2.4
     DUR_CONTRAST_CHANGE_FEEDBACK: tp.ClassVar[float] = 0.4
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         for release, study_id in self.RELEASE_TO_STUDYID.items():
             n = release.split("-")[-1]
             logger.info(
                 f"Downloading Dataset: Healthy Brain Network (HBN) EEG - Release {n}"
             )
-            download.Openneuro(study=study_id, dset_dir=self.path / release).download()
+            download.Openneuro(study=study_id, dset_dir=self.path / release).download(
+                overwrite=overwrite
+            )
 
     def iter_timelines(self):
         for release in self.RELEASE_TO_STUDYID.keys():
@@ -409,10 +411,19 @@ class Shirazi2024Hbn(study.Study):
             }
         )
 
-        # Adds reaction time and correctness to target
+        # Adds reaction time and correctness to target. The response is the first
+        # press at or after the target onset: presses with a negative reaction time
+        # preceded the contrast change and are premature. This matches the trial
+        # table of the EEG Foundation Challenge (`eegdash.hbn.build_trial_table`).
+        responses = (
+            button_df[button_df["reaction_time"] >= 0]
+            .sort_values("start", kind="mergesort")
+            .drop_duplicates("trial_num", keep="first")
+            .set_index("trial_num")[["reaction_time", "is_correct"]]
+        )
         target_df = pd.merge(
             left=target_df,
-            right=button_df.groupby("trial_num")[["reaction_time", "is_correct"]].max(),
+            right=responses,
             how="left",
             on="trial_num",
         )

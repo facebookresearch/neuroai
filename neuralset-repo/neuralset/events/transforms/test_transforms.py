@@ -834,7 +834,8 @@ def _custom_study(test_data_path: Path, tmp_path: Path) -> ns.Chain:
 
     create_wav(tmp_path / "noise.wav", fs=44100, duration=10)
     steps: list[tp.Any] = [
-        {"name": "Test2023Meg", "path": test_data_path},
+        # no multiproc in tests
+        {"name": "Test2023Meg", "path": test_data_path, "timelines": {"infra": None}},
         FakeChapter(path=tmp_path, infra="Cached"),  # type: ignore
         "Nothing",
         _transf.ChunkEvents(event_type_to_chunk="Audio", max_duration=5.0),
@@ -917,7 +918,6 @@ def test_configure_event_loader(test_data_path: Path) -> None:
     study_events = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
-        infra_timelines={"cluster": None},  # type: ignore[arg-type]
     ).run()
     sl_transform = _transf.ConfigureEventLoader(
         event_types="Fmri",

@@ -24,6 +24,9 @@ from neuraltrain.metrics.base import BaseMetric
         ([2.0, 8.0], [5.0, 5.0], 3.0, {}),
         # Upper boundary inclusion: target equal to last upper boundary belongs to last bin.
         ([550.0], [600.0], 50.0, {}),
+        # Inner edge goes to the upper bin: 40 -> [40,90), so per-bin MAEs are 0 and 30.
+        # Were it filed in [0,40), the single bin would average to 10.
+        ([10.0, 20.0, 70.0], [10.0, 20.0, 40.0], 15.0, {}),
         # Custom bin boundaries.
         ([0.5, 1.5], [0.2, 1.0], 0.4, {"bin_boundaries": [0.0, 1.0, 2.0]}),
         # No data returns NaN.

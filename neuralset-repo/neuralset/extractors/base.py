@@ -8,6 +8,7 @@ import logging
 import typing as tp
 import warnings
 
+import exca as xk
 import numpy as np
 import pandas as pd
 import pydantic
@@ -24,7 +25,7 @@ from neuralset.segments import Segment
 logger = logging.getLogger(__name__)
 
 
-class BaseExtractor(base._Module, base.NamedModel):
+class BaseExtractor(base.NamedModel, base._Module):
     """Base class for extracting features from :term:`events <event>` within a
     :class:`~neuralset.segments.Segment`.
 
@@ -122,10 +123,13 @@ class BaseExtractor(base._Module, base.NamedModel):
                 msg = f'In {name!r}, found function {func!r} which should be renamed to "_get_data"'
                 raise RuntimeError(msg)
         infrafield = cls.model_fields.get("infra", None)
-        if infrafield is not None:
-            funcname = infrafield.default._infra_method.method.__name__
+        if infrafield is not None and isinstance(infrafield.default, xk.MapInfra):
+            method = infrafield.default._infra_method
+            if method is None:
+                raise RuntimeError(f"In {name!r}, infra must decorate _get_data")
+            funcname = method.method.__name__
             if funcname != "_get_data":
-                msg = f'In {name!r}, found infra decorating {funcname!r} it should be "_get_data" by convention'
+                msg = f'In {name!r}, found infra decorating {funcname!r}, convention is "_get_data"'
                 raise RuntimeError(msg)
         # security checks for new event_types
         if not isinstance(event_types, str):

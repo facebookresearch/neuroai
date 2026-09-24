@@ -44,8 +44,8 @@ def test_features_model() -> None:
         cfg.to_yaml()
         == """extractors:
 - name: Pulse
-- frequency: 12.0
-  name: MegExtractor
+- name: MegExtractor
+  frequency: 12.0
 - name: ExternExtractor
 """
     )
@@ -313,6 +313,8 @@ def test_cfg_feature_uid(tmp_path: Path) -> None:
         ((12, 13, 14, 15), "sum", None, (12, 14, 15)),
         ((12, 13, 14, 15), "first", None, (12, 14, 15)),
         ((13, 14, 15), "last", 15, (13, 15)),
+        ((13, 14, 15), "cat", None, (13, 14 * 15)),
+        ((12, 13, 14, 15), "cat", None, (12, 13 * 14 * 15)),
         ((13, 14, 15), None, 5, (5, 14, 15)),
     ],
 )

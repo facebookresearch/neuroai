@@ -8,10 +8,10 @@ import typing as tp
 
 from torch import nn
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 
 
-class Green(BaseModelConfig):
+class Green(BaseBrainModelConfig):
     """
     Reference: GREEN: A lightweight architecture using learnable
     wavelets and Riemannian geometry for biomarker exploration with EEG signals.
@@ -19,8 +19,9 @@ class Green(BaseModelConfig):
 
     Parameters
     ----------
-    sfreq: int | None, default=None
-        Sampling frequency of the signal.
+    frequency: int | None, default=None
+        Sampling frequency of the signal.  Falls back to the build context's
+        ``frequency`` when not set on the config.
     n_freqs: int, default=15
         Number of main frequencies in the wavelet family.
     kernel_width_s: int, default=5
@@ -52,7 +53,7 @@ class Green(BaseModelConfig):
         Whether to use orthogonal weight initialization.
     """
 
-    sfreq: int | None = None
+    frequency: int | None = None
     n_freqs: int = 15
     kernel_width_s: int = 5
     conv_stride: int = 5
@@ -76,18 +77,24 @@ class Green(BaseModelConfig):
     orth_weights: bool = True
 
     def build(
-        self, n_in_channels: int, n_outputs: int, sfreq: int | None = None
+        self,
+        n_spatial_locations: int,
+        n_outputs: int | None,
+        frequency: float | None = None,
     ) -> nn.Module:
         import green.wavelet_layers as wl  # type: ignore
         from green.research_code.pl_utils import get_green  # type: ignore
 
         kwargs = self.model_dump()
         del kwargs["name"]
-        sfreq = sfreq or self.sfreq
-        if sfreq is None:
-            raise ValueError("sfreq must be provided to build the model.")
-        kwargs["sfreq"] = sfreq
+        # Resolve the sampling rate (config value, else the context's), then
+        # hand it to the underlying green API, which still expects `sfreq`.
+        resolved_freq = self.frequency if frequency is None else int(frequency)
+        if resolved_freq is None:
+            raise ValueError("A sampling frequency must be provided to build the model.")
+        kwargs.pop("frequency", None)
+        kwargs["sfreq"] = resolved_freq
         kwargs["pool_layer"] = getattr(wl, self.pool_layer)()
         kwargs["out_dim"] = n_outputs
-        kwargs["n_ch"] = n_in_channels
+        kwargs["n_ch"] = n_spatial_locations
         return get_green(**kwargs)

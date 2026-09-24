@@ -66,5 +66,11 @@ downstream_model_wrapper:
   # BIOT's encoder already averages all patches internally (.mean(dim=1) in
   # _BIOTEncoder), so its output is (B, emb_dim). No further aggregation needed.
   aggregation: null
+  # encoder.transformer.layers.layers.*.0.fn.{to_q,to_k,to_v,to_out}
+  lora_target_modules:
+    - to_q
+    - to_k
+    - to_v
+    - to_out
 
 # Paper config (Yang et al. NeurIPS 2023): Adam lr 1e-3 wd 1e-5, 100ep, batch 512, mean pool + ELU+Linear head, full FT.

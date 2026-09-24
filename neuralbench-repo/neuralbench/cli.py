@@ -19,25 +19,14 @@ import sys
 import traceback
 import typing as tp
 
-from exca import ConfDict
-
-from neuralbench.experiment_config import (
-    _warn_slurm_partition,
-    prepare_task_configs,
-)
+from neuralbench.experiment_config import build_experiment_configs
 from neuralbench.registry import (
     ALL_DEVICES,
     ALL_DOWNSTREAM_WRAPPERS,
     ALL_MODELS,
     ALL_TASKS,
     ALL_UNVALIDATED_TASKS,
-    DEFAULTS_DIR,
-    _expand_models,
     _format_datasets_epilog,
-    _resolve_datasets,
-    _resolve_tasks,
-    _validate_inputs,
-    load_yaml_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,9 +50,10 @@ def run_benchmark(
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
-    This is the programmatic equivalent of the ``neuralbench`` CLI.
-    It assembles experiment configs from the same YAML files and returns
-    test-metric dictionaries when running in debug mode.
+    This is the programmatic equivalent of the ``neuralbench`` CLI: it
+    assembles experiment configs from the same YAML files and launches them.
+    For a model built outside this repo, and for the results of the runs in
+    hand, see :func:`neuralbench.evaluate_model`.
 
     Parameters
     ----------
@@ -80,7 +70,9 @@ def run_benchmark(
     checkpoint : str or None
         Path to a model checkpoint to reload.
     downstream_wrapper : str or list of str or None
-        Downstream wrapper name(s) or ``"all"``.
+        Adaptation-strategy preset name(s) from
+        ``defaults/downstream_wrappers.yaml``, or ``"all"``.  Swept over
+        foundation models only.
     grid : bool
         Expand the task-specific hyperparameter grid.
     debug : bool
@@ -100,8 +92,9 @@ def run_benchmark(
     Returns
     -------
     list of dict
-        One result dict per experiment (empty when experiments are
-        submitted asynchronously via Slurm).
+        One result dict per experiment, with ``plot_cached=True`` only.  Every
+        other mode launches experiments and returns an empty list, the results
+        being written to the results folder.
     """
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("numexpr").setLevel(logging.WARNING)
@@ -121,77 +114,21 @@ def run_benchmark(
             "Cannot use force, retry, or prepare flags when plotting cached results."
         )
 
-    from neuralbench.config_manager import _ensure_initialized
-
-    _ensure_initialized()
-    _validate_inputs(device, task, model, downstream_wrapper)
-    _warn_slurm_partition(debug, prepare=prepare, download=download)
-
-    # --- base config & grid ---
-    default_config = load_yaml_config(DEFAULTS_DIR / "config.yaml")
-    config = ConfDict(default_config)
-
-    # Disable W&B entirely when no host is configured (blank WANDB_HOST), so the
-    # whole pipeline treats logging as off (mirrors the debug-mode overlay).
-    wandb_cfg = config.get("wandb_config")
-    host = wandb_cfg.get("host") if isinstance(wandb_cfg, dict) else None
-    if not host:
-        config["wandb_config"] = None
-
-    default_grid = load_yaml_config(DEFAULTS_DIR / "grid.yaml")
-    grid_conf = ConfDict(default_grid)
-
-    if prepare or debug:
-        grid_conf["seed"] = [grid_conf["seed"][0]]
-
-    if checkpoint is not None:
-        config["pretrained_weights_fname"] = checkpoint
-
-    # --- downstream wrappers ---
-    if downstream_wrapper is not None:
-        wrappers = (
-            [downstream_wrapper]
-            if isinstance(downstream_wrapper, str)
-            else list(downstream_wrapper)
-        )
-        if wrappers == ["all"]:
-            wrappers = list(ALL_DOWNSTREAM_WRAPPERS.keys())
-        wrapper_configs = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
-        grid_conf["downstream_model_wrapper"] = wrapper_configs
-
-    # --- tasks ---
-    tasks = _resolve_tasks(device, task)
-
-    # --- assemble experiment configs ---
-    configs: list[tp.Any] = []
-    task_iter: tp.Iterable[str] = tasks
-    if prepare and len(tasks) > 1:
-        from tqdm import tqdm
-
-        task_iter = tqdm(tasks, desc="Preparing tasks")
-
-    for task_name in task_iter:
-        # Resolve models per-task so the `all` / `all_baseline` aliases pick
-        # only the task-appropriate sklearn baseline (via FEATURE_BASED_BY_TASK)
-        # instead of launching every pipeline on every task.
-        models = _expand_models(model, device=device, task_name=task_name)
-        datasets = _resolve_datasets(device, task_name, dataset)
-        task_configs = prepare_task_configs(
-            config.copy(),
-            grid_conf,
-            device,
-            task_name,
-            grid,
-            debug,
-            force,
-            prepare,
-            download,
-            models,
-            datasets,
-            quiet=plot_cached,
-            retry=retry,
-        )
-        configs.extend(task_configs)
+    configs = build_experiment_configs(
+        device,
+        task,
+        model=model,
+        dataset=dataset,
+        checkpoint=checkpoint,
+        downstream_wrapper=downstream_wrapper,
+        grid=grid,
+        debug=debug,
+        force=force,
+        retry=retry,
+        prepare=prepare,
+        download=download,
+        quiet=plot_cached,
+    )
 
     if download:
         return []
@@ -202,7 +139,8 @@ def run_benchmark(
     from neuralbench.main import BenchmarkAggregator
 
     agg = BenchmarkAggregator(
-        experiments=configs,
+        # ConfDicts, which the pydantic model coerces into Experiment instances.
+        experiments=configs,  # type: ignore[arg-type]
         debug=debug,
     )
 
@@ -291,7 +229,10 @@ def run_benchmark_cli() -> None:
         "--downstream-wrapper",
         nargs="*",
         choices=["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys()),
-        help="Override/add a model wrapper for the downstream tasks.",
+        help=(
+            "Adaptation strategy preset(s) to sweep over; applied to foundation "
+            "models only."
+        ),
     )
     parser.add_argument(
         "--download",

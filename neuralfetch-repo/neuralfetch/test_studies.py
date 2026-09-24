@@ -7,6 +7,7 @@
 """Tests for neuralfetch: study discovery and study info validation."""
 
 import importlib.util
+import inspect
 import sys
 from pathlib import Path
 
@@ -16,11 +17,77 @@ import requests
 from scipy.io import loadmat
 
 import neuralset as ns
+from neuralfetch import download as _download_mod
 from neuralfetch import utils
 from neuralfetch.studies.moabb2025 import Reichert2020Impact
 from neuralset.events import study as _study_mod
 
 INFO_STUDIES = [n for n, c in ns.Study.catalog().items() if c._info is not None]
+
+
+def _accepts_overwrite(func: object) -> bool:
+    """True if *func* can be called with an ``overwrite=`` keyword."""
+    params = inspect.signature(func).parameters  # type: ignore[arg-type]
+    if "overwrite" in params:
+        return True
+    return any(p.kind is p.VAR_KEYWORD for p in params.values())
+
+
+def test_all_neuralfetch_studies_accept_overwrite() -> None:
+    """Every neuralfetch study's ``_download`` must accept ``overwrite=``.
+
+    ``Study.download(**kwargs)`` forwards ``overwrite`` verbatim to
+    ``_download``; a study missing the parameter makes ``neuralfetch download
+    <Study>`` raise ``TypeError`` on every invocation (even without the flag,
+    since the CLI always passes ``overwrite=``). This is the anti-regression
+    guard for that contract.
+    """
+    checked = 0
+    failures: list[str] = []
+    for name, cls in sorted(ns.Study.catalog().items()):
+        module = getattr(cls, "__module__", "")
+        if not module.startswith("neuralfetch."):
+            continue
+        checked += 1
+        if not _accepts_overwrite(cls._download):
+            sig = inspect.signature(cls._download)
+            failures.append(f"{name} ({module}): _download{sig}")
+
+    assert checked, "no neuralfetch studies were discovered"
+    assert not failures, (
+        "these neuralfetch studies' _download() cannot accept overwrite=, so "
+        "`neuralfetch download <Study>` would raise TypeError:\n  "
+        + "\n  ".join(failures)
+    )
+
+
+def test_all_download_backends_accept_overwrite() -> None:
+    """Every ``BaseDownload`` backend's ``_download`` must accept ``overwrite=``.
+
+    ``BaseDownload.download(overwrite)`` forwards the flag into ``_download``;
+    a backend missing the parameter would raise ``TypeError`` as soon as it is
+    used with the two-tier overwrite semantics.
+    """
+
+    def _all_subclasses(cls: type) -> set[type]:
+        subs = set(cls.__subclasses__())
+        for sub in list(subs):
+            subs |= _all_subclasses(sub)
+        return subs
+
+    failures: list[str] = []
+    for cls in sorted(
+        _all_subclasses(_download_mod.BaseDownload), key=lambda c: c.__name__
+    ):
+        download_fn = cls._download  # type: ignore[attr-defined]
+        if not _accepts_overwrite(download_fn):
+            sig = inspect.signature(download_fn)
+            failures.append(f"{cls.__name__}: _download{sig}")
+
+    assert not failures, (
+        "these download backends' _download() cannot accept overwrite=:\n  "
+        + "\n  ".join(failures)
+    )
 
 
 def test_neuralfetch_discovery() -> None:
@@ -157,14 +224,14 @@ def test_gifford_split_isolation() -> None:
 def test_reichert2020_impact_eeg_layout() -> None:
     """Reichert2020Impact._load_raw must produce a trial-major EEG layout.
 
-    Regression test for the MOABB BNCI2020_002 reshape bug. MOABB's
-    ``_convert_attention_shift`` calls ``bciexp.data.reshape(n_channels,
-    -1)`` on an F-contiguous ``(n_channels, n_samples, n_trials)`` array,
-    which produces a trial-fastest interleaved layout. Our
-    ``Reichert2020Impact._load_raw`` override re-applies the correct
-    ``transpose(0, 2, 1).reshape(...)`` so that, for any trial *t* and
-    sample *s*, ``raw._data[c, t * n_samples + s]`` equals
-    ``bciexp.data[c, s, t] * 1e-6`` (uV -> V).
+    MOABB's ``_convert_attention_shift`` used to call
+    ``bciexp.data.reshape(n_channels, -1)`` on an F-contiguous
+    ``(n_channels, n_samples, n_trials)`` array, producing a trial-fastest
+    interleaved layout.  MOABB >= 1.6.0 applies the correct
+    ``transpose(0, 2, 1).reshape(...)`` itself, so this is now a guard
+    against an upstream regression rather than a check on a local patch:
+    for any trial *t* and sample *s*, ``raw._data[c, t * n_samples + s]``
+    must equal ``bciexp.data[c, s, t] * 1e-6`` (uV -> V).
     """
     try:
         folder = utils.root_study_folder()
@@ -175,7 +242,12 @@ def test_reichert2020_impact_eeg_layout() -> None:
 
     timeline = {"subject": 1, "session": "0", "run": "0"}
     study = Reichert2020Impact(path=folder)
-    mat_path = study._mat_path(timeline)  # noqa: SLF001
+    # _mat_path now asks MOABB to resolve the file, which fetches it if absent;
+    # off-cluster or offline that raises rather than returning a missing path.
+    try:
+        mat_path = study._mat_path(timeline)  # noqa: SLF001
+    except Exception as exc:  # noqa: BLE001 - any resolution failure means "no data here"
+        pytest.skip(f"Reichert2020Impact data unavailable: {exc}")
     if not mat_path.exists():
         pytest.skip(f"Reichert2020Impact data not downloaded at {mat_path}")
 

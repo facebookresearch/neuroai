@@ -9,13 +9,16 @@ import typing as tp
 
 import numpy as np
 import torch
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
 
+from .config_manager import _ensure_initialized
+from .experiment_config import merge_task_config
 from .extractors import SleepOnsetTargetExtractor  # noqa: F401
+from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
     AddSleepOnsetTargets,
@@ -28,7 +31,12 @@ from .transforms import (  # noqa: F401
     SklearnSplit,
     TextPreprocessor,
 )
-from .utils import make_regression_bin_sampler, make_weighted_sampler, seed_worker
+from .utils import (
+    finite_target_fraction,
+    make_regression_bin_sampler,
+    make_weighted_sampler,
+    seed_worker,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,14 +105,9 @@ class RegressionBinSampler(BaseSampler):
     weights so that, in expectation, every populated bin contributes the
     same total mass to each training epoch.
 
-    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`:
-
-    * Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
-      ``i < n_bins - 1``; the top bin is closed on the right so targets
-      exactly at ``bin_edges[-1]`` are counted in the top bin.
-    * Targets outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero
-      weight** -- they are excluded from sampling and do not contribute to
-      any bin's count.
+    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`.  Targets
+    outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero weight** -- they
+    are excluded from sampling and do not contribute to any bin's count.
 
     Parameters
     ----------
@@ -150,6 +153,9 @@ class Data(ns.BaseModel):
     duration: float | None = 3
     stride: float | None = None
     stride_drop_incomplete: bool = True
+    # Targets are NaN wherever the label is invalid (emg/pose IK failures). 1.0 drops
+    # any segment holding one, which ``BrainModule`` would otherwise mask frame by frame.
+    min_finite_target_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
     # Dataloaders
     sampler: BaseSampler | None = None
     batch_size: int = 64
@@ -228,6 +234,21 @@ class Data(ns.BaseModel):
         dataset = segmenter.apply(events)
         dataset.prepare()
 
+        if self.min_finite_target_fraction is not None:
+            keep = (
+                finite_target_fraction(
+                    dataset, self.target, self.batch_size, self.num_workers
+                )
+                >= self.min_finite_target_fraction
+            )
+            LOGGER.info(
+                "Dropping %d/%d segments with under %.0f%% of their frames labelled",
+                len(keep) - int(keep.sum()),
+                len(keep),
+                100 * self.min_finite_target_fraction,
+            )
+            dataset = dataset.select(keep)
+
         # Derive four independent RNG streams from ``self.seed`` so that each
         # consumer (train DataLoader shuffle + train worker base-seeds, train
         # WeightedRandomSampler multinomial draws, val worker base-seeds,
@@ -287,3 +308,48 @@ class Data(ns.BaseModel):
             )
 
         return loaders
+
+
+def get_default_dataloaders(
+    device: str, task: str, *, dataset: str | None = None, **overrides: tp.Any
+) -> dict[str, DataLoader]:
+    """Return the train/val/test DataLoaders for a task's default data config.
+
+    The dataloaders match those of a non-debug benchmark run for the same
+    task, except for model-specific preprocessing: model configs override
+    ``data.neuro`` (sampling frequency, filters, clamping) and, for some
+    models, ``data.channel_positions``, and those overrides are not applied
+    here.
+
+    Parameters
+    ----------
+    device
+        Brain recording device (``"eeg"``, ``"meg"``, ``"fmri"``, ...).
+    task
+        Single task name, e.g. ``"motor_imagery"``.
+    dataset
+        Dataset variant from the task's ``datasets/`` directory. ``None`` uses
+        the study of the task config.
+    **overrides
+        Overrides for the ``data`` config, as dotted paths, e.g.
+        ``batch_size=8`` or ``**{"neuro.frequency": 60.0}``.
+
+    Returns
+    -------
+    dict with keys ``"train"``, ``"val"``, ``"test"`` mapping to
+    :class:`~torch.utils.data.DataLoader` instances.
+
+    Examples
+    --------
+    Extraction inherits the benchmark infra, which submits SLURM jobs where a
+    cluster is available. To extract in-process instead:
+
+    >>> loaders = get_default_dataloaders(
+    ...     "eeg", "audiovisual_stimulus", **{"neuro.infra.cluster": None}
+    ... )
+    """
+    _validate_inputs(device, task, model=None, downstream_wrapper=None, allow_all=False)
+    _ensure_initialized()
+    data_config = merge_task_config(device, task, dataset)["data"]
+    data_config.update(overrides)
+    return Data(**data_config).prepare()

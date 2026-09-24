@@ -29,7 +29,7 @@ def fake_meg():
     ],
 )
 def test_simple_conv_shape(fake_meg, depth, use_merger, subject_layers, initial_linear):
-    batch_size, n_in_channels, n_times = fake_meg.shape
+    batch_size, n_channels, n_times = fake_meg.shape
     n_out_channels = 6
 
     config_kwargs = {
@@ -41,20 +41,22 @@ def test_simple_conv_shape(fake_meg, depth, use_merger, subject_layers, initial_
     if not use_merger:
         config_kwargs["merger_config"] = None
 
-    model = SimpleConv(**config_kwargs).build(n_in_channels, n_out_channels)
+    model = SimpleConv(**config_kwargs).build(
+        n_spatial_locations=n_channels, n_outputs=n_out_channels
+    )
     if use_merger:
         assert isinstance(model.merger, ChannelMergerModel)
 
     subject_ids = torch.arange(batch_size)
-    channel_positions = torch.randn(batch_size, n_in_channels, 2)
+    channel_positions = torch.randn(batch_size, n_channels, 2)
 
     out = model(fake_meg, subject_ids=subject_ids, channel_positions=channel_positions)
     assert out.shape == (batch_size, n_out_channels, n_times)
 
 
 @pytest.mark.parametrize("n_pos_dims", [2, 3])
-def test_simple_conv_different_n_in_channels(fake_meg, n_pos_dims):
-    batch_size, n_in_channels, _ = fake_meg.shape
+def test_simple_conv_different_n_channels(fake_meg, n_pos_dims):
+    batch_size, n_channels, _ = fake_meg.shape
     n_out_channels = 6
 
     config_kwargs = {
@@ -70,8 +72,10 @@ def test_simple_conv_different_n_in_channels(fake_meg, n_pos_dims):
         "subject_layers_config": None,
         "initial_linear": False,
     }
-    model = SimpleConv(**config_kwargs).build(n_in_channels, n_out_channels)
-    channel_positions = torch.randn(batch_size, n_in_channels, n_pos_dims)
+    model = SimpleConv(**config_kwargs).build(
+        n_spatial_locations=n_channels, n_outputs=n_out_channels
+    )
+    channel_positions = torch.randn(batch_size, n_channels, n_pos_dims)
 
     out1 = model(fake_meg, channel_positions=channel_positions)
     out2 = model(fake_meg[:, :3, :], channel_positions=channel_positions[:, :3, :])
@@ -83,7 +87,7 @@ def test_simple_conv_different_n_in_channels(fake_meg, n_pos_dims):
 def test_simple_conv_time_agg_shape(
     fake_meg, time_agg_out: str, n_time_groups: int
 ) -> None:
-    batch_size, n_in_channels, _ = fake_meg.shape
+    batch_size, n_channels, _ = fake_meg.shape
     n_out_channels = 64
 
     model_kwargs = {
@@ -93,7 +97,9 @@ def test_simple_conv_time_agg_shape(
         "time_agg_out": time_agg_out,
         "n_time_groups": n_time_groups,
     }
-    model = SimpleConvTimeAgg(**model_kwargs).build(n_in_channels, n_out_channels)  # type: ignore
+    model = SimpleConvTimeAgg(**model_kwargs).build(  # type: ignore[arg-type]
+        n_spatial_locations=n_channels, n_outputs=n_out_channels
+    )
     out = model(fake_meg)
     if n_time_groups is None:
         assert out.shape == (batch_size, n_out_channels)
@@ -102,7 +108,7 @@ def test_simple_conv_time_agg_shape(
 
 
 def test_simple_conv_time_agg_zero_depth_shape(fake_meg):
-    batch_size, n_in_channels, _ = fake_meg.shape
+    batch_size, n_channels, _ = fake_meg.shape
     n_out_channels = 64
 
     model_kwargs = {
@@ -115,14 +121,16 @@ def test_simple_conv_time_agg_zero_depth_shape(fake_meg):
         "time_agg_out": "gap",
         "output_head_config": None,
     }
-    model = SimpleConvTimeAgg(**model_kwargs).build(n_in_channels, n_out_channels)
+    model = SimpleConvTimeAgg(**model_kwargs).build(
+        n_spatial_locations=n_channels, n_outputs=n_out_channels
+    )
     out = model(fake_meg)
     assert out.shape == (batch_size, n_out_channels)
 
 
 @pytest.mark.parametrize("output_size", [-1, 2])
 def test_simple_conv_time_agg_output_head(fake_meg, output_size: int):
-    batch_size, n_in_channels, _ = fake_meg.shape
+    batch_size, n_channels, _ = fake_meg.shape
     head_out = 8
 
     model_kwargs = {
@@ -138,8 +146,8 @@ def test_simple_conv_time_agg_output_head(fake_meg, output_size: int):
             "dropout": 0.5,
         },
     }
-    model = SimpleConvTimeAgg(**model_kwargs).build(  # type: ignore
-        n_in_channels, head_out
+    model = SimpleConvTimeAgg(**model_kwargs).build(  # type: ignore[arg-type]
+        n_spatial_locations=n_channels, n_outputs=head_out
     )
 
     out = model(fake_meg)
@@ -148,7 +156,7 @@ def test_simple_conv_time_agg_output_head(fake_meg, output_size: int):
 
 
 def test_simple_conv_time_agg_output_heads(fake_meg):
-    batch_size, n_in_channels, _ = fake_meg.shape
+    batch_size, n_channels, _ = fake_meg.shape
     n_out_channels = 6
 
     clip_head_out = 8
@@ -173,7 +181,9 @@ def test_simple_conv_time_agg_output_heads(fake_meg):
             },
         },
     }
-    model = SimpleConvTimeAgg(**model_kwargs).build(n_in_channels, n_out_channels)
+    model = SimpleConvTimeAgg(**model_kwargs).build(
+        n_spatial_locations=n_channels, n_outputs=n_out_channels
+    )
 
     out = model(fake_meg)
     assert out["clip"].shape == (batch_size, clip_head_out)

@@ -182,23 +182,26 @@ Each tutorial walks through one building block of the NeuralSet pipeline.
 Citation
 --------
 
-.. code-block:: text
+If you use NeuralSet in your research, please cite the
+`NeuralSet paper <https://arxiv.org/abs/2605.03169>`_:
 
-   @misc{king2026neuralset,
-     title  = {NeuralSet: A High-Performing Python Package for Neuro-AI},
-     author = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
-               and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
-               and Raugel, Josephine and Santos Revilla, Andrea
-               and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
-               and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
-               and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
-               and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
-               and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
-               and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
-               and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
-     year   = {2026},
-     url    = {https://kingjr.github.io/files/neuralset.pdf},
-     note   = {Preprint; URL will be updated when the paper lands on arXiv}
+.. code-block:: bibtex
+
+   @article{king2026neuralset,
+     title   = {NeuralSet: A High-Performing Python Package for Neuro-AI},
+     author  = {King, Jean-R{\'e}mi and Bel, Corentin and Evanson, Linnea
+                and Gadonneix, Julien and Houhamdi, Sophia and L{\'e}vy, Jarod
+                and Raugel, Josephine and Santos Revilla, Andrea
+                and Zhang, Mingfang and Bonnaire, Julie and Caucheteux, Charlotte
+                and D{\'e}fossez, Alexandre and Desbordes, Th{\'e}o
+                and Diego-Sim{\'o}n, Pablo and Khanna, Shubh and Millet, Juliette
+                and Orhan, Pierre and Panchavati, Saarang and Ratouchniak, Antoine
+                and Thual, Alexis and Brooks, Teon L. and Begany, Katelyn
+                and Benchetrit, Yohann and Careil, Marl{\`e}ne and Banville, Hubert
+                and d'Ascoli, St{\'e}phane and Dahan, Simon and Rapin, J{\'e}r{\'e}my},
+     year    = {2026},
+     journal = {arXiv preprint arXiv:2605.03169},
+     url     = {https://arxiv.org/abs/2605.03169},
    }
 
 .. toctree::

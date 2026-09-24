@@ -26,7 +26,7 @@ class Test2024Fnirs(study.Study):
         frequency=10.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

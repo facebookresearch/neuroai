@@ -83,8 +83,10 @@ class Sivakumar2024Emg2qwerty(study.Study):
 
     _bids_root_cache: Path | None = pydantic.PrivateAttr(default=None)
 
-    def _download(self) -> None:
-        download.Eegdash(study=self.NEMAR_DATASET_ID, dset_dir=self.path).download()
+    def _download(self, overwrite: bool = False) -> None:
+        download.Eegdash(study=self.NEMAR_DATASET_ID, dset_dir=self.path).download(
+            overwrite=overwrite
+        )
 
     @property
     def bids_root(self) -> Path:

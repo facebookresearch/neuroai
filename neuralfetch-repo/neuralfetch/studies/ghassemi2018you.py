@@ -164,13 +164,13 @@ class Ghassemi2018You(study.Study):
     _PHYSIONET_STUDY: tp.ClassVar[str] = "challenge-2018"
     _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         physionet = download.Physionet(
             study=self._PHYSIONET_STUDY,
             dset_dir=self.path,
             version=self._PHYSIONET_VERSION,
         )
-        physionet.download()
+        physionet.download(overwrite=overwrite)
 
     def _download_root(self) -> Path:
         return self.path / "download" / self._PHYSIONET_STUDY / self._PHYSIONET_VERSION

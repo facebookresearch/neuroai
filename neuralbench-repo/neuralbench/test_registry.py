@@ -96,10 +96,10 @@ def test_prepare_task_configs_meg_image_cov_ts_ridge_resolves() -> None:
     """
     from exca import ConfDict
 
+    from neuralbench.baselines import CovTsRidge
     from neuralbench.experiment_config import prepare_task_configs
     from neuralbench.main import Data
     from neuralbench.registry import DEFAULTS_DIR, load_yaml_config
-    from neuralbench.sklearn_baseline import CovTsRidge
 
     config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
     grid = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))

@@ -92,23 +92,27 @@ class NtLuna(BaseBrainDecodeModel):
 
     def build(
         self,
-        n_chans: int | None = None,
-        n_times: int | None = None,
+        n_spatial_locations: int,
+        n_temporal_samples: int,
         n_outputs: int | None = None,
-        **kwargs: tp.Any,
+        chs_info: list[dict[str, tp.Any]] | None = None,
+        frequency: float | None = None,
     ) -> nn.Module:
-        build_kwargs: dict[str, tp.Any] = {}
-        if n_chans is not None:
-            build_kwargs["n_chans"] = n_chans
-        if n_times is not None:
-            build_kwargs["n_times"] = n_times
+        # LUNA needs n_outputs=1 even in the encoder-only case (set below).
+        build_kwargs = self._bd_shape_kwargs(
+            n_spatial_locations=n_spatial_locations,
+            n_temporal_samples=n_temporal_samples,
+            n_outputs=n_outputs,
+            chs_info=chs_info,
+            frequency=frequency,
+        )
 
         encoder_only = n_outputs is None
         build_kwargs["n_outputs"] = 1 if encoder_only else n_outputs
 
         if self.from_pretrained_name is not None and self.pretrained_filename is not None:
-            kwargs["filename"] = self.pretrained_filename
-        model = super().build(**build_kwargs, **kwargs)
+            build_kwargs["filename"] = self.pretrained_filename
+        model = self._construct(**build_kwargs)
 
         if encoder_only:
             model.final_layer = nn.Identity()

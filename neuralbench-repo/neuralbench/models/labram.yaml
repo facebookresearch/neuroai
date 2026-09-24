@@ -29,5 +29,9 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
+  # blocks.*.attn.{qkv,proj}
+  lora_target_modules:
+    - qkv
+    - proj
 
 # Paper config (Jiang et al. ICLR 2024): AdamW lr 5e-4 wd 0.05, cosine+5ep warmup, 50ep, batch 512, LLRD 0.65, mean pool, full FT, drop_path 0.1, label smoothing 0.1.

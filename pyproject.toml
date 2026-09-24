@@ -9,6 +9,9 @@ exclude-newer = "3 days"
 [tool.uv.exclude-newer-package]
 exca = "2099-01-01"
 submitit = "2099-01-01"
+# Not ours: pinned to 1.8.1's release, the first shipping the emg/pose models.
+# A package pin replaces the window above, so bump this date deliberately.
+braindecode = "2026-08-31"
 
 [tool.ruff]
 line-length = 90
@@ -71,4 +74,5 @@ ignore-multiline-regex = 'bibtex[^\n]*= """[\s\S]*?"""|codespell:ignore-begin[\s
 # toi, rouge: French words ("you", "red") used in accent-insensitive matching tests
 # fo: test timeline identifier string
 # lond: London site code in Nieuwland2018 filenames
-ignore-words-list = 'fro,toi,rouge,fo,lond'
+# notin: Python AST class ast.NotIn
+ignore-words-list = 'fro,toi,rouge,fo,lond,notin'

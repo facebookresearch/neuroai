@@ -7,7 +7,7 @@
 import pytest
 import torch
 
-from .dummy_predictor import DummyPredictor, DummyPredictorModel
+from .baselines import DummyPredictor, DummyPredictorModel
 
 
 def test_dummy_predictor_clf():
@@ -20,7 +20,7 @@ def test_dummy_predictor_clf():
     )
 
     config = DummyPredictor()
-    predictor = config.build(y_train)
+    predictor = config.build(load_targets=lambda: y_train)
 
     assert isinstance(predictor, DummyPredictorModel)
 
@@ -43,7 +43,7 @@ def test_dummy_predictor_reg():
     )
 
     config = DummyPredictor()
-    predictor = config.build(y_train)
+    predictor = config.build(load_targets=lambda: y_train)
 
     assert isinstance(predictor, DummyPredictorModel)
 
@@ -71,7 +71,7 @@ def test_dummy_predictor_most_frequent_multilabel():
     # Most frequent values per class: [1, 0, 1, 0]
 
     config = DummyPredictor(mode="most_frequent_multilabel")
-    predictor = config.build(y_train)
+    predictor = config.build(load_targets=lambda: y_train)
 
     assert isinstance(predictor, DummyPredictorModel)
 
@@ -99,7 +99,7 @@ def test_dummy_predictor_stratified_multilabel():
     expected_probs = torch.tensor([0.8, 0.4, 0.6, 0.2])
 
     config = DummyPredictor(mode="stratified_multilabel", random_state=0)
-    predictor = config.build(y_train)
+    predictor = config.build(load_targets=lambda: y_train)
 
     assert isinstance(predictor, DummyPredictorModel)
     assert torch.allclose(predictor.probs, expected_probs)
@@ -132,9 +132,15 @@ def test_dummy_predictor_stratified_random_state():
     )
     X_test = torch.randn(128, 10, 100)
 
-    pred_a = DummyPredictor(mode="stratified_multilabel", random_state=0).build(y_train)
-    pred_b = DummyPredictor(mode="stratified_multilabel", random_state=0).build(y_train)
-    pred_c = DummyPredictor(mode="stratified_multilabel", random_state=1).build(y_train)
+    pred_a = DummyPredictor(mode="stratified_multilabel", random_state=0).build(
+        load_targets=lambda: y_train
+    )
+    pred_b = DummyPredictor(mode="stratified_multilabel", random_state=0).build(
+        load_targets=lambda: y_train
+    )
+    pred_c = DummyPredictor(mode="stratified_multilabel", random_state=1).build(
+        load_targets=lambda: y_train
+    )
 
     out_a = pred_a(X_test)
     out_b = pred_b(X_test)
@@ -181,8 +187,12 @@ def test_dummy_predictor_stratified_random_state():
 def test_dummy_predictor_auto_mode(y_train, expected_mode):
     """Verify that mode='auto' resolves identically to the expected explicit mode."""
     # Use a shared seed so the stratified auto/explicit outputs match bit-for-bit.
-    auto_predictor = DummyPredictor(mode="auto", random_state=0).build(y_train)
-    explicit_predictor = DummyPredictor(mode=expected_mode, random_state=0).build(y_train)
+    auto_predictor = DummyPredictor(mode="auto", random_state=0).build(
+        load_targets=lambda: y_train
+    )
+    explicit_predictor = DummyPredictor(mode=expected_mode, random_state=0).build(
+        load_targets=lambda: y_train
+    )
 
     X_test = torch.randn(5, 2, 10)
     assert torch.allclose(auto_predictor(X_test), explicit_predictor(X_test))
@@ -191,4 +201,4 @@ def test_dummy_predictor_auto_mode(y_train, expected_mode):
 def test_dummy_predictor_auto_mode_unsupported_dtype():
     y_train = torch.tensor([True, False, True])
     with pytest.raises(ValueError, match="Unsupported dtype"):
-        DummyPredictor(mode="auto").build(y_train)
+        DummyPredictor(mode="auto").build(load_targets=lambda: y_train)

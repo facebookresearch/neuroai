@@ -13,7 +13,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from neuralbench.plots._constants import MODEL_DISPLAY_NAMES
+from neuralbench.plots._constants import (
+    FM_DISPLAY,
+    MODEL_DISPLAY_NAMES,
+    AdaptationMode,
+)
 from neuralbench.plots._filters import multi_dataset_tasks
 from neuralbench.plots.ranking import compute_task_ranks
 from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
@@ -21,6 +25,9 @@ from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
 # Synthetic ``brain_model_name`` assigned to the task-appropriate sklearn row
 # after collapsing; resolves to ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``.
 _FEATURE_BASED_LABEL = "feature_based"
+
+# the only models run with more than one adaptation strategy
+_FM_DISPLAY_SET: frozenset[str] = frozenset(FM_DISPLAY)
 
 # ---------------------------------------------------------------------------
 # Result aggregation
@@ -122,16 +129,89 @@ def _check_no_collisions(df: pd.DataFrame) -> None:
     )
 
 
+_STRATEGY_ABBREV: dict[str, str] = {
+    "finetune": "FT",
+    "linear_probe": "LP",
+    "attentive_probe": "AP",
+}
+
+
+def eval_mode_suffix(eval_mode: str) -> str:
+    """Display-name suffix for an ``eval_mode`` tag (``"lora_r4"`` -> ``" (LoRA r4)"``).
+
+    Unknown tags get no suffix.
+    """
+    mode = AdaptationMode.parse(eval_mode)
+    if mode.is_lora:
+        abbrev = f"LoRA r{mode.lora_rank}"
+    elif mode.strategy in _STRATEGY_ABBREV:
+        abbrev = _STRATEGY_ABBREV[mode.strategy]
+    else:
+        return ""
+    return f" ({abbrev} {mode.aggregation})" if mode.aggregation else f" ({abbrev})"
+
+
+def _result_is_foundation(row: dict[str, tp.Any]) -> bool:
+    """True when *row* belongs to a foundation model (by display name)."""
+    name = row.get("brain_model_name")
+    if not isinstance(name, str):
+        return False
+    return MODEL_DISPLAY_NAMES.get(name, name) in _FM_DISPLAY_SET
+
+
+def foundation_eval_modes(results: list[dict[str, tp.Any]]) -> list[str]:
+    """Distinct adaptation strategies among FM results, in canonical order."""
+    modes = {
+        str(row.get("eval_mode") or "finetune")
+        for row in results
+        if _result_is_foundation(row)
+    }
+    return sorted(modes, key=lambda m: AdaptationMode.parse(m).sort_key)
+
+
+def filter_results_for_eval_mode(
+    results: list[dict[str, tp.Any]], eval_mode: str
+) -> list[dict[str, tp.Any]]:
+    """Keep FM rows at *eval_mode* plus every non-FM row, as a shared reference."""
+    return [
+        row
+        for row in results
+        if not _result_is_foundation(row)
+        or str(row.get("eval_mode") or "finetune") == eval_mode
+    ]
+
+
 def build_results_df(
     results: list[dict[str, tp.Any]],
     loss_to_metric_mapping: dict[str, str],
+    *,
+    suffix_eval_mode: bool = True,
 ) -> pd.DataFrame:
-    """Transform raw experiment dicts into a plot-ready DataFrame."""
+    """Transform raw experiment dicts into a plot-ready DataFrame.
+
+    With ``suffix_eval_mode`` and several FM strategies present, foundation-model
+    names carry their strategy (``"REVE (LoRA r32)"``) so each stays a distinct
+    entry; pass ``False`` for frames already holding a single strategy.
+    ``base_model_name`` always holds the unsuffixed display name.
+    """
     df = pd.DataFrame(results)
     df = _collapse_feature_based_baselines(df)
     df["model_name"] = df["brain_model_name"].map(
         lambda name: MODEL_DISPLAY_NAMES.get(name, name)
     )
+    # the plain display name, kept so consumers need not parse it back out
+    df["base_model_name"] = df["model_name"]
+    # cached results predating eval_mode are all finetunes
+    if "eval_mode" not in df.columns:
+        df["eval_mode"] = "finetune"
+    else:
+        df["eval_mode"] = df["eval_mode"].fillna("finetune")
+    is_fm = df["base_model_name"].isin(_FM_DISPLAY_SET)
+    # only FMs are swept over strategies, so only their tags decide suffixing
+    if suffix_eval_mode and df.loc[is_fm, "eval_mode"].nunique() > 1:
+        df.loc[is_fm, "model_name"] = df.loc[is_fm, "model_name"] + df.loc[
+            is_fm, "eval_mode"
+        ].map(eval_mode_suffix).fillna("")
     df = _disambiguate_model_variants(df)
     df["loss_name"] = df.loss.apply(pd.Series).name
     df["metric_name"] = df.loss_name.map(loss_to_metric_mapping)
@@ -227,8 +307,14 @@ def make_full_table(
 def print_skip_table(
     total: dict[tuple[str, str], int],
     skipped: dict[tuple[str, str], int],
+    failed: dict[tuple[str, str], int] | None = None,
 ) -> None:
-    """Print a tasks x models table of included / total experiment counts."""
+    """Print a tasks x models table of included / total experiment counts.
+
+    *failed* is the subset of *skipped* whose job errored out, as opposed to
+    not having run yet; those counts are marked with a trailing ``!n``.
+    """
+    failed = failed or {}
     tasks = sorted({t for t, _ in total})
     models = sorted({m for _, m in total})
 
@@ -240,7 +326,10 @@ def print_skip_table(
             key = (task, model)
             n_total = total.get(key, 0)
             n_included = n_total - skipped.get(key, 0)
-            cells[key] = f"{n_included}/{n_total}" if n_total else "-"
+            n_failed = failed.get(key, 0)
+            cells[key] = "-" if not n_total else f"{n_included}/{n_total}"
+            if n_failed:
+                cells[key] += f"!{n_failed}"
             inc, tot = model_totals[model]
             model_totals[model] = (inc + n_included, tot + n_total)
             tinc, ttot = task_totals[task]
@@ -268,7 +357,9 @@ def print_skip_table(
 
     n_skip = sum(skipped.values())
     n_total = sum(total.values())
+    n_failed = sum(failed.values())
+    legend = f"\n!n = n experiment(s) failed ({n_failed} total)." if n_failed else ""
     print(
         f"\nExperiments with cached results ({n_total - n_skip}/{n_total} included):\n"
-        f"{table_df.to_string()}"
+        f"{table_df.to_string()}{legend}"
     )

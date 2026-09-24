@@ -105,10 +105,10 @@ class Mumtaz2018Machine(study.Study):
         "MDD": "major_depressive_disorder",
     }
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         dataset_id = "4244171"
         figshare = download.Figshare(study=dataset_id, dset_dir=self.path)
-        figshare.download()
+        figshare.download(overwrite=overwrite)
 
     @staticmethod
     def _get_fname(path: Path, basename: str) -> Path:

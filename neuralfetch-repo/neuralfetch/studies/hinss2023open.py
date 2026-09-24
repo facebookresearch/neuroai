@@ -83,9 +83,9 @@ class Hinss2023Open(study.Study):
         "MATBdiff",
     ]
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         zenodo = download.Zenodo(study="COG-BCI", dset_dir=self.path, record_id="7413650")
-        zenodo.download()
+        zenodo.download(overwrite=overwrite)
 
     def _get_filepath(self, timeline: dict[str, tp.Any]):
         tl = timeline
