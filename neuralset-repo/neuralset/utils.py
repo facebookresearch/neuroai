@@ -377,6 +377,7 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             "de": "german",
             "it": "italian",
             "pt": "portuguese",
+            "el": "greek",
         }
         language = _iso_to_lang.get(language.lower(), language.lower())
         # Large ("_lg") models are used because only they ship static word
@@ -392,6 +393,7 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             german="de_core_news_lg",
             italian="it_core_news_lg",
             portuguese="pt_core_news_lg",
+            greek="el_core_news_lg",
         )
         if language not in defaults:
             raise ValueError(f"Language {language!r} not available: {defaults}")
