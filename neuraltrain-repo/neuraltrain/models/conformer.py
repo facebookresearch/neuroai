@@ -68,15 +68,18 @@ class Conformer(BaseModelConfig):
     def build(self, dim: int) -> nn.Module:
         from torchaudio.models import Conformer
 
-        # Subclass with forward method that infers `lengths` and returns only the output tensor
+        # Subclass with forward method that returns only the output tensor
         class ConformerSimpleOutput(Conformer):
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                lengths = torch.full(
-                    (x.shape[0],),
-                    fill_value=x.shape[1],
-                    dtype=torch.long,
-                    device=x.device,
-                )
+            def forward(
+                self, x: torch.Tensor, lengths: torch.Tensor | None = None
+            ) -> torch.Tensor:
+                if lengths is None:
+                    lengths = torch.full(
+                        (x.shape[0],),
+                        fill_value=x.shape[1],
+                        dtype=torch.long,
+                        device=x.device,
+                    )
                 out, _ = super().forward(input=x, lengths=lengths)
                 return out
 
