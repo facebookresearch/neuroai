@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.HrfConvolve
+======================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: HrfConvolve
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

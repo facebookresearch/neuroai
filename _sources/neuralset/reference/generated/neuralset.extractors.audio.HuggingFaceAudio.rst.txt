@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.HuggingFaceAudio
+===========================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: HuggingFaceAudio
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

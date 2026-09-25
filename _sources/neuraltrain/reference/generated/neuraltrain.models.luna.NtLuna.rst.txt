@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.luna.NtLuna
+==============================
+
+.. currentmodule:: neuraltrain.models.luna
+
+.. autopydantic_model:: NtLuna
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

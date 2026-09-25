@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.green.Green
+==============================
+
+.. currentmodule:: neuraltrain.models.green
+
+.. autopydantic_model:: Green
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.meta.CroppedExtractor
+==========================================
+
+.. currentmodule:: neuralset.extractors.meta
+
+.. autopydantic_model:: CroppedExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

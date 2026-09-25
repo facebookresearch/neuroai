@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Dandi
+==========================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Dandi
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

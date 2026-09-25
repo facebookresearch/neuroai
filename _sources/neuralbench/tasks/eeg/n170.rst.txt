@@ -1,0 +1,31 @@
+N170 face perception classification
+====================================
+
+| **Name**: n170
+| **Category**: visual neuroscience
+| **Dataset**: ``Kappenman2020N170`` (ErpCore2021_N170)
+| **Objective**: :bdg-info:`Binary classification`
+| **Split**: Leave-subjects-out
+
+Usage
+~~~~~
+
+.. code-block:: bash
+
+   neuralbench eeg n170
+
+.. dropdown:: Show ``config.yaml``
+
+   .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/n170/config.yaml
+      :language: yaml
+
+
+Description
+~~~~~~~~~~~
+
+The N170 classification task involves distinguishing brain responses to faces vs. non-face stimuli from EEG recordings. The N170 is a face-selective visual ERP component peaking around 170 ms after stimulus onset over occipito-temporal electrodes, reflecting early stages of face perception. We use the Kappenman2020N170 dataset [Kappenman2020N170]_, part of the ERP CORE (Compendium of Open Resources and Experiments), which contains EEG data from 40 subjects viewing face and non-face images.
+
+References
+~~~~~~~~~~
+
+.. [Kappenman2020N170] Kappenman, E. S., et al. "ERP CORE: An open resource for human event-related potential research." NeuroImage 225 (2021): 117465.

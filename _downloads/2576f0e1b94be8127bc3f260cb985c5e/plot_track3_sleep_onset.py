@@ -1,0 +1,280 @@
+"""
+Track 3 -- Sleep onset (cross-user latency prediction)
+=======================================================
+
+.. image:: https://neural-interfaces26.github.io/exports/sleep-onset.gif
+   :alt: Seconds to the first N2 epoch predicted from wearable EEG
+   :target: https://neural-interfaces26.github.io/tracks.html
+   :width: 100%
+
+Given continuous four-channel wearable EEG recorded at home, predict the
+seconds remaining until the **first N2 epoch** -- the first epoch scored
+N2, not the start of a run of consecutive N2 epochs. The competition tests
+generalisation across nights and across sleepers on one consumer device:
+training and evaluation use the same Muse headband, the same home protocol
+and the same target. Precise onset timing replaces full hypnogram
+reconstruction because a sparse wearable montage supports it poorly.
+
+- **Shift**: nights and sleepers, on one consumer device. The evaluation
+  cohort contains **both sleepers seen in training and sleepers never seen
+  in training**, so a model has to hold up on new nights from familiar
+  people as well as on new people. Night-to-night variation, motion
+  artifacts, impedance changes and channel dropout come with the home
+  setting.
+- **Headline metric**: binned onset error in seconds, lower is better, but
+  the binning is weighted differently in each phase. Both phases split the
+  error by *true* time to onset into [0, 40), [40, 90), [90, 300) and
+  [300, 600] s.
+
+  - *Sealed Muse phase*: **W-bMAE**. The four ranges carry severity
+    weights of **10x, 5x, 3x and 1x**, so an error close to onset costs
+    far more than one ten minutes out. W-bMAE is then computed separately
+    over seen subjects (new nights from people in the training set) and
+    unseen subjects, and the ranking score is the **macro-average of those
+    two**, weighting night-to-night and inter-person generalisation
+    equally.
+  - *Current Sleep-EDF warm-up*: **unweighted bMAE** plus plain MAE. This
+    is a temporary proxy. It switches to the Muse W-bMAE scheme when the
+    Muse warm-up data lands, and the Codabench scorer and this start kit
+    are due to be updated together at that point.
+
+  ``neuralbench.metrics.BinnedMAE`` implements the unweighted form, so
+  ``val/bmae`` and ``test/bmae`` here match the warm-up scorer today and
+  not the sealed one. Nothing in the start kit computes the severity
+  weights or the seen/unseen macro-average.
+- **Data**: continuous Muse wearable EEG sampled at **128 Hz**, with
+  ``n2_onset`` annotations on the training cohort and a separate hidden
+  evaluation cohort recorded with the same hardware and protocol. More
+  details to come on the cohort size. The onset that
+  ``AddSleepOnsetTargets`` extracts is the earliest annotated N2 event of
+  the recording, which is exactly the competition's definition.
+
+.. note::
+   The Muse training set is released through NeuralBench when
+   submissions open. Until then, this starter kit runs on polysomnography
+   datasets -- the data format, the target extractor and the metric are
+   identical, but the recording hardware is not, so the starter kit has a
+   device gap the competition itself does not (see `Where the competition
+   data diverges`_).
+"""
+
+# %%
+# New to NeuralBench? Start here
+# ------------------------------
+#
+# This page is a track guide, not an introduction to the ecosystem. If you
+# arrived straight from the competition website:
+#
+# - :doc:`Challenge overview <plot_overview>` -- what NeuralBench is, how it
+#   relates to the competition, and the baseline numbers for all four tracks.
+# - :doc:`Installation </neuralbench/install>` and the :doc:`quickstart
+#   </neuralbench/auto_examples/quickstart/01_run_first_task>` -- get a task
+#   running on a 1.5 GB dataset before you download anything large.
+# - `Official Track 3 guide <https://neural-interfaces26.github.io/tracks.html>`__
+#   -- registration, rules, data access, prizes, leaderboard. Authoritative
+#   on every competition matter; this page only covers the code.
+# - :doc:`How to Submit a Model <plot_submission_guide>`.
+
+# %%
+# Where to find this task in NeuralBench
+# --------------------------------------
+#
+# The matching task in NeuralBench is
+# :doc:`/neuralbench/tasks/eeg/sleep_onset`.
+#
+# - **CLI**: ``neuralbench eeg sleep_onset``
+# - **Default dataset**: ``Kemp2000Analysis`` (Sleep-EDF Expanded,
+#   78 participants recorded over up to two nights each, 2 EEG
+#   channels, full polysomnography).
+# - **Target**: the time *remaining* until the first N2 epoch, which
+#   ``AddSleepOnsetTargets`` + ``SleepOnsetTargetExtractor`` recompute for
+#   every window as ``clip(n2_onset - window_stop, 0, 600)`` seconds. The
+#   task therefore predicts once per 5-second window rather than once per
+#   recording, and the competition's single ``tau_hat`` is
+#   ``window_stop + prediction`` read off any window within 600 s of
+#   onset, where the cap has not saturated the target.
+# - **Headline metric key**: ``test/bmae`` (binned MAE in seconds).
+#
+# **What the config is.** A NeuralBench task is one ``config.yaml``, and
+# nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
+# the study to load, how to split it, what the target is, the loss, and the
+# metrics. Reading it is the fastest way to know exactly what the baseline
+# does.
+#
+# .. dropdown:: Show ``tasks/eeg/sleep_onset/config.yaml``
+#
+#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/sleep_onset/config.yaml
+#       :language: yaml
+
+# %%
+# Split and model selection
+# --------------------------
+#
+# **Split.** Participant-level 60 / 20 / 20, drawn by ``SklearnSplit`` with
+# ``split_by: subject``. Every recording from a participant lands in exactly
+# one fold, so no sleeper is shared between train, validation and test --
+# the starter kit's test score therefore measures generalisation to people
+# the model has never seen. Both split seeds are fixed at 33, so the
+# partition is identical on every machine and every run. On Sleep-EDF's 78
+# participants that resolves to **46 train / 16 validation / 16 test**.
+#
+# That 16-participant test partition *is* the current Codabench warm-up
+# evaluation set: the scorer runs on the same Sleep-EDF subset this split
+# produces at random state 33. A ``test/bmae`` here and a warm-up
+# leaderboard score are therefore the same measurement, which makes this
+# the one track where a local number should line up with the board.
+#
+# The sealed phase is a different story. Its Muse cohort mixes seen and
+# unseen sleepers, while this split holds every sleeper out, so the sealed
+# score is not something the starter kit can approximate.
+#
+# **Model selection.** The checkpoint with the lowest **``val/bmae``** is
+# kept -- validation binned MAE in seconds, the same quantity as the
+# warm-up ``test/bmae``, just on the validation fold. Training runs for at
+# most 40 epochs and stops early after 7 epochs without improvement; only
+# that single best checkpoint is scored on test. Note this selects on the
+# unweighted metric; when the sealed W-bMAE weights arrive, a model tuned
+# this way will be under-weighting the near-onset range that matters most.
+#
+# **How to change it**, in increasing order of effort:
+#
+# - ``--dataset <name>`` merges
+#   ``tasks/eeg/sleep_onset/datasets/<name>.yaml`` over the base config.
+#   That is how the two extra PSG corpora below are selected, and how the
+#   Muse corpus will be once it ships.
+# - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
+#   adaptation strategy (frozen probe, LoRA, full fine-tuning) without
+#   touching any file.
+# - Anything else -- the 600 s cap, the 5 s window, the learning rate -- is a
+#   config edit. From Python, pass dotted keys to
+#   :func:`~neuralbench.evaluate_model` (``overrides={"data.duration":
+#   30.0}``). From a source checkout (``pip install -e``), edit
+#   ``config.yaml`` directly, or add your own ``datasets/*.yaml`` variant
+#   beside the existing ones and select it with ``--dataset``. Both routes
+#   are described in :doc:`Adding a New Task
+#   </neuralbench/auto_examples/adding_task/create_new_task>`.
+
+# %%
+# Reproducing the baseline
+# ------------------------
+#
+# This is the cheapest of the four tracks to get running end to end, which
+# makes it a good first target whichever track you plan to submit to.
+#
+# .. code-block:: bash
+#
+#    # 1. Download Sleep-EDF into DATA_DIR: ~7 GB, about 4 minutes on a fast
+#    #    link. One-off per machine, and safe to interrupt and re-run.
+#    neuralbench eeg sleep_onset --download
+#
+#    # 2. Preprocess into CACHE_DIR -- resample, filter, scale, and cut the
+#    #    153 whole-night recordings into 5 s windows once, so every later run
+#    #    reads the cache instead. No GPU needed. ~15 min for eegnet's cache
+#    #    and ~9 min for reve's, spread over 20 SLURM jobs. Note the cache
+#    #    (~18 GB) is larger than the raw download.
+#    neuralbench eeg sleep_onset --prepare
+#
+#    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
+#    #    seed, always in-process, so progress lands in your terminal. ~1 min
+#    #    on one V100 with the cache warm. Name the model you actually plan to
+#    #    run -- a bare --debug takes the config default, which is EEGNet.
+#    neuralbench eeg sleep_onset -m eegnet --debug
+#
+#    # 4. Same check for the foundation model. The first build pulls REVE's
+#    #    weights from the HuggingFace Hub, which needs network access; doing
+#    #    it here rather than in a queued run keeps any failure in your
+#    #    terminal instead of a job log.
+#    neuralbench eeg sleep_onset -m reve --debug
+#
+#    # 5. Full baseline -- task-specific model (EEGNet). ~6 min per seed, and
+#    #    the default grid is three seeds (concurrent on SLURM).
+#    neuralbench eeg sleep_onset -m eegnet
+#
+#    # 6. Full baseline -- foundation model (REVE), fine-tuned end to end.
+#    #    ~8 min per seed. ~69M parameters against EEGNet's ~1.5k, all of them
+#    #    trainable here, so this one wants a datacentre GPU rather than a
+#    #    laptop; it also preprocesses at 200 Hz against the 120 Hz default,
+#    #    warming a second cache.
+#    neuralbench eeg sleep_onset -m reve
+#
+# :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
+# fallback -- ``--debug`` included.
+#
+# Steps 5 and 6 cache the test-metric dictionary under ``SAVE_DIR`` --
+# ``test/bmae`` is the headline number -- and re-running the same command with
+# ``--plot-cached`` turns those cached metrics into comparison plots and CSV
+# tables without retraining. On SLURM they return as soon as the grid is
+# queued, so the numbers appear in the job logs rather than your terminal; see
+# :ref:`reading-results`.
+
+# %%
+# Evaluating a model of your own
+# ------------------------------
+#
+# A model that lives in your own codebase needs no YAML here:
+# :func:`~neuralbench.evaluate_model` takes the built instance, wraps it in a
+# probe sized to the task, and returns the scores as a DataFrame.
+#
+# .. code-block:: python
+#
+#    from neuralbench import check_model, evaluate_model
+#
+#    print(check_model(my_model, "eeg", "sleep_onset"))  # shapes only, seconds
+#    scores = evaluate_model(my_model, "eeg", "sleep_onset", name="my-fm", debug=True)
+#
+# See :doc:`Evaluating your own model
+# </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>` for what
+# ``forward`` has to accept, the adaptation presets, and how to fan the runs
+# out to SLURM.
+
+# %%
+# Where the competition data diverges
+# ------------------------------------
+#
+# The competition's own shift is cross-user on a single device. The starter
+# kit adds a second, artificial shift on top, because the only public
+# sleep-onset data with scored hypnograms is clinical polysomnography. Three
+# axes therefore differ from what you will be scored on:
+#
+# 1. **Hardware**: research-grade PSG (Sleep-EDF and the two corpora below)
+#    vs the consumer-grade Muse headband (4-channel frontal EEG, no EOG).
+#    Expect to drop or re-map channels in the dataloader, and treat any
+#    number you get here as an upper bound on signal quality.
+# 2. **Cohort and recording context**: laboratory monitored sleep vs home
+#    recordings with movement artifacts, impedance changes and channel
+#    dropout.
+# 3. **Annotations**: full hypnograms vs ``n2_onset`` events only on
+#    the training set. NeuralBench already trains on
+#    ``SleepOnsetMarker`` events, so the model interface does not
+#    change.
+#
+# The three PSG corpora registered for this task are exactly the three public
+# datasets the competition lists for Track 3, and all use the same
+# ``AddSleepOnsetTargets`` + ``bmae`` pipeline as the default:
+#
+# .. code-block:: bash
+#
+#    # Sleep-EDF Expanded (the default), ~7 GB raw + ~18 GB cache
+#    neuralbench eeg sleep_onset
+#
+#    # PhysioNet/CinC Challenge 2018: 994 labelled subjects, by far the most
+#    # sleepers, so the best stress test of cross-user behaviour at the scale
+#    # the Muse training set will have. Also by far the largest: ~285 GB raw
+#    # plus ~40 GB of cache.
+#    neuralbench eeg sleep_onset --dataset ghassemi2018you
+#
+#    # HMC Sleep Staging: 151 clinical whole-night recordings, ~17 GB raw
+#    neuralbench eeg sleep_onset --dataset alvarez2022haaglanden
+#
+# Once the Muse study is registered, switching is a single
+# ``data.study.source.name: Interaxon2026Muse`` override (or
+# ``--dataset interaxon2026muse`` if a ``datasets/`` YAML ships).
+#
+# Submission outputs (per the competition):
+#
+# - a direct onset estimate ``tau_hat`` in seconds, **or**
+# - per-window time-to-onset predictions, **or**
+# - per-window sleep probabilities.
+#
+# The current NeuralBench head produces the second format directly, and
+# the first by the conversion above.

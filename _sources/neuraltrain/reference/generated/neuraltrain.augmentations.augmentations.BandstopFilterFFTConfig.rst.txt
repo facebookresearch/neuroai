@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.augmentations.augmentations.BandstopFilterFFTConfig
+===============================================================
+
+.. currentmodule:: neuraltrain.augmentations.augmentations
+
+.. autopydantic_model:: BandstopFilterFFTConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

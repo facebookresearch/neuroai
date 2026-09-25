@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Donders
+============================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Donders
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

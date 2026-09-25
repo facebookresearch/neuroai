@@ -1,0 +1,32 @@
+N400 semantic processing classification
+=======================================
+
+| **Name**: n400
+| **Category**: language / neurolinguistics
+| **Dataset**: ``Kappenman2021N400`` (ErpCore2021_N400)
+| **Objective**: :bdg-info:`Binary classification`
+| **Split**: Leave-subjects-out
+
+Usage
+~~~~~
+
+.. code-block:: bash
+
+   neuralbench eeg n400
+
+.. dropdown:: Show ``config.yaml``
+
+   .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/n400/config.yaml
+      :language: yaml
+
+
+Description
+~~~~~~~~~~~
+
+The N400 classification task involves distinguishing brain responses to semantically congruent vs. incongruent words. The N400 is an ERP component peaking around 400 ms after a word presentation, reflecting semantic processing difficulty. Words that are semantically unexpected in context elicit a larger N400. We use the Kappenman2021N400 dataset [Kappenman2021N400]_, part of the ERP CORE (Compendium of Open Resources and Experiments), which contains EEG data from 40 subjects reading word pairs that are either semantically related or unrelated.
+
+
+References
+~~~~~~~~~~
+
+.. [Kappenman2021N400] Kappenman, E. S., et al. "ERP CORE: An open resource for human event-related potential research." NeuroImage 225 (2021): 117465.

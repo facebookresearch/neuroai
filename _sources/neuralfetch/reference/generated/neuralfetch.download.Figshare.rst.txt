@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Figshare
+=============================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Figshare
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
