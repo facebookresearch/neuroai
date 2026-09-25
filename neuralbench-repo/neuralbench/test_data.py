@@ -35,6 +35,16 @@ import neuralset as ns
 from .data import Data, get_default_dataloaders
 
 
+def test_sequential_loader_is_task_independent(build_data):
+    data = build_data(seed=33, sequential_eval=True)
+    loaders = data.prepare()
+    assert loaders["train"].batch_size == 4
+    for split in ("val", "test"):
+        assert loaders[split].batch_size == 1
+        positions = [(s.timeline, s.start) for s in loaders[split].dataset.segments]
+        assert positions == sorted(positions)
+
+
 def _train_indices(loaders: dict[str, DataLoader]) -> list[int]:
     """Return the first-epoch train-loader index sequence.
 

@@ -1,0 +1,7 @@
+# Local Muse adaptation: retain the sleep-onset task's subject-disjoint split,
+# targets, five-second windows, preprocessing, sampler, loss and model selection.
+data:
+  sequential_eval: true
+  study:
+    source:
+      name: Interaxon2026Muse

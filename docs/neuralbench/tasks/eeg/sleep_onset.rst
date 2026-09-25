@@ -66,6 +66,23 @@ also logged alongside the headline ``bmae``.
 Additional Datasets
 ~~~~~~~~~~~~~~~~~~~
 
+Muse wearable EEG is available as `NEMAR nm000287, version 1.0.0
+<https://doi.org/10.82901/nemar.nm000287>`__: 540 recordings from 203 participants,
+four channels at 128 Hz, with first-N2 point annotations. Credit Muse Team;
+the license is CC-BY-NC-SA-4.0.
+
+.. code-block:: bash
+
+   neuralfetch download Interaxon2026Muse --path /path/to/DATA_DIR
+   neuralbench eeg sleep_onset --dataset interaxon2026muse
+
+This variant retains the starter's subject-disjoint split, preprocessing and
+unweighted bMAE objective. NeuralFetch preserves the supplied session labels
+(500 train / 40 seen-participant test recordings), but the default benchmark
+replaces them in memory. Sequential evaluation orders individual windows;
+it does not make whole-recording preprocessing causal. This recipe is not the
+sealed Muse evaluation or its seen/unseen weighted score.
+
 The following additional polysomnography datasets can also be used with this
 task. Both expose annotated sleep stages, so ``AddSleepOnsetTargets`` derives
 the N2-onset target the same way as on Sleep-EDF.

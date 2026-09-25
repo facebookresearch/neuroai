@@ -33,29 +33,41 @@ reconstruction because a sparse wearable montage supports it poorly.
     unseen subjects, and the ranking score is the **macro-average of those
     two**, weighting night-to-night and inter-person generalisation
     equally.
-  - *Current Sleep-EDF warm-up*: **unweighted bMAE** plus plain MAE. This
-    is a temporary proxy. It switches to the Muse W-bMAE scheme when the
-    Muse warm-up data lands, and the Codabench scorer and this start kit
-    are due to be updated together at that point.
+  - *Sleep-EDF proxy*: **unweighted bMAE** plus plain MAE. Publishing the
+    Muse dataset does not change this recipe or the Codabench scorer;
+    a Muse scoring configuration must be enabled explicitly.
 
   ``neuralbench.metrics.BinnedMAE`` implements the unweighted form, so
-  ``val/bmae`` and ``test/bmae`` here match the warm-up scorer today and
+  ``val/bmae`` and ``test/bmae`` here match the Sleep-EDF proxy objective and
   not the sealed one. Nothing in the start kit computes the severity
   weights or the seen/unseen macro-average.
 - **Data**: continuous Muse wearable EEG sampled at **128 Hz**, with
   ``n2_onset`` annotations on the training cohort and a separate hidden
-  evaluation cohort recorded with the same hardware and protocol. More
-  details to come on the cohort size. The onset that
+  evaluation cohort recorded with the same hardware and protocol. The public
+  release contains **540 recordings from 203 participants**, totaling about
+  157.52 hours. Its supplied split is 500 training recordings and 40 test
+  recordings, all from participants seen in training. These counts do not
+  describe the sealed cohort. The onset that
   ``AddSleepOnsetTargets`` extracts is the earliest annotated N2 event of
   the recording, which is exactly the competition's definition.
 
 .. note::
-   The Muse training set is released through NeuralBench when
-   submissions open. Until then, this starter kit runs on polysomnography
-   datasets -- the data format, the target extractor and the metric are
-   identical, but the recording hardware is not, so the starter kit has a
-   device gap the competition itself does not (see `Where the competition
-   data diverges`_).
+   Muse data are available as `NEMAR nm000287, version 1.0.0
+   <https://doi.org/10.82901/nemar.nm000287>`__, by Muse Team under
+   CC-BY-NC-SA-4.0. Download with ``neuralfetch download Interaxon2026Muse``
+   and select ``neuralbench eeg sleep_onset --dataset interaxon2026muse``.
+   Configure NeuralFetch's data root to match NeuralBench's ``DATA_DIR``.
+   The Muse recipe keeps the starter's subject-disjoint split and unweighted
+   bMAE model selection; it does not use the supplied session split or
+   reproduce the sealed score. Source session labels remain available in
+   NeuralFetch for experiments that need the supplied split.
+
+   Evaluation is sequential and causal according to the organisers: only
+   past context is allowed, recording length is hidden, and competitors
+   manage hidden state. The recipe delivers chronological single-window
+   validation/test batches, but inherited whole-recording preprocessing is
+   not causal. Every released recording ends 300 s after N2; neither total
+   length nor onset-aligned crop position is a legitimate predictive input.
 """
 
 # %%
@@ -133,15 +145,14 @@ reconstruction because a sparse wearable montage supports it poorly.
 # warm-up ``test/bmae``, just on the validation fold. Training runs for at
 # most 40 epochs and stops early after 7 epochs without improvement; only
 # that single best checkpoint is scored on test. Note this selects on the
-# unweighted metric; when the sealed W-bMAE weights arrive, a model tuned
+# unweighted metric; compared with the sealed W-bMAE weights, a model tuned
 # this way will be under-weighting the near-onset range that matters most.
 #
 # **How to change it**, in increasing order of effort:
 #
 # - ``--dataset <name>`` merges
 #   ``tasks/eeg/sleep_onset/datasets/<name>.yaml`` over the base config.
-#   That is how the two extra PSG corpora below are selected, and how the
-#   Muse corpus will be once it ships.
+#   That is how the extra PSG corpora and the released Muse dataset are selected.
 # - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
 #   adaptation strategy (frozen probe, LoRA, full fine-tuning) without
 #   touching any file.
@@ -237,7 +248,7 @@ reconstruction because a sparse wearable montage supports it poorly.
 # axes therefore differ from what you will be scored on:
 #
 # 1. **Hardware**: research-grade PSG (Sleep-EDF and the two corpora below)
-#    vs the consumer-grade Muse headband (4-channel frontal EEG, no EOG).
+#    vs the consumer-grade Muse headband (4-channel frontotemporal EEG, no EOG).
 #    Expect to drop or re-map channels in the dataloader, and treat any
 #    number you get here as an upper bound on signal quality.
 # 2. **Cohort and recording context**: laboratory monitored sleep vs home
@@ -258,17 +269,32 @@ reconstruction because a sparse wearable montage supports it poorly.
 #    neuralbench eeg sleep_onset
 #
 #    # PhysioNet/CinC Challenge 2018: 994 labelled subjects, by far the most
-#    # sleepers, so the best stress test of cross-user behaviour at the scale
-#    # the Muse training set will have. Also by far the largest: ~285 GB raw
+#    # sleepers, providing a larger cross-user proxy than the public Muse set.
+#    # Also by far the largest: ~285 GB raw
 #    # plus ~40 GB of cache.
 #    neuralbench eeg sleep_onset --dataset ghassemi2018you
 #
 #    # HMC Sleep Staging: 151 clinical whole-night recordings, ~17 GB raw
 #    neuralbench eeg sleep_onset --dataset alvarez2022haaglanden
 #
-# Once the Muse study is registered, switching is a single
-# ``data.study.source.name: Interaxon2026Muse`` override (or
-# ``--dataset interaxon2026muse`` if a ``datasets/`` YAML ships).
+# Muse S family wearable EEG: four channels (TP9, AF7, AF8, TP10), 128 Hz,
+# first-N2 point annotations, no full hypnograms. The adapter reads EEG-BIDS
+# through MNE-BIDS, including BrainVision physical-unit scaling. Prior filters,
+# exact hardware generation and N2 scoring methodology are undocumented.
+#
+# .. code-block:: bash
+#
+#    neuralfetch download Interaxon2026Muse --path /path/to/DATA_DIR
+#    neuralbench eeg sleep_onset --dataset interaxon2026muse
+#
+# An existing copy can be placed directly at ``DATA_DIR/Interaxon2026Muse``;
+# downloaded copies live under ``Interaxon2026Muse/download/nm000287``.
+# The existing NEMAR backend downloads version 1.0.0 through nemar-py,
+# including roughly 1.1 GB of recordings; git-annex is not required.
+# No EEGDash indexing is required. The loader also recognizes ``muse`` and
+# ``nm000287`` as study aliases (the benchmark dataset selector stays
+# ``interaxon2026muse``). Cite Muse Team, *Muse Sleep-Onset EEG*, version 1.0.0,
+# DOI ``10.82901/nemar.nm000287``, and retain the CC-BY-NC-SA-4.0 attribution.
 #
 # Submission outputs (per the competition):
 #

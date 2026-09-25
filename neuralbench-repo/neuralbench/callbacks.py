@@ -34,6 +34,37 @@ if tp.TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
+class SequentialEvaluation(Callback):
+    """Let stateful models accumulate context within, but not across, recordings.
+
+    With ``data.sequential_eval=True``, the dataloader groups windows by
+    recording and orders them by start time. It delivers one window per batch
+    so later windows cannot supply context to an earlier prediction.
+
+    This callback requires a single device to keep that stream on one model.
+    Before each recording, or a new evaluation pass, it calls the model's
+    optional ``reset_state()`` hook. Between those boundaries, state is left
+    intact so the model can use past windows. Stateless models need no hook.
+
+    Applies to validation, testing and prediction. Prediction loaders must
+    supply the same ordering. Preprocessing and within-window causality remain
+    the caller's responsibility; this callback does not enforce them.
+    """
+
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        if len(batch.segments) != 1 or trainer.world_size != 1:
+            raise ValueError("Sequential evaluation requires one window and one device")
+        key = (dataloader_idx, batch.segments[0].timeline)
+        # The first batch also resets state when an evaluation pass is repeated.
+        if batch_idx == 0 or key != self.previous:
+            if hasattr(pl_module.model, "reset_state"):
+                pl_module.model.reset_state()
+        self.previous = key
+
+    on_validation_batch_start = on_test_batch_start
+    on_predict_batch_start = on_test_batch_start
+
+
 def _set_plot_theme() -> None:
     """Apply the plotting theme used by neuralbench callbacks."""
     sns.set_theme(context="paper", style="white")
