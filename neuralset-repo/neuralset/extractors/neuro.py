@@ -213,9 +213,10 @@ class MneRaw(BaseExtractor):
     apply_hilbert : bool, default=False
         If True, applies the Hilbert transform to extract the signal envelope.
     notch_filter : float or list of float, optional
-        Frequencies (in Hz) to apply a notch filter at. For a single frequency (as
-        float) or a list of frequencies (as list of float), all harmonics of specified
-        frequencies up to 300 Hz will be filtered out.
+        Frequencies (in Hz) to apply a notch filter at.
+    notch_harmonics : bool, default=True
+        If True, remove harmonics of each notch frequency up to 300 Hz. If
+        False, remove only the frequencies explicitly listed in notch_filter.
     drop_bads : bool, default=False
         Whether to drop channels marked as bad in the MNE info structure.
     mne_cpus : int, default=-1
@@ -265,6 +266,7 @@ class MneRaw(BaseExtractor):
     filter: tuple[float | None, float | None] | None = None
     apply_hilbert: bool = False
     notch_filter: float | list[float] | None = None
+    notch_harmonics: bool = True
     drop_bads: bool = False
     mne_cpus: int = -1
     infra: MapInfra = MapInfra(
@@ -358,7 +360,12 @@ class MneRaw(BaseExtractor):
 
         if self.notch_filter is not None:
             raw.load_data()
-            raw = self._notch_filter(raw, self.notch_filter, self.mne_cpus)
+            raw = self._notch_filter(
+                raw,
+                self.notch_filter,
+                self.mne_cpus,
+                include_harmonics=self.notch_harmonics,
+            )
 
         if self.filter is not None:
             raw.load_data()
@@ -519,14 +526,23 @@ class MneRaw(BaseExtractor):
 
     @staticmethod
     def _notch_filter(
-        raw: mne.io.Raw, notch_filter: float | list[float], mne_cpus: int
+        raw: mne.io.Raw,
+        notch_filter: float | list[float],
+        mne_cpus: int,
+        *,
+        include_harmonics: bool = True,
     ) -> mne.io.Raw:
         notch_filter = [notch_filter] if isinstance(notch_filter, float) else notch_filter
         notch_freqs: list[float] = []
         for freq in notch_filter:
-            notch_freqs.extend(
-                np.arange(freq, min(raw.info["sfreq"] / 2, 301), freq).tolist()  # type: ignore
-            )
+            if include_harmonics:
+                notch_freqs.extend(
+                    np.arange(
+                        freq, min(raw.info["sfreq"] / 2, 301), freq
+                    ).tolist()  # type: ignore
+                )
+            elif freq < raw.info["sfreq"] / 2:
+                notch_freqs.append(freq)
 
         if len(notch_freqs) == 0:
             logger.info("Not applying notch filter as no valid frequencies were found.")

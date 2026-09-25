@@ -16,7 +16,7 @@ data:
       valid_split_ratio: 0.2
       valid_random_state: 33
   neuro:
-    # Excluded: FT9, FT10 (not in all recordings)
+    # Match the 23-channel order used by the official NeuroLM TUEV loader.
     picks:
       - Fp1
       - Fp2
@@ -30,6 +30,8 @@ data:
       - O2
       - F7
       - F8
+      # NeuralFetch canonicalizes the original TUEV legacy names before
+      # channel selection: T3/T4/T5/T6 -> T7/T8/P7/P8 and A1/A2 -> T9/T10.
       - T7
       - T8
       - P7
@@ -39,14 +41,17 @@ data:
       - Fz
       - Cz
       - Pz
+      # T1/T2 (canonical FT9/FT10) are absent from part of the TUEV corpus.
+      # Keep the 21-channel intersection rather than fabricating missing EEG
+      # channels or failing preprocessing for those recordings.
   target:
     =replace=: true
     name: LabelEncoder
     event_types: [EpileptiformActivity, Artifact]
     event_field: state
     return_one_hot: true
-    aggregation: sum
-    allow_missing: true
+    aggregation: trigger
+    allow_missing: false
   trigger_event_type: [EpileptiformActivity, Artifact]
   start: -1.0
   duration: 3.0
@@ -59,7 +64,6 @@ trainer_config.monitor: val/f1_score_macro
 trainer_config.mode: max
 loss:
   =replace=: true
-  name: BCEWithLogitsLoss
+  name: CrossEntropyLoss
 metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
   - *brain_model_output_size
-  - multilabel
