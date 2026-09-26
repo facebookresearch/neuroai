@@ -52,6 +52,26 @@ def test_event_from_dict_with_nan() -> None:
     assert out["category"] == "verb"
 
 
+def test_event_from_dict_with_array_column() -> None:
+    # Mirrors a parquet cache round-trip, where an array-valued cell
+    # (e.g. a series event's `dims`) comes back as an np.ndarray rather
+    # than the original tuple. `pd.isna` on an array is element-wise, so
+    # the NaN-skip check in `from_dict` shouldnt choke on it.
+    data = {
+        "type": "Word",
+        "start": 0,
+        "duration": 1.0,
+        "timeline": "t",
+        "text": "hello",
+        "dims": np.array(["x", "y", "z"]),
+    }
+    word = ns.events.Event.from_dict(data)
+    assert np.array_equal(word.extra["dims"], np.array(["x", "y", "z"]))
+    out = word.to_dict()
+    assert np.array_equal(out["dims"], np.array(["x", "y", "z"]))
+    assert out["text"] == "hello"
+
+
 def test_sound(tmp_path: Path) -> None:
     fp = tmp_path / "Sub1" / "Sub2" / "Sub3" / "noise.wav"
     fp.parent.mkdir(parents=True)
