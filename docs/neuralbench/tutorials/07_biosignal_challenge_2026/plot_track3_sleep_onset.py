@@ -92,7 +92,11 @@ reconstruction because a sparse wearable montage supports it poorly.
 #   task therefore predicts once per 5-second window rather than once per
 #   recording, and the competition's single ``tau_hat`` is
 #   ``window_stop + prediction`` read off any window within 600 s of
-#   onset, where the cap has not saturated the target.
+#   onset, where the cap has not saturated the target. ``AddSleepOnsetTargets``
+#   samples a random number of windows at random positions in the pre-onset
+#   region (seeded, so reproducible): a fixed contiguous grid would make the
+#   target a function of a window's position alone, letting a model score
+#   perfectly without reading the EEG.
 # - **Headline metric key**: ``test/bmae`` (binned MAE in seconds).
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and

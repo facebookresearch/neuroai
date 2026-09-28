@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import hashlib
 import typing as tp
 
 import numpy as np
@@ -17,14 +18,13 @@ from neuralset.events import transforms as _transf
 
 
 class SleepOnsetMarker(_etypes.Event):
-    """Pre-onset region marker for the sleep-onset prediction task.
+    """Pre-onset analysis window for the sleep-onset prediction task.
 
-    Emitted by :class:`AddSleepOnsetTargets`: one marker per timeline, spanning
-    the trainable pre-N2 region (typically
-    ``[t_onset - max_pre_n2_s, t_onset]``).  The ``n2_onset`` field carries
-    the absolute timestamp of the first scored N2 epoch on that timeline.
-    Downstream, the segmenter tiles this marker via ``stride`` to produce
-    analysis segments, and
+    Emitted by :class:`AddSleepOnsetTargets`: one marker per sampled window
+    (a random number per night, at random positions inside the pre-N2
+    region).  The ``n2_onset`` field carries the absolute timestamp of the
+    first scored N2 epoch on that timeline.  Downstream, each marker becomes
+    one analysis segment, and
     :class:`~neuralbench.extractors.SleepOnsetTargetExtractor` reads
     ``n2_onset`` from the marker to compute the per-segment
     ``clip(n2_onset - segment.stop, 0, cap_s)`` regression target on the fly.
@@ -330,39 +330,60 @@ class CropSleepRecordings(_transf.EventsTransform):
 
 
 class AddSleepOnsetTargets(_transf.EventsTransform):
-    """Emit a single ``SleepOnsetMarker`` event per timeline spanning the pre-onset region.
+    """Emit randomly-placed ``SleepOnsetMarker`` windows over the pre-onset region.
 
     For each timeline, finds the first scored N2 epoch (the global N2 onset)
-    and emits one ``SleepOnsetMarker`` event that spans
-    ``[max(rec_start, t_onset - max_pre_n2_s), min(t_onset, rec_stop)]`` and
-    carries the absolute ``n2_onset`` timestamp as a field.  Downstream, the
-    segmenter tiles this marker via ``stride`` to produce analysis segments,
-    and :class:`~neuralbench.extractors.SleepOnsetTargetExtractor` computes
-    the per-segment ``clip(n2_onset - segment.stop, 0, cap_s)`` target on
-    the fly -- so target alignment is exact even if the segment ``duration``
-    and ``stride`` differ from any value set on this transform.
+    and samples a random number of ``window_s``-long windows at random
+    positions inside the pre-N2 region
+    ``[max(rec_start, t_onset - max_pre_n2_s), min(t_onset, rec_stop)]``.
+    Each window becomes one ``SleepOnsetMarker`` event carrying the absolute
+    ``n2_onset`` timestamp, and
+    :class:`~neuralbench.extractors.SleepOnsetTargetExtractor` computes the
+    per-segment ``clip(n2_onset - segment.stop, 0, cap_s)`` target on the fly.
 
-    Timelines without any N2 epoch are left untouched (no marker is emitted),
-    so they produce no trigger events for the downstream sleep-onset task
-    and contribute zero segments to training/evaluation.
+    Randomizing both the count and the position of the windows breaks the
+    positional determinism of a contiguous grid: with a fixed grid ending at
+    onset the target is a pure function of a window's rank, so a model that
+    ignores the EEG can reproduce the labels from window position alone.
+    Random offsets make the time-to-onset a continuous quantity that only the
+    signal can reveal. The sampling is fully determined by ``seed`` (combined
+    with a stable per-timeline hash, so each night is independent of the order
+    timelines are processed in and reproducible across runs and processes).
+
+    Timelines without any N2 epoch, or whose pre-N2 region is too short to fit
+    a single ``window_s`` window, emit no marker and contribute no segments.
 
     Parameters
     ----------
     max_pre_n2_s : float | None
-        If set, restrict the marker to at most this many seconds ending at
-        N2 onset (i.e. the marker spans
-        ``[max(rec_start, t_onset - max_pre_n2_s), min(t_onset, rec_stop)]``).
-        Used to limit the cap-mass dominance of the regression target
-        distribution.  When ``None`` (the default), the marker spans the
-        full pre-N2 portion of the recording.
+        If set, restrict sampling to at most this many seconds ending at N2
+        onset. Used to limit the cap-mass dominance of the target
+        distribution. When ``None``, sampling spans the full pre-N2 region.
     n2_stage : str
         Stage label used to identify N2 sleep in ``SleepStage.stage``.
+    window_s : float
+        Length (seconds) of each sampled window; also the segment duration
+        downstream (the marker's ``duration``).
+    min_windows, max_windows : int
+        Inclusive bounds on the random number of windows sampled per night.
+    seed : int
+        Base seed for the sampling. The per-night RNG is seeded from
+        ``seed`` and a stable hash of the timeline id.
     """
 
     max_pre_n2_s: float | None = None
     n2_stage: str = "N2"
+    window_s: float = 5.0
+    min_windows: int = 40
+    max_windows: int = 240
+    seed: int = 0
 
-    def _emit_for_timeline(self, evs: pd.DataFrame) -> pd.DataFrame:
+    def _timeline_seed(self, timeline: str) -> int:
+        """Stable (cross-process) per-timeline seed derived from the id."""
+        digest = hashlib.blake2b(str(timeline).encode(), digest_size=8).digest()
+        return int.from_bytes(digest, "big")
+
+    def _emit_for_timeline(self, evs: pd.DataFrame, timeline: str) -> pd.DataFrame:
         n2 = evs[(evs.type == "SleepStage") & (evs.stage == self.n2_stage)]
         if n2.empty:
             return pd.DataFrame()
@@ -376,22 +397,30 @@ class AddSleepOnsetTargets(_transf.EventsTransform):
         if self.max_pre_n2_s is not None:
             t0 = max(t0, t_onset - self.max_pre_n2_s)
         t_stop = min(t_onset, rec_stop)
-        if t_stop <= t0:
+        # Latest start so the window stays fully inside [t0, t_stop].
+        hi = t_stop - self.window_s
+        if hi < t0:
             return pd.DataFrame()
+
+        rng = np.random.default_rng([self.seed, self._timeline_seed(timeline)])
+        n = int(rng.integers(self.min_windows, self.max_windows + 1))
+        # A degenerate range fits a single position only; avoid duplicate
+        # starts, which the segmenter rejects as ambiguous triggers.
+        starts = np.full(1, t0) if hi <= t0 else rng.uniform(t0, hi, size=n)
         return pd.DataFrame(
             {
-                "type": ["SleepOnsetMarker"],
-                "start": [t0],
-                "duration": [t_stop - t0],
-                "stop": [t_stop],
-                "n2_onset": [t_onset],
+                "type": "SleepOnsetMarker",
+                "start": starts,
+                "duration": self.window_s,
+                "stop": starts + self.window_s,
+                "n2_onset": t_onset,
             }
         )
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
         new_rows_per_tl: list[pd.DataFrame] = []
         for timeline, group in events.groupby("timeline", sort=False):
-            emitted = self._emit_for_timeline(group)
+            emitted = self._emit_for_timeline(group, timeline)
             if emitted.empty:
                 continue
             emitted["timeline"] = timeline

@@ -7,6 +7,7 @@
 import typing as tp
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -386,30 +387,60 @@ def test_crop_sleep_recordings(sleep_events):
 
 
 def test_add_sleep_onset_targets_basic(sleep_onset_events):
-    """tl_n2 (N2 onset at 60s): one marker spanning [0, 60] with n2_onset=60.
-    tl_no_n2 (no N2): no SleepOnsetMarker rows added."""
-    transform = AddSleepOnsetTargets()
+    """tl_n2 (N2 onset at 60s): a random number of window_s windows sampled
+    inside [0, 60]. tl_no_n2 (no N2): no SleepOnsetMarker rows added."""
+    transform = AddSleepOnsetTargets(min_windows=5, max_windows=20, window_s=5.0)
     new_events = transform(sleep_onset_events)
 
     markers = new_events[new_events.type == "SleepOnsetMarker"]
     marker_n2 = markers[markers.timeline == "tl_n2"].reset_index(drop=True)
     marker_no_n2 = markers[markers.timeline == "tl_no_n2"]
 
-    assert len(marker_n2) == 1
+    assert 5 <= len(marker_n2) <= 20
     assert len(marker_no_n2) == 0
 
-    assert marker_n2.loc[0, "start"] == pytest.approx(0.0)
-    assert marker_n2.loc[0, "duration"] == pytest.approx(60.0)
-    assert marker_n2.loc[0, "stop"] == pytest.approx(60.0)
-    assert marker_n2.loc[0, "n2_onset"] == pytest.approx(60.0)
+    # Every window is window_s long, fully inside the pre-onset region [0, 60],
+    # and carries the absolute onset.
+    assert (marker_n2["duration"] == pytest.approx(5.0)).all()
+    assert (marker_n2["start"] >= 0.0).all()
+    assert (marker_n2["stop"] <= 60.0 + 1e-9).all()
+    assert (marker_n2["n2_onset"] == pytest.approx(60.0)).all()
     # Per-timeline metadata propagated by standardize_events.
-    assert marker_n2.loc[0, "subject"] == "1"
-    assert marker_n2.loc[0, "study"] == "Test2025"
+    assert (marker_n2["subject"] == "1").all()
+    assert (marker_n2["study"] == "Test2025").all()
+
+
+def test_add_sleep_onset_targets_seed_is_reproducible(sleep_onset_events):
+    """Same seed -> identical windows; a different seed -> different windows."""
+    a = AddSleepOnsetTargets(seed=0)(sleep_onset_events)
+    b = AddSleepOnsetTargets(seed=0)(sleep_onset_events)
+    c = AddSleepOnsetTargets(seed=1)(sleep_onset_events)
+
+    def markers(df):
+        return (
+            df[df.type == "SleepOnsetMarker"]
+            .sort_values(["timeline", "start"])[["timeline", "start", "stop"]]
+            .reset_index(drop=True)
+        )
+
+    pd.testing.assert_frame_equal(markers(a), markers(b))
+    assert not markers(a).equals(markers(c))
+
+
+def test_add_sleep_onset_targets_positions_are_not_gridded(sleep_onset_events):
+    """Window starts are continuous random offsets, not a fixed window_s grid
+    (the property that removes the position-determines-target leak)."""
+    transform = AddSleepOnsetTargets(min_windows=30, max_windows=30, window_s=5.0)
+    marker_n2 = transform(sleep_onset_events).query(
+        "type == 'SleepOnsetMarker' and timeline == 'tl_n2'"
+    )
+    offsets = marker_n2["start"].to_numpy() % 5.0
+    assert np.any(offsets > 1e-6)  # not all aligned to a 5 s grid
 
 
 def test_add_sleep_onset_targets_no_pre_onset_window(sleep_onset_events):
-    """If the pre-onset region is empty (t_stop <= t0), no marker is emitted."""
-    # N2 onset is at 60s, so capping pre-N2 region to 0s leaves an empty span.
+    """If the pre-onset region cannot fit a window (hi < t0), none is emitted."""
+    # N2 onset is at 60s, so capping pre-N2 region to 0s leaves no room.
     transform = AddSleepOnsetTargets(max_pre_n2_s=0.0)
     new_events = transform(sleep_onset_events)
     assert (new_events.type == "SleepOnsetMarker").sum() == 0
@@ -417,43 +448,22 @@ def test_add_sleep_onset_targets_no_pre_onset_window(sleep_onset_events):
     assert len(new_events) == len(sleep_onset_events)
 
 
-def test_add_sleep_onset_targets_max_pre_n2_s_truncates_marker_span(
+def test_add_sleep_onset_targets_max_pre_n2_s_bounds_sampling_region(
     sleep_onset_events,
 ):
-    """`max_pre_n2_s` shifts the marker's start forward, capping its duration.
+    """`max_pre_n2_s` restricts sampling to end at N2 onset.
 
-    With N2 onset at t=60s and `max_pre_n2_s=20`, the marker spans [40, 60].
+    With N2 onset at t=60s and `max_pre_n2_s=20`, windows are sampled inside
+    [40, 60], so starts are >= 40 and stops <= 60.
     """
-    transform = AddSleepOnsetTargets(max_pre_n2_s=20.0)
-    new_events = transform(sleep_onset_events)
-    marker_n2 = new_events[
-        (new_events.type == "SleepOnsetMarker") & (new_events.timeline == "tl_n2")
-    ].reset_index(drop=True)
-    assert len(marker_n2) == 1
-    assert marker_n2.loc[0, "start"] == pytest.approx(40.0)
-    assert marker_n2.loc[0, "stop"] == pytest.approx(60.0)
-    assert marker_n2.loc[0, "duration"] == pytest.approx(20.0)
-    assert marker_n2.loc[0, "n2_onset"] == pytest.approx(60.0)
-
-
-def test_add_sleep_onset_targets_max_pre_n2_s_no_op_when_larger_than_recording(
-    sleep_onset_events,
-):
-    """A `max_pre_n2_s` exceeding the available pre-N2 region is a no-op."""
-    baseline = AddSleepOnsetTargets()(sleep_onset_events)
-    transformed = AddSleepOnsetTargets(max_pre_n2_s=10_000.0)(sleep_onset_events)
-
-    base_marker = (
-        baseline[baseline.type == "SleepOnsetMarker"]
-        .sort_values(["timeline", "start"])
-        .reset_index(drop=True)
+    transform = AddSleepOnsetTargets(max_pre_n2_s=20.0, window_s=5.0)
+    marker_n2 = transform(sleep_onset_events).query(
+        "type == 'SleepOnsetMarker' and timeline == 'tl_n2'"
     )
-    new_marker = (
-        transformed[transformed.type == "SleepOnsetMarker"]
-        .sort_values(["timeline", "start"])
-        .reset_index(drop=True)
-    )
-    pd.testing.assert_frame_equal(base_marker, new_marker)
+    assert len(marker_n2) > 0
+    assert (marker_n2["start"] >= 40.0 - 1e-9).all()
+    assert (marker_n2["stop"] <= 60.0 + 1e-9).all()
+    assert (marker_n2["n2_onset"] == pytest.approx(60.0)).all()
 
 
 @pytest.mark.parametrize("max_duration_s", [None, 10.0, 110.0])

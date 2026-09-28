@@ -11,6 +11,10 @@ data:
     annotate_sleep_onset:
       name: AddSleepOnsetTargets
       max_pre_n2_s: 1200.0
+      window_s: 5.0
+      min_windows: 40
+      max_windows: 240
+      seed: 0
     split:
       name: SklearnSplit
       split_by: subject
@@ -33,6 +37,8 @@ data:
     cap_s: 600.0
   trigger_event_type: SleepOnsetMarker
   start: 0.0
+  # Each SleepOnsetMarker is one window_s-long window; stride == duration ==
+  # window_s tiles it into exactly one segment (keep these three in sync).
   duration: 5.0
   stride: 5.0
   sampler:
