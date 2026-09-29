@@ -29,13 +29,13 @@ class Zyma2019Electroencephalograms(study.Study):
 
     Experimental Design:
         - EEG recordings (20-channel, 500 Hz, Neurocom)
-        - 35 participants
+        - 36 participants
         - 2 runs per participant
             * Run 1: resting-state baseline
             * Run 2: mental arithmetic (serial subtraction)
 
     Data Format:
-        - 70 total timelines (35 participants x 2 runs)
+        - 72 total timelines (36 participants x 2 runs)
         - EDF files for EEG data
         - Event types: Eeg
         - Participant metadata: age, gender, count quality, number of subtractions
@@ -67,11 +67,11 @@ class Zyma2019Electroencephalograms(study.Study):
     }
     """
     description: tp.ClassVar[str] = (
-        "EEG recordings from 35 participants performing mental arithmetic (serial subtraction)."
+        "EEG recordings from 36 participants performing mental arithmetic (serial subtraction)."
     )
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=35 * 2,
-        num_subjects=35,
+        num_timelines=36 * 2,
+        num_subjects=36,
         num_events_in_query=1,
         event_types_in_query={"Eeg"},
         data_shape=(20, 91000),
@@ -94,7 +94,7 @@ class Zyma2019Electroencephalograms(study.Study):
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         task_map = {"1": "rest", "2": "mental_arithmetic"}
-        for i in range(1, 36):
+        for i in range(0, 36):
             for run in ["1", "2"]:
                 yield dict(subject=f"Subject{i:02}", run=run, task=task_map[run])
 
