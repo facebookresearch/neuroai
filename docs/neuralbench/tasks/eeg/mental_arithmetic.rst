@@ -41,7 +41,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg mental_arithmetic --datasets shin2017b
+   neuralbench eeg mental_arithmetic --dataset shin2017b
 
 References
 ~~~~~~~~~~

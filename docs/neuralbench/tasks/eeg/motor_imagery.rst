@@ -65,7 +65,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg motor_imagery --dataset schalk2004bci
+   neuralbench eeg motor_imagery --dataset schalk2004bci2000
 
 References
 ~~~~~~~~~~
