@@ -228,6 +228,22 @@ reconstruction because a sparse wearable montage supports it poorly.
 # out to SLURM.
 
 # %%
+# Evaluating as a stream
+# ----------------------
+#
+# ``neuralbench eeg _sleep_onset_stream`` scores the same data, split, target
+# and metrics one window at a time, each recording forward in time. Validation
+# and test streams start at a random time before N2 onset, so the time since a
+# stream began says little about the target, and the model's optional
+# ``reset_state()`` is called on a fresh copy of the model at the start of each
+# recording (see :doc:`Modifying the training loop
+# </neuralbench/auto_examples/advanced/modify_training_loop>`). Validation stays
+# batched; set ``data.val_batch_size: 1`` to select checkpoints on streams too,
+# at several times the training cost. Scores are not comparable with
+# ``sleep_onset``'s, as the test windows differ. The leading underscore keeps
+# the task out of ``neuralbench eeg all``.
+
+# %%
 # Where the competition data diverges
 # ------------------------------------
 #
