@@ -100,12 +100,12 @@ class Li2022Petit(study.Study):
         event_types_in_query={"Fmri", "Audio", "Word", "Text"},
         data_shape=(73, 90, 74, 283),
         frequency=0.5,
-        fmri_spaces=("custom",),  # MNIColin27
+        fmri_spaces=("MNIColin27",),
     )
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        self.version = "v3"
+        self.version = "v4"
 
     def _download(self, overwrite: bool = False) -> None:
         """
@@ -268,7 +268,15 @@ class Li2022Petit(study.Study):
         # Use run index if available, otherwise use sequential index
         niifile = files[tl["run"] - 1] if len(files) >= tl["run"] else files[0]
         freq = 1.0 / self.TR_FMRI_S
-        events2.append(dict(type="Fmri", start=0, filepath=str(niifile), frequency=freq))
+        events2.append(
+            dict(
+                type="Fmri",
+                start=0,
+                filepath=str(niifile),
+                frequency=freq,
+                space="MNIColin27",
+            )
+        )
         out = pd.concat([events, pd.DataFrame(events2)], ignore_index=True)
 
         out.loc[out.type.isin(["Word", "Sentence", "Text"]), "modality"] = "heard"
@@ -303,7 +311,7 @@ class Li2022PetitSample(Li2022Petit):
         event_types_in_query={"Audio", "Fmri", "Text", "Word"},
         data_shape=(73, 90, 74, 282),
         frequency=0.5,
-        fmri_spaces={"custom"},
+        fmri_spaces={"MNIColin27"},
     )
 
     # URL for the English transcript files (run 1 only)

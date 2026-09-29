@@ -365,7 +365,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
         event_types_in_query={"Fmri", "Image"},
         data_shape=(77, 94, 80, 284),
         frequency=0.667,
-        fmri_spaces=("custom",),
+        fmri_spaces=("MNI152NLin2009aSym",),
     )
 
     SUBJECTS: tp.ClassVar[tuple[int, ...]] = (1, 2, 3)
@@ -373,10 +373,14 @@ class Hebart2023ThingsBold(_Hebart2023Things):
     RUNS_PER_SESSION: tp.ClassVar[int] = 10
     BIDS_FOLDER: tp.ClassVar[str] = "download/ds004192"
     DERIVATIVES_FOLDER: tp.ClassVar[str] = "derivatives"
-    BOLD_SPACE: tp.ClassVar[str] = "MNI152NLin2009aSym"
+    SPACE: tp.ClassVar[str] = "MNI152NLin2009aSym"
     TASK: tp.ClassVar[str] = "things"
     SESSION_SUFFIX: tp.ClassVar[str] = "things"
     TR_FMRI_S: tp.ClassVar[float] = 1.5
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"  # busts events cached with ``space="custom"``
 
     def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
@@ -431,6 +435,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
             "start": 0.0,
             "frequency": self._get_fmri_frequency(),
             "duration": self._get_bold_image(timeline).shape[-1] * self.TR_FMRI_S,
+            "space": self.SPACE,
         }
         bids_events_df_fp = nutils.get_bids_filepath(
             root_path=self.path / self.BIDS_FOLDER,
@@ -515,7 +520,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
             root_path=self.path / self.DERIVATIVES_FOLDER,
             filetype="bold_mask",
             data_type="Fmri",
-            space=self.BOLD_SPACE,
+            space=self.SPACE,
             ses_suffix=self.SESSION_SUFFIX,
             **timeline,
         )
@@ -526,7 +531,7 @@ class Hebart2023ThingsBold(_Hebart2023Things):
             root_path=self.path / self.DERIVATIVES_FOLDER,
             filetype="bold",
             data_type="Fmri",
-            space=self.BOLD_SPACE,
+            space=self.SPACE,
             ses_suffix=self.SESSION_SUFFIX,
             **timeline,
         )
