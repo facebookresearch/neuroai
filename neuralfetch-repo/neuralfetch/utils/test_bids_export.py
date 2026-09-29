@@ -256,6 +256,79 @@ def test_study_to_bids_stimulus_files_copied(tmp_path: Path) -> None:
     assert (stimuli_dir / "fake_image.png").exists(), "image file should be copied"
 
 
+def _stim_row(etype: str, filepath: Path, start: float) -> dict:
+    return {
+        "type": etype,
+        "start": start,
+        "duration": 0.2,
+        "timeline": "tl_0",
+        "subject": "01",
+        "filepath": str(filepath),
+        "frequency": 250.0,
+        "session": None,
+        "task": "auditory",
+        "run": None,
+    }
+
+
+def _events_tsv(bids_root: Path) -> pd.DataFrame:
+    (fname,) = bids_root.rglob("*_events.tsv")
+    return pd.read_csv(fname, sep="\t")
+
+
+def test_study_to_bids_fnirs_rejected(tmp_path: Path) -> None:
+    from neuralfetch.utils.bids_export import study_to_bids
+
+    study = _make_study(pd.DataFrame(), path=tmp_path)
+    with pytest.raises(ValueError, match="not supported"):
+        study_to_bids(study, tmp_path, device="Fnirs", task="task")
+
+
+def test_study_to_bids_audio_stimulus_exported(tmp_path: Path) -> None:
+    wav = tmp_path / "stim" / "tone.wav"
+    wav.parent.mkdir()
+    wav.write_bytes(b"RIFF")
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    _run_study_to_bids(bids_root, extra_rows=[_stim_row("Audio", wav, 0.2)])
+
+    assert (bids_root / "stimuli" / "tone.wav").exists()
+    assert "stimuli/tone.wav" in _events_tsv(bids_root)["stim_file"].tolist()
+
+
+def test_study_to_bids_same_basename_stimuli_kept_apart(tmp_path: Path) -> None:
+    """Distinct files sharing a basename are exported to distinct paths."""
+    srcs = []
+    for folder in ("a", "b"):
+        src = tmp_path / "stim" / folder / "img.png"
+        src.parent.mkdir(parents=True)
+        src.write_bytes(folder.encode())
+        srcs.append(src)
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    rows = [_stim_row("Image", src, 0.2 + 0.3 * i) for i, src in enumerate(srcs)]
+    _run_study_to_bids(bids_root, extra_rows=rows)
+
+    assert (bids_root / "stimuli" / "a" / "img.png").read_bytes() == b"a"
+    assert (bids_root / "stimuli" / "b" / "img.png").read_bytes() == b"b"
+    stim_files = set(_events_tsv(bids_root)["stim_file"].dropna())
+    assert {"stimuli/a/img.png", "stimuli/b/img.png"} <= stim_files
+
+
+def test_study_to_bids_overwrite_refreshes_stimulus(tmp_path: Path) -> None:
+    src = tmp_path / "stim" / "img.png"
+    src.parent.mkdir()
+    src.write_bytes(b"old")
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    rows = [_stim_row("Image", src, 0.2)]
+    _run_study_to_bids(bids_root, overwrite=True, extra_rows=rows)
+    src.write_bytes(b"new")
+    _run_study_to_bids(bids_root, overwrite=True, extra_rows=rows)
+
+    assert (bids_root / "stimuli" / "img.png").read_bytes() == b"new"
+
+
 def test_study_to_bids_subject_prefix_stripped(tmp_path: Path) -> None:
     """Subject strings like 'StudyName/01' are stripped to '01', written as 'sub-01'."""
     _run_study_to_bids(tmp_path, subject="StudyName/01")

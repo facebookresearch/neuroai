@@ -12,6 +12,7 @@ etc.) live in ``neuralfetch.utils``.
 
 import errno
 import logging
+import os
 import shutil
 import time
 import typing as tp
@@ -29,8 +30,10 @@ from neuralset.events import study as base
 
 logger = logging.getLogger(__name__)
 
-MNE_RAW_TYPES = {"Meg", "Eeg", "Emg", "Ieeg", "Fnirs"}
-STIMULUS_FILE_TYPES = {"Sound", "Image", "Video"}
+# Fnirs is excluded: mne_bids can only write NIRS by copying a source SNIRF file,
+# not from the preloaded raws this exporter produces.
+MNE_RAW_TYPES = {"Meg", "Eeg", "Emg", "Ieeg"}
+STIMULUS_FILE_TYPES = {"Audio", "Image", "Video"}
 
 # mne_bids requires a concrete write format for preloaded data (our raws are
 # always already loaded, never a passthrough file on disk) -- "auto" is only
@@ -129,9 +132,7 @@ def _write_participants_tsv(results: list[dict], path: Path) -> None:
 
         demographics = result.get("demographics", {})
         info = mne.create_info(ch_names=["STI"], sfreq=1000.0, ch_types=["stim"])
-        subject_info = mne._fiff.meas_info.SubjectInfo(demographics)
-        with info._unlock():
-            info["subject_info"] = subject_info
+        info["subject_info"] = demographics
         raw = mne.io.RawArray(np.zeros((1, 1)), info, verbose=False)
 
         _mne_participants_tsv(
@@ -151,7 +152,7 @@ class BidsExporter(pydantic.BaseModel):
         Root directory for the BIDS output.
     device :
         Neurophysiology recording type.  Must be one of ``"Eeg"``,
-        ``"Meg"``, ``"Ieeg"``, ``"Emg"``, or ``"Fnirs"``.
+        ``"Meg"``, ``"Ieeg"``, or ``"Emg"``.
     task :
         BIDS task label. If ``None``, the ``"task"`` column in the events
         DataFrame is used.
@@ -201,6 +202,9 @@ class BidsExporter(pydantic.BaseModel):
     _study_cls_name: str = pydantic.PrivateAttr(default="")
     _study_module: str = pydantic.PrivateAttr(default="")
     _study_path: Path = pydantic.PrivateAttr(default_factory=Path)
+    # Deepest directory shared by all of the study's stimulus files; set by
+    # export() so every job maps a given source file to the same destination.
+    _stim_root: Path = pydantic.PrivateAttr(default_factory=Path)
 
     def export(self, study: base.Study) -> Path:
         """Run the full BIDS export for *study*.
@@ -220,6 +224,17 @@ class BidsExporter(pydantic.BaseModel):
         self._study_path = study.path
 
         events = study.run()
+        stim_paths = (
+            events.loc[events["type"].isin(STIMULUS_FILE_TYPES), "filepath"]
+            .dropna()
+            .unique()
+            if "filepath" in events.columns
+            else []
+        )
+        if len(stim_paths):
+            self._stim_root = Path(
+                os.path.commonpath([str(Path(p).parent) for p in stim_paths])
+            )
         grouped = [(tid, df) for tid, df in events.groupby("timeline")]
 
         # Create the BIDS root before dispatching jobs. write_raw_bids writes
@@ -252,6 +267,18 @@ class BidsExporter(pydantic.BaseModel):
             path,
         )
         return path
+
+    def _stimulus_dest(self, src: Path) -> Path:
+        """BIDS-root-relative destination for stimulus file *src*.
+
+        Keeps *src*'s path under the shared stimulus root, so distinct files
+        with the same basename in different folders do not overwrite each other.
+        """
+        try:
+            rel = src.relative_to(self._stim_root)
+        except ValueError:
+            rel = Path(src.name)
+        return Path("stimuli") / rel
 
     @_infra_bids.apply(
         item_uid=lambda item: item[0],  # timeline_id — unique cache key per timeline
@@ -365,8 +392,7 @@ class BidsExporter(pydantic.BaseModel):
                 else:
                     demographics[col] = float(timeline_df[col].iloc[0])
 
-        subject_info = mne._fiff.meas_info.SubjectInfo(demographics)
-        raw.info["subject_info"] = subject_info
+        raw.info["subject_info"] = demographics
 
         # Resolve task: parameter > events column > study class name
         if self.task is not None:
@@ -443,13 +469,11 @@ class BidsExporter(pydantic.BaseModel):
             else pd.DataFrame()
         )
         if not stim_file_df.empty:
-            stimuli_dir = path / "stimuli"
-            stimuli_dir.mkdir(exist_ok=True)
-
             for src_path in stim_file_df["filepath"].unique():
                 src = Path(src_path)
-                dst = stimuli_dir / src.name
-                if not dst.exists():
+                dst = path / self._stimulus_dest(src)
+                if self.overwrite or not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
 
             # Write stimulus event rows to the BIDS events.tsv sidecar.
@@ -467,7 +491,7 @@ class BidsExporter(pydantic.BaseModel):
             }
             bids_events = stim_file_df.copy()
             bids_events["stim_file"] = bids_events["filepath"].apply(
-                lambda p: f"stimuli/{Path(p).name}"
+                lambda p: self._stimulus_dest(Path(p)).as_posix()
             )
             bids_events = bids_events.rename(columns={"start": "onset"})
             bids_events = bids_events.drop(
@@ -506,7 +530,7 @@ def study_to_bids(
     to parallelise per-timeline writes across SLURM or local workers.
 
     Currently supports neurophysiology modalities only: EEG, MEG, iEEG,
-    EMG, and fNIRS.  Neuroimaging modalities such as fMRI are not yet
+    and EMG.  fNIRS and neuroimaging modalities such as fMRI are not yet
     supported.
 
     Parameters
@@ -517,7 +541,7 @@ def study_to_bids(
         Root directory for the BIDS output.
     device :
         Neurophysiology recording type.  Must be one of ``"Eeg"``,
-        ``"Meg"``, ``"Ieeg"``, ``"Emg"``, or ``"Fnirs"``.
+        ``"Meg"``, ``"Ieeg"``, or ``"Emg"``.
     task :
         BIDS task label. If ``None``, the ``"task"`` column in the events
         DataFrame is used.
