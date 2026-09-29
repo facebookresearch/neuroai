@@ -254,11 +254,12 @@ def run_benchmark_cli() -> None:
         type=str,
         default=None,
         help=(
-            "Specify a dataset variant for the task. "
+            "Specify a dataset for the task, by study name (as listed below) or "
+            "by the stem of its file in the task's datasets/ folder. "
             "Use 'all' to run on all available datasets. "
-            "If provided, will load dataset-specific overrides from datasets/{dataset}.yaml "
-            "and merge them with the base config.yaml. "
-            "Example: --dataset steyrl2016 or --dataset all"
+            "A dataset other than the task's default merges datasets/<stem>.yaml "
+            "over the base config.yaml. "
+            "Example: --dataset Schalk2004Bci2000 or --dataset all"
         ),
     )
     args = parser.parse_args()

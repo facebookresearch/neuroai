@@ -26,6 +26,7 @@ from neuralbench.config_manager import get_config
 from neuralbench.registry import (
     DEBUG_STUDY_QUERIES,
     DEFAULTS_DIR,
+    _resolve_dataset_stem,
     _resolve_model_config_path,
     _resolve_task_dir,
     load_yaml_config,
@@ -146,15 +147,15 @@ def merge_task_config(
 def _merge_dataset_config(
     config: ConfDict, device: str, task_name: str, dataset: str
 ) -> None:
-    """Layer a task's ``datasets/<dataset>.yaml`` over *config*, in place."""
-    datasets_dir = _resolve_task_dir(device, task_name) / "datasets"
-    dataset_fname = datasets_dir / f"{dataset}.yaml"
-    if not dataset_fname.is_file():
-        raise ValueError(
-            f"Unknown dataset {dataset!r} for {device}/{task_name}. "
-            f"Choose from: {sorted(p.stem for p in datasets_dir.glob('*.yaml'))}"
-        )
+    """Layer the ``datasets/`` variant that *dataset* selects over *config*, in place.
+
+    The task's default study selects no variant and leaves *config* unchanged.
+    """
+    stem = _resolve_dataset_stem(device, task_name, dataset)
+    if stem is None:
+        return
     source_defaults = dict(config["data.study.source"])
+    dataset_fname = _resolve_task_dir(device, task_name) / "datasets" / f"{stem}.yaml"
     config.update(load_yaml_config(dataset_fname))
     # =replace= may wipe source; restore default path/infra
     for k, v in source_defaults.items():

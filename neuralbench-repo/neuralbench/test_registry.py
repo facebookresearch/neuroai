@@ -25,12 +25,22 @@ import pandas as pd
 
 from neuralbench.plots.tables import _collapse_feature_based_baselines
 from neuralbench.registry import (
+    ALL_DATASETS,
     DEVICE_BASELINE_MODELS,
     FEATURE_BASED_BY_TASK,
     SKLEARN_BASELINE_MODELS,
     _expand_models,
+    _resolve_dataset_stem,
     _task_aware_baseline,
 )
+
+
+def test_every_listed_dataset_name_resolves() -> None:
+    for device, tasks in ALL_DATASETS.items():
+        for task, names in tasks.items():
+            stems = [_resolve_dataset_stem(device, task, name) for name in names]
+            assert stems[0] is None, f"{device}/{task}: default must use config.yaml"
+            assert None not in stems[1:], f"{device}/{task}: {names} -> {stems}"
 
 
 def test_device_baseline_models_meg_has_riemannian_pipelines() -> None:
