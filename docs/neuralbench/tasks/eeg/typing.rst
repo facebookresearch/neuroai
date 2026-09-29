@@ -28,7 +28,7 @@ The typing decoding task involves decoding the characters that were typed on a c
 Dataset Notes
 ~~~~~~~~~~~~~
 
-* [TO BE UPDATED] Train/test splits are created by clustering similar sentences together into the same split to avoid data leakage (see `neuralset.splitting.SimilaritySplitter`).
+* [TO BE UPDATED] Train/test splits are created by clustering similar sentences together into the same split to avoid data leakage (see `neuralset.events.transforms.SimilaritySplitter`).
 
 References
 ~~~~~~~~~~
