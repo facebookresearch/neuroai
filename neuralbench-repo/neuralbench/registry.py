@@ -267,19 +267,20 @@ def get_available_datasets(device: str, task: str) -> list[str]:
 def _resolve_dataset_stem(device: str, task: str, dataset: str) -> str | None:
     """Return the ``datasets/`` file stem *dataset* selects, ``None`` for the default study.
 
-    *dataset* is a study name, as listed by ``neuralbench --help``, or a file stem.
+    *dataset* is a study name, as listed by ``neuralbench --help``, or a file stem,
+    matched case-insensitively.
     """
     pairs = _task_datasets(device, task)
     by_name: dict[str, str | None] = {}
     for name, stem in pairs:
-        by_name.setdefault(name, stem)
-    stems = {stem: stem for _, stem in pairs if stem is not None} | by_name
-    if dataset not in stems:
+        by_name.setdefault(name.lower(), stem)
+    stems = {stem.lower(): stem for _, stem in pairs if stem is not None} | by_name
+    if dataset.lower() not in stems:
         raise ValueError(
             f"Unknown dataset {dataset!r} for {device}/{task}. "
             f"Choose from: {_task_study_names(device, task)}"
         )
-    return stems[dataset]
+    return stems[dataset.lower()]
 
 
 # ---------------------------------------------------------------------------

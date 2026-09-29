@@ -255,7 +255,7 @@ def run_benchmark_cli() -> None:
         default=None,
         help=(
             "Specify a dataset for the task, by study name (as listed below) or "
-            "by the stem of its file in the task's datasets/ folder. "
+            "by the stem of its file in the task's datasets/ folder, in any case. "
             "Use 'all' to run on all available datasets. "
             "A dataset other than the task's default merges datasets/<stem>.yaml "
             "over the base config.yaml. "

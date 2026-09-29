@@ -41,6 +41,8 @@ def test_every_listed_dataset_name_resolves() -> None:
             stems = [_resolve_dataset_stem(device, task, name) for name in names]
             assert stems[0] is None, f"{device}/{task}: default must use config.yaml"
             assert None not in stems[1:], f"{device}/{task}: {names} -> {stems}"
+            lower = [_resolve_dataset_stem(device, task, n.lower()) for n in names]
+            assert lower == stems, f"{device}/{task}: lowercase names resolve differently"
 
 
 def test_device_baseline_models_meg_has_riemannian_pipelines() -> None:
