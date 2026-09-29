@@ -8,6 +8,9 @@ data:
   study:
     source:
       name: Kemp2000Analysis
+    annotate_sleep_onset:
+      name: AddSleepOnsetTargets
+      max_pre_n2_s: 1200.0
     split:
       name: SklearnSplit
       split_by: subject
@@ -15,9 +18,6 @@ data:
       test_split_ratio: 0.2
       valid_random_state: 33
       test_random_state: 33
-    annotate_sleep_onset:
-      name: AddSleepOnsetTargets
-      max_pre_n2_s: 1200.0
   # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,
   # Pz-Oz) whose MNE ch_locs are NaN, so the default ``ch_locs``-derived
   # position mapping in ``ChannelPositions`` produces all-``INVALID_VALUE``

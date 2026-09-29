@@ -102,7 +102,7 @@ works and how to customize it by subclassing ``BrainModule``.
 # Validation and test windows are ordered by timeline then time unless
 # ``data.val_shuffle``/``data.test_shuffle`` is set. Keeping validation batched
 # (only ``test_batch_size=1``) keeps epochs fast and multi-GPU training
-# available. No task does this by default.
+# available. ``eeg _sleep_onset_stream`` streams its test split this way.
 #
 # ``reset_per_timeline=true`` adds a PyTorch Lightning
 # `callback <https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html>`_
@@ -114,6 +114,25 @@ works and how to customize it by subclassing ``BrainModule``.
 # restored when evaluation ends. ``reset_state()`` also runs at each new
 # timeline during training, which with shuffled batches is almost every batch.
 # The wrapper forwards the hook to its backbone.
+#
+# A stateful backbone keeps what it carries across windows in attributes and
+# clears them in ``reset_state()``:
+#
+# .. code-block:: python
+#
+#    class RecurrentBackbone(nn.Module):
+#        def __init__(self, n_chans: int, n_hidden: int = 64):
+#            super().__init__()
+#            self.gru = nn.GRU(n_chans, n_hidden, batch_first=True)
+#            self.hidden: torch.Tensor | None = None
+#
+#        def reset_state(self) -> None:
+#            self.hidden = None
+#
+#        def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (B, C, T)
+#            out, hidden = self.gru(x.transpose(1, 2), self.hidden)
+#            self.hidden = hidden.detach()  # no backprop into earlier batches
+#            return out[:, -1]
 #
 # %%
 # Subclassing BrainModule

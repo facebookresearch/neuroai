@@ -10,10 +10,14 @@ Sleep onset prediction
 .. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
    :class: tip
 
-   This task backs :doc:`Track 3 -- Sleep onset
+   This page describes the NeuralBench benchmark version of the task.
+   :doc:`Track 3 -- Sleep onset
    </neuralbench/auto_examples/biosignal_challenge_2026/plot_track3_sleep_onset>`
-   of the challenge, whose page has the commands, timings, and competition
-   data notes for it.
+   of the challenge uses its streamed version, ``_sleep_onset_stream``, which
+   scores each recording one window at a time from a random start before N2
+   onset. **Participants should use** ``neuralbench eeg _sleep_onset_stream``,
+   in both phases; the Track 3 page has its commands, timings, and competition
+   data notes.
 
 Usage
 ~~~~~
