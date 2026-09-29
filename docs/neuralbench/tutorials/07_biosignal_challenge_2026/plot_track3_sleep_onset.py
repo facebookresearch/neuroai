@@ -140,8 +140,7 @@ reconstruction because a sparse wearable montage supports it poorly.
 # That 16-participant test partition *is* the current Codabench warm-up
 # evaluation set: the scorer runs on the same Sleep-EDF subset this split
 # produces at random state 33. A ``_sleep_onset_stream`` ``test/bmae`` and a
-# warm-up leaderboard score are therefore the same measurement, which makes
-# this the one track where a local number should line up with the board.
+# warm-up leaderboard score are therefore the same measurement.
 #
 # The sealed phase is a different story. Its Muse cohort mixes seen and
 # unseen sleepers, while this split holds every sleeper out, so the sealed

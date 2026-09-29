@@ -115,8 +115,8 @@ works and how to customize it by subclassing ``BrainModule``.
 # timeline during training, which with shuffled batches is almost every batch.
 # The wrapper forwards the hook to its backbone.
 #
-# A stateful backbone keeps what it carries across windows in attributes and
-# clears them in ``reset_state()``:
+# As an illustration only (not a NeuralBench model), a recurrent backbone could
+# carry its hidden state across windows and clear it in ``reset_state()``:
 #
 # .. code-block:: python
 #
@@ -131,7 +131,7 @@ works and how to customize it by subclassing ``BrainModule``.
 #
 #        def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (B, C, T)
 #            out, hidden = self.gru(x.transpose(1, 2), self.hidden)
-#            self.hidden = hidden.detach()  # no backprop into earlier batches
+#            self.hidden = hidden.detach()  # next backward() would hit a freed graph
 #            return out[:, -1]
 #
 # %%
