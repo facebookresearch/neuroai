@@ -238,11 +238,24 @@ def test_gin_https_base_strips_dot_git_and_appends_branch(tmp_path: Path) -> Non
     assert gin_bare._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
 
 
+def test_gin_https_base_not_serialized(tmp_path: Path) -> None:
+    """`_https_base` is derived, so it stays out of `model_dump`."""
+    assert "_https_base" not in _make_gin(tmp_path).model_dump()
+
+
 def test_gin_read_pointer_key_unlocked_pointer(tmp_path: Path) -> None:
     """An unlocked in-tree pointer file parses to its annex key."""
     key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
     pointer = tmp_path / "sub-001.meg4"
     pointer.write_text(f"/annex/objects/{key}\n")
+    assert download.Gin._read_pointer_key(pointer) == key
+
+
+def test_gin_read_pointer_key_hashed_pointer(tmp_path: Path) -> None:
+    """A pointer file using the hashed object path parses to its annex key."""
+    key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+    pointer = tmp_path / "sub-001.meg4"
+    pointer.write_text(f"/annex/objects/Wp/g8/{key}/{key}\n", "utf8")
     assert download.Gin._read_pointer_key(pointer) == key
 
 
