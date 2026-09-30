@@ -293,7 +293,8 @@ def test_study_to_bids_audio_stimulus_exported(tmp_path: Path) -> None:
     _run_study_to_bids(bids_root, extra_rows=[_stim_row("Audio", wav, 0.2)])
 
     assert (bids_root / "stimuli" / "tone.wav").exists()
-    assert "stimuli/tone.wav" in _events_tsv(bids_root)["stim_file"].tolist()
+    # BIDS stim_file is relative to the stimuli/ directory
+    assert "tone.wav" in _events_tsv(bids_root)["stim_file"].tolist()
 
 
 def test_study_to_bids_same_basename_stimuli_kept_apart(tmp_path: Path) -> None:
@@ -312,7 +313,30 @@ def test_study_to_bids_same_basename_stimuli_kept_apart(tmp_path: Path) -> None:
     assert (bids_root / "stimuli" / "a" / "img.png").read_bytes() == b"a"
     assert (bids_root / "stimuli" / "b" / "img.png").read_bytes() == b"b"
     stim_files = set(_events_tsv(bids_root)["stim_file"].dropna())
-    assert {"stimuli/a/img.png", "stimuli/b/img.png"} <= stim_files
+    assert {"a/img.png", "b/img.png"} <= stim_files
+
+
+def test_study_to_bids_colliding_timelines_get_distinct_runs(tmp_path: Path) -> None:
+    """Timelines differing only in a non-BIDS field are numbered as runs."""
+    from neuralfetch.utils.bids_export import study_to_bids
+
+    fif_path = tmp_path / "source_fake_raw.fif"
+    _make_fake_raw().save(str(fif_path), overwrite=True, verbose=False)
+    blocks = []
+    for block in range(2):
+        df = _make_fake_events(fif_path)
+        df["timeline"] = f"tl_block{block}"
+        df["block"] = block
+        blocks.append(df)
+    study = _make_study(pd.concat(blocks, ignore_index=True), path=tmp_path)
+    bids_root = tmp_path / "bids_out"
+    study_to_bids(study, bids_root, device="Eeg", task="auditory")
+
+    runs = sorted(p.name for p in bids_root.rglob("*_eeg.vhdr"))
+    assert runs == [
+        "sub-01_task-auditory_run-01_eeg.vhdr",
+        "sub-01_task-auditory_run-02_eeg.vhdr",
+    ]
 
 
 def test_study_to_bids_overwrite_refreshes_stimulus(tmp_path: Path) -> None:
