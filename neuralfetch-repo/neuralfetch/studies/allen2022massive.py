@@ -661,7 +661,7 @@ class Allen2022MassiveRaw(Allen2022Massive):
     CAPTION_SEPARATOR: tp.ClassVar[str] = "\n"
     BIDS_FOLDER: tp.ClassVar[str] = "nsddata_rawdata"
     DERIVATIVES_FOLDER: tp.ClassVar[str] = "derivatives/deepprep/bids"
-    BOLD_SPACE: tp.ClassVar[str] = "T1w"  # MNI152NLin2009aSym"
+    SPACE: tp.ClassVar[str] = "T1w"  # MNI152NLin2009aSym"
     SESSION_SUFFIX: tp.ClassVar[str] = "nsd"
     TR_FMRI_S: tp.ClassVar[float] = 1.6
     DEEPPREP_FSAVERAGE_OUTPUT_DIR: tp.ClassVar[str] = "derivatives/deepprep/bids"
@@ -698,7 +698,7 @@ class Allen2022MassiveRaw(Allen2022Massive):
                     self.path / self.DERIVATIVES_FOLDER,
                     filetype="bold",
                     data_type="Fmri",
-                    space=self.BOLD_SPACE,
+                    space=self.SPACE,
                     **params,
                 )
             )
@@ -707,7 +707,7 @@ class Allen2022MassiveRaw(Allen2022Massive):
                     self.path / self.DERIVATIVES_FOLDER,
                     filetype="bold_mask",
                     data_type="Fmri",
-                    space=self.BOLD_SPACE,
+                    space=self.SPACE,
                     **params,
                 )
             )

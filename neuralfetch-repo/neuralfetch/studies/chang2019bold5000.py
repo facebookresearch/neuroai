@@ -85,7 +85,7 @@ class Chang2019Bold5000(study.Study):
         event_types_in_query={"Fmri", "Image"},
         data_shape=(77, 94, 80, 194),
         frequency=0.5,
-        fmri_spaces=("custom",),
+        fmri_spaces=("MNI152NLin2009aSym",),
     )
 
     STIMULUS_URL: str = (
@@ -104,12 +104,16 @@ class Chang2019Bold5000(study.Study):
 
     BIDS_FOLDER: tp.ClassVar[str] = "download"
     DERIVATIVES_FOLDER: tp.ClassVar[str] = "derivatives_in_standard_space"
-    BOLD_SPACE: tp.ClassVar[str] = "MNI152NLin2009aSym"
+    SPACE: tp.ClassVar[str] = "MNI152NLin2009aSym"
     TASK: tp.ClassVar[str] = "5000scenes"
     TR_FMRI_S: tp.ClassVar[float] = 2.0
     STIMULI_FOLDER: tp.ClassVar[str] = "BOLD5000_Stimuli/"
     SUBJ_PADDING: tp.ClassVar[str] = "01"
     SUBJ_SUFFIX: tp.ClassVar[str] = "CSI"
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"  # busts events cached with ``space="custom"``
 
     def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
@@ -146,6 +150,7 @@ class Chang2019Bold5000(study.Study):
             "start": 0.0,
             "frequency": self._get_fmri_frequency(),
             "duration": self._get_bold_image(timeline).shape[-1] * self.TR_FMRI_S,
+            "space": self.SPACE,
         }
         bids_events_df_fp = get_bids_filepath(
             root_path=self.path / self.BIDS_FOLDER,
@@ -215,7 +220,7 @@ class Chang2019Bold5000(study.Study):
             root_path=self.path / self.DERIVATIVES_FOLDER,
             filetype="bold_mask",
             data_type="Fmri",
-            space=self.BOLD_SPACE,
+            space=self.SPACE,
             subj_padding=self.SUBJ_PADDING,
             subj_suffix=self.SUBJ_SUFFIX,
             **timeline,
@@ -227,7 +232,7 @@ class Chang2019Bold5000(study.Study):
             root_path=self.path / self.DERIVATIVES_FOLDER,
             filetype="bold",
             data_type="Fmri",
-            space=self.BOLD_SPACE,
+            space=self.SPACE,
             subj_padding=self.SUBJ_PADDING,
             subj_suffix=self.SUBJ_SUFFIX,
             **timeline,
