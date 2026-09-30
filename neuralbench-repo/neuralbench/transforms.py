@@ -429,6 +429,128 @@ class AddSleepOnsetTargets(_transf.EventsTransform):
         return pd.concat([events, new_rows], ignore_index=True, axis=0)
 
 
+class AddSleepOnsetCutTargets(_transf.EventsTransform):
+    """Emit fixed-length pre/post-onset crops for a single-window sleep task.
+
+    For each timeline with a scored N2 onset ``t_onset``, draw cut points
+    ``t_cut`` around the onset and emit, per cut, one ``SleepOnsetMarker``
+    spanning the fixed crop ``[t_cut - window_s, t_cut]`` and carrying the
+    absolute ``n2_onset``. Downstream, single-window segmentation
+    (``duration: null, stride: null``) turns each marker into exactly one
+    segment, and :class:`~neuralbench.extractors.SleepOnsetTargetExtractor`
+    with a negative ``floor_s`` returns the signed ``n2_onset - t_cut`` target.
+
+    Every crop has the same length ``window_s``, so the observable window
+    geometry carries no information about the target: unlike a tiled or streamed
+    grid there is no window count and no window length a model could read the
+    label off, and -- because the cut is continuous around onset -- no pile-up
+    of exactly-zero targets. ``t_cut`` is drawn uniformly in
+    ``[t_onset - lead_s, t_onset + lag_s]`` (asymmetric when ``lead_s`` differs
+    from ``lag_s``) and clamped so the whole crop stays inside the recording.
+    Draws are seeded per timeline (a stable hash of its id), so they are
+    reproducible and independent of the order timelines are processed in.
+
+    The evaluation splits get ``n_eval_windows`` crop(s) per night -- one by
+    default, which removes the window-counting prior a streaming model could
+    otherwise exploit -- while the ``train_split`` gets ``n_train_windows``
+    crops per night for enough training samples.
+
+    Timelines without an N2 epoch, or whose recording cannot fit a single
+    ``window_s`` crop within the cut range, emit no marker.
+
+    Parameters
+    ----------
+    window_s : float
+        Length (seconds) of every crop ``[t_cut - window_s, t_cut]`` fed to the
+        model; also the marker/segment duration downstream.
+    lead_s, lag_s : float
+        ``t_cut`` is drawn in ``[t_onset - lead_s, t_onset + lag_s]``. ``lead_s``
+        bounds how far before onset a cut may fall (positive target), ``lag_s``
+        how far after (negative target).
+    n_eval_windows : int
+        Crops per night on the non-train splits (default 1: one prediction per
+        night, no counting cue).
+    n_train_windows : int
+        Crops per night on ``train_split`` (augmentation).
+    train_split : str
+        Name of the split treated as training.
+    n2_stage : str
+        Stage label used to identify N2 sleep in ``SleepStage.stage``.
+    seed : int
+        Base seed; combined with a stable per-timeline hash.
+    """
+
+    window_s: float = 30.0
+    lead_s: float = 300.0
+    lag_s: float = 60.0
+    n_eval_windows: int = 1
+    n_train_windows: int = 20
+    train_split: str = "train"
+    n2_stage: str = "N2"
+    seed: int = 0
+
+    def _emit_for_timeline(self, evs: pd.DataFrame, timeline: str) -> pd.DataFrame:
+        n2 = evs[(evs.type == "SleepStage") & (evs.stage == self.n2_stage)]
+        if n2.empty:
+            return pd.DataFrame()
+        t_onset = float(n2["start"].min())
+        eeg = evs[evs.type == "Eeg"]
+        if eeg.empty:
+            return pd.DataFrame()
+        rec_start = float(eeg["start"].min())
+        rec_stop = float(eeg["stop"].max())
+        # A full window_s crop ending at t_cut must fit in the recording:
+        # t_cut - window_s >= rec_start and t_cut <= rec_stop.
+        lo = max(t_onset - self.lead_s, rec_start + self.window_s)
+        hi = min(t_onset + self.lag_s, rec_stop)
+        if hi <= lo:
+            return pd.DataFrame()
+
+        marker = dict(type="SleepOnsetMarker", n2_onset=t_onset)
+        n = self.n_eval_windows
+        if "split" in evs.columns:
+            splits = evs.split.dropna().unique()
+            if len(splits) != 1:
+                raise ValueError(
+                    f"Timeline {timeline!r} has splits {list(splits)}; markers need "
+                    "one split per timeline (split by subject or timeline)."
+                )
+            marker["split"] = splits[0]
+            if splits[0] == self.train_split:
+                n = self.n_train_windows
+
+        rng = np.random.default_rng([self.seed, zlib.crc32(timeline.encode())])
+        # Unique cuts only: the segmenter rejects duplicate triggers. Continuous
+        # uniform draws collide with probability ~0, so this rarely drops any.
+        cuts = np.unique(rng.uniform(lo, hi, size=n))
+        return pd.DataFrame(
+            dict(
+                marker,
+                start=cuts - self.window_s,
+                duration=self.window_s,
+                stop=cuts,
+            )
+        )
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        if "split" not in events.columns:
+            raise ValueError(
+                f"{type(self).__name__} splits train from eval per night; place "
+                "it after the split step of the study chain."
+            )
+        new_rows_per_tl: list[pd.DataFrame] = []
+        for timeline, group in events.groupby("timeline", sort=False):
+            emitted = self._emit_for_timeline(group, str(timeline))
+            if emitted.empty:
+                continue
+            emitted["timeline"] = timeline
+            new_rows_per_tl.append(emitted)
+        if not new_rows_per_tl:
+            return events
+        new_rows = pd.concat(new_rows_per_tl, ignore_index=True)
+        return pd.concat([events, new_rows], ignore_index=True, axis=0)
+
+
 class CropTimelines(_transf.EventsTransform):
     """Crop neuro timelines.
 

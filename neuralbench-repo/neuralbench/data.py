@@ -21,6 +21,7 @@ from .extractors import SleepOnsetTargetExtractor  # noqa: F401
 from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
+    AddSleepOnsetCutTargets,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
