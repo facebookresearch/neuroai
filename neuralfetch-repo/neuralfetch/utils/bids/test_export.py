@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Tests for neuralfetch.utils.bids_export (BidsExporter / study_to_bids)."""
+"""Tests for neuralfetch.utils.bids.export (BidsExporter / study_to_bids)."""
 
 from pathlib import Path
 
@@ -113,7 +113,7 @@ def _run_study_to_bids(
     extra_rows: list[dict] | None = None,
 ) -> Path:
     """Call ``study_to_bids`` with a mocked study backed by a real saved FIF file."""
-    from neuralfetch.utils.bids_export import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     raw = _make_fake_raw(device)
     fif_path = tmp_path / "source_fake_raw.fif"
@@ -143,7 +143,7 @@ def _run_study_to_bids(
 
 
 def test_annotation_descriptions() -> None:
-    from neuralfetch.utils.bids_export import _annotation_descriptions
+    from neuralfetch.utils.bids.export import _annotation_descriptions
 
     df = pd.DataFrame(
         [
@@ -171,7 +171,7 @@ def test_annotation_descriptions() -> None:
 
 
 def test_study_to_bids_invalid_device(tmp_path: Path) -> None:
-    from neuralfetch.utils.bids_export import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     study = _make_study(pd.DataFrame(), path=tmp_path)
     with pytest.raises(ValueError, match="not supported"):
@@ -277,7 +277,7 @@ def _events_tsv(bids_root: Path) -> pd.DataFrame:
 
 
 def test_study_to_bids_fnirs_rejected(tmp_path: Path) -> None:
-    from neuralfetch.utils.bids_export import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     study = _make_study(pd.DataFrame(), path=tmp_path)
     with pytest.raises(ValueError, match="not supported"):
@@ -318,7 +318,7 @@ def test_study_to_bids_same_basename_stimuli_kept_apart(tmp_path: Path) -> None:
 
 def test_study_to_bids_colliding_timelines_get_distinct_runs(tmp_path: Path) -> None:
     """Timelines differing only in a non-BIDS field are numbered as runs."""
-    from neuralfetch.utils.bids_export import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     fif_path = tmp_path / "source_fake_raw.fif"
     _make_fake_raw().save(str(fif_path), overwrite=True, verbose=False)

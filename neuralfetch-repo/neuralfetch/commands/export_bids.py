@@ -27,7 +27,7 @@ Usage:
         --anonymize-daysback 365
 """
 
-# The export logic lives in neuralfetch.utils.bids_export; this module is argparse glue.
+# The export logic lives in neuralfetch.utils.bids.export; this module is argparse glue.
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ NAME = "export-bids"
 HELP = "Export a study to a BIDS directory tree."
 
 # Devices supported by the BIDS exporter (mirrors
-# ``neuralfetch.utils.bids_export.MNE_RAW_TYPES``). Defined here so registering the
+# ``neuralfetch.utils.bids.export.MNE_RAW_TYPES``). Defined here so registering the
 # subparser does not import mne/exca; runtime validation happens in
 # ``study_to_bids``.
 _DEVICES = ("Eeg", "Emg", "Ieeg", "Meg")
@@ -146,7 +146,7 @@ def run(args: argparse.Namespace) -> None:
 
     import neuralset as ns
     from neuralfetch.utils import root_study_folder
-    from neuralfetch.utils.bids_export import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     folder = args.path or (root_study_folder() / args.study)
 
