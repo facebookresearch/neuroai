@@ -238,11 +238,24 @@ def test_gin_https_base_strips_dot_git_and_appends_branch(tmp_path: Path) -> Non
     assert gin_bare._https_base == "https://gin.g-node.org/CUBRIC/WAND/raw/master"
 
 
+def test_gin_https_base_not_serialized(tmp_path: Path) -> None:
+    """`_https_base` is derived, so it stays out of `model_dump`."""
+    assert "_https_base" not in _make_gin(tmp_path).model_dump()
+
+
 def test_gin_read_pointer_key_unlocked_pointer(tmp_path: Path) -> None:
     """An unlocked in-tree pointer file parses to its annex key."""
     key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
     pointer = tmp_path / "sub-001.meg4"
     pointer.write_text(f"/annex/objects/{key}\n")
+    assert download.Gin._read_pointer_key(pointer) == key
+
+
+def test_gin_read_pointer_key_hashed_pointer(tmp_path: Path) -> None:
+    """A pointer file using the hashed object path parses to its annex key."""
+    key = "MD5-s976320008--eea09d82b05cc6d6edb5b147f8579575"
+    pointer = tmp_path / "sub-001.meg4"
+    pointer.write_text(f"/annex/objects/Wp/g8/{key}/{key}\n", "utf8")
     assert download.Gin._read_pointer_key(pointer) == key
 
 
@@ -386,6 +399,20 @@ def test_physionet_preserves_study_version_structure(tmp_path: Path) -> None:
     out_root = tmp_path / "study" / "download" / "eegmat" / "1.0.0"
     for name, expected in [("file1.txt", "data1"), ("file2.txt", "data2")]:
         assert (out_root / name).read_text("utf8") == expected
+
+
+@pytest.mark.parametrize("version,overwrite", [(None, False), ("1.0.4", True)])
+def test_nemar(tmp_path: Path, version: str | None, overwrite: bool) -> None:
+    obj = download.Nemar(study="nm000133", dset_dir=tmp_path / "study", version=version)
+    with patch.dict(sys.modules, {"nemar": (nemar := MagicMock())}):
+        obj._download(overwrite=overwrite)
+    kw = nemar.download.call_args.kwargs
+    assert (kw["target_dir"], kw["tag"], kw["trust_existing"]) == (
+        obj._dl_dir / "nm000133",
+        version,
+        not overwrite,
+    )
+    assert f"_{version}_" in obj.get_success_file().name
 
 
 @pytest.mark.parametrize("study_name", ["Allen2022Massive", "Allen2022MassiveRaw"])

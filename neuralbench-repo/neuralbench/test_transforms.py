@@ -456,6 +456,34 @@ def test_add_sleep_onset_targets_max_pre_n2_s_no_op_when_larger_than_recording(
     pd.testing.assert_frame_equal(base_marker, new_marker)
 
 
+def test_add_sleep_onset_targets_random_start(sleep_onset_events):
+    transform = AddSleepOnsetTargets(random_start_splits=("test",), min_pre_n2_s=5.0)
+    with pytest.raises(ValueError, match="after the split step"):
+        transform(sleep_onset_events)
+    events = pd.concat(
+        [
+            sleep_onset_events.assign(split="train"),
+            sleep_onset_events.assign(
+                split="test", timeline=sleep_onset_events.timeline + "_test"
+            ),
+        ],
+        ignore_index=True,
+    )
+    markers = transform(events).query("type == 'SleepOnsetMarker'").set_index("timeline")
+    assert markers.split.to_dict() == {"tl_n2": "train", "tl_n2_test": "test"}
+    assert markers.loc["tl_n2", "start"] == 0.0
+    assert 0.0 < markers.loc["tl_n2_test", "start"] <= 55.0
+    assert markers.loc["tl_n2_test", "stop"] == 60.0
+    reversed_markers = (
+        transform(events.iloc[::-1])
+        .query("type == 'SleepOnsetMarker'")
+        .set_index("timeline")
+    )
+    assert (
+        reversed_markers.loc["tl_n2_test", "start"] == markers.loc["tl_n2_test", "start"]
+    ), "random starts must not depend on row order"
+
+
 @pytest.mark.parametrize("max_duration_s", [None, 10.0, 110.0])
 def test_crop_timelines(eeg_events, max_duration_s: float | None):
     start_offset_s = 10.0

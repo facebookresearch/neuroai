@@ -150,6 +150,7 @@ class _Module(BaseModel):
             "opencv-python": "cv2",
             "datalad-installer": "datalad_installer",
             "openneuro-py": "openneuro",
+            "nemar-py": "nemar",
             "sonar-space": "sonar",
         }
         missing = []

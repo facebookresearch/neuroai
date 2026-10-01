@@ -164,6 +164,10 @@ class Ghassemi2018You(study.Study):
     _PHYSIONET_STUDY: tp.ClassVar[str] = "challenge-2018"
     _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
+
     def _download(self, overwrite: bool = False) -> None:
         physionet = download.Physionet(
             study=self._PHYSIONET_STUDY,
@@ -280,9 +284,14 @@ class Ghassemi2018You(study.Study):
             summarize_labels=False,
         )
         mne_annots = convert_wfdb_anns_to_mne_annotations(annots)
-        annots_df = mne_annots.to_data_frame()
-        start = annots_df.loc[0, "onset"]  # Assumes annots start at time 0
-        annots_df["start"] = (annots_df["onset"] - start).dt.total_seconds()
+        # scoring starts minutes into the record: don't rebase on the first onset
+        annots_df = pd.DataFrame(
+            {
+                "start": mne_annots.onset,
+                "duration": mne_annots.duration,
+                "description": mne_annots.description,
+            }
+        )
 
         # Handle sleep stage events
         stage_mask = annots_df.description.isin(["W", "N1", "N2", "N3", "R"])

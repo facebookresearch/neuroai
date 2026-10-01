@@ -243,7 +243,8 @@ class BrainModule(pl.LightningModule):
         else:
             self.log(f"{step_name}/loss", loss, **log_kwargs)
 
-        # Just update metrics, don't compute or log yet
+        # Just update metrics; they are logged once per epoch, as Lightning
+        # re-moves a logged Metric's whole state to the device on every log call.
         for metric_name, metric in self.metrics.items():
             if metric_name.startswith(step_name) and metric_true.numel():
                 if isinstance(metric, GroupedMetric):
@@ -253,10 +254,23 @@ class BrainModule(pl.LightningModule):
                         metric.update(metric_pred, metric_true.int())
                     else:
                         metric.update(metric_pred, metric_true)
-                if "confusion_matrix" not in metric_name:
-                    self.log(metric_name, metric, **log_kwargs)
 
         return loss, y_pred, y_true
+
+    def _log_metrics(self, step_name: str) -> None:
+        for metric_name, metric in self.metrics.items():
+            if (
+                metric_name.startswith(step_name)
+                and metric.update_called
+                and "confusion_matrix" not in metric_name
+            ):
+                self.log(metric_name, metric, prog_bar=True)
+
+    def on_validation_epoch_end(self) -> None:
+        self._log_metrics("val")
+
+    def on_test_epoch_end(self) -> None:
+        self._log_metrics("test")
 
     def training_step(self, batch: Batch, batch_idx: int):
         loss, _, _ = self._run_step(batch, step_name="train", batch_idx=batch_idx)

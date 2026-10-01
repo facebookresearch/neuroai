@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import logging
 import os
 import typing as tp
 from itertools import product
@@ -16,13 +15,9 @@ import pandas as pd
 from neuralfetch import download
 from neuralset.events import study
 
-logger = logging.getLogger(__name__)
-
 
 class Xu2025Alljoined(study.Study):
-    url: tp.ClassVar[str] = (
-        "https://huggingface.co/datasets/Alljoined/Alljoined-1.6M/tree/main/raw_eeg"
-    )
+    url: tp.ClassVar[str] = "https://doi.org/10.82901/nemar.nm000134"
     """Alljoined-1.6M: large-scale EEG responses to static images.
 
     A million-trial EEG dataset from 20 participants viewing static images,
@@ -39,9 +34,7 @@ class Xu2025Alljoined(study.Study):
 
     Notes:
         - Successor to Alljoined (xu2024.py) with ~10x more data.
-        - Subject 8 has mislabeled files (sessions 1/3/4); handled in code.
         - Markers sharing an onset are dropped as ambiguous; handled in code.
-        - Image stimuli are extracted from a zip archive during download.
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("Alljoined-1.6M",)
@@ -62,16 +55,19 @@ class Xu2025Alljoined(study.Study):
     }
 
     @misc{xu2025_data,
-        url={https://huggingface.co/datasets/Alljoined/Alljoined-1.6M/tree/main/raw_eeg}
+        title={Alljoined-1.6M},
+        publisher={NEMAR},
+        doi={10.82901/nemar.nm000134},
+        url={https://doi.org/10.82901/nemar.nm000134}
     }
     """
-    licence: tp.ClassVar[str] = "CC-BY-NC-SA-4.0"
+    licence: tp.ClassVar[str] = "CC-BY-NC-ND-4.0"
     description: tp.ClassVar[str] = "20 participants watching static images in EEG."
 
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=1520,
         num_subjects=20,
-        num_events_in_query=1072,
+        num_events_in_query=1021,
         event_types_in_query={"Eeg", "Image"},
         data_shape=(32, 76032),
         frequency=256.0,
@@ -85,66 +81,29 @@ class Xu2025Alljoined(study.Study):
         )
         if not accept:
             raise RuntimeError(
-                "Alljoined-1.6M is released under CC-BY-NC-SA-4.0 (non-commercial use). "
+                f"Alljoined-1.6M is released under {self.licence} (non-commercial use). "
                 "Set ALLJOINED_ACCEPT_LICENCE=1 to accept the licence before downloading."
             )
-        hf_org = "Alljoined"
-        hf_repo = "Alljoined-1.6M"
-        hg = download.Huggingface(org=hf_org, study=hf_repo, dset_dir=self.path)
-        if hg.get_success_file().exists() and not overwrite:
-            return
-        hg.download(overwrite=overwrite)
-        self._extract_stimuli(self.path, overwrite=overwrite)
-
-    @classmethod
-    def _extract_stimuli(cls, path: Path, overwrite=False) -> None:
-        # The HF repo ships the image stimuli only as `stimuli.zip` (top-level
-        # `images/*.jpg`); `_load_timeline_events` reads them from the extracted
-        # `stimuli/images/` dir, so we must unpack on first download. Gate on
-        # whether the images already exist (idempotent) rather than `overwrite`,
-        # which previously skipped extraction on every normal download.
-        zip_filepath = path / "download" / "stimuli.zip"
-        stimuli_dir = path / "download" / "stimuli"
-        images_dir = stimuli_dir / "images"
-        if images_dir.exists() and not overwrite:
-            return
-        from zipfile import ZipFile
-
-        with ZipFile(zip_filepath, "r") as FILE:
-            FILE.extractall(stimuli_dir)
-
-        logger.info("Success: Stimuli extraction complete.")
+        download.Nemar(
+            study="nm000134",
+            dset_dir=self.path,
+            version="1.0.3",
+            exclude=["code/**", "sourcedata/**"],
+        ).download(overwrite=overwrite)
 
     @staticmethod
     def _get_fname(path: str | Path, subject: int, session: int, run: int) -> Path:
-        folder, suffix = "raw_eeg", ".edf"
+        folder, suffix = "nm000134", "_eeg.edf"
         dir_path = (
             Path(path)
             / "download"
             / folder
             / f"sub-{subject:02d}"
-            / f"session_{session:02d}"
-            / f"block_{run:02d}"
+            / f"ses-{session:02d}"
+            / "eeg"
         )
-        # This subject is mislabeled within its directory so we update
-        # the logic here to find the correct file
-        # Also, I made a PR to notify the team these files were mislabeled
-        # and they only corrected one of the runs
-        # https://huggingface.co/datasets/Alljoined/Alljoined-1.6M/discussions/3
-        mislabeled = list(product([8], [1], range(2, 20))) + list(
-            product([8], [3, 4], range(1, 20))
-        )
-        if (subject, session, run) in mislabeled:
-            subject = 19
-        pattern = f"Subject {subject}, Session {session}, Block {run}*{suffix}"
-        matches = [f for f in dir_path.glob(pattern)]
-        if len(matches) != 1:
-            raise ValueError(
-                f"Expected 1 match, got {len(matches)} for {pattern} in {dir_path}"
-            )
-        fpath = matches[0]
-
-        return fpath
+        stem = f"sub-{subject:02d}_ses-{session:02d}_task-images_run-{run:02d}"
+        return dir_path / f"{stem}{suffix}"
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
@@ -181,33 +140,23 @@ class Xu2025Alljoined(study.Study):
         return raw
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        """
-        NOTE: EDF annotations were validated against the json annotation files accompanying the dataset.
-        """
         raw = self._load_raw(timeline)
         frequency = raw.info["sfreq"]
         # extract annotations
-        events_df = raw.annotations.to_data_frame(time_format=None)
-        events_df.rename(columns={"onset": "start"}, inplace=True)
+        events_tsv = str(raw.filenames[0]).replace("_eeg.edf", "_events.tsv")
+        events_df = pd.read_csv(events_tsv, sep="\t")
+        events_df.rename(columns={"onset": "start", "trial_type": "label"}, inplace=True)
         # the marker stream stalls and flushes several markers on one timestamp
         # (29/1525 recordings, 160 markers): the evoking image is unrecoverable
         collided = events_df["start"].duplicated(keep=False)
-        events_df = events_df[~collided].reset_index(drop=True)
+        # behav (responses) and debug markers show no image: stim_file is n/a
+        keep = ~collided & events_df["stim_file"].notna()
+        events_df = events_df[keep].reset_index(drop=True)
         # stimulus presentation defined in the study as 100ms
         events_df["duration"] = 0.1
         events_df["type"] = "Image"
-        events_df[["label", "value", "deleted", "orig_index"]] = events_df[
-            "description"
-        ].str.split(",", expand=True)
-        events_df["filepath"] = events_df["value"].apply(
-            lambda x: str(
-                Path(self.path).resolve()
-                / "download"
-                / "stimuli"
-                / "images"
-                / f"{int(x):05d}.jpg"
-            )
-        )
+        stimuli = Path(self.path).resolve() / "download" / "nm000134" / "stimuli"
+        events_df["filepath"] = events_df["stim_file"].apply(lambda x: str(stimuli / x))
         # add raw event
         info = study.SpecialLoader(method=self._load_raw, timeline=timeline).to_json()
         eeg = dict(type="Eeg", filepath=info, frequency=frequency, start=0)

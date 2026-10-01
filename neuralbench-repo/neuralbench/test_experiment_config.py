@@ -14,12 +14,14 @@ from neuralbench.experiment_config import (
     _adapts_a_backbone,
     _expand_grid,
     _warn_unsupported_gpu,
+    merge_task_config,
 )
 from neuralbench.registry import (
     ALL_DOWNSTREAM_WRAPPERS,
     DEFAULTS_DIR,
     FM_MODELS,
     _resolve_model_config_path,
+    get_available_datasets,
     load_yaml_config,
 )
 from neuraltrain.optimizers.base import LightningOptimizer
@@ -118,3 +120,17 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     config.update(ALL_DOWNSTREAM_WRAPPERS[preset])
     # a model YAML with scheduler=null would come back nameless: overlays set only max_lr
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
+
+
+@pytest.mark.parametrize("dataset", [None, *get_available_datasets("eeg", "sleep_onset")])
+def test_sleep_onset_stream_diff(dataset: str | None):
+    core, stream = (
+        merge_task_config("eeg", task, dataset).flat()
+        for task in ["sleep_onset", "_sleep_onset_stream"]
+    )
+    diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
+    assert diff == {
+        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"],
+        "data.test_batch_size": 1,
+        "reset_per_timeline": True,
+    }

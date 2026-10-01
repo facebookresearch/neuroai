@@ -10,7 +10,7 @@ Emotion,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Chen2023Large`,5.
 Error-related negativity,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kappenman2021ErpErn`,1.0,30,Classification,2,15972,9591,75,3000,40,Chavarriaga2010Learning; Kueper2024Eeg
 Image,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Gifford2022Large`,1.0,63,Retrieval,1536,830640,534720,4178,167120,10,Xu2024Alljoined; Xu2025Alljoined
 Lrp,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kappenman2021ErpLrp`,1.0,30,Classification,2,15972,9591,75,3000,40,
-Mental arithmetic,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Zyma2019Eeg`,5.0,20,Classification,2,1659,986,8,320,35,Shin2017OpenB
+Mental arithmetic,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Zyma2019Electroencephalograms`,5.0,20,Classification,2,1707,1007,8,320,36,Shin2017OpenB
 Mental imagery,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Scherer2015Individually`,4.0,30,Classification,5,3550,1620,13,520,9,
 Mental workload,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Hinss2023Open`,5.0,63,Classification,3,15399,9027,71,2840,29,Hinss2021Open; Jao2023Eeg
 Mismatch negativity,:bdg-success:`event`,EEG,:py:class:`~neuralset.studies.Kappenman2021ErpMmn`,1.0,30,Classification,2,39835,23835,187,7480,40,

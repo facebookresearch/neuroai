@@ -56,7 +56,7 @@ and ``export-bids`` (export a study to a BIDS directory tree).
    download_study
    list_downloadable_studies
 
-.. currentmodule:: neuralfetch.utils.bids
+.. currentmodule:: neuralfetch.utils.bids.export
 
 .. autosummary::
    :toctree: generated/

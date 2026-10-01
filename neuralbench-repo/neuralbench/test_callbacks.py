@@ -6,20 +6,88 @@
 
 from types import SimpleNamespace
 
+import lightning.pytorch as pl
 import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torchmetrics
 from exca.cachedict import CacheDict
+from lightning.pytorch.loggers.logger import DummyLogger
+from torch import nn
+
+from neuralset.dataloader import Batch
 
 from .callbacks import (
     PlotRegressionScatter,
     RecordingLevelEval,
+    ResetPerTimeline,
     WindowPredictionCollector,
 )
+from .modules import DownstreamWrapperModel
+from .pl_module import BrainModule
 
 matplotlib.use("Agg")
+
+
+def test_reset_per_timeline_in_lightning():
+    class Model(nn.Module):
+        total = torch.tensor(100.0)  # a missed reset must also fail
+
+        def reset_state(self):
+            self.total = torch.tensor(0.0)
+
+        def forward(self, x):
+            self.total = self.total + x.mean()
+            observed.append(self.total.item())
+            return self.total.expand(x.shape[0], 1)
+
+    observed: list[float] = []
+    batches = [
+        Batch(
+            segments=[SimpleNamespace(timeline=t) for t in timelines],
+            data={
+                "neuro": torch.full((len(timelines), 1, 4), 2.0**i),
+                "target": torch.zeros(len(timelines), 1),
+                "subject_id": torch.zeros(len(timelines), 1, dtype=torch.long),
+            },
+        )
+        for i, timelines in enumerate([["a"], ["a"], ["a", "b"], ["b"], ["b"]])
+    ]
+    backbone = Model()
+    model = DownstreamWrapperModel(backbone, torch.Size([1]), None, 1, aggregation=None)
+    module = BrainModule(
+        model=model,
+        loss=nn.L1Loss(),
+        metrics={"mae": torchmetrics.MeanAbsoluteError()},
+        lightning_optimizer_config=None,
+    )
+    callback = ResetPerTimeline()
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        callbacks=[callback],
+        logger=DummyLogger(),
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+    )
+    loader = torch.utils.data.DataLoader(batches, batch_size=None)
+    for stage, run in [("test", trainer.test), ("val", trainer.validate)] * 2:
+        result = run(module, loader, verbose=False)[0]
+        assert result[f"{stage}/mae"] == pytest.approx((1 + 3 + 2 * 4 + 8 + 24) / 6)
+    per_timeline = [1.0, 3.0, 4.0, 8.0, 24.0]
+    assert observed == per_timeline * 4
+    assert module.model is model and backbone.total == 100, "original model changed"
+    observed.clear()
+    for batch_idx, i in enumerate([0, 1, 1, 2, 3, 4]):
+        if batch_idx == 2:
+            trainer.validate(module, loader, verbose=False)
+        callback.on_train_batch_start(None, module, batches[i], batch_idx)
+        module.model_forward(batches[i])
+    assert observed == [1.0, 3.0] + per_timeline + [5.0, 4.0, 8.0, 24.0]
+    stateless = SimpleNamespace(model=nn.Identity())
+    callback.on_train_batch_start(None, stateless, batches[0], 0)
 
 
 class MockSegment:

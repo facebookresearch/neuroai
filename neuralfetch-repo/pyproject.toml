@@ -22,6 +22,9 @@ dependencies = [
 
 [project.optional-dependencies]
 all = ["neuralset[all]", "matplotlib"]
+# Test-only. praatio backs neuralfetch.utils.textgrid; the rest of the test
+# tooling comes from neuralset[dev].
+dev = ["praatio"]
 quickstart = [
   "openneuro-py>=2026.7.1",
   "praatio",
