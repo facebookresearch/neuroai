@@ -205,7 +205,6 @@ def _resolve_model_config_path(model_name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-@functools.lru_cache(maxsize=None)
 def _task_datasets(device: str, task_name: str) -> tuple[tuple[str, str | None], ...]:
     """List a task's ``(study name, datasets/ file stem)`` pairs, default study first.
 
