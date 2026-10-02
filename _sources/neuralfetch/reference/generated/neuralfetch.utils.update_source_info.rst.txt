@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.utils.update\_source\_info
+======================================
+
+.. currentmodule:: neuralfetch.utils
+
+.. autofunction:: update_source_info
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

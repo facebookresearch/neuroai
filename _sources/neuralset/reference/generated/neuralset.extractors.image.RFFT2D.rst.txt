@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.image.RFFT2D
+=================================
+
+.. currentmodule:: neuralset.extractors.image
+
+.. autopydantic_model:: RFFT2D
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

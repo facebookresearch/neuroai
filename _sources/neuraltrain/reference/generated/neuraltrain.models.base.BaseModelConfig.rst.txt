@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.base.BaseModelConfig
+=======================================
+
+.. currentmodule:: neuraltrain.models.base
+
+.. autopydantic_model:: BaseModelConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

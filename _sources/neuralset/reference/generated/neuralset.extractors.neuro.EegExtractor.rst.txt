@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.EegExtractor
+=======================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: EegExtractor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

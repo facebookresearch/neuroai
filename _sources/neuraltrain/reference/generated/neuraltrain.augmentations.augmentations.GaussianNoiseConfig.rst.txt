@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.augmentations.augmentations.GaussianNoiseConfig
+===========================================================
+
+.. currentmodule:: neuraltrain.augmentations.augmentations
+
+.. autopydantic_model:: GaussianNoiseConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

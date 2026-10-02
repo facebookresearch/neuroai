@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.reve.NtReve
+==============================
+
+.. currentmodule:: neuraltrain.models.reve
+
+.. autopydantic_model:: NtReve
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

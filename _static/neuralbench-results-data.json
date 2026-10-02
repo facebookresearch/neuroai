@@ -1,0 +1,3560 @@
+{
+  "tasks": [
+    {
+      "id": "eeg_age",
+      "name": "age",
+      "display": "Age",
+      "device": "eeg",
+      "objective": "regression",
+      "metric": "test/pearsonr",
+      "metric_display": "Pearson R",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_artifact",
+      "name": "artifact",
+      "display": "Artifact",
+      "device": "eeg",
+      "objective": "multilabel",
+      "metric": "test/f1_score_macro",
+      "metric_display": "F1 score (macro)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_audiovisual_stimulus",
+      "name": "audiovisual_stimulus",
+      "display": "Audiovisual",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_clinical_event",
+      "name": "clinical_event",
+      "display": "Clinical event",
+      "device": "eeg",
+      "objective": "multilabel",
+      "metric": "test/f1_score_macro",
+      "metric_display": "F1 score (macro)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_cvep",
+      "name": "cvep",
+      "display": "c-VEP",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_dementia_diagnosis",
+      "name": "dementia_diagnosis",
+      "display": "Dementia",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_depression_diagnosis",
+      "name": "depression_diagnosis",
+      "display": "Depression",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_emotion",
+      "name": "emotion",
+      "display": "Emotion",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_ern",
+      "name": "ern",
+      "display": "ERN",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_image",
+      "name": "image",
+      "display": "Image",
+      "device": "eeg",
+      "objective": "retrieval",
+      "metric": "test/full_retrieval/top5_acc_subject-agg",
+      "metric_display": "Top-5 accuracy (per-subject)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_lrp",
+      "name": "lrp",
+      "display": "LRP",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_mental_arithmetic",
+      "name": "mental_arithmetic",
+      "display": "Mental arith.",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_mental_imagery",
+      "name": "mental_imagery",
+      "display": "Mental imagery",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_mental_workload",
+      "name": "mental_workload",
+      "display": "Workload",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_mismatch_negativity",
+      "name": "mismatch_negativity",
+      "display": "MMN",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_motor_execution",
+      "name": "motor_execution",
+      "display": "Motor execution",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_motor_imagery",
+      "name": "motor_imagery",
+      "display": "Motor imagery",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_n170",
+      "name": "n170",
+      "display": "N170",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_n2pc",
+      "name": "n2pc",
+      "display": "N2pc",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_n400",
+      "name": "n400",
+      "display": "N400",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_p3",
+      "name": "p3",
+      "display": "P300",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_parkinsons_diagnosis",
+      "name": "parkinsons_diagnosis",
+      "display": "Parkinson's",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_pathology",
+      "name": "pathology",
+      "display": "Pathology",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_psychopathology",
+      "name": "psychopathology",
+      "display": "Psychopathology",
+      "device": "eeg",
+      "objective": "regression",
+      "metric": "test/pearsonr",
+      "metric_display": "Pearson R",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_reaction_time",
+      "name": "reaction_time",
+      "display": "Reaction time",
+      "device": "eeg",
+      "objective": "regression",
+      "metric": "test/pearsonr",
+      "metric_display": "Pearson R",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_schizophrenia_diagnosis",
+      "name": "schizophrenia_diagnosis",
+      "display": "Schizophrenia",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_seizure",
+      "name": "seizure",
+      "display": "Seizure",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_sentence",
+      "name": "sentence",
+      "display": "Sentence",
+      "device": "eeg",
+      "objective": "retrieval",
+      "metric": "test/full_retrieval/top5_acc_subject-agg",
+      "metric_display": "Top-5 accuracy (per-subject)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_sex",
+      "name": "sex",
+      "display": "Sex",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_sleep_arousal",
+      "name": "sleep_arousal",
+      "display": "Sleep arousal",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_sleep_stage",
+      "name": "sleep_stage",
+      "display": "Sleep stage",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_speech",
+      "name": "speech",
+      "display": "Speech",
+      "device": "eeg",
+      "objective": "retrieval",
+      "metric": "test/full_retrieval/top5_acc_subject-agg",
+      "metric_display": "Top-5 accuracy (per-subject)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_ssvep",
+      "name": "ssvep",
+      "display": "SSVEP",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_typing",
+      "name": "typing",
+      "display": "Typing",
+      "device": "eeg",
+      "objective": "classification",
+      "metric": "test/bal_acc",
+      "metric_display": "Balanced accuracy",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_video",
+      "name": "video",
+      "display": "Video",
+      "device": "eeg",
+      "objective": "retrieval",
+      "metric": "test/full_retrieval/top5_acc_subject-agg",
+      "metric_display": "Top-5 accuracy (per-subject)",
+      "lower_is_better": false
+    },
+    {
+      "id": "eeg_word",
+      "name": "word",
+      "display": "Word",
+      "device": "eeg",
+      "objective": "retrieval",
+      "metric": "test/full_retrieval/top5_acc_subject-agg",
+      "metric_display": "Top-5 accuracy (per-subject)",
+      "lower_is_better": false
+    }
+  ],
+  "models": [
+    {
+      "name": "atcnet",
+      "display": "ATCNet",
+      "category": "classic"
+    },
+    {
+      "name": "bdtcn",
+      "display": "BDTCN",
+      "category": "classic"
+    },
+    {
+      "name": "bendr",
+      "display": "BENDR",
+      "category": "foundation"
+    },
+    {
+      "name": "biot",
+      "display": "BIOT",
+      "category": "foundation"
+    },
+    {
+      "name": "cbramod",
+      "display": "CBraMod",
+      "category": "foundation"
+    },
+    {
+      "name": "ctnet",
+      "display": "CTNet",
+      "category": "classic"
+    },
+    {
+      "name": "chance",
+      "display": "Chance",
+      "category": "baseline"
+    },
+    {
+      "name": "deep4net",
+      "display": "Deep4Net",
+      "category": "classic"
+    },
+    {
+      "name": "dummy",
+      "display": "Dummy",
+      "category": "baseline"
+    },
+    {
+      "name": "eegconformer",
+      "display": "EEGConformer",
+      "category": "classic"
+    },
+    {
+      "name": "eegnet",
+      "display": "EEGNet",
+      "category": "classic"
+    },
+    {
+      "name": "feature_based",
+      "display": "Handcrafted",
+      "category": "baseline"
+    },
+    {
+      "name": "luna",
+      "display": "LUNA",
+      "category": "foundation"
+    },
+    {
+      "name": "labram",
+      "display": "LaBraM",
+      "category": "foundation"
+    },
+    {
+      "name": "reve",
+      "display": "REVE",
+      "category": "foundation"
+    },
+    {
+      "name": "shallow_fbcsp_net",
+      "display": "ShallowFBCSPNet",
+      "category": "classic"
+    },
+    {
+      "name": "simpleconv_time_agg",
+      "display": "SimpleConvTimeAgg",
+      "category": "classic"
+    }
+  ],
+  "results": {
+    "eeg_age": {
+      "atcnet": {
+        "mean": 0.619,
+        "std": 0.014,
+        "rank": 9
+      },
+      "bdtcn": {
+        "mean": 0.521,
+        "std": 0.011,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 0.215,
+        "std": 0.025,
+        "rank": 14
+      },
+      "biot": {
+        "mean": 0.131,
+        "std": 0.046,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 0.676,
+        "std": 0.012,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 0.612,
+        "std": 0.015,
+        "rank": 10
+      },
+      "chance": {
+        "mean": 0.008,
+        "std": 0.007,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 0.662,
+        "std": 0.009,
+        "rank": 8
+      },
+      "eegconformer": {
+        "mean": 0.667,
+        "std": 0.015,
+        "rank": 7
+      },
+      "eegnet": {
+        "mean": 0.369,
+        "std": 0.039,
+        "rank": 13
+      },
+      "feature_based": {
+        "mean": 0.447,
+        "std": 0.0,
+        "rank": 12
+      },
+      "luna": {
+        "mean": 0.668,
+        "std": 0.005,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 0.715,
+        "std": 0.009,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 0.721,
+        "std": 0.011,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 0.697,
+        "std": 0.006,
+        "rank": 3
+      },
+      "simpleconv_time_agg": {
+        "mean": 0.667,
+        "std": 0.005,
+        "rank": 6
+      }
+    },
+    "eeg_artifact": {
+      "atcnet": {
+        "mean": 0.474,
+        "std": 0.009,
+        "rank": 10
+      },
+      "bdtcn": {
+        "mean": 0.471,
+        "std": 0.012,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 0.502,
+        "std": 0.017,
+        "rank": 5
+      },
+      "biot": {
+        "mean": 0.439,
+        "std": 0.016,
+        "rank": 14
+      },
+      "cbramod": {
+        "mean": 0.503,
+        "std": 0.003,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 0.494,
+        "std": 0.035,
+        "rank": 7
+      },
+      "chance": {
+        "mean": 0.21,
+        "std": 0.005,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 0.443,
+        "std": 0.008,
+        "rank": 13
+      },
+      "dummy": {
+        "mean": 0.141,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 0.476,
+        "std": 0.017,
+        "rank": 9
+      },
+      "eegnet": {
+        "mean": 0.455,
+        "std": 0.004,
+        "rank": 12
+      },
+      "feature_based": {
+        "mean": 0.421,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 0.502,
+        "std": 0.015,
+        "rank": 6
+      },
+      "labram": {
+        "mean": 0.518,
+        "std": 0.015,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 0.539,
+        "std": 0.039,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 0.528,
+        "std": 0.021,
+        "rank": 2
+      },
+      "simpleconv_time_agg": {
+        "mean": 0.491,
+        "std": 0.036,
+        "rank": 8
+      }
+    },
+    "eeg_audiovisual_stimulus": {
+      "atcnet": {
+        "mean": 28.373,
+        "std": 6.794,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 23.889,
+        "std": 1.925,
+        "rank": 16
+      },
+      "bendr": {
+        "mean": 41.865,
+        "std": 2.028,
+        "rank": 5
+      },
+      "biot": {
+        "mean": 26.071,
+        "std": 2.296,
+        "rank": 13
+      },
+      "cbramod": {
+        "mean": 31.111,
+        "std": 7.594,
+        "rank": 8
+      },
+      "ctnet": {
+        "mean": 32.738,
+        "std": 9.825,
+        "rank": 7
+      },
+      "chance": {
+        "mean": 23.056,
+        "std": 2.88,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 51.111,
+        "std": 4.915,
+        "rank": 3
+      },
+      "dummy": {
+        "mean": 25.0,
+        "std": 0.0,
+        "rank": 14
+      },
+      "eegconformer": {
+        "mean": 29.643,
+        "std": 6.43,
+        "rank": 9
+      },
+      "eegnet": {
+        "mean": 28.889,
+        "std": 4.295,
+        "rank": 10
+      },
+      "feature_based": {
+        "mean": 62.262,
+        "std": 0.0,
+        "rank": 1
+      },
+      "luna": {
+        "mean": 26.19,
+        "std": 1.575,
+        "rank": 12
+      },
+      "labram": {
+        "mean": 36.587,
+        "std": 9.456,
+        "rank": 6
+      },
+      "reve": {
+        "mean": 50.476,
+        "std": 1.031,
+        "rank": 4
+      },
+      "shallow_fbcsp_net": {
+        "mean": 24.206,
+        "std": 0.991,
+        "rank": 15
+      },
+      "simpleconv_time_agg": {
+        "mean": 59.841,
+        "std": 11.768,
+        "rank": 2
+      }
+    },
+    "eeg_clinical_event": {
+      "atcnet": {
+        "mean": 0.445,
+        "std": 0.012,
+        "rank": 10
+      },
+      "bdtcn": {
+        "mean": 0.345,
+        "std": 0.028,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 0.494,
+        "std": 0.012,
+        "rank": 4
+      },
+      "biot": {
+        "mean": 0.429,
+        "std": 0.011,
+        "rank": 11
+      },
+      "cbramod": {
+        "mean": 0.511,
+        "std": 0.006,
+        "rank": 2
+      },
+      "ctnet": {
+        "mean": 0.483,
+        "std": 0.018,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 0.26,
+        "std": 0.004,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 0.371,
+        "std": 0.006,
+        "rank": 14
+      },
+      "dummy": {
+        "mean": 0.194,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 0.454,
+        "std": 0.02,
+        "rank": 8
+      },
+      "eegnet": {
+        "mean": 0.453,
+        "std": 0.028,
+        "rank": 9
+      },
+      "feature_based": {
+        "mean": 0.39,
+        "std": 0.0,
+        "rank": 13
+      },
+      "luna": {
+        "mean": 0.511,
+        "std": 0.02,
+        "rank": 3
+      },
+      "labram": {
+        "mean": 0.481,
+        "std": 0.04,
+        "rank": 6
+      },
+      "reve": {
+        "mean": 0.547,
+        "std": 0.051,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 0.458,
+        "std": 0.025,
+        "rank": 7
+      },
+      "simpleconv_time_agg": {
+        "mean": 0.426,
+        "std": 0.025,
+        "rank": 12
+      }
+    },
+    "eeg_cvep": {
+      "atcnet": {
+        "mean": 56.841,
+        "std": 1.513,
+        "rank": 8
+      },
+      "bdtcn": {
+        "mean": 4.989,
+        "std": 0.097,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 18.789,
+        "std": 24.047,
+        "rank": 11
+      },
+      "biot": {
+        "mean": 4.704,
+        "std": 0.336,
+        "rank": 17
+      },
+      "cbramod": {
+        "mean": 87.063,
+        "std": 1.312,
+        "rank": 3
+      },
+      "ctnet": {
+        "mean": 80.326,
+        "std": 1.029,
+        "rank": 4
+      },
+      "chance": {
+        "mean": 4.963,
+        "std": 0.497,
+        "rank": 15
+      },
+      "deep4net": {
+        "mean": 6.3,
+        "std": 1.54,
+        "rank": 12
+      },
+      "dummy": {
+        "mean": 5.0,
+        "std": 0.0,
+        "rank": 13
+      },
+      "eegconformer": {
+        "mean": 36.237,
+        "std": 26.985,
+        "rank": 9
+      },
+      "eegnet": {
+        "mean": 59.474,
+        "std": 2.395,
+        "rank": 7
+      },
+      "feature_based": {
+        "mean": 4.833,
+        "std": 0.0,
+        "rank": 16
+      },
+      "luna": {
+        "mean": 87.156,
+        "std": 0.886,
+        "rank": 2
+      },
+      "labram": {
+        "mean": 87.6,
+        "std": 0.532,
+        "rank": 1
+      },
+      "reve": {
+        "mean": 79.093,
+        "std": 0.827,
+        "rank": 5
+      },
+      "shallow_fbcsp_net": {
+        "mean": 31.563,
+        "std": 0.626,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 69.433,
+        "std": 1.618,
+        "rank": 6
+      }
+    },
+    "eeg_dementia_diagnosis": {
+      "atcnet": {
+        "mean": 40.27,
+        "std": 5.607,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 33.202,
+        "std": 0.377,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 33.095,
+        "std": 0.999,
+        "rank": 16
+      },
+      "biot": {
+        "mean": 42.82,
+        "std": 2.721,
+        "rank": 6
+      },
+      "cbramod": {
+        "mean": 32.774,
+        "std": 1.749,
+        "rank": 17
+      },
+      "ctnet": {
+        "mean": 37.42,
+        "std": 3.952,
+        "rank": 12
+      },
+      "chance": {
+        "mean": 33.172,
+        "std": 0.982,
+        "rank": 15
+      },
+      "deep4net": {
+        "mean": 41.315,
+        "std": 6.676,
+        "rank": 8
+      },
+      "dummy": {
+        "mean": 33.333,
+        "std": 0.0,
+        "rank": 13
+      },
+      "eegconformer": {
+        "mean": 44.227,
+        "std": 3.476,
+        "rank": 4
+      },
+      "eegnet": {
+        "mean": 44.003,
+        "std": 2.172,
+        "rank": 5
+      },
+      "feature_based": {
+        "mean": 47.459,
+        "std": 0.0,
+        "rank": 1
+      },
+      "luna": {
+        "mean": 44.297,
+        "std": 4.862,
+        "rank": 3
+      },
+      "labram": {
+        "mean": 41.319,
+        "std": 2.269,
+        "rank": 7
+      },
+      "reve": {
+        "mean": 40.79,
+        "std": 4.51,
+        "rank": 10
+      },
+      "shallow_fbcsp_net": {
+        "mean": 41.246,
+        "std": 0.565,
+        "rank": 9
+      },
+      "simpleconv_time_agg": {
+        "mean": 46.447,
+        "std": 3.188,
+        "rank": 2
+      }
+    },
+    "eeg_depression_diagnosis": {
+      "atcnet": {
+        "mean": 80.584,
+        "std": 3.469,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 77.044,
+        "std": 1.718,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 85.709,
+        "std": 1.867,
+        "rank": 8
+      },
+      "biot": {
+        "mean": 86.723,
+        "std": 1.762,
+        "rank": 4
+      },
+      "cbramod": {
+        "mean": 87.338,
+        "std": 0.557,
+        "rank": 1
+      },
+      "ctnet": {
+        "mean": 83.647,
+        "std": 2.322,
+        "rank": 10
+      },
+      "chance": {
+        "mean": 51.557,
+        "std": 2.019,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 86.546,
+        "std": 1.107,
+        "rank": 6
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 85.964,
+        "std": 0.489,
+        "rank": 7
+      },
+      "eegnet": {
+        "mean": 83.521,
+        "std": 0.51,
+        "rank": 11
+      },
+      "feature_based": {
+        "mean": 81.345,
+        "std": 0.0,
+        "rank": 13
+      },
+      "luna": {
+        "mean": 84.435,
+        "std": 0.294,
+        "rank": 9
+      },
+      "labram": {
+        "mean": 86.68,
+        "std": 3.774,
+        "rank": 5
+      },
+      "reve": {
+        "mean": 86.989,
+        "std": 0.629,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 86.783,
+        "std": 0.24,
+        "rank": 3
+      },
+      "simpleconv_time_agg": {
+        "mean": 82.251,
+        "std": 1.772,
+        "rank": 12
+      }
+    },
+    "eeg_emotion": {
+      "atcnet": {
+        "mean": 21.228,
+        "std": 0.517,
+        "rank": 9
+      },
+      "bdtcn": {
+        "mean": 14.101,
+        "std": 0.544,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 11.872,
+        "std": 0.747,
+        "rank": 15
+      },
+      "biot": {
+        "mean": 12.486,
+        "std": 0.304,
+        "rank": 14
+      },
+      "cbramod": {
+        "mean": 29.434,
+        "std": 1.815,
+        "rank": 3
+      },
+      "ctnet": {
+        "mean": 26.772,
+        "std": 0.551,
+        "rank": 6
+      },
+      "chance": {
+        "mean": 10.84,
+        "std": 0.579,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 18.885,
+        "std": 0.393,
+        "rank": 10
+      },
+      "dummy": {
+        "mean": 11.111,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 28.165,
+        "std": 0.46,
+        "rank": 4
+      },
+      "eegnet": {
+        "mean": 23.152,
+        "std": 0.735,
+        "rank": 8
+      },
+      "feature_based": {
+        "mean": 16.901,
+        "std": 0.0,
+        "rank": 12
+      },
+      "luna": {
+        "mean": 32.335,
+        "std": 6.601,
+        "rank": 1
+      },
+      "labram": {
+        "mean": 28.023,
+        "std": 0.648,
+        "rank": 5
+      },
+      "reve": {
+        "mean": 31.519,
+        "std": 0.992,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 23.85,
+        "std": 0.226,
+        "rank": 7
+      },
+      "simpleconv_time_agg": {
+        "mean": 18.652,
+        "std": 0.591,
+        "rank": 11
+      }
+    },
+    "eeg_ern": {
+      "atcnet": {
+        "mean": 61.981,
+        "std": 1.29,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 64.397,
+        "std": 1.897,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 76.802,
+        "std": 4.593,
+        "rank": 10
+      },
+      "biot": {
+        "mean": 46.368,
+        "std": 3.568,
+        "rank": 17
+      },
+      "cbramod": {
+        "mean": 81.085,
+        "std": 1.474,
+        "rank": 7
+      },
+      "ctnet": {
+        "mean": 82.576,
+        "std": 1.481,
+        "rank": 3
+      },
+      "chance": {
+        "mean": 49.575,
+        "std": 2.651,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 81.774,
+        "std": 1.307,
+        "rank": 5
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 15
+      },
+      "eegconformer": {
+        "mean": 69.638,
+        "std": 0.792,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 79.67,
+        "std": 0.6,
+        "rank": 8
+      },
+      "feature_based": {
+        "mean": 77.53,
+        "std": 0.0,
+        "rank": 9
+      },
+      "luna": {
+        "mean": 81.868,
+        "std": 1.147,
+        "rank": 4
+      },
+      "labram": {
+        "mean": 83.292,
+        "std": 0.81,
+        "rank": 1
+      },
+      "reve": {
+        "mean": 81.381,
+        "std": 3.336,
+        "rank": 6
+      },
+      "shallow_fbcsp_net": {
+        "mean": 75.262,
+        "std": 1.289,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 82.69,
+        "std": 0.951,
+        "rank": 2
+      }
+    },
+    "eeg_image": {
+      "atcnet": {
+        "mean": 5.083,
+        "std": 0.104,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 7.9,
+        "std": 0.087,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 79.6,
+        "std": 0.755,
+        "rank": 5
+      },
+      "biot": {
+        "mean": 12.75,
+        "std": 0.964,
+        "rank": 11
+      },
+      "cbramod": {
+        "mean": 83.917,
+        "std": 0.126,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 44.883,
+        "std": 0.189,
+        "rank": 8
+      },
+      "chance": {
+        "mean": 2.217,
+        "std": 0.306,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 57.333,
+        "std": 0.511,
+        "rank": 7
+      },
+      "dummy": {
+        "mean": 2.5,
+        "std": 0.0,
+        "rank": 15
+      },
+      "eegconformer": {
+        "mean": 10.033,
+        "std": 0.252,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 28.133,
+        "std": 0.144,
+        "rank": 9
+      },
+      "feature_based": {
+        "mean": 2.5,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 77.817,
+        "std": 3.305,
+        "rank": 6
+      },
+      "labram": {
+        "mean": 87.65,
+        "std": 1.502,
+        "rank": 1
+      },
+      "reve": {
+        "mean": 84.75,
+        "std": 0.377,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 15.433,
+        "std": 0.375,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 84.467,
+        "std": 1.151,
+        "rank": 3
+      }
+    },
+    "eeg_lrp": {
+      "atcnet": {
+        "mean": 56.498,
+        "std": 1.37,
+        "rank": 13
+      },
+      "bdtcn": {
+        "mean": 55.015,
+        "std": 0.62,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 70.546,
+        "std": 0.416,
+        "rank": 9
+      },
+      "biot": {
+        "mean": 50.214,
+        "std": 0.382,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 77.973,
+        "std": 0.654,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 76.24,
+        "std": 0.56,
+        "rank": 6
+      },
+      "chance": {
+        "mean": 49.673,
+        "std": 0.723,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 79.451,
+        "std": 0.297,
+        "rank": 1
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 62.462,
+        "std": 0.64,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 73.15,
+        "std": 1.592,
+        "rank": 8
+      },
+      "feature_based": {
+        "mean": 65.23,
+        "std": 0.0,
+        "rank": 10
+      },
+      "luna": {
+        "mean": 74.736,
+        "std": 0.649,
+        "rank": 7
+      },
+      "labram": {
+        "mean": 78.885,
+        "std": 1.014,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 79.213,
+        "std": 0.604,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 63.001,
+        "std": 0.729,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 77.725,
+        "std": 0.476,
+        "rank": 5
+      }
+    },
+    "eeg_mental_arithmetic": {
+      "atcnet": {
+        "mean": 56.151,
+        "std": 6.746,
+        "rank": 12
+      },
+      "bdtcn": {
+        "mean": 50.198,
+        "std": 0.344,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 68.122,
+        "std": 1.212,
+        "rank": 6
+      },
+      "biot": {
+        "mean": 63.955,
+        "std": 2.317,
+        "rank": 10
+      },
+      "cbramod": {
+        "mean": 68.452,
+        "std": 2.062,
+        "rank": 5
+      },
+      "ctnet": {
+        "mean": 61.508,
+        "std": 4.666,
+        "rank": 11
+      },
+      "chance": {
+        "mean": 49.603,
+        "std": 2.209,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 52.315,
+        "std": 6.564,
+        "rank": 13
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 15
+      },
+      "eegconformer": {
+        "mean": 66.997,
+        "std": 9.787,
+        "rank": 8
+      },
+      "eegnet": {
+        "mean": 48.479,
+        "std": 4.135,
+        "rank": 17
+      },
+      "feature_based": {
+        "mean": 69.841,
+        "std": 0.0,
+        "rank": 2
+      },
+      "luna": {
+        "mean": 64.286,
+        "std": 6.873,
+        "rank": 9
+      },
+      "labram": {
+        "mean": 68.651,
+        "std": 7.537,
+        "rank": 4
+      },
+      "reve": {
+        "mean": 73.876,
+        "std": 2.694,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 69.709,
+        "std": 2.582,
+        "rank": 3
+      },
+      "simpleconv_time_agg": {
+        "mean": 67.063,
+        "std": 3.118,
+        "rank": 7
+      }
+    },
+    "eeg_mental_imagery": {
+      "atcnet": {
+        "mean": 23.505,
+        "std": 3.04,
+        "rank": 8
+      },
+      "bdtcn": {
+        "mean": 21.848,
+        "std": 2.345,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 20.914,
+        "std": 1.071,
+        "rank": 14
+      },
+      "biot": {
+        "mean": 27.505,
+        "std": 1.678,
+        "rank": 5
+      },
+      "cbramod": {
+        "mean": 20.152,
+        "std": 0.344,
+        "rank": 15
+      },
+      "ctnet": {
+        "mean": 28.114,
+        "std": 3.054,
+        "rank": 4
+      },
+      "chance": {
+        "mean": 19.79,
+        "std": 0.746,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 23.333,
+        "std": 0.555,
+        "rank": 9
+      },
+      "dummy": {
+        "mean": 20.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 28.914,
+        "std": 2.192,
+        "rank": 2
+      },
+      "eegnet": {
+        "mean": 28.762,
+        "std": 1.274,
+        "rank": 3
+      },
+      "feature_based": {
+        "mean": 26.343,
+        "std": 0.0,
+        "rank": 6
+      },
+      "luna": {
+        "mean": 20.933,
+        "std": 1.435,
+        "rank": 13
+      },
+      "labram": {
+        "mean": 21.79,
+        "std": 0.772,
+        "rank": 12
+      },
+      "reve": {
+        "mean": 25.581,
+        "std": 2.109,
+        "rank": 7
+      },
+      "shallow_fbcsp_net": {
+        "mean": 33.124,
+        "std": 1.076,
+        "rank": 1
+      },
+      "simpleconv_time_agg": {
+        "mean": 22.286,
+        "std": 0.863,
+        "rank": 10
+      }
+    },
+    "eeg_mental_workload": {
+      "atcnet": {
+        "mean": 63.674,
+        "std": 1.464,
+        "rank": 8
+      },
+      "bdtcn": {
+        "mean": 58.841,
+        "std": 2.16,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 48.703,
+        "std": 2.249,
+        "rank": 13
+      },
+      "biot": {
+        "mean": 39.339,
+        "std": 6.737,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 60.745,
+        "std": 0.51,
+        "rank": 10
+      },
+      "ctnet": {
+        "mean": 63.789,
+        "std": 2.509,
+        "rank": 7
+      },
+      "chance": {
+        "mean": 34.568,
+        "std": 1.812,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 41.871,
+        "std": 1.742,
+        "rank": 14
+      },
+      "dummy": {
+        "mean": 33.333,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 58.642,
+        "std": 1.339,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 62.764,
+        "std": 0.871,
+        "rank": 9
+      },
+      "feature_based": {
+        "mean": 72.065,
+        "std": 0.0,
+        "rank": 3
+      },
+      "luna": {
+        "mean": 68.414,
+        "std": 0.537,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 70.559,
+        "std": 1.305,
+        "rank": 4
+      },
+      "reve": {
+        "mean": 67.859,
+        "std": 2.582,
+        "rank": 6
+      },
+      "shallow_fbcsp_net": {
+        "mean": 74.754,
+        "std": 1.317,
+        "rank": 1
+      },
+      "simpleconv_time_agg": {
+        "mean": 73.122,
+        "std": 1.941,
+        "rank": 2
+      }
+    },
+    "eeg_mismatch_negativity": {
+      "atcnet": {
+        "mean": 50.924,
+        "std": 0.443,
+        "rank": 12
+      },
+      "bdtcn": {
+        "mean": 51.5,
+        "std": 0.437,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 50.745,
+        "std": 1.29,
+        "rank": 13
+      },
+      "biot": {
+        "mean": 50.104,
+        "std": 0.039,
+        "rank": 16
+      },
+      "cbramod": {
+        "mean": 59.326,
+        "std": 0.959,
+        "rank": 3
+      },
+      "ctnet": {
+        "mean": 59.813,
+        "std": 0.168,
+        "rank": 1
+      },
+      "chance": {
+        "mean": 50.31,
+        "std": 1.016,
+        "rank": 15
+      },
+      "deep4net": {
+        "mean": 59.693,
+        "std": 0.681,
+        "rank": 2
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 52.154,
+        "std": 0.684,
+        "rank": 10
+      },
+      "eegnet": {
+        "mean": 58.044,
+        "std": 0.45,
+        "rank": 5
+      },
+      "feature_based": {
+        "mean": 52.992,
+        "std": 0.0,
+        "rank": 9
+      },
+      "luna": {
+        "mean": 57.208,
+        "std": 0.711,
+        "rank": 7
+      },
+      "labram": {
+        "mean": 58.734,
+        "std": 0.232,
+        "rank": 4
+      },
+      "reve": {
+        "mean": 57.693,
+        "std": 0.595,
+        "rank": 6
+      },
+      "shallow_fbcsp_net": {
+        "mean": 50.565,
+        "std": 0.46,
+        "rank": 14
+      },
+      "simpleconv_time_agg": {
+        "mean": 56.318,
+        "std": 0.95,
+        "rank": 8
+      }
+    },
+    "eeg_motor_execution": {
+      "atcnet": {
+        "mean": 21.531,
+        "std": 1.22,
+        "rank": 13
+      },
+      "bdtcn": {
+        "mean": 17.647,
+        "std": 0.185,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 33.841,
+        "std": 1.161,
+        "rank": 11
+      },
+      "biot": {
+        "mean": 23.842,
+        "std": 1.575,
+        "rank": 12
+      },
+      "cbramod": {
+        "mean": 51.01,
+        "std": 0.445,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 55.309,
+        "std": 0.973,
+        "rank": 2
+      },
+      "chance": {
+        "mean": 5.882,
+        "std": 0.337,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 46.283,
+        "std": 1.756,
+        "rank": 8
+      },
+      "dummy": {
+        "mean": 6.25,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 47.329,
+        "std": 0.64,
+        "rank": 6
+      },
+      "eegnet": {
+        "mean": 46.303,
+        "std": 0.641,
+        "rank": 7
+      },
+      "feature_based": {
+        "mean": 17.576,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 48.912,
+        "std": 1.449,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 53.925,
+        "std": 0.987,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 58.771,
+        "std": 2.286,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 39.265,
+        "std": 1.905,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 42.238,
+        "std": 0.278,
+        "rank": 9
+      }
+    },
+    "eeg_motor_imagery": {
+      "atcnet": {
+        "mean": 58.489,
+        "std": 0.398,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 49.767,
+        "std": 0.435,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 60.712,
+        "std": 0.326,
+        "rank": 7
+      },
+      "biot": {
+        "mean": 48.062,
+        "std": 0.404,
+        "rank": 14
+      },
+      "cbramod": {
+        "mean": 64.062,
+        "std": 0.287,
+        "rank": 3
+      },
+      "ctnet": {
+        "mean": 62.141,
+        "std": 0.162,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 24.805,
+        "std": 1.026,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 54.402,
+        "std": 0.868,
+        "rank": 12
+      },
+      "dummy": {
+        "mean": 25.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 59.703,
+        "std": 0.354,
+        "rank": 8
+      },
+      "eegnet": {
+        "mean": 58.579,
+        "std": 0.339,
+        "rank": 10
+      },
+      "feature_based": {
+        "mean": 44.777,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 64.021,
+        "std": 0.241,
+        "rank": 4
+      },
+      "labram": {
+        "mean": 65.305,
+        "std": 0.574,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 68.041,
+        "std": 0.731,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 59.595,
+        "std": 0.442,
+        "rank": 9
+      },
+      "simpleconv_time_agg": {
+        "mean": 61.875,
+        "std": 0.778,
+        "rank": 6
+      }
+    },
+    "eeg_n170": {
+      "atcnet": {
+        "mean": 57.109,
+        "std": 0.971,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 58.125,
+        "std": 0.417,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 66.224,
+        "std": 0.88,
+        "rank": 10
+      },
+      "biot": {
+        "mean": 50.365,
+        "std": 0.488,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 70.738,
+        "std": 0.773,
+        "rank": 6
+      },
+      "ctnet": {
+        "mean": 71.797,
+        "std": 0.264,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 49.306,
+        "std": 2.489,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 73.602,
+        "std": 1.3,
+        "rank": 3
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 58.403,
+        "std": 0.799,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 67.804,
+        "std": 1.446,
+        "rank": 8
+      },
+      "feature_based": {
+        "mean": 66.302,
+        "std": 0.0,
+        "rank": 9
+      },
+      "luna": {
+        "mean": 69.28,
+        "std": 0.643,
+        "rank": 7
+      },
+      "labram": {
+        "mean": 72.752,
+        "std": 0.281,
+        "rank": 4
+      },
+      "reve": {
+        "mean": 75.538,
+        "std": 1.347,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 65.642,
+        "std": 1.302,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 73.707,
+        "std": 1.16,
+        "rank": 2
+      }
+    },
+    "eeg_n2pc": {
+      "atcnet": {
+        "mean": 50.729,
+        "std": 1.818,
+        "rank": 13
+      },
+      "bdtcn": {
+        "mean": 55.052,
+        "std": 0.709,
+        "rank": 10
+      },
+      "bendr": {
+        "mean": 53.307,
+        "std": 3.014,
+        "rank": 12
+      },
+      "biot": {
+        "mean": 50.273,
+        "std": 0.273,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 61.602,
+        "std": 0.567,
+        "rank": 7
+      },
+      "ctnet": {
+        "mean": 61.875,
+        "std": 3.36,
+        "rank": 6
+      },
+      "chance": {
+        "mean": 47.995,
+        "std": 1.134,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 65.326,
+        "std": 0.712,
+        "rank": 1
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 54.779,
+        "std": 2.127,
+        "rank": 11
+      },
+      "eegnet": {
+        "mean": 62.969,
+        "std": 0.629,
+        "rank": 4
+      },
+      "feature_based": {
+        "mean": 50.703,
+        "std": 0.0,
+        "rank": 14
+      },
+      "luna": {
+        "mean": 60.703,
+        "std": 1.491,
+        "rank": 8
+      },
+      "labram": {
+        "mean": 63.099,
+        "std": 2.16,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 65.286,
+        "std": 0.318,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 60.365,
+        "std": 1.506,
+        "rank": 9
+      },
+      "simpleconv_time_agg": {
+        "mean": 62.552,
+        "std": 1.04,
+        "rank": 5
+      }
+    },
+    "eeg_n400": {
+      "atcnet": {
+        "mean": 51.701,
+        "std": 1.694,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 58.09,
+        "std": 0.754,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 61.632,
+        "std": 0.262,
+        "rank": 9
+      },
+      "biot": {
+        "mean": 50.556,
+        "std": 0.898,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 61.076,
+        "std": 2.161,
+        "rank": 10
+      },
+      "ctnet": {
+        "mean": 64.549,
+        "std": 0.962,
+        "rank": 3
+      },
+      "chance": {
+        "mean": 48.125,
+        "std": 0.541,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 64.062,
+        "std": 0.104,
+        "rank": 5
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 59.549,
+        "std": 0.886,
+        "rank": 12
+      },
+      "eegnet": {
+        "mean": 63.09,
+        "std": 1.147,
+        "rank": 7
+      },
+      "feature_based": {
+        "mean": 66.146,
+        "std": 0.0,
+        "rank": 1
+      },
+      "luna": {
+        "mean": 64.757,
+        "std": 1.207,
+        "rank": 2
+      },
+      "labram": {
+        "mean": 63.924,
+        "std": 0.694,
+        "rank": 6
+      },
+      "reve": {
+        "mean": 64.479,
+        "std": 1.088,
+        "rank": 4
+      },
+      "shallow_fbcsp_net": {
+        "mean": 60.278,
+        "std": 2.397,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 61.91,
+        "std": 2.571,
+        "rank": 8
+      }
+    },
+    "eeg_p3": {
+      "atcnet": {
+        "mean": 54.302,
+        "std": 0.446,
+        "rank": 12
+      },
+      "bdtcn": {
+        "mean": 53.374,
+        "std": 0.154,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 66.516,
+        "std": 0.203,
+        "rank": 3
+      },
+      "biot": {
+        "mean": 50.201,
+        "std": 0.112,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 62.998,
+        "std": 0.052,
+        "rank": 8
+      },
+      "ctnet": {
+        "mean": 67.418,
+        "std": 0.394,
+        "rank": 1
+      },
+      "chance": {
+        "mean": 49.374,
+        "std": 0.334,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 67.129,
+        "std": 0.585,
+        "rank": 2
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 57.134,
+        "std": 0.561,
+        "rank": 11
+      },
+      "eegnet": {
+        "mean": 65.188,
+        "std": 1.419,
+        "rank": 6
+      },
+      "feature_based": {
+        "mean": 60.113,
+        "std": 0.0,
+        "rank": 10
+      },
+      "luna": {
+        "mean": 62.563,
+        "std": 0.293,
+        "rank": 9
+      },
+      "labram": {
+        "mean": 65.16,
+        "std": 0.431,
+        "rank": 7
+      },
+      "reve": {
+        "mean": 65.382,
+        "std": 0.054,
+        "rank": 4
+      },
+      "shallow_fbcsp_net": {
+        "mean": 51.981,
+        "std": 2.061,
+        "rank": 14
+      },
+      "simpleconv_time_agg": {
+        "mean": 65.358,
+        "std": 1.073,
+        "rank": 5
+      }
+    },
+    "eeg_parkinsons_diagnosis": {
+      "atcnet": {
+        "mean": 65.834,
+        "std": 0.682,
+        "rank": 10
+      },
+      "bdtcn": {
+        "mean": 53.914,
+        "std": 2.149,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 67.482,
+        "std": 1.872,
+        "rank": 7
+      },
+      "biot": {
+        "mean": 77.247,
+        "std": 1.658,
+        "rank": 1
+      },
+      "cbramod": {
+        "mean": 69.953,
+        "std": 9.423,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 66.105,
+        "std": 1.148,
+        "rank": 9
+      },
+      "chance": {
+        "mean": 49.997,
+        "std": 0.436,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 65.29,
+        "std": 3.026,
+        "rank": 11
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 69.377,
+        "std": 5.404,
+        "rank": 5
+      },
+      "eegnet": {
+        "mean": 63.228,
+        "std": 3.493,
+        "rank": 13
+      },
+      "feature_based": {
+        "mean": 57.925,
+        "std": 0.0,
+        "rank": 14
+      },
+      "luna": {
+        "mean": 66.964,
+        "std": 2.394,
+        "rank": 8
+      },
+      "labram": {
+        "mean": 73.113,
+        "std": 4.66,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 69.34,
+        "std": 2.482,
+        "rank": 6
+      },
+      "shallow_fbcsp_net": {
+        "mean": 63.515,
+        "std": 0.853,
+        "rank": 12
+      },
+      "simpleconv_time_agg": {
+        "mean": 71.501,
+        "std": 0.697,
+        "rank": 3
+      }
+    },
+    "eeg_pathology": {
+      "atcnet": {
+        "mean": 80.564,
+        "std": 0.327,
+        "rank": 2
+      },
+      "bdtcn": {
+        "mean": 78.318,
+        "std": 0.455,
+        "rank": 11
+      },
+      "bendr": {
+        "mean": 81.753,
+        "std": 0.272,
+        "rank": 1
+      },
+      "biot": {
+        "mean": 76.593,
+        "std": 0.117,
+        "rank": 14
+      },
+      "cbramod": {
+        "mean": 79.669,
+        "std": 0.762,
+        "rank": 6
+      },
+      "ctnet": {
+        "mean": 80.118,
+        "std": 0.073,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 49.902,
+        "std": 0.517,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 78.108,
+        "std": 0.834,
+        "rank": 12
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 78.466,
+        "std": 0.785,
+        "rank": 10
+      },
+      "eegnet": {
+        "mean": 79.446,
+        "std": 0.295,
+        "rank": 7
+      },
+      "feature_based": {
+        "mean": 72.289,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 80.25,
+        "std": 0.67,
+        "rank": 4
+      },
+      "labram": {
+        "mean": 78.523,
+        "std": 0.78,
+        "rank": 9
+      },
+      "reve": {
+        "mean": 78.044,
+        "std": 1.03,
+        "rank": 13
+      },
+      "shallow_fbcsp_net": {
+        "mean": 79.442,
+        "std": 0.184,
+        "rank": 8
+      },
+      "simpleconv_time_agg": {
+        "mean": 80.428,
+        "std": 0.268,
+        "rank": 3
+      }
+    },
+    "eeg_psychopathology": {
+      "atcnet": {
+        "mean": 0.12,
+        "std": 0.044,
+        "rank": 3
+      },
+      "bdtcn": {
+        "mean": 0.047,
+        "std": 0.01,
+        "rank": 9
+      },
+      "bendr": {
+        "mean": 0.018,
+        "std": 0.021,
+        "rank": 12
+      },
+      "biot": {
+        "mean": 0.006,
+        "std": 0.035,
+        "rank": 14
+      },
+      "cbramod": {
+        "mean": 0.137,
+        "std": 0.003,
+        "rank": 1
+      },
+      "ctnet": {
+        "mean": 0.097,
+        "std": 0.023,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 0.01,
+        "std": 0.015,
+        "rank": 13
+      },
+      "eegconformer": {
+        "mean": 0.058,
+        "std": 0.025,
+        "rank": 7
+      },
+      "eegnet": {
+        "mean": 0.044,
+        "std": 0.024,
+        "rank": 10
+      },
+      "luna": {
+        "mean": 0.09,
+        "std": 0.013,
+        "rank": 6
+      },
+      "labram": {
+        "mean": 0.104,
+        "std": 0.024,
+        "rank": 4
+      },
+      "reve": {
+        "mean": 0.05,
+        "std": 0.034,
+        "rank": 8
+      },
+      "shallow_fbcsp_net": {
+        "mean": 0.123,
+        "std": 0.025,
+        "rank": 2
+      },
+      "simpleconv_time_agg": {
+        "mean": 0.037,
+        "std": 0.033,
+        "rank": 11
+      }
+    },
+    "eeg_reaction_time": {
+      "atcnet": {
+        "mean": 0.104,
+        "std": 0.009,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 0.046,
+        "std": 0.019,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 0.06,
+        "std": 0.021,
+        "rank": 13
+      },
+      "biot": {
+        "mean": 0.072,
+        "std": 0.027,
+        "rank": 12
+      },
+      "cbramod": {
+        "mean": 0.396,
+        "std": 0.003,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 0.327,
+        "std": 0.003,
+        "rank": 6
+      },
+      "chance": {
+        "mean": 0.007,
+        "std": 0.026,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 0.132,
+        "std": 0.026,
+        "rank": 9
+      },
+      "eegconformer": {
+        "mean": 0.336,
+        "std": 0.008,
+        "rank": 5
+      },
+      "eegnet": {
+        "mean": 0.108,
+        "std": 0.078,
+        "rank": 10
+      },
+      "feature_based": {
+        "mean": 0.057,
+        "std": 0.0,
+        "rank": 14
+      },
+      "luna": {
+        "mean": 0.415,
+        "std": 0.006,
+        "rank": 3
+      },
+      "labram": {
+        "mean": 0.441,
+        "std": 0.006,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 0.523,
+        "std": 0.025,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 0.286,
+        "std": 0.006,
+        "rank": 7
+      },
+      "simpleconv_time_agg": {
+        "mean": 0.273,
+        "std": 0.007,
+        "rank": 8
+      }
+    },
+    "eeg_schizophrenia_diagnosis": {
+      "atcnet": {
+        "mean": 72.859,
+        "std": 2.186,
+        "rank": 1
+      },
+      "bdtcn": {
+        "mean": 52.774,
+        "std": 4.725,
+        "rank": 12
+      },
+      "bendr": {
+        "mean": 60.48,
+        "std": 1.896,
+        "rank": 8
+      },
+      "biot": {
+        "mean": 58.229,
+        "std": 2.058,
+        "rank": 10
+      },
+      "cbramod": {
+        "mean": 57.749,
+        "std": 2.735,
+        "rank": 11
+      },
+      "ctnet": {
+        "mean": 67.192,
+        "std": 4.941,
+        "rank": 4
+      },
+      "chance": {
+        "mean": 50.29,
+        "std": 0.356,
+        "rank": 14
+      },
+      "deep4net": {
+        "mean": 69.429,
+        "std": 3.269,
+        "rank": 2
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 15
+      },
+      "eegconformer": {
+        "mean": 51.036,
+        "std": 6.752,
+        "rank": 13
+      },
+      "eegnet": {
+        "mean": 67.554,
+        "std": 5.456,
+        "rank": 3
+      },
+      "feature_based": {
+        "mean": 60.633,
+        "std": 0.0,
+        "rank": 7
+      },
+      "luna": {
+        "mean": 66.588,
+        "std": 1.433,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 63.702,
+        "std": 5.2,
+        "rank": 6
+      },
+      "reve": {
+        "mean": 43.677,
+        "std": 7.687,
+        "rank": 17
+      },
+      "shallow_fbcsp_net": {
+        "mean": 58.935,
+        "std": 1.234,
+        "rank": 9
+      },
+      "simpleconv_time_agg": {
+        "mean": 45.504,
+        "std": 2.054,
+        "rank": 16
+      }
+    },
+    "eeg_seizure": {
+      "atcnet": {
+        "mean": 82.821,
+        "std": 2.849,
+        "rank": 6
+      },
+      "bdtcn": {
+        "mean": 85.541,
+        "std": 0.543,
+        "rank": 1
+      },
+      "bendr": {
+        "mean": 78.893,
+        "std": 1.743,
+        "rank": 11
+      },
+      "biot": {
+        "mean": 76.387,
+        "std": 4.157,
+        "rank": 13
+      },
+      "cbramod": {
+        "mean": 81.632,
+        "std": 1.877,
+        "rank": 7
+      },
+      "ctnet": {
+        "mean": 83.294,
+        "std": 3.982,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 47.745,
+        "std": 0.774,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 80.315,
+        "std": 2.62,
+        "rank": 9
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 84.253,
+        "std": 2.916,
+        "rank": 4
+      },
+      "eegnet": {
+        "mean": 84.969,
+        "std": 1.642,
+        "rank": 2
+      },
+      "feature_based": {
+        "mean": 58.197,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 74.137,
+        "std": 3.808,
+        "rank": 14
+      },
+      "labram": {
+        "mean": 80.756,
+        "std": 7.835,
+        "rank": 8
+      },
+      "reve": {
+        "mean": 77.608,
+        "std": 2.686,
+        "rank": 12
+      },
+      "shallow_fbcsp_net": {
+        "mean": 84.38,
+        "std": 0.921,
+        "rank": 3
+      },
+      "simpleconv_time_agg": {
+        "mean": 79.935,
+        "std": 2.577,
+        "rank": 10
+      }
+    },
+    "eeg_sentence": {
+      "atcnet": {
+        "mean": 2.11,
+        "std": 0.219,
+        "rank": 16
+      },
+      "bdtcn": {
+        "mean": 3.507,
+        "std": 0.526,
+        "rank": 12
+      },
+      "bendr": {
+        "mean": 6.159,
+        "std": 3.104,
+        "rank": 6
+      },
+      "biot": {
+        "mean": 7.2,
+        "std": 0.617,
+        "rank": 4
+      },
+      "cbramod": {
+        "mean": 2.481,
+        "std": 0.186,
+        "rank": 14
+      },
+      "ctnet": {
+        "mean": 4.79,
+        "std": 1.445,
+        "rank": 8
+      },
+      "chance": {
+        "mean": 2.124,
+        "std": 0.137,
+        "rank": 15
+      },
+      "deep4net": {
+        "mean": 2.652,
+        "std": 0.186,
+        "rank": 13
+      },
+      "dummy": {
+        "mean": 2.096,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 3.835,
+        "std": 0.631,
+        "rank": 11
+      },
+      "eegnet": {
+        "mean": 4.149,
+        "std": 0.785,
+        "rank": 10
+      },
+      "feature_based": {
+        "mean": 4.234,
+        "std": 0.0,
+        "rank": 9
+      },
+      "luna": {
+        "mean": 10.436,
+        "std": 0.704,
+        "rank": 2
+      },
+      "labram": {
+        "mean": 8.397,
+        "std": 0.507,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 11.334,
+        "std": 1.233,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 6.858,
+        "std": 0.857,
+        "rank": 5
+      },
+      "simpleconv_time_agg": {
+        "mean": 5.988,
+        "std": 0.841,
+        "rank": 7
+      }
+    },
+    "eeg_sex": {
+      "atcnet": {
+        "mean": 89.419,
+        "std": 0.367,
+        "rank": 7
+      },
+      "bdtcn": {
+        "mean": 85.585,
+        "std": 0.27,
+        "rank": 13
+      },
+      "bendr": {
+        "mean": 69.079,
+        "std": 1.972,
+        "rank": 14
+      },
+      "biot": {
+        "mean": 69.063,
+        "std": 1.577,
+        "rank": 15
+      },
+      "cbramod": {
+        "mean": 87.727,
+        "std": 0.105,
+        "rank": 12
+      },
+      "ctnet": {
+        "mean": 89.971,
+        "std": 0.523,
+        "rank": 3
+      },
+      "chance": {
+        "mean": 49.498,
+        "std": 0.651,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 89.416,
+        "std": 0.434,
+        "rank": 8
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 89.703,
+        "std": 0.268,
+        "rank": 6
+      },
+      "eegnet": {
+        "mean": 89.937,
+        "std": 0.064,
+        "rank": 4
+      },
+      "feature_based": {
+        "mean": 88.909,
+        "std": 0.0,
+        "rank": 10
+      },
+      "luna": {
+        "mean": 89.915,
+        "std": 0.36,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 88.486,
+        "std": 0.551,
+        "rank": 11
+      },
+      "reve": {
+        "mean": 90.73,
+        "std": 0.696,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 91.044,
+        "std": 0.296,
+        "rank": 1
+      },
+      "simpleconv_time_agg": {
+        "mean": 88.944,
+        "std": 0.21,
+        "rank": 9
+      }
+    },
+    "eeg_sleep_arousal": {
+      "atcnet": {
+        "mean": 57.354,
+        "std": 0.442,
+        "rank": 5
+      },
+      "bdtcn": {
+        "mean": 56.078,
+        "std": 0.585,
+        "rank": 10
+      },
+      "bendr": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 17
+      },
+      "biot": {
+        "mean": 56.404,
+        "std": 0.333,
+        "rank": 9
+      },
+      "cbramod": {
+        "mean": 59.458,
+        "std": 0.356,
+        "rank": 2
+      },
+      "ctnet": {
+        "mean": 56.896,
+        "std": 0.129,
+        "rank": 8
+      },
+      "chance": {
+        "mean": 50.037,
+        "std": 0.01,
+        "rank": 15
+      },
+      "deep4net": {
+        "mean": 58.433,
+        "std": 0.139,
+        "rank": 3
+      },
+      "dummy": {
+        "mean": 50.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 57.131,
+        "std": 0.419,
+        "rank": 7
+      },
+      "eegnet": {
+        "mean": 55.205,
+        "std": 0.2,
+        "rank": 13
+      },
+      "feature_based": {
+        "mean": 52.707,
+        "std": 0.0,
+        "rank": 14
+      },
+      "luna": {
+        "mean": 59.526,
+        "std": 0.557,
+        "rank": 1
+      },
+      "labram": {
+        "mean": 57.228,
+        "std": 0.864,
+        "rank": 6
+      },
+      "reve": {
+        "mean": 55.725,
+        "std": 1.468,
+        "rank": 12
+      },
+      "shallow_fbcsp_net": {
+        "mean": 55.996,
+        "std": 0.695,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 57.646,
+        "std": 0.18,
+        "rank": 4
+      }
+    },
+    "eeg_sleep_stage": {
+      "atcnet": {
+        "mean": 70.781,
+        "std": 0.032,
+        "rank": 5
+      },
+      "bdtcn": {
+        "mean": 62.512,
+        "std": 0.408,
+        "rank": 14
+      },
+      "bendr": {
+        "mean": 70.065,
+        "std": 0.111,
+        "rank": 7
+      },
+      "biot": {
+        "mean": 69.087,
+        "std": 0.723,
+        "rank": 9
+      },
+      "cbramod": {
+        "mean": 72.926,
+        "std": 0.527,
+        "rank": 1
+      },
+      "ctnet": {
+        "mean": 70.762,
+        "std": 0.188,
+        "rank": 6
+      },
+      "chance": {
+        "mean": 19.97,
+        "std": 0.884,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 66.331,
+        "std": 3.011,
+        "rank": 13
+      },
+      "dummy": {
+        "mean": 20.0,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 68.487,
+        "std": 1.002,
+        "rank": 10
+      },
+      "eegnet": {
+        "mean": 67.53,
+        "std": 0.551,
+        "rank": 12
+      },
+      "feature_based": {
+        "mean": 52.261,
+        "std": 0.0,
+        "rank": 15
+      },
+      "luna": {
+        "mean": 72.481,
+        "std": 0.876,
+        "rank": 3
+      },
+      "labram": {
+        "mean": 72.505,
+        "std": 1.128,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 71.181,
+        "std": 0.452,
+        "rank": 4
+      },
+      "shallow_fbcsp_net": {
+        "mean": 68.295,
+        "std": 0.316,
+        "rank": 11
+      },
+      "simpleconv_time_agg": {
+        "mean": 69.947,
+        "std": 1.036,
+        "rank": 8
+      }
+    },
+    "eeg_speech": {
+      "atcnet": {
+        "mean": 2.564,
+        "std": 0.164,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 2.462,
+        "std": 0.101,
+        "rank": 12
+      },
+      "bendr": {
+        "mean": 2.36,
+        "std": 0.076,
+        "rank": 17
+      },
+      "biot": {
+        "mean": 2.608,
+        "std": 0.015,
+        "rank": 10
+      },
+      "cbramod": {
+        "mean": 2.443,
+        "std": 0.152,
+        "rank": 14
+      },
+      "ctnet": {
+        "mean": 4.215,
+        "std": 0.045,
+        "rank": 4
+      },
+      "chance": {
+        "mean": 2.389,
+        "std": 0.168,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 3.647,
+        "std": 0.066,
+        "rank": 6
+      },
+      "dummy": {
+        "mean": 2.404,
+        "std": 0.0,
+        "rank": 15
+      },
+      "eegconformer": {
+        "mean": 4.341,
+        "std": 0.234,
+        "rank": 3
+      },
+      "eegnet": {
+        "mean": 4.38,
+        "std": 0.113,
+        "rank": 2
+      },
+      "feature_based": {
+        "mean": 2.448,
+        "std": 0.0,
+        "rank": 13
+      },
+      "luna": {
+        "mean": 3.662,
+        "std": 0.201,
+        "rank": 5
+      },
+      "labram": {
+        "mean": 2.783,
+        "std": 0.162,
+        "rank": 9
+      },
+      "reve": {
+        "mean": 5.488,
+        "std": 0.378,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 3.205,
+        "std": 0.367,
+        "rank": 7
+      },
+      "simpleconv_time_agg": {
+        "mean": 2.899,
+        "std": 0.22,
+        "rank": 8
+      }
+    },
+    "eeg_ssvep": {
+      "atcnet": {
+        "mean": 4.821,
+        "std": 0.805,
+        "rank": 14
+      },
+      "bdtcn": {
+        "mean": 4.484,
+        "std": 1.925,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 11.29,
+        "std": 7.145,
+        "rank": 9
+      },
+      "biot": {
+        "mean": 58.869,
+        "std": 2.88,
+        "rank": 4
+      },
+      "cbramod": {
+        "mean": 49.008,
+        "std": 24.698,
+        "rank": 5
+      },
+      "ctnet": {
+        "mean": 10.734,
+        "std": 2.565,
+        "rank": 10
+      },
+      "chance": {
+        "mean": 2.659,
+        "std": 0.653,
+        "rank": 16
+      },
+      "deep4net": {
+        "mean": 9.067,
+        "std": 0.485,
+        "rank": 12
+      },
+      "dummy": {
+        "mean": 2.5,
+        "std": 0.0,
+        "rank": 17
+      },
+      "eegconformer": {
+        "mean": 10.675,
+        "std": 0.275,
+        "rank": 11
+      },
+      "eegnet": {
+        "mean": 8.988,
+        "std": 0.877,
+        "rank": 13
+      },
+      "feature_based": {
+        "mean": 39.107,
+        "std": 0.0,
+        "rank": 6
+      },
+      "luna": {
+        "mean": 11.786,
+        "std": 0.357,
+        "rank": 8
+      },
+      "labram": {
+        "mean": 96.488,
+        "std": 0.179,
+        "rank": 1
+      },
+      "reve": {
+        "mean": 96.071,
+        "std": 0.157,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 19.008,
+        "std": 1.429,
+        "rank": 7
+      },
+      "simpleconv_time_agg": {
+        "mean": 77.163,
+        "std": 1.877,
+        "rank": 3
+      }
+    },
+    "eeg_typing": {
+      "atcnet": {
+        "mean": 3.16,
+        "std": 0.329,
+        "rank": 16
+      },
+      "bdtcn": {
+        "mean": 3.089,
+        "std": 0.622,
+        "rank": 17
+      },
+      "bendr": {
+        "mean": 3.448,
+        "std": 0.0,
+        "rank": 13
+      },
+      "biot": {
+        "mean": 4.916,
+        "std": 0.877,
+        "rank": 2
+      },
+      "cbramod": {
+        "mean": 4.322,
+        "std": 0.647,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 3.334,
+        "std": 0.323,
+        "rank": 15
+      },
+      "chance": {
+        "mean": 3.517,
+        "std": 0.44,
+        "rank": 12
+      },
+      "deep4net": {
+        "mean": 3.91,
+        "std": 0.361,
+        "rank": 5
+      },
+      "dummy": {
+        "mean": 3.448,
+        "std": 0.0,
+        "rank": 13
+      },
+      "eegconformer": {
+        "mean": 3.879,
+        "std": 0.747,
+        "rank": 6
+      },
+      "eegnet": {
+        "mean": 3.589,
+        "std": 0.339,
+        "rank": 11
+      },
+      "feature_based": {
+        "mean": 3.747,
+        "std": 0.0,
+        "rank": 9
+      },
+      "luna": {
+        "mean": 3.831,
+        "std": 0.489,
+        "rank": 8
+      },
+      "labram": {
+        "mean": 4.504,
+        "std": 0.525,
+        "rank": 3
+      },
+      "reve": {
+        "mean": 6.402,
+        "std": 0.486,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 3.688,
+        "std": 0.396,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 3.84,
+        "std": 0.658,
+        "rank": 7
+      }
+    },
+    "eeg_video": {
+      "atcnet": {
+        "mean": 1.649,
+        "std": 0.125,
+        "rank": 17
+      },
+      "bdtcn": {
+        "mean": 1.827,
+        "std": 0.116,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 2.554,
+        "std": 0.146,
+        "rank": 12
+      },
+      "biot": {
+        "mean": 2.72,
+        "std": 0.28,
+        "rank": 8
+      },
+      "cbramod": {
+        "mean": 2.607,
+        "std": 0.139,
+        "rank": 11
+      },
+      "ctnet": {
+        "mean": 3.5,
+        "std": 0.264,
+        "rank": 3
+      },
+      "chance": {
+        "mean": 1.833,
+        "std": 0.105,
+        "rank": 14
+      },
+      "deep4net": {
+        "mean": 3.054,
+        "std": 0.201,
+        "rank": 6
+      },
+      "dummy": {
+        "mean": 1.786,
+        "std": 0.0,
+        "rank": 16
+      },
+      "eegconformer": {
+        "mean": 3.321,
+        "std": 0.188,
+        "rank": 4
+      },
+      "eegnet": {
+        "mean": 2.702,
+        "std": 0.068,
+        "rank": 9
+      },
+      "feature_based": {
+        "mean": 1.964,
+        "std": 0.0,
+        "rank": 13
+      },
+      "luna": {
+        "mean": 2.738,
+        "std": 0.045,
+        "rank": 7
+      },
+      "labram": {
+        "mean": 3.72,
+        "std": 0.055,
+        "rank": 2
+      },
+      "reve": {
+        "mean": 5.345,
+        "std": 0.616,
+        "rank": 1
+      },
+      "shallow_fbcsp_net": {
+        "mean": 2.69,
+        "std": 0.443,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 3.31,
+        "std": 0.227,
+        "rank": 5
+      }
+    },
+    "eeg_word": {
+      "atcnet": {
+        "mean": 2.305,
+        "std": 0.073,
+        "rank": 11
+      },
+      "bdtcn": {
+        "mean": 0.746,
+        "std": 0.013,
+        "rank": 15
+      },
+      "bendr": {
+        "mean": 0.587,
+        "std": 0.024,
+        "rank": 16
+      },
+      "biot": {
+        "mean": 1.688,
+        "std": 0.154,
+        "rank": 13
+      },
+      "cbramod": {
+        "mean": 15.72,
+        "std": 0.505,
+        "rank": 4
+      },
+      "ctnet": {
+        "mean": 7.938,
+        "std": 0.055,
+        "rank": 5
+      },
+      "chance": {
+        "mean": 0.465,
+        "std": 0.017,
+        "rank": 17
+      },
+      "deep4net": {
+        "mean": 6.912,
+        "std": 0.069,
+        "rank": 6
+      },
+      "dummy": {
+        "mean": 1.341,
+        "std": 0.0,
+        "rank": 14
+      },
+      "eegconformer": {
+        "mean": 5.214,
+        "std": 0.111,
+        "rank": 8
+      },
+      "eegnet": {
+        "mean": 5.13,
+        "std": 0.037,
+        "rank": 9
+      },
+      "feature_based": {
+        "mean": 1.693,
+        "std": 0.0,
+        "rank": 12
+      },
+      "luna": {
+        "mean": 16.632,
+        "std": 0.596,
+        "rank": 3
+      },
+      "labram": {
+        "mean": 22.545,
+        "std": 0.392,
+        "rank": 1
+      },
+      "reve": {
+        "mean": 21.092,
+        "std": 0.333,
+        "rank": 2
+      },
+      "shallow_fbcsp_net": {
+        "mean": 4.844,
+        "std": 0.111,
+        "rank": 10
+      },
+      "simpleconv_time_agg": {
+        "mean": 5.735,
+        "std": 0.207,
+        "rank": 7
+      }
+    }
+  }
+}
