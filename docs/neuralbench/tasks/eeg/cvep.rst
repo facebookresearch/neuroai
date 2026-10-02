@@ -42,7 +42,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg cvep --datasets thielen2015
+   neuralbench eeg cvep --dataset thielen2015
 
 References
 ~~~~~~~~~~

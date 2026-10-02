@@ -192,7 +192,7 @@ side by side.
 Running with dataset variants
 ------------------------------
 
-Nine tasks support multiple datasets. Use ``--dataset all`` to evaluate across
+Thirteen tasks support multiple datasets. Use ``--dataset all`` to evaluate across
 all dataset variants for a task:
 
 .. code-block:: bash

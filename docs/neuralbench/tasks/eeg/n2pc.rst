@@ -39,7 +39,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg n2pc --datasets reichert2020
+   neuralbench eeg n2pc --dataset reichert2020
 
 References
 ~~~~~~~~~~

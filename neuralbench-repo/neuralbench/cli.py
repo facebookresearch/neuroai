@@ -176,10 +176,11 @@ def run_benchmark_cli() -> None:
         type=str,
         nargs="+",
         choices=["all", "all_multi_dataset"] + ALL_TASKS + ALL_UNVALIDATED_TASKS,
+        metavar="TASK",
         help=(
             "Task(s) to run. Use 'all' to run all tasks, "
             "'all_multi_dataset' to run only tasks with multiple dataset variants, "
-            "or specify one or more task names."
+            "or specify one or more task names (listed per device below)."
         ),
     )
     parser.add_argument(
@@ -207,12 +208,17 @@ def run_benchmark_cli() -> None:
         action="store_true",
         help="Run single experiment to prepare cache.",
     )
+    model_choices = ["all", "all_classic", "all_fm", "all_baseline"] + ALL_MODELS
     parser.add_argument(
         "-m",
         "--model",
         nargs="*",
-        choices=["all", "all_classic", "all_fm", "all_baseline"] + ALL_MODELS,
-        help="Override config to use one or more predefined models. Multiple models will be run in the grid.",
+        choices=model_choices,
+        metavar="MODEL",
+        help=(
+            "Override config to use one or more predefined models. Multiple models "
+            f"will be run in the grid. Choose from: {', '.join(model_choices)}."
+        ),
     )
     parser.add_argument(
         "-c",
@@ -224,14 +230,16 @@ def run_benchmark_cli() -> None:
             "for a specific wandb grid."
         ),
     )
+    wrapper_choices = ["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys())
     parser.add_argument(
         "-w",
         "--downstream-wrapper",
         nargs="*",
-        choices=["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys()),
+        choices=wrapper_choices,
+        metavar="WRAPPER",
         help=(
             "Adaptation strategy preset(s) to sweep over; applied to foundation "
-            "models only."
+            f"models only. Choose from: {', '.join(wrapper_choices)}."
         ),
     )
     parser.add_argument(
@@ -254,11 +262,12 @@ def run_benchmark_cli() -> None:
         type=str,
         default=None,
         help=(
-            "Specify a dataset variant for the task. "
+            "Specify a dataset for the task, by study name (as listed below) or "
+            "by the stem of its file in the task's datasets/ folder, in any case. "
             "Use 'all' to run on all available datasets. "
-            "If provided, will load dataset-specific overrides from datasets/{dataset}.yaml "
-            "and merge them with the base config.yaml. "
-            "Example: --dataset steyrl2016 or --dataset all"
+            "A dataset other than the task's default merges datasets/<stem>.yaml "
+            "over the base config.yaml. "
+            "Example: --dataset Schalk2004Bci2000 or --dataset all"
         ),
     )
     args = parser.parse_args()

@@ -205,44 +205,34 @@ def _resolve_model_config_path(model_name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _build_all_datasets(
-    tasks: dict[str, list[str]],
-) -> tuple[dict[str, dict[str, list[str]]], dict[str, dict[str, list[str]]]]:
-    """Build study-name and file-stem mappings for every task's datasets.
+def _task_datasets(device: str, task_name: str) -> tuple[tuple[str, str | None], ...]:
+    """List a task's ``(study name, datasets/ file stem)`` pairs, default study first.
 
-    Returns ``(study_names, file_stems)`` where each is
-    ``{device: {task: [...]}}``.
+    The default study is set in ``config.yaml`` and has no file (stem ``None``);
+    a variant that does not set a study inherits the default one.
     """
-    study_names: dict[str, dict[str, list[str]]] = {}
-    file_stems: dict[str, dict[str, list[str]]] = {}
-    for device, task_names in tasks.items():
-        study_names[device] = {}
-        file_stems[device] = {}
-        for task_name in task_names:
-            task_dir = _resolve_task_dir(device, task_name)
-            config = load_yaml_config(task_dir / "config.yaml", safe=True)
-            assert config is not None
-            default_study = config["data"]["study"]["source"]["name"]
-            studies = [default_study]
-            stems: list[str] = []
-            datasets_dir = task_dir / "datasets"
-            if datasets_dir.exists():
-                for f in sorted(datasets_dir.glob("*.yaml")):
-                    stems.append(f.stem)
-                    ds_config = load_yaml_config(f, safe=True)
-                    if ds_config is None:
-                        continue
-                    name = (
-                        ds_config.get("data", {})
-                        .get("study", {})
-                        .get("source", {})
-                        .get("name")
-                    )
-                    if name and name not in studies:
-                        studies.append(name)
-            study_names[device][task_name] = studies
-            file_stems[device][task_name] = stems
-    return study_names, file_stems
+    task_dir = _resolve_task_dir(device, task_name)
+    config = load_yaml_config(task_dir / "config.yaml", safe=True)
+    assert config is not None
+    default_study = config["data"]["study"]["source"]["name"]
+    pairs: list[tuple[str, str | None]] = [(default_study, None)]
+    for f in sorted((task_dir / "datasets").glob("*.yaml")):
+        ds_config = load_yaml_config(f, safe=True) or {}
+        name = ds_config.get("data", {}).get("study", {}).get("source", {}).get("name")
+        pairs.append((name or default_study, f.stem))
+    return tuple(pairs)
+
+
+def _task_study_names(device: str, task_name: str) -> list[str]:
+    return list(dict.fromkeys(name for name, _ in _task_datasets(device, task_name)))
+
+
+def _build_all_datasets(tasks: dict[str, list[str]]) -> dict[str, dict[str, list[str]]]:
+    """Map ``{device: {task: [study names]}}``, default study first."""
+    return {
+        device: {task: _task_study_names(device, task) for task in task_names}
+        for device, task_names in tasks.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -265,12 +255,31 @@ ALL_DOWNSTREAM_WRAPPERS: dict[str, dict[str, tp.Any]] = (
 DEBUG_STUDY_QUERIES: dict[str, str | None] = (
     load_yaml_config(DEFAULTS_DIR / "debug_study.yaml") or {}
 )
-ALL_DATASETS, _ALL_DATASET_STEMS = _build_all_datasets(TASKS)
+ALL_DATASETS = _build_all_datasets(TASKS)
 
 
 def get_available_datasets(device: str, task: str) -> list[str]:
     """Get list of available dataset file stems for a given task."""
-    return _ALL_DATASET_STEMS.get(device, {}).get(task, [])
+    return [stem for _, stem in _task_datasets(device, task) if stem is not None]
+
+
+def _resolve_dataset_stem(device: str, task: str, dataset: str) -> str | None:
+    """Return the ``datasets/`` file stem *dataset* selects, ``None`` for the default study.
+
+    *dataset* is a study name, as listed by ``neuralbench --help``, or a file stem,
+    matched case-insensitively.
+    """
+    pairs = _task_datasets(device, task)
+    by_name: dict[str, str | None] = {}
+    for name, stem in pairs:
+        by_name.setdefault(name.lower(), stem)
+    stems = {stem.lower(): stem for _, stem in pairs if stem is not None} | by_name
+    if dataset.lower() not in stems:
+        raise ValueError(
+            f"Unknown dataset {dataset!r} for {device}/{task}. "
+            f"Choose from: {_task_study_names(device, task)}"
+        )
+    return stems[dataset.lower()]
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +499,7 @@ def _resolve_tasks(device: str, task: str | list[str]) -> list[str]:
             )
         resolved = TASKS[device]
         if task == ["all_multi_dataset"]:
-            resolved = [t for t in resolved if _ALL_DATASET_STEMS.get(device, {}).get(t)]
+            resolved = [t for t in resolved if get_available_datasets(device, t)]
         return resolved
     return task
 
