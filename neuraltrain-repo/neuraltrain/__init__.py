@@ -9,4 +9,3 @@ from .metrics import BaseMetric
 from .models import BaseModelConfig
 from .optimizers import BaseOptimizer
 from .optimizers.base import LightningOptimizer
-# dummy change to trigger CI (2026-10)

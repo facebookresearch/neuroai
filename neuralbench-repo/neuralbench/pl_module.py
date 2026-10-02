@@ -260,6 +260,7 @@ class BrainModule(pl.LightningModule):
 
     def _log_metrics(self, step_name: str) -> None:
         for metric_name, metric in self.metrics.items():
+            assert isinstance(metric, Metric)
             if (
                 metric_name.startswith(step_name)
                 and metric.update_called
