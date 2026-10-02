@@ -61,6 +61,21 @@ The following additional datasets from MOABB can also be used with this task:
 * ``Wei2022B`` (Beetl2021_B) -- 2 subjects, 4 classes
 * ``Zhou2016`` -- 4 subjects, 3 classes
 
+The training release of the EEG/EMG Foundation Challenge 2026 Track 2 corpus is
+available as `NEMAR nm000290, version 1.0.0
+<https://doi.org/10.82901/nemar.nm000290>`__: 112 runs from 14 sessions of 10
+participants, three cued mental commands (motor imagery, mental subtraction, word
+generation) with the Graz and BrainHero interfaces, 41 EEG channels at 500 Hz. The
+license is CC-BY-4.0.
+
+.. code-block:: bash
+
+   neuralfetch download Dreyer2026Proteus --path /path/to/DATA_DIR
+   neuralbench eeg motor_imagery --dataset dreyer2026proteus
+
+This variant uses the task's subject-disjoint split. It is not the official
+cross-session split or the sealed evaluation.
+
 To run with an alternate dataset:
 
 .. code-block:: bash

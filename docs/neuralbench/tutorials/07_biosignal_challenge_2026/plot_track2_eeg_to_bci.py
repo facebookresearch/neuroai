@@ -25,10 +25,14 @@ recalibration allowed.
   sessions released.
 
 .. note::
-   The official Track 2 corpus (Graz / BrainHero, 3 classes: MI / Calc
-   / Word) is released through NeuralBench when submissions open.
-   Until then, `Starter-kit analogs`_ below lists the NeuralBench tasks
-   that come closest, one per axis of the official task.
+   The training release of the official Track 2 corpus is available as
+   `NEMAR nm000290, version 1.0.0 <https://doi.org/10.82901/nemar.nm000290>`__:
+   112 runs from 14 sessions of 10 participants, 41 EEG channels at
+   500 Hz (CC-BY-4.0). ``neuralbench eeg motor_imagery --dataset
+   dreyer2026proteus`` runs a local subject-disjoint benchmark on it,
+   not the official split or the sealed evaluation.
+   `Starter-kit analogs`_ below lists the other NeuralBench tasks that
+   come closest, one per axis of the official task.
 """
 
 # %%
@@ -241,10 +245,10 @@ recalibration allowed.
 # Starter-kit analogs
 # -------------------
 #
-# No public dataset has all of the official task at once -- three mental
-# commands, six sessions, one user at a time -- so the four public corpora the
-# competition points to are split across three NeuralBench tasks. Each covers
-# a different axis of Track 2, and all four are worth training on:
+# The training release of the official corpus (first row) has the three
+# mental commands and both interfaces. The four public corpora the competition
+# points to are split across three NeuralBench tasks; each covers a different
+# axis of Track 2, and all are worth training on:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -253,6 +257,11 @@ recalibration allowed.
 #    * - Command
 #      - Dataset
 #      - What it gives you
+#    * - ``neuralbench eeg motor_imagery --dataset dreyer2026proteus``
+#      - ``Dreyer2026Proteus`` (NEMAR nm000290)
+#      - The training release of the official corpus: the three commands
+#        with the Graz and BrainHero interfaces, 41 EEG channels, split on
+#        held-out subjects.
 #    * - ``neuralbench eeg motor_imagery --dataset dreyer2023``
 #      - ``Dreyer2023Large`` (recommended warm-up configuration)
 #      - 87 subjects of 2-class MI, split on held-out subjects, and the
@@ -280,10 +289,10 @@ recalibration allowed.
 # ----------------------------------
 #
 # To match the official Track 2 evaluation regime, two pieces need to
-# change once the official dataset is released:
+# change:
 #
-# 1. **Dataset source**: register the new MI / Calc / Word study and
-#    set ``data.study.source.name`` to it, with
+# 1. **Dataset source**: ``--dataset dreyer2026proteus`` sets
+#    ``data.study.source.name: Dreyer2026Proteus`` and
 #    ``brain_model_output_size: 3``.
 # 2. **Split**: replace the default ``SklearnSplit`` with a
 #    predefined per-subject split where sessions 1-3 are train and
