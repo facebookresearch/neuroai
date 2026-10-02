@@ -236,8 +236,11 @@ def load_checkpoint(
     keys_to_remove = []
     for k, v in stripped_state_dict.items():
         if model_dict[k].size() != v.size():
-            logger.info(
-                f"Size mismatch for {k}, checkpoint has shape {v.size()} and current model has shape {model_dict[k].size()}."
+            logger.warning(
+                f"Size mismatch for {k}: checkpoint has shape {v.size()}, model has "
+                f"{model_dict[k].size()}. Keeping the randomly initialised weights; "
+                f"check that the model config matches the one the checkpoint was "
+                f"trained with."
             )
             keys_to_remove.append(k)
     for k in keys_to_remove:

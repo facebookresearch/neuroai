@@ -138,7 +138,9 @@ class HuggingFaceMixin(base.BaseModel):
         e.g. if layers=[0, 0.5, 1] and there are 10 layers, the layers will be grouped as [0:5], [5:10].
     token_aggregation: str
         How to aggregate the tokens (second dimension of the tensor of activations).
-        Can be "first", "last", "mean", "sum", "max", or None (in which case we keep the original dimension).
+        Can be "first", "last", "mean", "sum", "max", "cat", or None (in which case we
+        keep the original dimension). "cat" flattens the token and embedding dimensions
+        into a single feature vector per layer.
 
     Requires `transformers` and `huggingface_hub`. You can install them manually
     or via `pip install "neuralset[all]"`.
@@ -165,7 +167,9 @@ class HuggingFaceMixin(base.BaseModel):
     layers: float | list[float] | tp.Literal["all"] = 2 / 3
     cache_n_layers: int | None = None
     layer_aggregation: tp.Literal["mean", "sum", "group_mean"] | None = "mean"
-    token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] | None = "mean"
+    token_aggregation: tp.Literal["first", "last", "mean", "sum", "max", "cat"] | None = (
+        "mean"
+    )
     _model: torch.nn.Module | None = pydantic.PrivateAttr(default=None)
     _processor: tp.Any | None = pydantic.PrivateAttr(default=None)
 
@@ -382,6 +386,8 @@ class HuggingFaceMixin(base.BaseModel):
                 out = latents[:, 0, ...]
             case "last":
                 out = latents[:, -1, ...]
+            case "cat":
+                out = latents.reshape(latents.shape[0], -1)
             case None:
                 out = latents
         if isinstance(out, torch.Tensor):

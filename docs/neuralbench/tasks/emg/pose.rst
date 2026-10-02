@@ -7,6 +7,14 @@ Hand pose decoding
 | **Objective**: :bdg-dark:`20-joint angle trajectory regression`
 | **Split**: The paper's assignment, testing on its held-out user+stage set
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This task backs :doc:`Track 4 -- EMG-to-Pose
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track4_emg_to_pose>`
+   of the challenge, whose page has the commands, timings, and competition
+   data notes for it.
+
 .. image:: https://fb-ctrl-oss.s3.amazonaws.com/emg2pose/emg2pose_overview.png
    :alt: emg2pose overview: sEMG wristband recordings paired with motion-capture hand pose
    :width: 75%

@@ -77,7 +77,8 @@ def _set_dir_permissions(path: Path) -> None:
                     skipped += 1
                     continue
                 os.chmod(item, 0o777)
-            except PermissionError:
+            # FileNotFoundError for broken symlinks: partial Datalad download
+            except (PermissionError, FileNotFoundError):
                 logger.debug("Cannot chmod %s (not owner), skipping.", item)
                 skipped += 1
     if skipped:
@@ -283,7 +284,8 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     version : str
         Cache-busting key kept in the uid; bump when loading logic changes.
     query : Query or None
-        Optional filter applied after loading (e.g. ``"timeline_index < 5"``).
+        Optional timeline selection, applied before loading (e.g.
+        ``"timeline_index < 5"``); filter loaded rows with ``QueryEvents``.
 
     Examples
     --------

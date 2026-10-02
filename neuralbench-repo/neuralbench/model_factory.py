@@ -43,20 +43,23 @@ def build_dummy_batch(
     brain_model: torch.nn.Module,
     batch: tp.Any,
     downstream_model_wrapper: DownstreamWrapper | None,
-) -> tuple[dict[str, torch.Tensor | None], str]:
+    ch_names: list[str] | None = None,
+) -> tuple[dict[str, tp.Any], str]:
     """Build a single-sample dummy batch from *batch* for lazy-layer init and model summary.
 
     Returns the dummy batch dict and the name of the primary input parameter.
     """
     forward_sig = inspect.signature(brain_model.forward)
     input_name = list(forward_sig.parameters.keys())[0]
-    dummy_batch: dict[str, torch.Tensor | None] = {
+    dummy_batch: dict[str, tp.Any] = {
         input_name: batch.data["neuro"][:1].to("cpu"),
     }
     if "subject_ids" in forward_sig.parameters:
         dummy_batch["subject_ids"] = batch.data["subject_id"][:1].to("cpu")
     if "channel_positions" in forward_sig.parameters:
         dummy_batch["channel_positions"] = batch.data["channel_positions"][:1].to("cpu")
+    if ch_names is not None and "ch_names" in forward_sig.parameters:
+        dummy_batch["ch_names"] = ch_names
 
     # ChannelMerger-based adapters need channel_positions and subject_ids
     # even if the inner model doesn't require them.
@@ -75,7 +78,7 @@ def build_dummy_batch(
 
 def init_lazy_layers(
     brain_model: torch.nn.Module,
-    dummy_batch: dict[str, torch.Tensor | None],
+    dummy_batch: dict[str, tp.Any],
     input_name: str,
     downstream_model_wrapper: DownstreamWrapper | None,
 ) -> None:
@@ -118,7 +121,7 @@ def build_brain_model(
     val_loader: DataLoader | None = None,
     wandb_logger: WandbLogger | None = None,
     loss: BaseLoss | None = None,
-) -> tuple[torch.nn.Module, int, int]:
+) -> tuple[torch.nn.Module, int, int, list[str] | None]:
     """Build, initialise and optionally wrap a brain model.
 
     This is the main entry point that orchestrates braindecode/generic model
@@ -132,7 +135,10 @@ def build_brain_model(
     concatenation of the train and val splits so they see the same pool of
     labelled data as the DL models (which get val via early stopping).
 
-    Returns ``(model, n_total_params, n_trainable_params)``.
+    Returns ``(model, n_total_params, n_trainable_params, ch_names)``, the last
+    being the names of the channels the model receives (``None`` when the
+    dataset does not name them, or when a channel adapter reshapes them), for
+    models that read channel identity by name rather than by position.
     """
     batch = next(iter(train_loader))
     n_spatial_locations, n_temporal_samples = batch.data["neuro"].shape[1:]
@@ -278,7 +284,7 @@ def build_brain_model(
 
     # 2) Initialize lazy layers
     dummy_batch, input_name = build_dummy_batch(
-        brain_model, batch, downstream_model_wrapper
+        brain_model, batch, downstream_model_wrapper, ch_names
     )
     init_lazy_layers(brain_model, dummy_batch, input_name, downstream_model_wrapper)
 
@@ -296,10 +302,13 @@ def build_brain_model(
             input_channel_names=dataset_ch_names,
         )
 
-    # 5) Log model summary
+    # 5) Log model summary. torchinfo adds up the memory of everything in
+    # ``input_data``, so anything that is not a tensor (``ch_names``) has to
+    # reach the forward as a keyword argument instead.
     model_summary = summary(
         brain_model,
-        input_data=dummy_batch,
+        input_data={k: v for k, v in dummy_batch.items() if isinstance(v, torch.Tensor)},
+        **{k: v for k, v in dummy_batch.items() if not isinstance(v, torch.Tensor)},
         col_names=("output_size", "num_params", "trainable"),
         row_settings=("hide_recursive_layers",),
         verbose=0,
@@ -317,4 +326,4 @@ def build_brain_model(
             }
         )
 
-    return brain_model, n_total_params, n_trainable_params
+    return brain_model, n_total_params, n_trainable_params, ch_names

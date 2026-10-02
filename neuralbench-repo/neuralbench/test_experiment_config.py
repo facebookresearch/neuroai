@@ -7,14 +7,21 @@
 import functools
 
 import pytest
+import torch
 from exca import ConfDict
 
-from neuralbench.experiment_config import _expand_grid
+from neuralbench.experiment_config import (
+    _adapts_a_backbone,
+    _expand_grid,
+    _warn_unsupported_gpu,
+    merge_task_config,
+)
 from neuralbench.registry import (
     ALL_DOWNSTREAM_WRAPPERS,
     DEFAULTS_DIR,
     FM_MODELS,
     _resolve_model_config_path,
+    get_available_datasets,
     load_yaml_config,
 )
 from neuraltrain.optimizers.base import LightningOptimizer
@@ -79,6 +86,33 @@ def _base_and_model_config(model_name: str) -> ConfDict:
     return config
 
 
+@pytest.mark.parametrize(
+    ("model_name", "expected"),
+    # mae is a backbone without published weights, so it is absent from FM_MODELS
+    [
+        *((name, True) for name in [*FM_MODELS, "mae"]),
+        ("eegnet", False),
+        ("chance", False),
+    ],
+)
+def test_adaptation_applies_to_backbones_only(model_name: str, expected: bool):
+    assert _adapts_a_backbone(model_name) is expected
+
+
+def test_unsupported_gpu_check_survives_a_driver_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _too_old(index: int) -> tuple[int, int]:
+        raise RuntimeError("driver too old")
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_arch_list", lambda: ["sm_90"])
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", _too_old)
+    with pytest.warns(UserWarning, match="driver too old"):
+        _warn_unsupported_gpu()
+
+
 @pytest.mark.parametrize("preset", list(ALL_DOWNSTREAM_WRAPPERS))
 @pytest.mark.parametrize("model_name", FM_MODELS)
 def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: str):
@@ -86,3 +120,17 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     config.update(ALL_DOWNSTREAM_WRAPPERS[preset])
     # a model YAML with scheduler=null would come back nameless: overlays set only max_lr
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
+
+
+@pytest.mark.parametrize("dataset", [None, *get_available_datasets("eeg", "sleep_onset")])
+def test_sleep_onset_stream_diff(dataset: str | None):
+    core, stream = (
+        merge_task_config("eeg", task, dataset).flat()
+        for task in ["sleep_onset", "_sleep_onset_stream"]
+    )
+    diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
+    assert diff == {
+        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"],
+        "data.test_batch_size": 1,
+        "reset_per_timeline": True,
+    }

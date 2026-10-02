@@ -15,6 +15,9 @@ data:
     scaler: StandardScaler
     scale_factor: null
     clamp: 15
+  channel_positions:
+    # REVE's pretrained position bank is in MNE head-frame metres.
+    normalize: false
 brain_model_config:
   =replace=: true
   name: NtReve

@@ -2,13 +2,16 @@
 Using the Python API
 =====================
 
-As an alternative to the :doc:`CLI
-</neuralbench/auto_examples/quickstart/01_run_first_task>`,
-NeuralBench also exposes a Python function
-:func:`~neuralbench.run_benchmark` that lets you launch experiments
-directly from a script or notebook.  This is convenient when you want
-to integrate benchmark runs into a larger workflow or inspect results
-programmatically without parsing log files.
+:func:`~neuralbench.run_benchmark` launches the same experiments as the
+:doc:`CLI </neuralbench/auto_examples/quickstart/01_run_first_task>` -- same
+YAML configs, same selections, same cache -- from a script or notebook.  Reach
+for it when a benchmark run is one step of a larger workflow you are scripting.
+
+Two things it is not.  It takes a model *name*, so a model of your own goes
+through :doc:`evaluate_model
+</neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>` instead.
+And it launches runs rather than collecting them, which the :doc:`results
+tutorial </neuralbench/auto_examples/results/plot_visualize_results>` covers.
 """
 
 # %%
@@ -41,15 +44,38 @@ programmatically without parsing log files.
 #
 #    from neuralbench import run_benchmark
 #
-#    results = run_benchmark(
+#    run_benchmark(
 #        device="eeg",
 #        task="audiovisual_stimulus",
 #        debug=True,
 #    )
 #
-#    print(f"Got {len(results)} result(s)")
-#    for r in results:
-#        print(r)
+
+# %%
+# What comes back
+# ---------------
+#
+# Nothing, in every mode but one: the call launches experiments and returns an
+# empty list, the results being written to the results folder under each
+# experiment's UID.  Two ways to get them in hand:
+#
+# - ``plot_cached=True`` returns the cached results it plotted, and runs
+#   nothing.  This is the CLI's ``--plot-cached``.
+# - ``BenchmarkAggregator`` collects them directly, which is what the
+#   :doc:`results tutorial
+#   </neuralbench/auto_examples/results/plot_visualize_results>` uses for
+#   comparison plots and tables.
+#
+# .. code-block:: python
+#
+#    results = run_benchmark(
+#        device="eeg",
+#        task="audiovisual_stimulus",
+#        plot_cached=True,
+#    )
+#
+# :func:`~neuralbench.evaluate_model` is the entry point that returns results
+# from the runs it launched, as a frame.
 #
 
 # %%
@@ -79,34 +105,31 @@ programmatically without parsing log files.
 #
 # .. code-block:: python
 #
-#    results = run_benchmark(
+#    run_benchmark(
 #        device="eeg",
 #        task=["audiovisual_stimulus", "sex"],
 #        model=["eegnet", "deep4net"],
 #        debug=True,
 #    )
 #
-#    print(f"Ran {len(results)} experiment(s)")
-#
 
 # %%
-# Controlling random seeds
-# ------------------------
+# Sweeping seeds
+# --------------
 #
-# The ``seeds`` parameter overrides the grid's seed list (default
-# ``[33]``).  Passing multiple seeds generates one experiment per
-# seed, which is useful for estimating variance.
+# Seeds come from the grid rather than from a parameter: ``grid=True`` expands
+# the task's ``grid.yaml`` on top of ``defaults/grid.yaml``, whose default
+# sweep is the seed list ``[33, 34, 35]``.  That gives one experiment per seed,
+# which is what a variance estimate needs.
 #
 # .. code-block:: python
 #
-#    results = run_benchmark(
+#    run_benchmark(
 #        device="eeg",
 #        task="audiovisual_stimulus",
-#        debug=True,
-#        seeds=[33, 34, 35],
+#        model="reve",
+#        grid=True,
 #    )
-#
-#    print(f"Ran {len(results)} experiment(s) (one per seed)")
 #
 
 # %%

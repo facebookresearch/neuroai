@@ -7,12 +7,16 @@
 from . import (
     baselines as _baselines,  # noqa: F401  # registers fit-once baseline configs
 )
+from . import (
+    external as _external,  # noqa: F401  # registers the ExternalModel config
+)
 from . import metrics as _metrics  # noqa: F401  # registers custom metric configs
 from . import (
     transforms as _transforms,  # noqa: F401  # registers custom Event/Step subclasses
 )
 from .cli import run_benchmark, run_benchmark_cli
 from .data import get_default_dataloaders
+from .evaluate import check_model, evaluate_model
 from .utils import SequenceLabelEncoder
 
 # ``SequenceLabelEncoder`` is re-exported so importing ``neuralbench``
@@ -21,7 +25,9 @@ from .utils import SequenceLabelEncoder
 # without an explicit import.
 __all__ = [
     "SequenceLabelEncoder",
+    "check_model",
+    "evaluate_model",
+    "get_default_dataloaders",
     "run_benchmark",
     "run_benchmark_cli",
-    "get_default_dataloaders",
 ]

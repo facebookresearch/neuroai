@@ -542,7 +542,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     def build(
         self,
         model: nn.Module,
-        dummy_batch: dict[str, torch.Tensor | None],
+        dummy_batch: dict[str, tp.Any],
         n_outputs: int,
         input_channel_names: list[str] | None = None,
     ) -> "DownstreamWrapperModel":
@@ -677,6 +677,11 @@ class DownstreamWrapperModel(nn.Module):
     Handles the full pipeline: optional preprocessing -> channel adapter ->
     model -> output key selection -> aggregation -> probe.
     """
+
+    def reset_state(self) -> None:
+        """Call the backbone's ``reset_state()``, when it has one."""
+        if hasattr(self.wrapped_model, "reset_state"):
+            tp.cast(tp.Callable[[], None], self.wrapped_model.reset_state)()
 
     def __init__(
         self,

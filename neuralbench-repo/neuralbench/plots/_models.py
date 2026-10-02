@@ -94,6 +94,19 @@ class ModelEntry:
         Short description of the pretraining objective (foundation only).
     pretrain_data
         Short description of the pretraining corpus (foundation only).
+    architecture
+        Coarse backbone family shown as a categorical dimension in the model
+        scatter (e.g. ``"Convolutional"``, ``"Transformer"``).  ``None`` when
+        unknown / not applicable.
+    pretrain_n_subjects
+        Number of subjects in the pretraining corpus (foundation only).
+        ``None`` when not reported by the source paper.
+    pretrain_n_hours
+        Hours of signal in the pretraining corpus (foundation only).
+        ``None`` when not reported by the source paper.
+    fmri_space
+        For fMRI models only, the representation space (e.g. ``"surface"``,
+        ``"volume"``, ``"flatmap"``).  ``None`` for non-fMRI models.
     pretraining_overlap
         Set of ``neuralhub`` study class names the model was pretrained on.
         Drives downstream-bar hatching via
@@ -117,6 +130,10 @@ class ModelEntry:
     variant: str | None = None
     pretrain_strategy: str | None = None
     pretrain_data: str | None = None
+    architecture: str | None = None
+    pretrain_n_subjects: int | None = None
+    pretrain_n_hours: float | None = None
+    fmri_space: str | None = None
     pretraining_overlap: frozenset[str] | None = None
     builder: Callable[[], "torch.nn.Module"] | None = None
     backbone_subtract: tuple[str, ...] = field(default_factory=tuple)
@@ -395,6 +412,7 @@ MODELS: list[ModelEntry] = [
         bibtex="schirrmeister2017deep",
         config_name="ShallowFBCSPNet",
         cli_name="shallow_fbcsp_net",
+        architecture="Convolutional",
         builder=_make_classic_braindecode_builder("ShallowFBCSPNet"),
         backbone_subtract=("final_layer",),
     ),
@@ -406,6 +424,7 @@ MODELS: list[ModelEntry] = [
         bibtex="schirrmeister2017deep",
         config_name="Deep4Net",
         cli_name="deep4net",
+        architecture="Convolutional",
         builder=_make_classic_braindecode_builder("Deep4Net"),
         backbone_subtract=("final_layer",),
     ),
@@ -417,6 +436,7 @@ MODELS: list[ModelEntry] = [
         bibtex="lawhern2018eegnet",
         config_name="EEGNet",
         cli_name="eegnet",
+        architecture="Convolutional",
         builder=_make_classic_braindecode_builder("EEGNet"),
         backbone_subtract=("final_layer",),
     ),
@@ -428,6 +448,7 @@ MODELS: list[ModelEntry] = [
         bibtex="gemein2020bdtcn",
         config_name="BDTCN",
         cli_name="bdtcn",
+        architecture="Convolutional",
         builder=_make_classic_braindecode_builder("BDTCN"),
         backbone_subtract=("final_layer",),
     ),
@@ -439,6 +460,7 @@ MODELS: list[ModelEntry] = [
         bibtex="song2022eegconformer",
         config_name="EEGConformer",
         cli_name="eegconformer",
+        architecture="Transformer",
         builder=_make_classic_braindecode_builder("EEGConformer"),
         backbone_subtract=("final_layer",),
     ),
@@ -450,6 +472,7 @@ MODELS: list[ModelEntry] = [
         bibtex="altaheri2022atcnet",
         config_name="ATCNet",
         cli_name="atcnet",
+        architecture="Transformer",
         builder=_make_classic_braindecode_builder("ATCNet"),
         backbone_subtract=("final_layer",),
     ),
@@ -461,6 +484,7 @@ MODELS: list[ModelEntry] = [
         bibtex="elouahidi2023eegsimpleconv",
         config_name="SimpleConvTimeAgg",
         cli_name="simpleconv_time_agg",
+        architecture="Convolutional",
         builder=_build_simpleconv_time_agg,
         backbone_subtract=("output_head",),
     ),
@@ -472,6 +496,7 @@ MODELS: list[ModelEntry] = [
         bibtex="zhao2024ctnet",
         config_name="CTNet",
         cli_name="ctnet",
+        architecture="Transformer",
         builder=_make_classic_braindecode_builder("CTNet"),
         backbone_subtract=("final_layer",),
     ),
@@ -484,6 +509,7 @@ MODELS: list[ModelEntry] = [
         bibtex="sivakumar2024emg2qwerty",
         config_name="EMG2QwertyNet",
         cli_name="emg2qwerty",
+        architecture="Convolutional",
         builder=_build_emg2qwerty,
         backbone_subtract=("final_layer",),
     ),
@@ -507,6 +533,7 @@ MODELS: list[ModelEntry] = [
         device="fmri",
         config_name="FmriLinear",
         cli_name="fmri_linear",
+        architecture="Linear",
     ),
     ModelEntry(
         name="FmriMlp",
@@ -514,6 +541,7 @@ MODELS: list[ModelEntry] = [
         device="fmri",
         config_name="FmriMlp",
         cli_name="fmri_mlp",
+        architecture="MLP",
     ),
     # Foundation models, year-sorted.
     ModelEntry(
@@ -527,6 +555,7 @@ MODELS: list[ModelEntry] = [
         variant="---",
         pretrain_strategy="Contrastive (wav2vec 2.0-style)",
         pretrain_data="TUEG",
+        architecture="Transformer",
         pretraining_overlap=_PT_BENDR,
         builder=_build_bendr,
         backbone_subtract=(),
@@ -542,6 +571,7 @@ MODELS: list[ModelEntry] = [
         variant="---",
         pretrain_strategy="Contrastive + reconstruction",
         pretrain_data="6 datasets",
+        architecture="Transformer",
         pretraining_overlap=_PT_BIOT,
         builder=_build_biot,
         backbone_subtract=("final_layer", "classifier", "head"),
@@ -557,6 +587,8 @@ MODELS: list[ModelEntry] = [
         variant="Base",
         pretrain_strategy="VQ-VAE masked prediction",
         pretrain_data=r"16 datasets, ${\sim}$2.5K h",
+        architecture="Transformer",
+        pretrain_n_hours=2500,
         pretraining_overlap=_PT_LABRAM,
         builder=_build_labram,
         backbone_subtract=(),
@@ -572,6 +604,7 @@ MODELS: list[ModelEntry] = [
         variant="---",
         pretrain_strategy="Masked patch reconstruction",
         pretrain_data="TUEG",
+        architecture="Transformer",
         pretraining_overlap=_PT_CBRAMOD,
         builder=_build_cbramod,
         backbone_subtract=("final_layer", "classifier", "head"),
@@ -587,6 +620,7 @@ MODELS: list[ModelEntry] = [
         variant="Large",
         pretrain_strategy="Contrastive + MAE",
         pretrain_data="TUEG + Siena",
+        architecture="Transformer",
         pretraining_overlap=_PT_LUNA,
         builder=_build_luna,
         backbone_subtract=("final_layer",),
@@ -602,6 +636,9 @@ MODELS: list[ModelEntry] = [
         variant="Base",
         pretrain_strategy="Masked autoencoding",
         pretrain_data=r"92 datasets, ${\sim}$60K h",
+        architecture="Transformer",
+        pretrain_n_subjects=25000,
+        pretrain_n_hours=60000,
         pretraining_overlap=_PT_REVE,
         builder=_build_reve,
         backbone_subtract=("final_layer",),

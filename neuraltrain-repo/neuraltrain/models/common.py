@@ -16,7 +16,7 @@ import torch
 from torch import nn
 from torchvision.ops import MLP
 
-from neuraltrain.models.base import BaseModelConfig
+from . import base as model_base
 
 INVALID_POS_VALUE = -0.1  # See ns.extractors.ChannelPositions.INVALID_VALUE
 
@@ -131,7 +131,7 @@ class ChannelDropout(nn.Module):
         raise NotImplementedError
 
 
-class SubjectLayers(BaseModelConfig):
+class SubjectLayers(model_base.BaseModelConfig):
     """Configuration for per-subject linear projections.
 
     Parameters
@@ -297,7 +297,7 @@ class SubjectLayersModel(nn.Module):
         return f"SubjectLayersModel({C}, {D}, {S})"
 
 
-class FourierEmb(BaseModelConfig):
+class FourierEmb(model_base.BaseModelConfig):
     """Configuration for Fourier positional embedding.
 
     Parameters
@@ -410,7 +410,7 @@ class FourierEmbModel(nn.Module):
         return emb
 
 
-class ChannelMerger(BaseModelConfig):
+class ChannelMerger(model_base.BaseBrainModelConfig):
     """Configuration for the ChannelMerger module.
 
     Parameters
@@ -664,7 +664,7 @@ class NormDenormScaler(nn.Module):
         return self.scaler(x)
 
 
-class Mlp(BaseModelConfig):
+class Mlp(model_base.BaseModelConfig):
     """Multilayer perceptron, e.g. for use as projection head.
 
     Notes
@@ -730,7 +730,7 @@ class Mlp(BaseModelConfig):
         )
 
 
-class TemporalDownsampling(BaseModelConfig):
+class TemporalDownsampling(model_base.BaseModelConfig):
     """Temporal downsampling via a 2-D convolution over the time axis.
 
     Parameters

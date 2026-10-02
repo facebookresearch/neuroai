@@ -218,9 +218,6 @@ def prepare_extractors(
         if extractors_using_slurm:
             msg = f"Started parallel preparation of extractors {slurm_names} on slurm"
             logger.info(msg)
-        for extractor in other_extractors:
-            logger.info(f"Preparing extractor: {extractor.__class__.__name__}")
-            extractor.prepare(events)
         for future in concurrent.futures.as_completed(futures):
             try:
                 future.result()  # Raise any exception from the task
@@ -228,6 +225,12 @@ def prepare_extractors(
                 name = future.__dict__.get("_name", "UNKNOWN")
                 logger.warning("Error occurred while preparing extractor %s: %s", name, e)
                 raise
+        # Some lightweight extractors wrap one of the Slurm extractors (notably
+        # ChannelPositions -> MneRaw). Preparing them before the futures finish
+        # recursively launches duplicate work for the same cache UID.
+        for extractor in other_extractors:
+            logger.info(f"Preparing extractor: {extractor.__class__.__name__}")
+            extractor.prepare(events)
 
 
 def _get_pad_lengths(
@@ -470,9 +473,9 @@ class Segmenter(base.Step):
         Start time (in seconds) of the segment, with respect to the
         :term:`trigger` event (or stride). E.g. use -1.0 if you want the
         segment to start 1s before the event.
-    duration: optional float
-        Duration (in seconds) of the segment (defaults to event duration if
-        ``trigger_query`` is used to extract segments based on specific events).
+    duration: float or None
+        Duration (in seconds) of the segment. Required: pass ``None`` to use each
+        trigger event's own duration (``trigger_query`` only).
     trigger_query: optional Query
         Dataframe query selecting which events act as :term:`triggers <trigger>`
         — segments are time-locked to the matching events
@@ -519,7 +522,7 @@ class Segmenter(base.Step):
     # extractors
     extractors: dict[str, BaseExtractor]
     # dataset
-    padding: float | None = None
+    padding: float | tp.Literal["auto"] | None = None
     drop_incomplete: bool = False
     drop_unused_events: bool = True
     #
@@ -628,5 +631,5 @@ def _remove_incomplete_segments(
     if drop_incomplete and invalid_indices:
         msg = f"Removing {len(invalid_indices)} segments out of {len(segments)}"
         logger.info(msg)
-        segments = [s for i, s in enumerate(segments) if i not in sorted(invalid_indices)]
+        segments = [s for i, s in enumerate(segments) if i not in invalid_indices]
     return segments

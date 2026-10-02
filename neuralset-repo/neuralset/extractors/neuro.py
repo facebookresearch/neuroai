@@ -289,7 +289,7 @@ class MneRaw(BaseExtractor):
 
     def _exclude_from_cache_uid(self) -> list[str]:
         prev = super()._exclude_from_cache_uid()
-        return prev + ["baseline", "offset", "scale_factor", "clamp"]
+        return prev + ["baseline", "offset", "scale_factor", "clamp", "channel_order"]
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -2335,7 +2335,12 @@ class ChannelPositions(BaseStatic):
         invalid_names = [n for n in ch_names if n and n not in pos_mapping]
 
         if not valid_inds:
-            raise ValueError(f"No channel has valid positions: {ta_ch_names}.")
+            raise ValueError(
+                f"No channel has valid positions: {ta_ch_names}. Positions come "
+                f"from {self.layout_or_montage_name or 'the recording ch_locs'}; "
+                "set layout_or_montage_name to a montage naming these channels, "
+                "or to None to read them off the recording."
+            )
 
         if len(valid_inds) < 0.1 * len(ch_names):
             unique_invalid_names = set(invalid_names)

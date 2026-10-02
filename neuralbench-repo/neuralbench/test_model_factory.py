@@ -37,6 +37,49 @@ class _RecordHeadWidth(BaseBrainModelConfig):
         return nn.Identity()
 
 
+class _NameReader(nn.Module):
+    """Model reading channel identity by name, as LaBraM does."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen: list[str] | None = None
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        channel_positions: torch.Tensor | None = None,
+        ch_names: list[str] | None = None,
+    ) -> torch.Tensor:
+        self.seen = ch_names
+        return x
+
+
+class _NameReaderConfig(BaseBrainModelConfig):
+    """Config building a model whose ``forward`` names ``ch_names``."""
+
+    def build(self, n_spatial_locations: int, n_outputs: int | None = None) -> nn.Module:
+        return _NameReader()
+
+
+def test_build_brain_model_names_channels_for_a_model_that_reads_them(
+    build_data: Callable[..., Data],
+) -> None:
+    loader = build_data(seed=0).prepare()["train"]
+    ch_names = list(loader.dataset.extractors["neuro"]._channels.keys())  # type: ignore[attr-defined]
+
+    model, _, _, returned = build_brain_model(
+        brain_model_config=_NameReaderConfig(),
+        downstream_model_wrapper=None,
+        pretrained_weights_fname=None,
+        train_loader=loader,
+    )
+
+    # Returned for the training loop to pass on every batch, and already
+    # carried by the init pass: a model that asks for names never runs without.
+    assert returned == ch_names
+    assert tp.cast(_NameReader, model).seen == ch_names
+
+
 def test_build_brain_model_forwards_dataset_channel_names_to_adapter(
     build_data: Callable[..., Data],
 ) -> None:
@@ -54,7 +97,7 @@ def test_build_brain_model_forwards_dataset_channel_names_to_adapter(
         aggregation="flatten",
     )
 
-    model, _, _ = build_brain_model(
+    model, _, _, _ = build_brain_model(
         brain_model_config=_Passthrough(),
         downstream_model_wrapper=wrapper,
         pretrained_weights_fname=None,

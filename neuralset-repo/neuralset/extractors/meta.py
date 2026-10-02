@@ -113,18 +113,21 @@ class AggregatedExtractor(base.BaseExtractor):
     event_types: str | tuple[str, ...] = "Event"
     extractors: list[base.BaseExtractor]
     extractor_aggregation: tp.Literal["cat", "stack", "mean", "sum"] = "cat"
-    frequency: tp.Literal["native"] = "native"  # deferred to sub-extractors
+    frequency: float | tp.Literal["native"] = "native"  # deferred to sub-extractors
 
     def model_post_init(self, log__: tp.Any) -> None:
-        """Check that extractors are all static or all dynamic."""
+        """Check stream compatibility and propagate the common frequency."""
         fts = self.extractors
-        static_count = sum(isinstance(f, base.BaseStatic) for f in fts)
-        if static_count not in [0, len(fts)]:
+        # BaseStatic extractors become temporal streams when configured with a
+        # non-zero frequency, so classify by frequency rather than inheritance.
+        static_count = sum(f.frequency == 0 for f in fts)
+        if static_count not in (0, len(fts)):
             raise ValueError("Extractors must be either all static or all dynamic.")
-        if not static_count:  # dynamic
-            frequencies = set(f.frequency for f in self.extractors)
+        frequencies = {f.frequency for f in fts}
+        if not static_count:
             if len(frequencies) > 1:
                 raise ValueError("All extractors must have the same frequency.")
+            self.frequency = frequencies.pop()
         all_event_types = set(c for f in fts for c in f._event_types_helper.classes)
         self.event_types = tuple(c.__name__ for c in all_event_types)
         super().model_post_init(log__)

@@ -146,7 +146,7 @@ def _make_experiment_with_capturing_build(
         del kwargs
         build_draws.append(torch.rand(4))
         _ = torch.rand(11)
-        return nn.Identity(), 0, 0
+        return nn.Identity(), 0, 0, None
 
     monkeypatch.setattr("neuralbench.main.build_brain_model", fake_build_brain_model)
     monkeypatch.setattr("neuralbench.main.BrainModule", _DummyBrainModule)

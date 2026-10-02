@@ -28,7 +28,8 @@ from lightning.pytorch.loggers.logger import DummyLogger, Logger
 from torch.utils.data import DataLoader
 
 import neuralset as ns
-from neuraltrain import BaseLoss, BaseMetric, BaseModelConfig, LightningOptimizer
+from neuraltrain import BaseLoss, BaseMetric, LightningOptimizer
+from neuraltrain.models import BaseBrainModelConfig, BrainModelBuildContext
 from neuraltrain.utils import CsvLoggerConfig, WandbLoggerConfig
 
 from .pl_module import BrainModule
@@ -77,7 +78,7 @@ class Experiment(pydantic.BaseModel):
     # Reproducibility
     seed: int = 33
     # Model
-    brain_model_config: BaseModelConfig
+    brain_model_config: BaseBrainModelConfig
     load_checkpoint: bool = True
     save_checkpoints: bool = False
     # Loss
@@ -196,11 +197,13 @@ class Experiment(pydantic.BaseModel):
         batch = next(iter(train_loader))
         n_chans, n_times = batch.data["input"].shape[1:]
         n_classes = train_loader.dataset.triggers.code.nunique()
-        brain_model = self.brain_model_config.build(
+        # build_from_context injects by name, so any model builds from one context
+        ctx = BrainModelBuildContext(
             n_spatial_locations=n_chans,
             n_temporal_samples=n_times,
             n_outputs=n_classes,
         )
+        brain_model = self.brain_model_config.build_from_context(ctx)
         return BrainModule(
             model=brain_model,
             loss=self.loss.build(),

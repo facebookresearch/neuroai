@@ -18,7 +18,14 @@ from .audio import (
 from .base import BaseExtractor as BaseExtractor
 from .base import BaseStatic as BaseStatic
 from .base import EventDetector, EventField, LabelEncoder, Pulse
-from .image import HOG, LBP, RFFT2D, ColorHistogram, HuggingFaceImage
+from .image import (
+    HOG,
+    LBP,
+    RFFT2D,
+    ClipVersatileDiffusion,
+    ColorHistogram,
+    HuggingFaceImage,
+)
 from .meta import (
     AggregatedExtractor,
     CroppedExtractor,

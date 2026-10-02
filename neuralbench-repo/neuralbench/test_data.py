@@ -35,6 +35,23 @@ import neuralset as ns
 from .data import Data, get_default_dataloaders
 
 
+def test_split_batch_size_and_shuffle(build_data):
+    loaders = build_data(
+        seed=33,
+        val_batch_size=1,
+        test_batch_size=2,
+        train_shuffle=False,
+        test_shuffle=True,
+    ).prepare()
+    splits = ("train", "val", "test")
+    assert [loaders[split].batch_size for split in splits] == [4, 1, 2]
+    shuffled = [
+        isinstance(loaders[split].sampler, torch.utils.data.RandomSampler)
+        for split in splits
+    ]
+    assert shuffled == [False, False, True]
+
+
 def _train_indices(loaders: dict[str, DataLoader]) -> list[int]:
     """Return the first-epoch train-loader index sequence.
 

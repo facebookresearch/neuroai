@@ -228,6 +228,30 @@ def test_openai_clip_layer(
         assert out.shape == (768,)
 
 
+@pytest.mark.parametrize("normalize", [True, False])
+def test_clip_versatile_diffusion(cat_event: etypes.Image, normalize: bool) -> None:
+    extractor = ns.extractors.ClipVersatileDiffusion(
+        device="cpu",
+        normalize=normalize,
+    )
+    latent = next(iter(extractor._get_data([cat_event])))
+    # CLS + 256 patches, ViT-L/14 projection dim
+    assert latent.shape == (257, 768)
+    cls_norm = np.linalg.norm(latent[0])
+    if normalize:
+        np.testing.assert_allclose(cls_norm, 1.0, rtol=1e-5, atol=1e-5)
+    else:
+        assert not np.isclose(cls_norm, 1.0)
+
+
+def test_clip_versatile_diffusion_rejects_non_clip() -> None:
+    with pytest.raises(ValueError, match="CLIP-style"):
+        ns.extractors.ClipVersatileDiffusion(
+            device="cpu",
+            model_name="facebook/dinov2-small-imagenet1k-1-layer",
+        )
+
+
 def test_hf_dinov2(cat_event: etypes.Image) -> None:
     extractor = ns.extractors.HuggingFaceImage(
         device="cpu",

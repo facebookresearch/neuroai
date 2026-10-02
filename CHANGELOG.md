@@ -4,23 +4,104 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralfetch`: `Zyma2019Electroencephalograms` reads all 36 EEGMAT subjects, including `Subject00`, which it skipped (#289). The `eeg mental_arithmetic` subject split changes with it (1,707 windows over 36 subjects, 1,007 for training, against 1,659 over 35), so scores are not comparable with earlier runs. A study cache written before the fix still holds 35 subjects and is reused as is: delete `<CACHE_DIR>/name=Zyma2019Electroencephalograms-*` to pick up the new subject.
+- `neuralfetch`: new `Nemar` download backend (nemar-py; `version=` pins the release, `include`/`exclude` select files); `Xu2024Alljoined` and `Xu2025Alljoined` use it for the NEMAR BIDS releases nm000133 v1.0.4 and nm000134 v1.0.3 (~5 and ~8.5 GB), with images from each event's `stim_file` (#279). Copies fetched from OSF or Hugging Face are not read: re-run with `--download`. Alljoined-1 keeps every presented trial (49,541 over 13 recordings); the OSF version read the same raw EEG but took its trial list from the `05_125` epoch files, which omit the trials AutoReject rejected (43,070 over 12), so scores are not comparable with earlier runs; Alljoined-1.6M's image events are unchanged except for 49 test trials that shared an onset with a `debug` marker and are kept.
+- `neuralfetch`: `Kemp2000Analysis` downloads Sleep-EDF from PhysioNet's `physionet-open` S3 mirror, as the other PhysioNet studies already do, instead of the `physionet.org` web host, which served it at 51 KB/s against the mirror's 31 MB/s on the host we measured — minutes for the ~7 GB corpus rather than tens of hours. Recordings now live under `download/sleep-edfx/1.0.0/sleep-cassette/`, and the `physionet-sleep-data/` folder the previous `mne` fetch wrote is still read where it lies, so a copy fetched before the switch is neither re-downloaded nor silently invisible.
+- `neuralfetch`: `success_writer` clears the marker before an `overwrite` re-run rather than leaving it on disk, so a re-run that dies partway no longer looks complete to the next call, which previously skipped the work and accepted half-written output (#278).
+- docs: REVE's `brain-bzh` checkpoints are public, so the starter kit, `install.md` and the model page no longer ask for a HuggingFace account, an accepted licence or a token.
+- docs: each EEG/EMG Foundation Challenge 2026 track page opens with a cheaper way in than its default corpus — `xu2024alljoined` for Track 1, `tangermann2012` for Track 2, and `--download --debug` for Track 4.
+- docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from participant feedback — every track page documents its exact split and the validation metric that selects the final checkpoint, `--dataset dreyer2023` is presented as Track 2's recommended warm-up configuration (the task default is still `Stieger2021Continuous`), and Track 3's target is the first N2 epoch rather than the first *stable* one, on a 128 Hz cohort holding both seen and unseen sleepers (#277).
+- docs: the challenge track pages separate warm-up from sealed specifications, which differ for Tracks 1-3 — Track 3 scores unweighted bMAE on the Sleep-EDF warm-up against the sealed W-bMAE (10x/5x/3x/1x severity weights, macro-averaged over seen and unseen subjects), and Track 2 pools balanced accuracy over windows where the sealed phase averages over subject-session-context cells. Track 4's split section no longer claims held-out users: its `user_stage` test set holds unseen user-stage *combinations* (#277).
+- docs: the challenge submission page defers the submission contract, registration and benchopt workflow to Codabench, which owns and updates them, and keeps only what NeuralBench owns — getting weights out of a run (`delete_checkpoints_on_exit`, stripping the `pl_module` prefix), the preprocessing and unit gaps a lifted model has to close, and whether a local score tracks the leaderboard (#277).
+- docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections from the post-release audit — the pretraining corpus needs an explicit `ssl_example.grids.download` step and `moabb`, `MaeModule` takes no other `neuraltrain` model, freezing comes from `linear_probe_mean` rather than `mae.yaml`, `install.md` lists the six config keys that have no default, Track 3's target is the earliest annotated N2 event, and emg2pose is ~340 GB (#251).
+
+## [0.3.1] - 2026-09-10
+
+- `neuralbench`: adaptation wrappers (`-w`) apply to every model whose config ships a `downstream_model_wrapper`, not just the published foundation models, so a locally pretrained `mae` encoder is linear-probed as documented instead of silently fine-tuned end to end (#249).
+- `neuralbench`: the GPU capability check warns rather than aborting when the driver is too old for the installed torch, so `--download`, `--prepare` and `--plot-cached` still run on such a host (#249).
+- `neuralbench`: `load_config` creates the directories a hand-written `config.json` names, and reports the `/tmp` fallback it takes when no config exists and stdin is not a terminal (#249).
+- `neuralfetch`: a MOABB study whose subjects all fail to download raises an error naming the counts and chaining the underlying failure, instead of asserting that `timelines.csv` is missing (#249).
+- `neuralset`: `ChannelPositions` names the montage it resolved against, and the fix, when no channel has a valid position (#249).
+- docs: EEG/EMG Foundation Challenge 2026 starter-kit corrections — Track 1's headline metric key, Track 3's per-window target, the Track 4 aggregation command, the dataset clients and download footprints each track needs, `ssl_example`'s clone step and its own cache paths, and the Codabench submission route (#249).
+
+## [0.3.0] - 2026-09-09
+
 - `neuralbench`: added the `emg pose` task — 20-joint hand-angle trajectory regression on EMG2Pose (NEMAR NM000281), in the paper's regression setting (#229).
 - `neuralfetch`: read EMG2Pose paper split metadata from the BIDS `scans.tsv`, falling back to the upstream `emg2pose_metadata.csv` on NEMAR releases that omit those columns (#229).
-- `neuralbench`: `Data.min_finite_target_fraction` drops windows labelled over less than that fraction of their frames. `emg pose` sets it to 1.0 — emg2pose's `skip_ik_failures`, so an IK failure removes the window from every split rather than being masked out frame by frame. A lower value trades that parity for data, since `BrainModule` masks unlabelled frames out of the loss and the metrics regardless (#229).
-- `neuralbench`: `emg pose` tests on EMG2Pose's held-out user+stage set alone. The paper scores its three test sets (held-out users, stages, and both) separately, so a score pooled over their union is comparable to none of them; user+stage is the paper's hardest and most deployment-like scenario. `val` keeps both of its scenarios (#229).
+- `neuralbench`: `Data.min_finite_target_fraction` drops windows labelled over less than that fraction of their frames. `emg pose` sets 1.0 to match emg2pose's `skip_ik_failures`; a lower value trades that parity for data (#229).
+- `neuralbench`: `emg pose` tests on EMG2Pose's held-out user+stage set alone, the paper's hardest scenario; the paper scores its three test sets separately, so a pooled score matches none of them. `val` keeps both scenarios (#229).
 - `neuralbench`: multi-GPU runs reach the test phase — reading the best checkpoint to report `best_epoch` and deleting it on exit are rank-zero only, so the other ranks no longer fail on a checkpoint they never wrote or strip it before rank zero tests with it (#229).
-- `neuraltrain`/`neuralbench`: `BandRotationConfig` wraps braindecode's `BandRotation`, and `Experiment.augmentation` applies an augmentation to the neuro input during training only. `emg pose` rotates its 16-electrode band by one position, emg2pose's `RotationAugmentation` (#229).
-- `neuralbench`: `emg pose` trains on joint angles in radians, as emg2pose does, instead of scaling them to degrees. The paper's degrees are a reporting-time conversion; applying it to the target made every model's output layer travel 57x further for the same L1 gradient, and left `VEMG2Pose` unable to fit its training set because its `output_scalar` assumes radians. Reported metrics are now radians — multiply by 57.29578 to compare with the paper (#229).
+- `neuraltrain`/`neuralbench`: `BandRotationConfig` wraps braindecode's `BandRotation`, and `Experiment.augmentation` applies an augmentation to the neuro input during training only. `emg pose` rotates its band by one position (#229).
+- `neuralbench`: `emg pose` trains on joint angles in radians, as emg2pose does, rather than degrees — scaling the target inflated gradients and left `VEMG2Pose` unable to fit. Reported metrics are radians; multiply by 57.29578 to compare with the paper (#229).
 - `neuralbench`: the `emg pose` extractors read from the disk cache instead of also holding recordings in RAM — exca's RAM cache never evicts, so a full run grew past 250 GB and was OOM-killed (#229).
 - `neuralbench`: `test/mae` is the headline metric for `L1Loss`, so `--plot-cached` aggregates regression tasks such as `emg pose` instead of raising `KeyError` (#229).
-- `neuralbench`: the EEG `reaction_time` task (Shirazi2024/HBN) now triggers on the contrast-change `Stimulus` instead of the `Keystroke`, so its window is 0.5 s to 2.5 s after stimulus onset as specified by the EEG Foundation Challenge 2025 (arXiv:2506.19141). The previous trigger put the whole window *after* the button press. Reported numbers for this task change and are not comparable with earlier runs (#205).
-- `neuralfetch`: `Shirazi2024Hbn` contrast-change-detection trials now take `reaction_time` and `is_correct` from the first button press at or after the target onset, matching the challenge's own trial table (`eegdash.hbn.build_trial_table`). Both previously came from `groupby("trial_num").max()`, which labelled the ~8% of trials carrying several post-target presses with the last one instead of the response (0.93 s late on average, up to 2.5 s). Cached events for this study are stale: delete the `name=Shirazi2024Hbn*` folders under your `CACHE_DIR` to pick the change up (#205).
-- `neuralfetch`: raised the MOABB requirement to `>=1.7.1` and removed every workaround it makes redundant — the `BNCI2020_002` reshape override, the `MartinezCagigal2023` `stim_trial` monkeypatch and the MAMEM Figshare listing cache (MOABB #1068); the `BNCI2025_001` non-EEG channel retyping, the `Cattan2019_PHMD` montage, the `Haufe2011Eeg` loader reimplementation and the `Cattan2019Passive` duration override (MOABB #1161); plus a dead `Stieger2021Continuous._get_dataset`. `Reichert2020Impact._mat_path` now asks MOABB where the file is instead of hardcoding its layout. Two behaviour changes to note: `Haufe2011Eeg` events now carry MOABB's `interval[0] = -0.5 s` shift (the p3 task's `start` moves 0.3 → 0.8 to compensate), and `Cattan2019Passive` stimulus durations become MOABB's 60 s blocks instead of ~80 s marker-to-marker spacing. Also note MOABB 1.6.0 converts `MartinezCagigal2023Checker`/`MartinezCagigal2023Pary` EEG from microvolts to volts, and `Lee2019_*` now exposes both sessions (`num_timelines` doubled and `data_shape` changed for the three `Lee2019Eeg*` studies; delete any existing `timelines.csv` for them). The `>=1.7.1` floor matters on hosts behind an HTTP proxy: up to and including 1.7.0, `get_data()` let `httpx.ProxyError` from the NEMAR sourcedata prefetch escape, so any NEMAR-registered dataset failed to load even when already on disk (MOABB #1171).
+- `neuralbench`: the EEG `reaction_time` task triggers on the contrast-change `Stimulus`, not the `Keystroke`, so its window is 0.5–2.5 s after stimulus onset per the EEG Foundation Challenge 2025 (arXiv:2506.19141). Numbers are not comparable with earlier runs (#234).
+- `neuralfetch`: `Shirazi2024Hbn` takes `reaction_time` and `is_correct` from the first button press at or after target onset rather than the last, which mislabelled ~8% of trials. Delete the `name=Shirazi2024Hbn*` folders under your `CACHE_DIR` (#234).
+- `neuralfetch`: raised the MOABB floor to `>=1.7.1`, dropping the workarounds it makes redundant (MOABB #1068, #1161) and fixing NEMAR dataset loads behind an HTTP proxy (MOABB #1171) (#226).
+- `neuralfetch`: MOABB 1.7.1 changes data — `Haufe2011Eeg` events shift by -0.5 s, `Cattan2019Passive` durations become 60 s blocks, `MartinezCagigal2023*` rescales to volts, and `Lee2019Eeg*` exposes both sessions, so delete their `timelines.csv` (#226).
+- `neuralset`: `Study._body()` resolves `timelines.infra` on use rather than at construction, so a `Study` inside a `Chain` keeps its per-timeline backend instead of silently loading timelines sequentially and uncached (#240).
+- `neuralset`: `HuggingFacePCA` stages under a deterministic folder, clears it once the PCA is cached, and releases the extractor cache in a `finally`. Killed runs used to leave unbounded `HF-PCA-tmp*` folders and open fds over NFS (#239).
+- `neuralset`: added the `ClipVersatileDiffusion` image extractor (#246).
+- `neuralset`: `HuggingFaceMixin` accepts `token_aggregation="cat"` (#245).
+- `neuralset`: `Segmenter.padding` accepts `"auto"`, padding segments to `max(segments.duration)` as `SegmentDataset.pad_duration` already did (#244).
+- `neuralset`: `AggregatedExtractor` accepts static extractors configured with a non-zero frequency — streams are classified by frequency rather than by inheritance — and takes the common frequency as its own (#244).
+- `neuralset`: lightweight extractors wrapping a Slurm extractor (such as `ChannelPositions` around `MneRaw`) are prepared once the futures finish, instead of recursively launching duplicate work for the same cache uid (#244).
+- `neuralset`: `channel_order` is excluded from `MneRaw`'s cache uid, so reordering channels reuses the cached extraction (#244).
+- `neuralset`: fixed the channel-mapping docstring to match the current dimensions (#232).
+- `neuraltrain`: added an `ssl_example` MAE pretraining project and a training docs page, for the EEG/EMG Foundation Challenge 2026 starter kit (#237).
+- `neuraltrain`: `neuraltrain.models` exports `BaseBrainModelConfig` and `BrainModelBuildContext`, and `ChannelMerger` is a `BaseBrainModelConfig` (#244).
+- `neuraltrain`: W&B login runs on rank zero only. Under Slurm/srun every rank called `wandb.login`, and concurrent attempts to start the local authentication service could race and fail before Lightning's rank-zero guard applied (#244).
+- `neuralfetch`: added a `Gin` download backend for gin.g-node.org, which registers annex URLs and pulls with `git annex get --from=web` — plain `datalad get` leaves only pointer files there. Same arguments as `Datalad`, plus `branch=` (#244).
+- `neuralfetch`: `Figshare` verifies each file's MD5, downloads through a `.part` file, and retries on mismatch. `skip_existing` re-checks files already on disk, repairing datasets that an expired URL had corrupted with an error page (#238).
+- `neuralfetch`: every `Study._download` declares `overwrite`, so `neuralfetch download <Study>` behaves uniformly across studies (#222).
+- `neuralfetch`: OpenNeuro downloads with `overwrite=False` skip a target that already holds data instead of letting openneuro-py re-verify and repair it in place (#224).
+- `neuralbench`: adaptation strategies for foundation models — linear probe, attentive probe, LoRA and full fine-tuning — selectable per model, with adaptation-aware plots and tables. Requires `peft>=0.13` and `transformers>=4.43` (#230).
+- `neuralbench`: added a Bring-Your-Own-Model evaluation API, with an `03_evaluate_your_own_model` quickstart tutorial; `labram` and `reve` are reworked onto it (#241).
+- `neuralbench`: `get_default_dataloaders` returns a task's dataloaders standalone, without running an experiment. Accepts dataset variants and rejects unknown datasets and task aggregates (#209, #228).
+- `neuralbench`: dropped the `torch==2.6` pin for `torch>=2.5.1`, matching `neuralset` and `neuraltrain`. The CLI warns instead when a visible GPU's CUDA capability is absent from the installed torch's arch list, naming the reinstall that fixes it (#236).
+- `neuralbench`: depends on `neuralfetch[quickstart]` rather than carrying its own `datasets` extra, so the study catalog and its download backends arrive together (#233).
+- `neuralbench`: `ModelEntry` carries backbone and pretraining-corpus descriptions (#242).
+- `neuralbench`: `RegressionBinSampler` edge binning matches `BinnedMAE` (#183).
+- `neuralbench`: task configs take the cluster from `~/.neuralbench/config.json` instead of hardcoding it (#225).
+- `neuralbench`: dropped competition track 5 (foundation-model transfer) from the Biosignal Challenge 2026 starter kit (#227).
+- docs: the NeuralSet paper is cited as arXiv:2605.03169 rather than a preprint PDF (#197).
+
+## [0.2.3] - 2026-07-31
+
 - `neuralset`: `Study.version` is now a top-level field; `infra_timelines` → `timelines.infra` (Step syntax, defaults to `ProcessPool`). Requires exca ≥ 0.5.27. (#194)
+- `neuralset`: fMRI ROI support — `CiftiRoiProjector` for cortical Glasser and subcortical ROIs, Glasser fsaverage ROI projection, and ROI query/selection options (#185, #210, #211, #215).
+- `neuralset`: support for Algonauts CIFTI fMRI derivatives (#191).
+- `neuralset`: unified HuggingFace model loading, refactored the visual extractors, and added model prefetching (#102, #135, #145, #151).
+- `neuralset`: `HuggingFaceText` truncates context to the model's positional capacity (#121).
+- `neuralset`: added `TimedArray.copy(**changes)` (#206).
+- `neuralset`: added an `on_trigger_overlap` guard to `list_segments` (#115).
+- `neuralset`: `ensure_finite` is honored when other cleaning is disabled (#164).
+- `neuralset`: duration calculation accounts for precision (#138).
 - `neuralset`: fixed `Mne2013Sample`/`Fake2025Meg` re-downloading MNE sample data on `run()` after `download()` (#157).
+- `neuraltrain`: declared `exca` as a runtime dependency (#156).
 - `neuralfetch`: added `Allen2022MassiveRaw` (BIDS/deepprep NSD variant) and gated NSD downloads behind `NSD_ACCEPT_LICENCE` (#105).
-- `neuralbench`: added `CLUSTER` key to `~/.neuralbench/config.json` (`null` = local, `"auto"` = SLURM auto-detect, `"slurm"` = always SLURM); honored by `--prepare` (#118).
+- `neuralfetch`: added the `Levy2026Noninvasive` (SpanishBCBL/DECOMEG) typing study (#201).
+- `neuralfetch`: combined the THINGS fMRI and MEG studies into `hebart2023things` (#131).
+- `neuralfetch`: aligned study file names with their class names (#119, #186).
+- `neuralfetch`: fixed `Brennan2019Hierarchical` loading for the v2 (bn999738r) release (#175).
+- `neuralbench`: added the EMG `qwerty` CTC keystroke-decoding task (#50).
+- `neuralbench`: added a `CLUSTER` key to `~/.neuralbench/config.json` (`null` = local, `"auto"` = SLURM auto-detect, `"slurm"` = always SLURM); honored by `--prepare` (#118).
 - `neuralbench`: blank `WANDB_HOST` now disables W&B logging (previously `wandb.login` was still called) (#118).
+- `neuralbench`: prediction logging (#126).
+- `neuralbench`: added a `probe_layer` field to `DownstreamWrapper` for layer-wise linear probing (#83).
+- `neuralbench`: support for the `build_from_context` brain-model build API (#207).
+
+## [0.2.2] - 2026-05-26
+
+- `neuralset`: extended `ChunkEvents` to fMRI and `MneRaw` inputs (#81).
+- `neuralset`: single aggregation allows non-overlapping events (#95).
+- `neuraltrain`: `dilation_growth` accepts floats (#80).
+- `neuralfetch`: `StudyInfo`-powered dataset explorer in the docs (#76, #78, #91).
+- `neuralfetch`: switched the Excel engine from openpyxl to calamine (~6× faster) in the Nieuwland and Chen studies (#69).
+- `neuralfetch`: replaced deprecated `pick_types()` with `pick()` in `Nieuwland2018Large` (#68).
+- `neuralfetch`: fixed the digest type for SHA-256 in `download.py` (#85).
+- `neuralbench`: added the sleep-onset prediction task (#89).
+- `neuralbench`: refactored RNG handling in `Data`, and seeded before data setup and model construction (#70, #74).
 
 ## [0.2.1] - 2026-05-13
 

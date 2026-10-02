@@ -157,7 +157,6 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
     )
     def _get_data(self, events: list[evts.Video]) -> tp.Iterator[nsbase.TimedArray]:
         # read all videos of the events
-        logging.getLogger("neuralset").setLevel(logging.DEBUG)
         self._warn_if_config_num_frames_mismatch()
         freq = events[0].frequency if self.frequency == "native" else self.frequency
         T = 1 / freq if self.clip_duration is None else self.clip_duration

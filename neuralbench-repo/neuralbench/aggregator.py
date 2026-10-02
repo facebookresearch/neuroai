@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import typing as tp
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -171,12 +172,16 @@ class BenchmarkAggregator(ns.BaseModel):
     @staticmethod
     def _process_one_experiment(
         experiment: "Experiment", cached_only: bool
-    ) -> tuple[dict[str, tp.Any] | None, str, str]:
-        """Process one experiment, returning ``(result_or_None, task, model)``."""
+    ) -> tuple[dict[str, tp.Any] | None, str, str, str]:
+        """Process one experiment, returning ``(result_or_None, task, model, status)``.
+
+        The status distinguishes an experiment that errored out from one that
+        simply has not run yet, which otherwise look identical in the table.
+        """
         task = experiment.task_name
         model = experiment.brain_model_name
-        if cached_only and experiment.infra.status() != "completed":
-            return None, task, model
+        if cached_only and (status := experiment.infra.status()) != "completed":
+            return None, task, model, status
         out = experiment.run()
         out["task_name"] = experiment.task_name
         study = experiment.data.study
@@ -189,7 +194,7 @@ class BenchmarkAggregator(ns.BaseModel):
         out["loss"] = {"name": type(experiment.loss).__name__}
         out["seed"] = experiment.seed
         out["eval_mode"] = _infer_eval_mode(experiment)
-        return out, task, model
+        return out, task, model, "completed"
 
     def _collect_results(self, cached_only: bool = False) -> list[dict[str, tp.Any]]:
         """Gather experiment results, optionally skipping uncached ones.
@@ -201,49 +206,48 @@ class BenchmarkAggregator(ns.BaseModel):
             return self._collect_results_parallel()
         return self._collect_results_sequential(cached_only=False)
 
-    def _collect_results_sequential(
-        self, cached_only: bool = False
+    def _tally(
+        self, outcomes: tp.Iterable[tuple[dict[str, tp.Any] | None, str, str, str]]
     ) -> list[dict[str, tp.Any]]:
+        """Keep the results out of *outcomes*, tabling what was skipped."""
         results: list[dict[str, tp.Any]] = []
-        total: dict[tuple[str, str], int] = {}
-        skipped: dict[tuple[str, str], int] = {}
-        for experiment in self.experiments:
-            out, task, model = self._process_one_experiment(experiment, cached_only)
-            key = (task, model)
-            total[key] = total.get(key, 0) + 1
+        total: Counter[tuple[str, str]] = Counter()
+        skipped: Counter[tuple[str, str]] = Counter()
+        failed: Counter[tuple[str, str]] = Counter()
+        for out, task, model, status in outcomes:
+            total[task, model] += 1
             if out is None:
-                skipped[key] = skipped.get(key, 0) + 1
+                skipped[task, model] += 1
+                if status == "failed":
+                    failed[task, model] += 1
             else:
                 results.append(out)
         if skipped:
-            print_skip_table(total, skipped)
+            print_skip_table(total, skipped, failed)
         return results
 
+    def _collect_results_sequential(
+        self, cached_only: bool = False
+    ) -> list[dict[str, tp.Any]]:
+        return self._tally(
+            self._process_one_experiment(exp, cached_only) for exp in self.experiments
+        )
+
     def _collect_results_parallel(self) -> list[dict[str, tp.Any]]:
-        results: list[dict[str, tp.Any]] = []
-        total: dict[tuple[str, str], int] = {}
-        skipped: dict[tuple[str, str], int] = {}
         n_workers = min(self.collect_max_workers, len(self.experiments))
         with ThreadPoolExecutor(max_workers=n_workers) as pool:
-            futures = {
-                pool.submit(self._process_one_experiment, exp, True): exp
+            futures = [
+                pool.submit(self._process_one_experiment, exp, True)
                 for exp in self.experiments
-            }
-            for future in tqdm(
-                as_completed(futures),
-                total=len(futures),
-                desc="Collecting cached results",
-            ):
-                out, task, model = future.result()
-                key = (task, model)
-                total[key] = total.get(key, 0) + 1
-                if out is None:
-                    skipped[key] = skipped.get(key, 0) + 1
-                else:
-                    results.append(out)
-        if skipped:
-            print_skip_table(total, skipped)
-        return results
+            ]
+            return self._tally(
+                future.result()
+                for future in tqdm(
+                    as_completed(futures),
+                    total=len(futures),
+                    desc="Collecting cached results",
+                )
+            )
 
     def _save_computational_stats(self, results: list[dict[str, tp.Any]]) -> Path:
         """Write per-experiment computational stats to JSON for later analysis."""
@@ -270,6 +274,10 @@ class BenchmarkAggregator(ns.BaseModel):
             json.dump(stats, f, indent=2)
         LOGGER.info("Saved computational stats to %s", out_path)
         return out_path
+
+    def collect(self, cached_only: bool = True) -> list[dict[str, tp.Any]]:
+        """Gather results, without the plots, tables and stats files :meth:`run` writes."""
+        return self._collect_results(cached_only=cached_only)
 
     def run(self, cached_only: bool = False) -> list[dict[str, tp.Any]]:
         results = self._collect_results(cached_only=cached_only)

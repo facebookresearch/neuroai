@@ -221,6 +221,7 @@ class _BaseMoabb(studies.Study):
                     ds = self._get_dataset()
                     rows: list[dict[str, tp.Any]] = []
                     failed_subjects: list[tp.Any] = []
+                    last_error: Exception | None = None
                     for subject in ds.subject_list:
                         try:
                             subj_data = ds.get_data(
@@ -233,6 +234,7 @@ class _BaseMoabb(studies.Study):
                                 f"{self.aliases[0]}: {e}"
                             )
                             failed_subjects.append(subject)
+                            last_error = e
                             continue
                         for session, runs in subj_data[subject].items():
                             for run in runs:
@@ -250,9 +252,14 @@ class _BaseMoabb(studies.Study):
                         )
 
                 timelines = pd.DataFrame(rows)
-                assert not timelines.empty, (
-                    f"Failed to create timelines.csv at {timeline_path}"
-                )
+                if timelines.empty:
+                    raise RuntimeError(
+                        f"{timeline_path} not written: none of the "
+                        f"{len(ds.subject_list)} subject(s) of "
+                        f"{self.aliases[0]} could be read "
+                        f"({len(failed_subjects)} failed; the last error is "
+                        "chained below, and each is logged above)"
+                    ) from last_error
                 timelines.to_csv(timeline_path, index=False)
                 logger.info(
                     f"Downloaded dataset to {dl_path} "

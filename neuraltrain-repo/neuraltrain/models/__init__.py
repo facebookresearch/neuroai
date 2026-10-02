@@ -4,6 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+# flake8: noqa: F401
+# ruff: noqa: F401
+
 # Import modules to ensure configs are registered with DiscriminatedModel
 from . import bendr as _bendr  # noqa: F401
 from . import common as _common  # noqa: F401
@@ -16,11 +19,14 @@ from . import green as _green  # noqa: F401
 from . import labram as _labram  # noqa: F401
 from . import linear as _linear  # noqa: F401
 from . import luna as _luna  # noqa: F401
+from . import mae as _mae  # noqa: F401
 from . import preprocessor as _preprocessor  # noqa: F401
 from . import reve as _reve  # noqa: F401
 from . import simpleconv as _simpleconv  # noqa: F401
 from . import simplerconv as _simplerconv  # noqa: F401
 from . import sit as _sit  # noqa: F401
 from . import transformer as _transformer  # noqa: F401
+from .base import BaseBrainModelConfig as BaseBrainModelConfig
 from .base import BaseModelConfig as BaseModelConfig  # used for configs
+from .base import BrainModelBuildContext as BrainModelBuildContext
 from .simpleconv import SimpleConvTimeAgg as SimpleConvTimeAgg

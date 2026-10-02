@@ -77,8 +77,6 @@ def _clean_text(text: str) -> str:
 
 
 class _Bel2026PetitBase(study.Study):
-    requirements: tp.ClassVar[tuple[str, ...]] = ("openneuro-py",)
-
     task: tp.ClassVar[str]
 
     def model_post_init(self, log__: tp.Any) -> None:

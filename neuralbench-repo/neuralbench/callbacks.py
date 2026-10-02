@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import copy
 import logging
 import typing as tp
 import warnings
@@ -32,6 +33,72 @@ if tp.TYPE_CHECKING:
     from neuraltrain.utils import StandardScaler
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ResetPerTimeline(Callback):
+    """Reset the model's state at each new timeline, on a fresh model copy in evaluation.
+
+    A timeline starts at each batch whose set of timelines differs from the
+    previous batch's, or that opens an epoch or evaluation pass. With windows in
+    timeline then time order and one window per batch (batch size 1, no
+    shuffling), this is exactly each new timeline, seen forward in time. With
+    larger or shuffled batches it fires more often, never less: shuffled
+    training batches almost always start a new timeline.
+
+    At each new timeline, the model's optional ``reset_state()`` is called.
+    During validation and test, it is called on a fresh copy of the model as it
+    was when evaluation began, so nothing the model changes while predicting
+    (weights, buffers, attributes) carries over to the next timeline. The
+    original model is restored when evaluation ends, so training and
+    checkpoints never see the copies. A model that carries state across
+    training batches must detach it from the autograd graph.
+    """
+
+    def __init__(self) -> None:
+        self.original: nn.Module | None = None
+        # stage ("train" or "eval") -> (dataloader_idx, timelines) of its last batch
+        self.previous: dict[str, tuple[int, frozenset[str]]] = {}
+
+    @staticmethod
+    def _reset_state(model: nn.Module) -> None:
+        reset_state = getattr(model, "reset_state", None)
+        if reset_state is not None:
+            reset_state()
+
+    def _is_new_timeline(
+        self, stage: str, batch, batch_idx: int, dataloader_idx: int
+    ) -> bool:
+        key = (dataloader_idx, frozenset(s.timeline for s in batch.segments))
+        is_new = batch_idx == 0 or key != self.previous.get(stage)
+        self.previous[stage] = key
+        return is_new
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        if self._is_new_timeline("train", batch, batch_idx, 0):
+            self._reset_state(pl_module.model)
+
+    def on_test_start(self, trainer, pl_module):
+        self.original = pl_module.model
+
+    def on_validation_start(self, trainer, pl_module):
+        self.on_test_start(trainer, pl_module)
+
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        if self._is_new_timeline("eval", batch, batch_idx, dataloader_idx):
+            pl_module.model = copy.deepcopy(self.original)
+            self._reset_state(pl_module.model)
+
+    def on_validation_batch_start(
+        self, trainer, pl_module, batch, batch_idx, dataloader_idx=0
+    ):
+        self.on_test_batch_start(trainer, pl_module, batch, batch_idx, dataloader_idx)
+
+    def on_test_end(self, trainer, pl_module):
+        pl_module.model = self.original
+        self.original = None
+
+    def on_validation_end(self, trainer, pl_module):
+        self.on_test_end(trainer, pl_module)
 
 
 def _set_plot_theme() -> None:

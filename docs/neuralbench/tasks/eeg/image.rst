@@ -7,6 +7,14 @@ Image decoding
 | **Objective**: :bdg-dark:`Retrieval`
 | **Split**: Predefined
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This task backs :doc:`Track 1 -- EEG-to-Image
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track1_eeg_to_image>`
+   of the challenge, whose page has the commands, timings, and competition
+   data notes for it.
+
 Usage
 ~~~~~
 
@@ -36,7 +44,7 @@ Additional Datasets
 The following additional EEG image-decoding datasets can also be used with this task:
 
 * ``Xu2024Alljoined`` (Alljoined1) -- 8 participants, 64-channel EEG at 512 Hz, viewing static images from the Natural Scenes Dataset (NSD) [Xu2024Alljoined]_.
-* ``Xu2025Alljoined`` (Alljoined-1.6M) -- 20 participants viewing static images in EEG [Xu2025Alljoined]_. Source: `Hugging Face <https://huggingface.co/datasets/Alljoined/Alljoined-1.6M>`_.
+* ``Xu2025Alljoined`` (Alljoined-1.6M) -- 20 participants viewing static images in EEG [Xu2025Alljoined]_. Source: `NEMAR <https://doi.org/10.82901/nemar.nm000134>`_.
 * ``Grootswagers2022Human`` (THINGS-EEG1) -- 50 participants, 64-channel EEG at 1000 Hz, viewing rapid serial visual presentation (RSVP) streams covering all 1,854 THINGS object concepts; uses the dataset's predefined train/test split [Grootswagers2022]_.
 
 To run with an alternate dataset:
