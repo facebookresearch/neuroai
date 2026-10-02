@@ -678,6 +678,11 @@ class DownstreamWrapperModel(nn.Module):
     model -> output key selection -> aggregation -> probe.
     """
 
+    def reset_state(self) -> None:
+        """Call the backbone's ``reset_state()``, when it has one."""
+        if hasattr(self.wrapped_model, "reset_state"):
+            tp.cast(tp.Callable[[], None], self.wrapped_model.reset_state)()
+
     def __init__(
         self,
         model: nn.Module,

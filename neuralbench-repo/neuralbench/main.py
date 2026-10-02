@@ -51,6 +51,7 @@ from .callbacks import (
     PlotRegressionScatter,
     PlotRegressionVectors,
     RecordingLevelEval,
+    ResetPerTimeline,
     TestFullRetrievalMetrics,
     WindowPredictionCollector,
 )
@@ -96,6 +97,8 @@ class Experiment(BaseExperiment):
     # When True, raw per-window test predictions/targets are folded into the
     # cached ``run`` result (see ``WindowPredictionCollector``).
     save_test_predictions: bool = False
+    # See ``ResetPerTimeline``.
+    reset_per_timeline: bool = False
 
     # Weights & Biases
     csv_config: CsvLoggerConfig | None = None
@@ -270,6 +273,8 @@ class Experiment(BaseExperiment):
     def setup_trainer(self, is_test: bool = False) -> pl.Trainer:
         """Create callbacks and setup Trainer."""
         callbacks: list[Callback] = []
+        if self.reset_per_timeline:
+            callbacks.append(ResetPerTimeline())
         if "confusion_matrix" in [metric.log_name for metric in self.metrics]:
             labels: list[str] | None = None
             if isinstance(self.data.target, ns.extractors.LabelEncoder):

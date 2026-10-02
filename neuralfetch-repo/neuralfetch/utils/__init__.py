@@ -8,7 +8,7 @@
 
 The public helpers are re-exported here so ``from neuralfetch.utils import ...``
 keeps working. The BIDS exporter and download runner live in the
-:mod:`neuralfetch.utils.bids` and :mod:`neuralfetch.utils.runner` submodules and
+:mod:`neuralfetch.utils.bids.export` and :mod:`neuralfetch.utils.runner` submodules and
 are imported lazily (they pull in heavy dependencies).
 """
 

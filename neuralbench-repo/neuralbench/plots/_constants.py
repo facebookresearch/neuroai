@@ -113,6 +113,7 @@ TASK_DISPLAY_NAMES: dict[str, str] = {
     "sleep_stage": "Sleep stage",
     "sleep_arousal": "Sleep arousal",
     "sleep_onset": "Sleep onset",
+    "_sleep_onset_stream": "Sleep onset (stream)",
     "reaction_time": "Reaction time",
 }
 
@@ -298,6 +299,7 @@ TASK_CATEGORIES: dict[str, list[str]] = {
     "Sleep": [
         "sleep_arousal",
         "sleep_onset",
+        "_sleep_onset_stream",
         "sleep_stage",
     ],
     "Phenotyping": [

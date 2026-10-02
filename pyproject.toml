@@ -1,7 +1,10 @@
 # this is used for the pre-commit hooks
 # and when running from the root folder (eg: in the CI)
 
+# awscli (neuralfetch[quickstart]) pins docutils<0.17, but sphinx
+# (neuralset[dev]) needs docutils>=0.20
 [tool.uv]
+override-dependencies = ["docutils>=0.20"]
 # Ignore releases younger than this to let compromised uploads get flagged.
 exclude-newer = "3 days"
 

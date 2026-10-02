@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Tests for neuralfetch.utils.bids (BidsExporter / study_to_bids)."""
+"""Tests for neuralfetch.utils.bids.export (BidsExporter / study_to_bids)."""
 
 from pathlib import Path
 
@@ -113,7 +113,7 @@ def _run_study_to_bids(
     extra_rows: list[dict] | None = None,
 ) -> Path:
     """Call ``study_to_bids`` with a mocked study backed by a real saved FIF file."""
-    from neuralfetch.utils.bids import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     raw = _make_fake_raw(device)
     fif_path = tmp_path / "source_fake_raw.fif"
@@ -143,7 +143,7 @@ def _run_study_to_bids(
 
 
 def test_annotation_descriptions() -> None:
-    from neuralfetch.utils.bids import _annotation_descriptions
+    from neuralfetch.utils.bids.export import _annotation_descriptions
 
     df = pd.DataFrame(
         [
@@ -171,7 +171,7 @@ def test_annotation_descriptions() -> None:
 
 
 def test_study_to_bids_invalid_device(tmp_path: Path) -> None:
-    from neuralfetch.utils.bids import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     study = _make_study(pd.DataFrame(), path=tmp_path)
     with pytest.raises(ValueError, match="not supported"):
@@ -254,6 +254,103 @@ def test_study_to_bids_stimulus_files_copied(tmp_path: Path) -> None:
     stimuli_dir = bids_root / "stimuli"
     assert stimuli_dir.exists(), "stimuli/ directory should be created"
     assert (stimuli_dir / "fake_image.png").exists(), "image file should be copied"
+
+
+def _stim_row(etype: str, filepath: Path, start: float) -> dict:
+    return {
+        "type": etype,
+        "start": start,
+        "duration": 0.2,
+        "timeline": "tl_0",
+        "subject": "01",
+        "filepath": str(filepath),
+        "frequency": 250.0,
+        "session": None,
+        "task": "auditory",
+        "run": None,
+    }
+
+
+def _events_tsv(bids_root: Path) -> pd.DataFrame:
+    (fname,) = bids_root.rglob("*_events.tsv")
+    return pd.read_csv(fname, sep="\t")
+
+
+def test_study_to_bids_fnirs_rejected(tmp_path: Path) -> None:
+    from neuralfetch.utils.bids.export import study_to_bids
+
+    study = _make_study(pd.DataFrame(), path=tmp_path)
+    with pytest.raises(ValueError, match="not supported"):
+        study_to_bids(study, tmp_path, device="Fnirs", task="task")
+
+
+def test_study_to_bids_audio_stimulus_exported(tmp_path: Path) -> None:
+    wav = tmp_path / "stim" / "tone.wav"
+    wav.parent.mkdir()
+    wav.write_bytes(b"RIFF")
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    _run_study_to_bids(bids_root, extra_rows=[_stim_row("Audio", wav, 0.2)])
+
+    assert (bids_root / "stimuli" / "tone.wav").exists()
+    # BIDS stim_file is relative to the stimuli/ directory
+    assert "tone.wav" in _events_tsv(bids_root)["stim_file"].tolist()
+
+
+def test_study_to_bids_same_basename_stimuli_kept_apart(tmp_path: Path) -> None:
+    """Distinct files sharing a basename are exported to distinct paths."""
+    srcs = []
+    for folder in ("a", "b"):
+        src = tmp_path / "stim" / folder / "img.png"
+        src.parent.mkdir(parents=True)
+        src.write_bytes(folder.encode())
+        srcs.append(src)
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    rows = [_stim_row("Image", src, 0.2 + 0.3 * i) for i, src in enumerate(srcs)]
+    _run_study_to_bids(bids_root, extra_rows=rows)
+
+    assert (bids_root / "stimuli" / "a" / "img.png").read_bytes() == b"a"
+    assert (bids_root / "stimuli" / "b" / "img.png").read_bytes() == b"b"
+    stim_files = set(_events_tsv(bids_root)["stim_file"].dropna())
+    assert {"a/img.png", "b/img.png"} <= stim_files
+
+
+def test_study_to_bids_colliding_timelines_get_distinct_runs(tmp_path: Path) -> None:
+    """Timelines differing only in a non-BIDS field are numbered as runs."""
+    from neuralfetch.utils.bids.export import study_to_bids
+
+    fif_path = tmp_path / "source_fake_raw.fif"
+    _make_fake_raw().save(str(fif_path), overwrite=True, verbose=False)
+    blocks = []
+    for block in range(2):
+        df = _make_fake_events(fif_path)
+        df["timeline"] = f"tl_block{block}"
+        df["block"] = block
+        blocks.append(df)
+    study = _make_study(pd.concat(blocks, ignore_index=True), path=tmp_path)
+    bids_root = tmp_path / "bids_out"
+    study_to_bids(study, bids_root, device="Eeg", task="auditory")
+
+    runs = sorted(p.name for p in bids_root.rglob("*_eeg.vhdr"))
+    assert runs == [
+        "sub-01_task-auditory_run-01_eeg.vhdr",
+        "sub-01_task-auditory_run-02_eeg.vhdr",
+    ]
+
+
+def test_study_to_bids_overwrite_refreshes_stimulus(tmp_path: Path) -> None:
+    src = tmp_path / "stim" / "img.png"
+    src.parent.mkdir()
+    src.write_bytes(b"old")
+    bids_root = tmp_path / "bids_out"
+    bids_root.mkdir()
+    rows = [_stim_row("Image", src, 0.2)]
+    _run_study_to_bids(bids_root, overwrite=True, extra_rows=rows)
+    src.write_bytes(b"new")
+    _run_study_to_bids(bids_root, overwrite=True, extra_rows=rows)
+
+    assert (bids_root / "stimuli" / "img.png").read_bytes() == b"new"
 
 
 def test_study_to_bids_subject_prefix_stripped(tmp_path: Path) -> None:

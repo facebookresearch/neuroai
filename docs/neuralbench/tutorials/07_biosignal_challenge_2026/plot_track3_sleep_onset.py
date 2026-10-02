@@ -79,10 +79,29 @@ reconstruction because a sparse wearable montage supports it poorly.
 # Where to find this task in NeuralBench
 # --------------------------------------
 #
-# The matching task in NeuralBench is
-# :doc:`/neuralbench/tasks/eeg/sleep_onset`.
+# NeuralBench has two versions of this task. **Use ``_sleep_onset_stream``
+# for the competition, in both phases.**
 #
-# - **CLI**: ``neuralbench eeg sleep_onset``
+# - ``_sleep_onset_stream`` scores each recording one 5 s window at a time,
+#   forward in time, as Codabench does, and its ``test/bmae`` is the warm-up
+#   leaderboard's measurement. Validation and test streams start at a random
+#   time before N2 onset, so the time since a stream began says little about
+#   the target, and a model's optional ``reset_state()`` is called on a fresh
+#   copy of the model at the start of each recording (see :doc:`Modifying the
+#   training loop </neuralbench/auto_examples/advanced/modify_training_loop>`).
+#   Validation stays batched; set ``data.val_batch_size: 1`` to select
+#   checkpoints on streams too, at several times the training cost. The
+#   leading underscore only keeps the task out of ``neuralbench eeg all``.
+# - :doc:`/neuralbench/tasks/eeg/sleep_onset` is the NeuralBench benchmark
+#   version: validation and test cover the last 20 minutes before N2 onset of
+#   every recording, each window scored independently. The baseline numbers
+#   in the :doc:`challenge overview <plot_overview>` come from it. Its scores
+#   are not comparable with ``_sleep_onset_stream``'s, as the test windows
+#   differ.
+#
+# Both versions share the data, split, target, loss and metrics:
+#
+# - **CLI**: ``neuralbench eeg _sleep_onset_stream``
 # - **Default dataset**: ``Kemp2000Analysis`` (Sleep-EDF Expanded,
 #   78 participants recorded over up to two nights each, 2 EEG
 #   channels, full polysomnography).
@@ -101,9 +120,9 @@ reconstruction because a sparse wearable montage supports it poorly.
 # metrics. Reading it is the fastest way to know exactly what the baseline
 # does.
 #
-# .. dropdown:: Show ``tasks/eeg/sleep_onset/config.yaml``
+# .. dropdown:: Show ``tasks/eeg/_sleep_onset_stream/config.yaml``
 #
-#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/sleep_onset/config.yaml
+#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/_sleep_onset_stream/config.yaml
 #       :language: yaml
 
 # %%
@@ -120,9 +139,8 @@ reconstruction because a sparse wearable montage supports it poorly.
 #
 # That 16-participant test partition *is* the current Codabench warm-up
 # evaluation set: the scorer runs on the same Sleep-EDF subset this split
-# produces at random state 33. A ``test/bmae`` here and a warm-up
-# leaderboard score are therefore the same measurement, which makes this
-# the one track where a local number should line up with the board.
+# produces at random state 33. A ``_sleep_onset_stream`` ``test/bmae`` and a
+# warm-up leaderboard score are therefore the same measurement.
 #
 # The sealed phase is a different story. Its Muse cohort mixes seen and
 # unseen sleepers, while this split holds every sleeper out, so the sealed
@@ -139,7 +157,7 @@ reconstruction because a sparse wearable montage supports it poorly.
 # **How to change it**, in increasing order of effort:
 #
 # - ``--dataset <name>`` merges
-#   ``tasks/eeg/sleep_onset/datasets/<name>.yaml`` over the base config.
+#   ``tasks/eeg/_sleep_onset_stream/datasets/<name>.yaml`` over the base config.
 #   That is how the two extra PSG corpora below are selected, and how the
 #   Muse corpus will be once it ships.
 # - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
@@ -165,37 +183,37 @@ reconstruction because a sparse wearable montage supports it poorly.
 #
 #    # 1. Download Sleep-EDF into DATA_DIR: ~7 GB, about 4 minutes on a fast
 #    #    link. One-off per machine, and safe to interrupt and re-run.
-#    neuralbench eeg sleep_onset --download
+#    neuralbench eeg _sleep_onset_stream --download
 #
 #    # 2. Preprocess into CACHE_DIR -- resample, filter, scale, and cut the
 #    #    153 whole-night recordings into 5 s windows once, so every later run
 #    #    reads the cache instead. No GPU needed. ~15 min for eegnet's cache
 #    #    and ~9 min for reve's, spread over 20 SLURM jobs. Note the cache
 #    #    (~18 GB) is larger than the raw download.
-#    neuralbench eeg sleep_onset --prepare
+#    neuralbench eeg _sleep_onset_stream --prepare
 #
 #    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
 #    #    seed, always in-process, so progress lands in your terminal. ~1 min
 #    #    on one V100 with the cache warm. Name the model you actually plan to
 #    #    run -- a bare --debug takes the config default, which is EEGNet.
-#    neuralbench eeg sleep_onset -m eegnet --debug
+#    neuralbench eeg _sleep_onset_stream -m eegnet --debug
 #
 #    # 4. Same check for the foundation model. The first build pulls REVE's
 #    #    weights from the HuggingFace Hub, which needs network access; doing
 #    #    it here rather than in a queued run keeps any failure in your
 #    #    terminal instead of a job log.
-#    neuralbench eeg sleep_onset -m reve --debug
+#    neuralbench eeg _sleep_onset_stream -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). ~6 min per seed, and
 #    #    the default grid is three seeds (concurrent on SLURM).
-#    neuralbench eeg sleep_onset -m eegnet
+#    neuralbench eeg _sleep_onset_stream -m eegnet
 #
 #    # 6. Full baseline -- foundation model (REVE), fine-tuned end to end.
 #    #    ~8 min per seed. ~69M parameters against EEGNet's ~1.5k, all of them
 #    #    trainable here, so this one wants a datacentre GPU rather than a
 #    #    laptop; it also preprocesses at 200 Hz against the 120 Hz default,
 #    #    warming a second cache.
-#    neuralbench eeg sleep_onset -m reve
+#    neuralbench eeg _sleep_onset_stream -m reve
 #
 # :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
 # fallback -- ``--debug`` included.
@@ -219,8 +237,8 @@ reconstruction because a sparse wearable montage supports it poorly.
 #
 #    from neuralbench import check_model, evaluate_model
 #
-#    print(check_model(my_model, "eeg", "sleep_onset"))  # shapes only, seconds
-#    scores = evaluate_model(my_model, "eeg", "sleep_onset", name="my-fm", debug=True)
+#    print(check_model(my_model, "eeg", "_sleep_onset_stream"))  # shapes only, seconds
+#    scores = evaluate_model(my_model, "eeg", "_sleep_onset_stream", name="my-fm", debug=True)
 #
 # See :doc:`Evaluating your own model
 # </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>` for what
@@ -255,16 +273,16 @@ reconstruction because a sparse wearable montage supports it poorly.
 # .. code-block:: bash
 #
 #    # Sleep-EDF Expanded (the default), ~7 GB raw + ~18 GB cache
-#    neuralbench eeg sleep_onset
+#    neuralbench eeg _sleep_onset_stream
 #
 #    # PhysioNet/CinC Challenge 2018: 994 labelled subjects, by far the most
 #    # sleepers, so the best stress test of cross-user behaviour at the scale
 #    # the Muse training set will have. Also by far the largest: ~285 GB raw
 #    # plus ~40 GB of cache.
-#    neuralbench eeg sleep_onset --dataset ghassemi2018you
+#    neuralbench eeg _sleep_onset_stream --dataset ghassemi2018you
 #
 #    # HMC Sleep Staging: 151 clinical whole-night recordings, ~17 GB raw
-#    neuralbench eeg sleep_onset --dataset alvarez2022haaglanden
+#    neuralbench eeg _sleep_onset_stream --dataset alvarez2022haaglanden
 #
 # Once the Muse study is registered, switching is a single
 # ``data.study.source.name: Interaxon2026Muse`` override (or

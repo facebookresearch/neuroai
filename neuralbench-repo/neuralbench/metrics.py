@@ -26,11 +26,12 @@ def _assign_bins(targets: torch.Tensor, bin_edges: Sequence[float]) -> torch.Ten
 
     Out-of-range targets land in the end bins; callers mask them separately.
     """
-    inner_edges = torch.as_tensor(
-        list(bin_edges)[1:-1], device=targets.device, dtype=targets.dtype
-    )
-    # `right` is inverted w.r.t. numpy.searchsorted's `side`: right=True gives [lo, hi).
-    return torch.bucketize(targets, inner_edges, right=True)
+    # Compared against Python floats: an edge tensor would be a blocking
+    # host-to-device copy on every metric update.
+    bins = torch.zeros_like(targets, dtype=torch.long)
+    for edge in list(bin_edges)[1:-1]:
+        bins += targets >= edge
+    return bins
 
 
 class BinnedMAE(torchmetrics.Metric):
@@ -91,10 +92,9 @@ class BinnedMAE(torchmetrics.Metric):
         e = (preds.flatten().to(self.sum_abs_err.dtype) - t).abs()
         bin_idx = _assign_bins(t, self.bin_boundaries)
         in_range = (t >= self.bin_boundaries[0]) & (t <= self.bin_boundaries[-1])
-
-        if in_range.any():
-            self.sum_abs_err.scatter_add_(0, bin_idx[in_range], e[in_range])
-            self.count.scatter_add_(0, bin_idx[in_range], torch.ones_like(e[in_range]))
+        # Masked by value, not by index: boolean indexing syncs the GPU.
+        self.sum_abs_err.scatter_add_(0, bin_idx, torch.where(in_range, e, 0.0))
+        self.count.scatter_add_(0, bin_idx, in_range.to(self.count.dtype))
 
     def compute(self) -> torch.Tensor:
         nonempty = self.count > 0
