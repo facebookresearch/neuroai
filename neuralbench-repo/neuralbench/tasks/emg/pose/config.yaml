@@ -29,7 +29,7 @@ data:
       col_name: split
       valid_split_by: null
   # No filter / notch / baseline / scaler / clamp: the paper feeds raw 2 kHz
-  # EMG straight to the model, same convention as ``emg/typing``.
+  # EMG in microvolts straight to the model, same convention as ``emg/typing``.
   neuro:
     =replace=: true
     name: EmgExtractor
@@ -38,6 +38,9 @@ data:
     filter: null
     notch_filter: null
     baseline: null
+    # mne returns SI volts (BDF stores uV); emg2pose trains on the raw HDF5 values in uV.
+    # At volt scale VEMG2Pose's first LayerNorm (eps=1e-5) erases the signal.
+    scale_factor: 1.0e+6
     scaler: null
     clamp: null
     infra:

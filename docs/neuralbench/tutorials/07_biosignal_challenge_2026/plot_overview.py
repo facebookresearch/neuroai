@@ -164,7 +164,7 @@ re-run the top three submissions of each track.
 #      - --
 #      - --
 #      - --
-#      - 25.14 +/- 2.30
+#      - 16.46 +/- 0.17
 #
 # The Sleep column is the benchmark version of the task, ``sleep_onset``.
 # Track 3 uses ``_sleep_onset_stream``, whose test windows differ, so its
