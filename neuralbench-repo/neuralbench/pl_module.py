@@ -238,6 +238,7 @@ class BrainModule(pl.LightningModule):
 
         # Just update metrics, don't compute or log yet
         for metric_name, metric in self.metrics.items():
+            assert isinstance(metric, Metric)
             if metric_name.startswith(step_name) and metric_true.numel():
                 if isinstance(metric, GroupedMetric):
                     metric.update(metric_pred, metric_true, metric_subjects)
