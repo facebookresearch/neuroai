@@ -7,6 +7,7 @@
 import typing as tp
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -16,6 +17,7 @@ from neuralset.events import standardize_events
 from .main import Data
 from .transforms import (
     AddDefaultEvents,
+    AddSleepOnsetCutTargets,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
@@ -482,6 +484,49 @@ def test_add_sleep_onset_targets_random_start(sleep_onset_events):
     assert (
         reversed_markers.loc["tl_n2_test", "start"] == markers.loc["tl_n2_test", "start"]
     ), "random starts must not depend on row order"
+
+
+def test_add_sleep_onset_cut_targets(sleep_onset_events):
+    # tl_n2: recording [0, 120], first N2 onset at t=60.
+    transform = AddSleepOnsetCutTargets(
+        window_s=30.0, lead_s=300.0, lag_s=60.0, n_eval_windows=1, n_train_windows=5
+    )
+    with pytest.raises(ValueError, match="after the split step"):
+        transform(sleep_onset_events)
+
+    events = pd.concat(
+        [
+            sleep_onset_events.assign(split="train"),
+            sleep_onset_events.assign(
+                split="test", timeline=sleep_onset_events.timeline + "_test"
+            ),
+        ],
+        ignore_index=True,
+    )
+    markers = transform(events).query("type == 'SleepOnsetMarker'")
+
+    # One crop per night on eval, n_train_windows on train.
+    counts = markers.timeline.value_counts().to_dict()
+    assert counts["tl_n2"] == 5
+    assert counts["tl_n2_test"] == 1
+
+    # Every crop has the exact same length: no window-length leak.
+    assert (markers.duration == 30.0).all()
+    assert np.allclose(markers.stop - markers.start, 30.0)
+
+    # Crops stay inside the recording and in the cut range [30, 120].
+    assert (markers.start >= 0.0).all()
+    assert (markers.stop <= 120.0).all()
+    assert (markers.stop.between(30.0, 120.0)).all()
+
+    # Target is n2_onset - stop; n2_onset is carried on the marker.
+    assert (markers.n2_onset == 60.0).all()
+
+    # Draws are reproducible and independent of row order.
+    rev = transform(events.iloc[::-1]).query("type == 'SleepOnsetMarker'")
+    assert sorted(rev.query("timeline == 'tl_n2_test'").stop.tolist()) == sorted(
+        markers.query("timeline == 'tl_n2_test'").stop.tolist()
+    )
 
 
 @pytest.mark.parametrize("max_duration_s", [None, 10.0, 110.0])

@@ -17,12 +17,19 @@ class SleepOnsetTargetExtractor(ns.extractors.BaseStatic):
     """Compute the time-to-N2-onset target dynamically from the segment's ``stop``.
 
     Reads the absolute ``n2_onset`` timestamp from a ``SleepOnsetMarker``
-    event (emitted by :class:`~neuralbench.transforms.AddSleepOnsetTargets`)
-    and returns ``clip(n2_onset - segment.stop, 0, cap_s)``.  Computing the
-    target from the actual segment boundary -- rather than reading a value
-    baked into the event at transform time -- guarantees the label always
-    matches the EEG window being fed to the model, even if the segmenter's
-    ``duration`` or ``stride`` changes.
+    event (emitted by :class:`~neuralbench.transforms.AddSleepOnsetTargets` or
+    :class:`~neuralbench.transforms.AddSleepOnsetCutTargets`) and returns
+    ``clip(n2_onset - segment.stop, floor_s, cap_s)``.  Computing the target
+    from the actual segment boundary -- rather than reading a value baked into
+    the event at transform time -- guarantees the label always matches the EEG
+    window being fed to the model, even if the segmenter's ``duration`` or
+    ``stride`` changes.
+
+    With the default ``floor_s=0`` the target is the non-negative time until
+    onset (a window ending after onset reads 0). A negative ``floor_s`` keeps
+    the sign, so a window whose ``stop`` falls past onset reports how long ago
+    onset happened -- used by the single-window task where the cut is drawn on
+    both sides of onset.
 
     Parameters
     ----------
@@ -30,13 +37,15 @@ class SleepOnsetTargetExtractor(ns.extractors.BaseStatic):
         Type of event(s) to read the ``n2_onset`` field from.  Defaults to
         ``"SleepOnsetMarker"``.
     cap_s : float
-        Maximum target value; values larger than this are clipped (matches
-        the competition spec where targets are capped at 10 minutes
-        pre-onset).
+        Upper clip bound on the target (largest reported time-to-onset).
+    floor_s : float
+        Lower clip bound on the target. ``0`` clips post-onset windows to 0;
+        a negative value keeps the signed time relative to onset.
     """
 
     event_types: str | tuple[str, ...] = "SleepOnsetMarker"
     cap_s: float = 600.0
+    floor_s: float = 0.0
 
     def prepare(self, obj: tp.Any) -> None:
         pass
@@ -51,7 +60,7 @@ class SleepOnsetTargetExtractor(ns.extractors.BaseStatic):
         stop = start + duration
         for event in events:
             n2_onset = float(event._get_field_or_extra("n2_onset"))
-            time_to_onset = np.clip(n2_onset - stop, 0.0, self.cap_s)
+            time_to_onset = np.clip(n2_onset - stop, self.floor_s, self.cap_s)
             embedding = torch.tensor([time_to_onset], dtype=torch.float32)
             yield ns.base.TimedArray(
                 frequency=0,

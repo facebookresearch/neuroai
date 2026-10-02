@@ -20,7 +20,11 @@ data:
       valid_random_state: 33
       test_random_state: 33
     annotate_sleep_onset:
-      name: AddSleepOnsetTargets
-      max_pre_n2_s: 1200.0
-      random_start_splits: [val, test]
+      name: AddSleepOnsetCutTargets
+      window_s: 30.0
+      lead_s: 300.0
+      lag_s: 60.0
+      n_eval_windows: 1
+      n_train_windows: 20
+      seed: 0
   channel_positions.layout_or_montage_name: standard_1005

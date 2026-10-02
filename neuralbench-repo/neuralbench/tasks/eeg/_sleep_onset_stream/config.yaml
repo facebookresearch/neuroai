@@ -4,7 +4,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# sleep_onset, tested as streams; diff to it guarded by test_sleep_onset_stream_diff
+# Single-window sleep-onset task. One fixed-length EEG crop per night ending at
+# a random cut drawn around N2 onset; the model returns one signed
+# time-to-onset value per night. Because every crop has the same length and
+# there is no window grid, no window count or length leaks the target, and the
+# continuous cut avoids a zero-target pile-up (see AddSleepOnsetCutTargets).
+# Diff to sleep_onset is guarded by test_sleep_onset_stream_diff.
 
 data:
   study:
@@ -18,9 +23,13 @@ data:
       valid_random_state: 33
       test_random_state: 33
     annotate_sleep_onset:
-      name: AddSleepOnsetTargets
-      max_pre_n2_s: 1200.0
-      random_start_splits: [val, test]
+      name: AddSleepOnsetCutTargets
+      window_s: 30.0
+      lead_s: 300.0
+      lag_s: 60.0
+      n_eval_windows: 1
+      n_train_windows: 20
+      seed: 0
   # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,
   # Pz-Oz) whose MNE ch_locs are NaN, so the default ``ch_locs``-derived
   # position mapping in ``ChannelPositions`` produces all-``INVALID_VALUE``
@@ -33,17 +42,18 @@ data:
     name: SleepOnsetTargetExtractor
     event_types: SleepOnsetMarker
     aggregation: trigger
-    cap_s: 600.0
+    # Signed target n2_onset - t_cut, in [-lag_s, +lead_s].
+    floor_s: -60.0
+    cap_s: 300.0
   trigger_event_type: SleepOnsetMarker
   start: 0.0
-  duration: 5.0
-  stride: 5.0
+  # Single-window segmentation: one segment per marker = the window_s crop.
+  duration: null
+  stride: null
   sampler:
     name: RegressionBinSampler
-    bin_edges: [0.0, 40.0, 90.0, 300.0, 600.0]
+    bin_edges: [-60.0, 0.0, 40.0, 90.0, 300.0]
   summary_columns: [n2_onset]
-  test_batch_size: 1
-reset_per_timeline: true
 brain_model_output_size: &brain_model_output_size 1
 trainer_config:
   monitor: val/bmae
@@ -56,5 +66,6 @@ loss:
     mse:
       name: MSELoss
   weights:
-    mse: 0.0001  # targets are in [0, 600] s; weight=0.0001 (0.01^2) keeps MSE <= ~36 so gradient clipping does not saturate.
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_sleep_onset_metric_configs []
+    mse: 0.0001  # signed targets in [-60, 300] s; small weight keeps MSE from saturating gradient clipping.
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_sleep_onset_metric_configs
+  - [-60.0, 0.0, 40.0, 90.0, 300.0]

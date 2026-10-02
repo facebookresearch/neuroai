@@ -122,15 +122,24 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
 
 
-@pytest.mark.parametrize("dataset", [None, *get_available_datasets("eeg", "sleep_onset")])
+@pytest.mark.parametrize(
+    "dataset", [None, *get_available_datasets("eeg", "_sleep_onset_stream")]
+)
 def test_sleep_onset_stream_diff(dataset: str | None):
-    core, stream = (
-        merge_task_config("eeg", task, dataset).flat()
-        for task in ["sleep_onset", "_sleep_onset_stream"]
-    )
-    diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
-    assert diff == {
-        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"],
-        "data.test_batch_size": 1,
-        "reset_per_timeline": True,
-    }
+    """The stream task is the single-window cut formulation: one fixed-length
+    crop per night ending at a random cut around onset, with a signed target
+    and no window grid (so no window-count or window-length leak)."""
+    cfg = merge_task_config("eeg", "_sleep_onset_stream", dataset).flat()
+    assert cfg["data.study.annotate_sleep_onset.name"] == "AddSleepOnsetCutTargets"
+    # Single-window segmentation: one segment per marker, so its fixed length
+    # carries no information about the target.
+    assert cfg.get("data.duration") is None
+    assert cfg.get("data.stride") is None
+    # Signed target: a cut past onset reports a negative time-to-onset.
+    assert cfg["data.target.floor_s"] < 0
+    # One crop per night on eval (no counting cue), more on train.
+    assert cfg["data.study.annotate_sleep_onset.n_eval_windows"] == 1
+    assert cfg["data.study.annotate_sleep_onset.n_train_windows"] >= 1
+    # No streaming machinery left.
+    assert not cfg.get("reset_per_timeline", False)
+    assert cfg.get("data.test_batch_size") is None
