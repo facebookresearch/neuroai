@@ -1,0 +1,29 @@
+# NeuralBench model-specific preprocessing for the official NeuroLM input
+# distribution.  The generative model is dispatched by the NeuroLM runner,
+# not by the encoder BrainModule path, so this file intentionally contains
+# preprocessing metadata only.
+model_family: generative_instruction
+neurolm:
+  eeg_token_samples: 200
+  max_eeg_tokens: 320
+  max_text_tokens: 80
+  # Official downstream tasks use 276. The current COG-BCI preparation has
+  # 63 channels x 5 seconds (=315 tokens), which fits in the 320-token cap.
+data:
+  neuro:
+    frequency: 200.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+    notch_harmonics: false
+    baseline: null
+    scaler: null
+    # NeuralSet stores recordings in volts; NeuroLM expects microvolt-scale
+    # input before its official /100 normalization.
+    scale_factor: 1000000.0
+    clamp: null
+  # NeuroLM's tokenizer consumes the available EEG channels after channel
+  # normalization. Dataset-specific channel selection remains in each
+  # NeuralBench task config rather than being replaced by TUAB's channels.

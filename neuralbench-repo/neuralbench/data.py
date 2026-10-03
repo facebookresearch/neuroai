@@ -8,6 +8,7 @@ import logging
 import typing as tp
 
 import numpy as np
+import pandas as pd
 import torch
 from pydantic import Field, field_validator
 from torch.utils.data import DataLoader
@@ -39,6 +40,54 @@ from .utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _channel_coverage(value: object) -> set[str]:
+    """Return the channel identifiers represented by a NeuralSet event value."""
+    if isinstance(value, str):
+        return {item.strip() for item in value.strip("{}").split(",") if item.strip()}
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return set()
+    return {str(value)}
+
+
+def _collapse_trigger_collisions(
+    events: pd.DataFrame, trigger_types: list[str]
+) -> pd.DataFrame:
+    """Resolve channel-wise duplicate triggers for a single-label task.
+
+    NeuralSet preserves TUEV's channel-wise annotations. NeuroLM's TUEV
+    contract, however, has one class answer per EEG segment. This helper is
+    opt-in so the default NeuralBench event semantics remain unchanged.
+    """
+    trigger_mask = events["type"].isin(trigger_types)
+    triggers = events.loc[trigger_mask].copy()
+    if triggers.empty or "channel" not in triggers or "state" not in triggers:
+        return events
+
+    grouped_rows: list[pd.Series] = []
+    group_columns = ["type", "timeline", "start", "state"]
+    for _, group in triggers.groupby(group_columns, sort=False, dropna=False):
+        row = group.iloc[0].copy()
+        row["duration"] = group["duration"].max()
+        channels: set[str] = set()
+        for value in group["channel"]:
+            channels.update(_channel_coverage(value))
+        row["_channel_count"] = len(channels)
+        grouped_rows.append(row)
+
+    collapsed = pd.DataFrame(grouped_rows)
+    collapsed = (
+        collapsed.sort_values(
+            ["type", "timeline", "start", "_channel_count", "duration", "state"],
+            ascending=[True, True, True, False, False, True],
+            kind="stable",
+        )
+        .drop_duplicates(["type", "timeline", "start"], keep="first")
+        .drop(columns="_channel_count")
+    )
+    nontriggers = events.loc[~trigger_mask]
+    return pd.concat([nontriggers, collapsed], axis=0).sort_index()
 
 
 class BaseSampler(ns.base.NamedModel):
@@ -149,6 +198,7 @@ class Data(ns.BaseModel):
     channel_positions: ns.extractors.ChannelPositions
     # Segments
     trigger_event_type: str | list[str]
+    trigger_collision_policy: str | None = None
     start: float = -0.5
     duration: float | None = 3
     stride: float | None = None
@@ -194,6 +244,13 @@ class Data(ns.BaseModel):
         :class:`~torch.utils.data.DataLoader` instances.
         """
         events = self.study.run()
+        trigger_event_type = (
+            [self.trigger_event_type]
+            if isinstance(self.trigger_event_type, str)
+            else self.trigger_event_type
+        )
+        if self.trigger_collision_policy == "majority_channel":
+            events = _collapse_trigger_collisions(events, trigger_event_type)
         if "split" not in events.columns:
             LOGGER.error(
                 "No `split` column found in events. Make sure splits are defined in the study, "
@@ -225,11 +282,6 @@ class Data(ns.BaseModel):
             )
             extractors["channel_positions"] = channel_positions
 
-        trigger_event_type = (
-            [self.trigger_event_type]
-            if isinstance(self.trigger_event_type, str)
-            else self.trigger_event_type
-        )
         segmenter = ns.dataloader.Segmenter(
             start=self.start,
             duration=self.duration,
