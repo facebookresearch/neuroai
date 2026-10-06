@@ -36,6 +36,7 @@ Harati2015Tuev: "subject in ['Harati2015Tuev/017', 'Harati2015Tuev/aaaaaajc', 'H
 Hinss2023Open: "subject_index < 3"
 # Designed to contain all 6 labels and timelines from both splits
 Hollenstein2018Zuco: "subject == 'Hollenstein2018Zuco/ZKH'"
+Interaxon2026Muse: "subject_index < 10"
 Kemp2000Analysis: "subject_index < 3"
 Korczowski2019BrainBi2014A: "subject_index < 10"
 Kueper2024Eeg: null

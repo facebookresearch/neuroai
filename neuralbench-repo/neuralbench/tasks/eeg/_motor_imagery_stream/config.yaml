@@ -4,12 +4,14 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-# motor_imagery, tested as streams; diff to it guarded by test_stream_task_diff
+# motor_imagery on dreyer2026proteus, tested as streams; diff guarded by test_stream_task_diff
+# Local subject-disjoint benchmark on the training release, not the official
+# split or the sealed protocol.
 
 data:
   study:
     source:
-      name: Stieger2021Continuous
+      name: Dreyer2026Proteus
     split:
       name: SklearnSplit
       split_by: subject
@@ -25,13 +27,13 @@ data:
     return_one_hot: true
     aggregation: trigger
   trigger_event_type: Stimulus
-  start: 0.0
+  start: 1.0  # cue at 0 s, feedback from 3 s, trial end at 8 s
   duration: 4.0
   summary_columns: [code]
   test_batch_size: 1
 reset_per_timeline: true
 compute_class_weights: true
-brain_model_output_size: &brain_model_output_size 4
+brain_model_output_size: &brain_model_output_size 3
 trainer_config.monitor: val/bal_acc
 trainer_config.mode: max
 loss:

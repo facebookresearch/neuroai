@@ -128,6 +128,11 @@ _STREAM_ONLY_DIFF = {
     },
     "motor_imagery": {},
 }
+# stream dataset -> core dataset, where they differ (None: task default)
+_STREAM_TO_CORE_DATASET: dict[str, dict[str | None, str | None]] = {
+    "sleep_onset": {None: "interaxon2026muse", "kemp2000analysis": None},
+    "motor_imagery": {None: "dreyer2026proteus"},
+}
 
 
 @pytest.mark.parametrize(
@@ -147,10 +152,9 @@ _STREAM_ONLY_DIFF = {
     ],
 )
 def test_stream_task_diff(task: str, dataset: str | None):
-    core, stream = (
-        merge_task_config("eeg", name, dataset).flat()
-        for name in [task, f"_{task}_stream"]
-    )
+    core_dataset = _STREAM_TO_CORE_DATASET[task].get(dataset, dataset)
+    core = merge_task_config("eeg", task, core_dataset).flat()
+    stream = merge_task_config("eeg", f"_{task}_stream", dataset).flat()
     diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
     assert diff == {
         **_STREAM_ONLY_DIFF[task],

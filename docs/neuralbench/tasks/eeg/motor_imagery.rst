@@ -14,7 +14,8 @@ Motor imagery classification
    :doc:`Track 2 -- BCI decoding
    </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`
    of the challenge uses its streamed version, ``_motor_imagery_stream``,
-   which scores each recording one window at a time, in time order.
+   which scores each recording one window at a time, in time order, on the
+   competition's training release by default.
    **Participants should use** ``neuralbench eeg _motor_imagery_stream``; the
    Track 2 page has its commands, timings, and competition data notes.
 
@@ -76,8 +77,9 @@ license is CC-BY-4.0.
    neuralfetch download Dreyer2026Proteus --path /path/to/DATA_DIR
    neuralbench eeg motor_imagery --dataset dreyer2026proteus
 
-This variant uses the task's subject-disjoint split. It is not the official
-cross-session split or the sealed evaluation.
+It is also the default dataset of ``_motor_imagery_stream``. This variant uses
+the task's subject-disjoint split. It is not the official cross-session split or
+the sealed evaluation.
 
 To run with an alternate dataset:
 

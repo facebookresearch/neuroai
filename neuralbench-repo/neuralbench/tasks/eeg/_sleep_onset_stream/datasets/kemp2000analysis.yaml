@@ -7,8 +7,4 @@
 data:
   study:
     source:
-      name: Tangermann2012Review
-  start: 0.0
-brain_model_output_size: &brain_model_output_size 4
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
-  - *brain_model_output_size
+      name: Kemp2000Analysis
