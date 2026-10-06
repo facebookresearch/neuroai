@@ -1,0 +1,27 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Dreyer2023Large combines parts A (subjects 1-60), B (61-81), and C (82-87).
+# 6 subjects in part C are re-recordings of subjects from A or B under
+# different IDs (exact mapping unknown). We assign part B (61-81) to test
+# so that train/test populations are disjoint. Part C subjects stay in
+# train only, where overlap with A is harmless.
+
+data:
+  study:
+    source:
+      name: Dreyer2023Large
+    split:
+      =replace=: true
+      name: PredefinedSplit
+      test_split_query: "subject.isin(['Dreyer2023Large/61', 'Dreyer2023Large/62', 'Dreyer2023Large/63', 'Dreyer2023Large/64', 'Dreyer2023Large/65', 'Dreyer2023Large/66', 'Dreyer2023Large/67', 'Dreyer2023Large/68', 'Dreyer2023Large/69', 'Dreyer2023Large/70', 'Dreyer2023Large/71', 'Dreyer2023Large/72', 'Dreyer2023Large/73', 'Dreyer2023Large/74', 'Dreyer2023Large/75', 'Dreyer2023Large/76', 'Dreyer2023Large/77', 'Dreyer2023Large/78', 'Dreyer2023Large/79', 'Dreyer2023Large/80', 'Dreyer2023Large/81'])"
+      col_name: split
+      valid_split_by: subject
+      valid_split_ratio: 0.2
+      valid_random_state: 33
+brain_model_output_size: &brain_model_output_size 2
+metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - *brain_model_output_size

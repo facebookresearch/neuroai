@@ -91,6 +91,7 @@ METRIC_PERFECT_SCORE: dict[str, float] = {
 
 TASK_DISPLAY_NAMES: dict[str, str] = {
     "motor_imagery": "Motor imagery",
+    "_motor_imagery_stream": "Motor imagery (stream)",
     "motor_execution": "Motor execution",
     "p3": "P300",
     "cvep": "c-VEP",
@@ -269,6 +270,7 @@ TASK_CATEGORIES: dict[str, list[str]] = {
         "mental_imagery",
         "motor_execution",
         "motor_imagery",
+        "_motor_imagery_stream",
         "p3",
         "pose",
         "ssvep",

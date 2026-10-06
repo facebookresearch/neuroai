@@ -166,9 +166,12 @@ re-run the top three submissions of each track.
 #      - --
 #      - 16.46 +/- 0.17
 #
-# The Sleep column is the benchmark version of the task, ``sleep_onset``.
-# Track 3 uses ``_sleep_onset_stream``, whose test windows differ, so its
-# bMAE is not comparable (see the :doc:`Track 3 page <plot_track3_sleep_onset>`).
+# The BCI and Sleep columns are the benchmark versions of the tasks,
+# ``motor_imagery`` and ``sleep_onset``. Track 2 uses ``_motor_imagery_stream``,
+# which tests on the same windows, so a model without state scores the same
+# on it (see the :doc:`Track 2 page <plot_track2_eeg_to_bci>`). Track 3 uses
+# ``_sleep_onset_stream``, whose test windows differ, so its bMAE is not
+# comparable (see the :doc:`Track 3 page <plot_track3_sleep_onset>`).
 #
 # The pose column is in degrees, to match the published baseline, while
 # the task logs ``val/mae`` in radians: multiply by 180 / pi to compare.
@@ -306,10 +309,10 @@ re-run the top three submissions of each track.
 # .. code-block:: bash
 #
 #    # 1. Run the three EEG tracks (cached automatically)
-#    neuralbench eeg image motor_imagery _sleep_onset_stream -m eegnet reve
+#    neuralbench eeg image _motor_imagery_stream _sleep_onset_stream -m eegnet reve
 #
 #    # 2. Aggregate cached results -- no retraining
-#    neuralbench eeg image motor_imagery _sleep_onset_stream -m eegnet reve --plot-cached
+#    neuralbench eeg image _motor_imagery_stream _sleep_onset_stream -m eegnet reve --plot-cached
 #
 #    # 3. Track 4 lives under another device -- aggregate separately
 #    neuralbench emg pose -m vemg2pose --plot-cached
