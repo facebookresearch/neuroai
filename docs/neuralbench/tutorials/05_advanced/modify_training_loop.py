@@ -102,7 +102,8 @@ works and how to customize it by subclassing ``BrainModule``.
 # Validation and test windows are ordered by timeline then time unless
 # ``data.val_shuffle``/``data.test_shuffle`` is set. Keeping validation batched
 # (only ``test_batch_size=1``) keeps epochs fast and multi-GPU training
-# available. ``eeg _sleep_onset_stream`` streams its test split this way.
+# available. ``eeg _sleep_onset_stream`` and ``eeg _motor_imagery_stream``
+# stream their test split this way.
 #
 # ``reset_per_timeline=true`` adds a PyTorch Lightning
 # `callback <https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html>`_

@@ -10,10 +10,13 @@ Motor imagery classification
 .. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
    :class: tip
 
-   This task is the default starter-kit baseline for :doc:`Track 2 -- BCI
-   decoding
-   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`,
-   whose page has the commands, timings, and competition data notes for it.
+   This page describes the NeuralBench benchmark version of the task.
+   :doc:`Track 2 -- BCI decoding
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`
+   of the challenge uses its streamed version, ``_motor_imagery_stream``,
+   which scores each recording one window at a time, in time order.
+   **Participants should use** ``neuralbench eeg _motor_imagery_stream``; the
+   Track 2 page has its commands, timings, and competition data notes.
 
 Usage
 ~~~~~

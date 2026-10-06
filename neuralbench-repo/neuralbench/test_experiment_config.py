@@ -122,15 +122,30 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
 
 
-@pytest.mark.parametrize("dataset", [None, *get_available_datasets("eeg", "sleep_onset")])
-def test_sleep_onset_stream_diff(dataset: str | None):
+_STREAM_ONLY_DIFF = {
+    "sleep_onset": {
+        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"]
+    },
+    "motor_imagery": {},
+}
+
+
+@pytest.mark.parametrize(
+    "task,dataset",
+    [
+        (task, dataset)
+        for task in _STREAM_ONLY_DIFF
+        for dataset in [None, *get_available_datasets("eeg", task)]
+    ],
+)
+def test_stream_task_diff(task: str, dataset: str | None):
     core, stream = (
-        merge_task_config("eeg", task, dataset).flat()
-        for task in ["sleep_onset", "_sleep_onset_stream"]
+        merge_task_config("eeg", name, dataset).flat()
+        for name in [task, f"_{task}_stream"]
     )
     diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
     assert diff == {
-        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"],
+        **_STREAM_ONLY_DIFF[task],
         "data.test_batch_size": 1,
         "reset_per_timeline": True,
     }

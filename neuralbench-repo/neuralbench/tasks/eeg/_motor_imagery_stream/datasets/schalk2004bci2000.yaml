@@ -1,0 +1,26 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  study:
+    source:
+      name: Schalk2004Bci2000
+    remove_bad_subjects:
+      name: QueryEvents
+      query: "~subject.isin(['Schalk2004Bci2000/S088', 'Schalk2004Bci2000/S092', 'Schalk2004Bci2000/S100'])"
+    keep_imagery_events:
+      name: QueryEvents
+      query: "(type == 'Eeg') | (~description.isna() & description.str.startswith('imagery_'))"
+  target:
+    =replace=: true
+    name: LabelEncoder
+    event_types: Action
+    event_field: description
+    return_one_hot: true
+    aggregation: trigger
+  trigger_event_type: Action
+  summary_columns: [description]
+brain_model_output_size: 4
