@@ -368,13 +368,13 @@ re-run the top three submissions of each track.
 #    the corpus Codabench currently scores against.
 #    ``Scherer2015Individually`` covers the cross-session, multi-command
 #    side of the task.
-# 2. **Muse sleep-onset training set.** More details to come. The
-#    Track 3 page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and
-#    the additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
-#    datasets -- with the same ``SleepOnsetTargetExtractor`` + ``bmae``
-#    metric the competition will use. Note that these are clinical
-#    polysomnography, so the starter kit adds a device gap the competition
-#    itself does not have: there, training and evaluation are both Muse.
+# 2. **Muse sleep-onset training set.** Public on NEMAR as ``nm000287``:
+#    540 recordings from 203 participants, four EEG channels at 128 Hz.
+#    Select ``--dataset interaxon2026muse`` for a local subject-disjoint
+#    baseline. It uses unweighted ``bmae``, not the sealed Muse
+#    weighted score. The supplied 500/40 session split remains available
+#    through NeuralFetch. Sleep-EDF and the additional clinical PSG datasets
+#    remain proxy datasets; see Track 3 for the evaluation limitations.
 # 3. **Hidden evaluation sets.** All four tracks are scored against labels
 #    that stay confidential (the Alljoined evaluation cohort, later
 #    Graz/BrainHero sessions, the Muse evaluation cohort, and the EMG2Pose
