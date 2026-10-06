@@ -71,8 +71,10 @@ recalibration allowed.
 #   Both versions test on the same windows, so a model without state scores
 #   the same on either.
 #
-# Both versions share the data, split, target, loss, metrics and
-# ``datasets/`` variants.
+# Both versions share the data, split, target, loss and metrics.
+# ``_motor_imagery_stream`` ships only the two dataset variants these pages
+# use, ``dreyer2023`` and ``tangermann2012``; the other MI corpora are
+# variants of ``motor_imagery``.
 #
 # The task's own default dataset is ``Stieger2021Continuous``: 62 subjects
 # of 4-class MI, and the corpus the published NeuralBench Track 2 baseline
@@ -118,8 +120,7 @@ recalibration allowed.
 #
 # - ``--dataset <name>`` merges
 #   ``tasks/eeg/_motor_imagery_stream/datasets/<name>.yaml`` over the base config.
-#   Seventeen MI corpora ship that way, and the competition corpus will too
-#   once it lands.
+#   The competition corpus will ship that way once it lands.
 # - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
 #   adaptation strategy (frozen probe, LoRA, full fine-tuning) without
 #   touching any file.
@@ -291,8 +292,8 @@ recalibration allowed.
 #      - Mental calculation against a rest baseline, 36 subjects.
 #
 # Every other MI corpus registered in
-# :doc:`/neuralbench/tasks/eeg/motor_imagery` (BCI Competition IV, Cho2017,
-# Lee2019, ...) can be selected the same way with ``--dataset <name>``.
+# :doc:`/neuralbench/tasks/eeg/motor_imagery` (Cho2017, Lee2019, ...) can be
+# selected with ``neuralbench eeg motor_imagery --dataset <name>``.
 
 # %%
 # Adapting to the competition setup

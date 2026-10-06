@@ -21,7 +21,7 @@ from neuralbench.registry import (
     DEFAULTS_DIR,
     FM_MODELS,
     _resolve_model_config_path,
-    get_available_datasets,
+    _resolve_task_dir,
     load_yaml_config,
 )
 from neuraltrain.optimizers.base import LightningOptimizer
@@ -135,7 +135,15 @@ _STREAM_ONLY_DIFF = {
     [
         (task, dataset)
         for task in _STREAM_ONLY_DIFF
-        for dataset in [None, *get_available_datasets("eeg", task)]
+        for dataset in [
+            None,
+            *(
+                p.stem
+                for p in (_resolve_task_dir("eeg", f"_{task}_stream") / "datasets").glob(
+                    "*.yaml"
+                )
+            ),
+        ]
     ],
 )
 def test_stream_task_diff(task: str, dataset: str | None):
