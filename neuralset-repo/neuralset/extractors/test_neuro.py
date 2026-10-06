@@ -369,19 +369,21 @@ def test_meg_filter(
 
 
 @pytest.mark.parametrize(
-    "notch_filter,expected",
+    "notch_filter,notch_harmonics,expected",
     [
-        [10.0, "[10.0, 20.0, 30.0, 40.0]"],
-        [40.0, "[40.0]"],
-        [[40.0, 45.0], "[40.0, 45.0]"],
-        [100.0, "Not applying notch filter as no valid frequencies were found."],
-        [None, None],
+        [10.0, True, "[10.0, 20.0, 30.0, 40.0]"],
+        [10.0, False, "[10.0]"],
+        [40.0, True, "[40.0]"],
+        [[40.0, 45.0], True, "[40.0, 45.0]"],
+        [100.0, True, "Not applying notch filter as no valid frequencies were found."],
+        [None, True, None],
     ],
 )
 def test_meg_notch_filter(
     caplog,
     test_data_path: Path,
     notch_filter: float | list[float] | None,
+    notch_harmonics: bool,
     expected: str | None,
 ) -> None:
     ns.Study(
@@ -392,7 +394,9 @@ def test_meg_notch_filter(
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
     event = etypes.Meg.from_dict(make_meg_event(fif, 0.0))
-    extractor = ns.extractors.MegExtractor(notch_filter=notch_filter)
+    extractor = ns.extractors.MegExtractor(
+        notch_filter=notch_filter, notch_harmonics=notch_harmonics
+    )
     with caplog.at_level("INFO"):
         next(iter(extractor._get_data([event])))
 
