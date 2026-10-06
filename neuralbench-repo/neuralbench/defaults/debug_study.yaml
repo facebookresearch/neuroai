@@ -83,6 +83,7 @@ Vaineau2018Brain: "subject_index < 5"
 Crell2024Handwritten: "subject_index < 5"
 Dornhege2004Boosting: null
 Dreyer2023Large: "subject_index < 3 or subject_index in [60, 61]"
+Dreyer2026Proteus: "subject_index < 5 and session == '1'"
 Faller2012Autocalibration: "subject_index < 5 & subject_timeline_index == 0"
 GrosseWentrup2009Beamforming: "subject_index < 5"
 Guger2009How: "subject_index < 5 & subject_timeline_index == 0"

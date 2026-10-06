@@ -360,7 +360,11 @@ re-run the top three submissions of each track.
 # datasets, so three pieces are still missing here:
 #
 # 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
-#    sessions, Graz + BrainHero).** The task still defaults to
+#    sessions, Graz + BrainHero).** Its training release is on NEMAR as
+#    ``nm000290`` (112 runs from 14 sessions of 10 participants, 41 EEG
+#    channels at 500 Hz). Select ``--dataset dreyer2026proteus`` for a
+#    local subject-disjoint baseline, not the official split or the
+#    sealed evaluation. The task still defaults to
 #    ``Stieger2021Continuous`` (4 motor-imagery classes), which is also
 #    what the published baseline numbers come from. Add
 #    ``--dataset dreyer2023`` for the **recommended warm-up
