@@ -409,11 +409,12 @@ def test_failure_case() -> None:
 
 
 def test_duplicate() -> None:
+    """Of two annotations competing for one token, the loser gets no char position."""
     text = "It's supposed to be cement."
     words = text.split()
     words = words[:2] + words[1:]
     info = _tutils.TextWordMatcher(text).match(words)
-    assert set(info[1]) == {"sentence"}  # should have sentence but not sentence_char
+    assert [set(i) for i in info[1:3] if "text_char" not in i] == [{"sentence"}]
 
 
 def test_gap_sentence_at_boundary() -> None:
@@ -447,6 +448,41 @@ def test_gap_punctuated_word_offset() -> None:
     info = _tutils.TextWordMatcher(text).match(["aaa", "hello!", "world", "bbb"])
     assert info[1].get("text_char") == 4
     assert info[2].get("text_char") == 11
+
+
+def test_contraction_before_homograph() -> None:
+    """Contractions split by spaCy must not steal the following homograph."""
+    text = "take my advice: examine him carefully. don't do it before us."
+    words = [
+        "take",
+        "my",
+        "advice",
+        "examine",
+        "him",
+        "carefully",
+        "don't",
+        "do",
+        "it",
+        "before",
+        "us",
+    ]
+    info = _tutils.TextWordMatcher(text, language="english").match(words)
+    assert info[6]["text_char"] == text.index("don't")
+    assert info[6]["sentence"] == "don't do it before us."
+    assert info[6]["sentence_char"] == 0
+    assert info[7]["text_char"] == text.index("do", text.index("don't") + 1)
+    assert info[7]["sentence_char"] == 6
+    assert all(i for i in info)
+
+
+def test_gap_after_contraction() -> None:
+    """A merged contraction must still bound the char-level gap on its right."""
+    text = "don't worry about the cement."
+    info = _tutils.TextWordMatcher(text).match(
+        ["don't", "wory", "about", "the", "cement"]
+    )
+    assert info[1]["text_char"] == text.index("worry")
+    assert all(i for i in info)
 
 
 def test_duplicate_full_pipeline(recwarn: pytest.WarningsRecorder) -> None:
