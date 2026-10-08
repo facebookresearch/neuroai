@@ -663,16 +663,22 @@ class ImageSimilarity(torchmetrics.Metric):
 class GroupedMetric(torchmetrics.Metric):
     """
     A wrapper around a torchmetrics.Metric that allows for computing metrics per group.
-    IMPORTANT: this metric does not work well with LightningModule, because the
-    self.log() method does not support dictionaries of metrics.
 
-    To use this metric, you need to add this in the on_val_epoch_end and on_test_epoch_end methods:
+    With ``reduction`` set, ``compute`` reduces the per-group values to a scalar
+    (``"std"`` is the sample standard deviation), which LightningModule.log accepts.
+    Without it, ``compute`` returns a dict of group id to value, which self.log()
+    does not support; log it from the on_val_epoch_end and on_test_epoch_end methods:
         metric_dict = {metric_name + "/" + k: v for k, v in grouped_metric.compute().items()}
         self.log_dict(metric_dict)
         grouped_metric.reset()
     """
 
-    def __init__(self, metric_name: str, kwargs: dict[str, tp.Any] | None = None) -> None:
+    def __init__(
+        self,
+        metric_name: str,
+        kwargs: dict[str, tp.Any] | None = None,
+        reduction: tp.Literal["mean", "std"] | None = None,
+    ) -> None:
         super().__init__()
         if kwargs is None:
             kwargs = {}
@@ -686,6 +692,7 @@ class GroupedMetric(torchmetrics.Metric):
                 raise ValueError(f"Metric {metric_name} not found")
             self.base_metric_cls = metric_cls
         self.metric_kwargs = kwargs
+        self.reduction = reduction
         self.metrics = torch.nn.ModuleDict()  # store metrics per group
 
     def update(
@@ -722,12 +729,16 @@ class GroupedMetric(torchmetrics.Metric):
 
             self.metrics[group_key].update(group_preds, group_target)  # type: ignore
 
-    def compute(self) -> dict[str, float]:
+    def compute(self) -> dict[str, float] | torch.Tensor:
         # Return a dictionary of group_id: computed_metric
-        return {
+        per_group = {
             gid: metric.compute().item()  # type: ignore[operator]
             for gid, metric in self.metrics.items()  # type: ignore
         }
+        if self.reduction is None:
+            return per_group
+        values = torch.tensor(list(per_group.values()), device=self.device)
+        return values.mean() if self.reduction == "mean" else values.std()
 
     def reset(self) -> None:
         for metric in self.metrics.values():

@@ -136,7 +136,8 @@ jobs:
     runs-on: 8-core-ubuntu
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-python-env
+      - id: setup
+        uses: ./.github/actions/setup-python-env
 
       # neuraltrain first (2nd biggest test suite: ~1m18s + 9s)
       - name: pytest neuraltrain
@@ -181,6 +182,14 @@ jobs:
           source .venv/bin/activate
           cd neuralbench-repo
           pytest neuralbench --durations=10
+
+      # Saving scoped to downstream which runs for any package change (only after tests pass)
+      - name: Save .venv cache (main only)
+        if: steps.setup.outputs.venv-cache-hit != 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: ./.venv
+          key: ${{ env.VENV_CACHE_KEY }}
 
   # ── Job 3: type checks (no data caches needed) ─────────────
   # mypy doesn't need HuggingFace/MNE data caches, only the venv.

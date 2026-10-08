@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import PIL.Image
 import pytest
 import torch
 
@@ -92,6 +93,29 @@ def test_video_image(video_event: etypes.Video) -> None:
     movie = video_event.read()
     vi = _VideoImage(video=movie, time=12345.12345)
     assert vi.filepath.endswith("random_video_6s.mp4:12345.123")
+
+
+def test_huggingface_video_static_image_clip(tmp_path: Path) -> None:
+    if "IN_GITHUB_ACTION" in os.environ:
+        pytest.skip("Run locally; image events use the full video model path.")
+    filepath = tmp_path / "image.png"
+    frame = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
+    PIL.Image.fromarray(frame).save(filepath)
+    event = etypes.Image(start=1.0, duration=3.0, filepath=filepath, timeline="foo")
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
+    extractor = vid.HuggingFaceVideo(
+        event_types=("Image", "Video"),
+        infra=infra,
+        max_imsize=64,
+        num_frames=16,
+        device="cpu",
+    )
+
+    out = extractor(event, start=1.0, duration=3.0)
+
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == (768, 3)
+    assert torch.isfinite(out).all()
 
 
 def test_video(video_event: etypes.Video, tmp_path: Path) -> None:

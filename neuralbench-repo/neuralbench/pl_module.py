@@ -246,6 +246,7 @@ class BrainModule(pl.LightningModule):
         # Just update metrics; they are logged once per epoch, as Lightning
         # re-moves a logged Metric's whole state to the device on every log call.
         for metric_name, metric in self.metrics.items():
+            assert isinstance(metric, Metric)
             if metric_name.startswith(step_name) and metric_true.numel():
                 if isinstance(metric, GroupedMetric):
                     metric.update(metric_pred, metric_true, metric_subjects)
@@ -259,6 +260,7 @@ class BrainModule(pl.LightningModule):
 
     def _log_metrics(self, step_name: str) -> None:
         for metric_name, metric in self.metrics.items():
+            assert isinstance(metric, Metric)
             if (
                 metric_name.startswith(step_name)
                 and metric.update_called

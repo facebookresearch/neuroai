@@ -21,7 +21,7 @@ from neuralbench.registry import (
     DEFAULTS_DIR,
     FM_MODELS,
     _resolve_model_config_path,
-    get_available_datasets,
+    _resolve_task_dir,
     load_yaml_config,
 )
 from neuraltrain.optimizers.base import LightningOptimizer
@@ -122,15 +122,42 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
 
 
-@pytest.mark.parametrize("dataset", [None, *get_available_datasets("eeg", "sleep_onset")])
-def test_sleep_onset_stream_diff(dataset: str | None):
-    core, stream = (
-        merge_task_config("eeg", task, dataset).flat()
-        for task in ["sleep_onset", "_sleep_onset_stream"]
-    )
+_STREAM_ONLY_DIFF = {
+    "sleep_onset": {
+        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"]
+    },
+    "motor_imagery": {},
+}
+# stream dataset -> core dataset, where they differ (None: task default)
+_STREAM_TO_CORE_DATASET: dict[str, dict[str | None, str | None]] = {
+    "sleep_onset": {None: "interaxon2026muse", "kemp2000analysis": None},
+    "motor_imagery": {None: "dreyer2026proteus"},
+}
+
+
+@pytest.mark.parametrize(
+    "task,dataset",
+    [
+        (task, dataset)
+        for task in _STREAM_ONLY_DIFF
+        for dataset in [
+            None,
+            *(
+                p.stem
+                for p in (_resolve_task_dir("eeg", f"_{task}_stream") / "datasets").glob(
+                    "*.yaml"
+                )
+            ),
+        ]
+    ],
+)
+def test_stream_task_diff(task: str, dataset: str | None):
+    core_dataset = _STREAM_TO_CORE_DATASET[task].get(dataset, dataset)
+    core = merge_task_config("eeg", task, core_dataset).flat()
+    stream = merge_task_config("eeg", f"_{task}_stream", dataset).flat()
     diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
     assert diff == {
-        "data.study.annotate_sleep_onset.random_start_splits": ["val", "test"],
+        **_STREAM_ONLY_DIFF[task],
         "data.test_batch_size": 1,
         "reset_per_timeline": True,
     }

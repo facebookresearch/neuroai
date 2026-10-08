@@ -25,10 +25,14 @@ recalibration allowed.
   sessions released.
 
 .. note::
-   The official Track 2 corpus (Graz / BrainHero, 3 classes: MI / Calc
-   / Word) is released through NeuralBench when submissions open.
-   Until then, `Starter-kit analogs`_ below lists the NeuralBench tasks
-   that come closest, one per axis of the official task.
+   The training release of the official Track 2 corpus is available as
+   `NEMAR nm000290, version 1.0.0 <https://doi.org/10.82901/nemar.nm000290>`__:
+   112 runs from 14 sessions of 10 participants, 41 EEG channels at
+   500 Hz (CC-BY-4.0). It is the default dataset of ``neuralbench eeg
+   _motor_imagery_stream``, which runs a local subject-disjoint benchmark
+   on it, not the official split or the sealed evaluation.
+   `Starter-kit analogs`_ below lists the other NeuralBench tasks that
+   come closest, one per axis of the official task.
 """
 
 # %%
@@ -52,32 +56,46 @@ recalibration allowed.
 # Where to find this task in NeuralBench
 # --------------------------------------
 #
-# The starter-kit baseline is
-# :doc:`/neuralbench/tasks/eeg/motor_imagery`.
+# NeuralBench has two versions of this task. **Use ``_motor_imagery_stream``
+# for the competition.**
 #
-# The task's own default dataset is ``Stieger2021Continuous``: 62 subjects
-# of 4-class MI, and the corpus the published NeuralBench Track 2 baseline
-# numbers come from. It is also a ~640 GB download (~940 GB once MOABB has
-# converted it), and it is not what Codabench scores against.
+# - ``_motor_imagery_stream`` scores each recording one window at a time,
+#   forward in time: test windows come one per batch, in time order, and a
+#   model's optional ``reset_state()`` is called on a fresh copy of the model
+#   at the start of each recording (see :doc:`Modifying the training loop
+#   </neuralbench/auto_examples/advanced/modify_training_loop>`). A stateful
+#   model can therefore adapt to a recording as it goes, but carries nothing
+#   over to the next one. Validation stays batched; set
+#   ``data.val_batch_size: 1`` to select checkpoints on streams too, at
+#   several times the training cost. The leading underscore only keeps the
+#   task out of ``neuralbench eeg all``.
+# - :doc:`/neuralbench/tasks/eeg/motor_imagery` is the NeuralBench benchmark
+#   version, which scores windows independently, in batches. The baseline
+#   numbers in the :doc:`challenge overview <plot_overview>` come from it, on
+#   its own default dataset, ``Stieger2021Continuous`` (62 subjects of
+#   4-class MI). With ``--dataset dreyer2026proteus`` it tests on the same
+#   windows as ``_motor_imagery_stream``, so a model without state scores the
+#   same on either.
 #
-# So these pages build against the **recommended warm-up configuration**
-# instead, selected with an explicit flag:
+# Both versions share the split, target, loss and metrics.
+# ``_motor_imagery_stream`` defaults to the competition corpus, and ships
+# only the two other dataset variants these pages use, ``dreyer2023`` and
+# ``tangermann2012``; the other MI corpora are variants of ``motor_imagery``.
 #
-# - **CLI**: ``neuralbench eeg motor_imagery --dataset dreyer2023``
-# - **Dataset**: ``Dreyer2023Large`` (87 subjects, 27-channel EEG,
-#   2-class motor imagery -- left hand / right hand, ~19 GB). This is the
-#   corpus Codabench scores Track 2 against during the warm-up phase, so
-#   it is the one to build against first.
+# - **CLI**: ``neuralbench eeg _motor_imagery_stream``
+# - **Dataset**: ``Dreyer2026Proteus`` (NEMAR nm000290, ~1.5 GB), the
+#   training release of the official corpus: 10 participants, 41-channel
+#   EEG, the three cued commands -- motor imagery, mental subtraction, word
+#   generation -- with the Graz and BrainHero interfaces. Each window covers
+#   1-5 s after a cue. Every run mixes the three commands in random order.
 # - **Shift**: held-out subjects, *not* the cross-session shift of the
 #   competition. Use it to validate the training pipeline and architecture
 #   choice.
 # - **Headline metric key**: ``test/bal_acc``.
 #
-# .. important::
-#    ``--dataset dreyer2023`` is required. Dropping it does not fall back
-#    to the warm-up corpus -- it runs ``Stieger2021Continuous``, a
-#    different task (4 classes, not 2) on a very much larger download.
-#    Every command on this page carries the flag for that reason.
+# ``--dataset dreyer2023`` selects ``Dreyer2023Large`` (87 subjects,
+# 27-channel EEG, 2-class motor imagery -- left hand / right hand, ~19 GB),
+# the corpus Codabench scores Track 2 against during the warm-up phase.
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
 # nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
@@ -85,22 +103,20 @@ recalibration allowed.
 # metrics. Reading it is the fastest way to know exactly what the baseline
 # does.
 #
-# .. dropdown:: Show ``tasks/eeg/motor_imagery/config.yaml``
+# .. dropdown:: Show ``tasks/eeg/_motor_imagery_stream/config.yaml``
 #
-#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/motor_imagery/config.yaml
+#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/_motor_imagery_stream/config.yaml
 #       :language: yaml
 #
-# .. dropdown:: Show ``tasks/eeg/motor_imagery/datasets/dreyer2023.yaml``
+# .. dropdown:: Show ``tasks/eeg/_motor_imagery_stream/datasets/dreyer2023.yaml``
 #
-#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/motor_imagery/datasets/dreyer2023.yaml
+#    .. literalinclude:: ../../../../neuralbench-repo/neuralbench/tasks/eeg/_motor_imagery_stream/datasets/dreyer2023.yaml
 #       :language: yaml
 #
 # **How to change it**, in increasing order of effort:
 #
 # - ``--dataset <name>`` merges
-#   ``tasks/eeg/motor_imagery/datasets/<name>.yaml`` over the base config.
-#   Seventeen MI corpora ship that way, and the competition corpus will too
-#   once it lands.
+#   ``tasks/eeg/_motor_imagery_stream/datasets/<name>.yaml`` over the base config.
 # - ``-m <model>`` and ``-w <preset>`` swap the architecture and the
 #   adaptation strategy (frozen probe, LoRA, full fine-tuning) without
 #   touching any file.
@@ -117,6 +133,12 @@ recalibration allowed.
 # Split and model selection
 # --------------------------
 #
+# **Split (task default ``Dreyer2026Proteus``).** Subject-level
+# 60 / 20 / 20 drawn by ``SklearnSplit`` with ``split_by: subject`` and both
+# seeds fixed at 33, which on 10 participants resolves to **6 train /
+# 2 validation / 2 test** (1,521 / 379 / 755 windows). Every session of a
+# participant lands in the same fold.
+#
 # **Split (``--dataset dreyer2023``).** Subject-level and predefined, not
 # random. ``Dreyer2023Large`` pools the study's parts A (subjects 1-60),
 # B (61-81) and C (82-87); ``PredefinedSplit`` assigns **all 21 subjects of
@@ -130,11 +152,6 @@ recalibration allowed.
 # That part-B test partition is the current Codabench warm-up evaluation
 # set, so a ``test/bal_acc`` from this configuration and a warm-up
 # leaderboard score measure the same thing.
-#
-# **Split (task default ``Stieger2021Continuous``).** Subject-level
-# 60 / 20 / 20 drawn by ``SklearnSplit`` with ``split_by: subject`` and both
-# seeds fixed at 33, which on 62 subjects resolves to **36 train /
-# 13 validation / 13 test**.
 #
 # Either way the starter-kit shift is *cross-subject*, while the sealed
 # phase's is *cross-session within subject*. See `Adapting to the
@@ -156,57 +173,56 @@ recalibration allowed.
 # Reproducing the baseline
 # ------------------------
 #
-# ``Dreyer2023Large`` and the alternative MI datasets are served by
-# MOABB, which the base install does not pull, so install it first:
-# ``pip install 'moabb>=1.7.1'``.
-#
 # .. code-block:: bash
 #
-#    # 1. Download Dreyer2023Large into DATA_DIR: ~19 GB. One-off per
+#    # 1. Download Dreyer2026Proteus into DATA_DIR: ~1.5 GB. One-off per
 #    #    machine, and safe to interrupt and re-run.
-#    neuralbench eeg motor_imagery --dataset dreyer2023 --download
+#    neuralbench eeg _motor_imagery_stream --download
 #
 #    # 2. Preprocess into CACHE_DIR -- resample, filter, scale and window
 #    #    every recording once, so each later run reads the cache instead.
 #    #    No GPU needed, and it fans out over SLURM when one is configured.
-#    neuralbench eeg motor_imagery --dataset dreyer2023 --prepare
+#    neuralbench eeg _motor_imagery_stream --prepare
 #
 #    # 3. Sanity check before you queue anything: 2 epochs, a data subset, one
 #    #    seed, always in-process, so progress lands in your terminal. Name
 #    #    the model you actually plan to run -- a bare --debug takes the
 #    #    config default, which is EEGNet.
-#    neuralbench eeg motor_imagery --dataset dreyer2023 -m eegnet --debug
+#    neuralbench eeg _motor_imagery_stream -m eegnet --debug
 #
 #    # 4. Same check for the foundation model. The first build pulls REVE's
 #    #    weights from the HuggingFace Hub, which needs network access; doing
 #    #    it here rather than in a queued run keeps any failure in your
 #    #    terminal instead of a job log.
-#    neuralbench eeg motor_imagery --dataset dreyer2023 -m reve --debug
+#    neuralbench eeg _motor_imagery_stream -m reve --debug
 #
 #    # 5. Full baseline -- task-specific model (EEGNet). The default grid is
 #    #    three seeds (concurrent on SLURM).
-#    neuralbench eeg motor_imagery --dataset dreyer2023 -m eegnet
+#    neuralbench eeg _motor_imagery_stream -m eegnet
 #
 #    # 6. Full baseline -- foundation model (REVE), fine-tuned end to end.
 #    #    ~69M parameters against EEGNet's ~1.5k, all of them trainable here,
 #    #    so this one wants a datacentre GPU rather than a laptop; it also
 #    #    preprocesses at 200 Hz against the 120 Hz default, warming a second
 #    #    cache.
-#    neuralbench eeg motor_imagery --dataset dreyer2023 -m reve
+#    neuralbench eeg _motor_imagery_stream -m reve
 #
-# .. tip::
-#    Smaller still: ``--dataset tangermann2012`` is BCI Competition IV-2a,
-#    9 subjects of 22-channel four-class MI in under 1 GB, with the whole
-#    download-prepare-train loop in well under an hour (~15 min to prepare,
-#    ~2 min per training seed) against a well-known published baseline.
+# Add ``--dataset dreyer2023`` to any of these commands to run on the
+# warm-up corpus (~19 GB), or ``--dataset tangermann2012`` for BCI
+# Competition IV-2a: 9 subjects of 22-channel four-class MI in under 1 GB,
+# with the whole download-prepare-train loop in well under an hour (~15 min
+# to prepare, ~2 min per training seed) against a well-known published
+# baseline. Both are served by MOABB, which the base install does not pull,
+# so install it first: ``pip install 'moabb>=1.7.1'``.
 #
-# Dropping ``--dataset dreyer2023`` from any of the commands above runs
-# ``Stieger2021Continuous`` instead. Budget ~940 GB on disk (~640 GB, plus
-# ~300 GB for the copy MOABB converts on first read), ~96 GB of cache and
-# ~65 min of preparation over 75 SLURM jobs, then ~30 min per EEGNet seed
-# and ~2.5 h per REVE seed. Do not skip ``--prepare`` there: a cold-cache
-# ``--debug`` on that corpus spent ~45 min doing the same work serially
-# in-process.
+# The baseline numbers in the :doc:`challenge overview <plot_overview>` come
+# from ``neuralbench eeg motor_imagery``, on ``Stieger2021Continuous``: 62
+# subjects split **36 train / 13 validation / 13 test** by the same
+# ``SklearnSplit``. Budget ~940 GB on disk (~640 GB, plus ~300 GB for the
+# copy MOABB converts on first read), ~96 GB of cache and ~65 min of
+# preparation over 75 SLURM jobs, then ~30 min per EEGNet seed and ~2.5 h
+# per REVE seed. Do not skip ``--prepare`` there: a cold-cache ``--debug``
+# on that corpus spent ~45 min doing the same work serially in-process.
 #
 # :ref:`pretrained-weights` covers the hub cache, and no run has a CPU
 # fallback -- ``--debug`` included.
@@ -229,8 +245,8 @@ recalibration allowed.
 #
 #    from neuralbench import check_model, evaluate_model
 #
-#    print(check_model(my_model, "eeg", "motor_imagery"))  # shapes only, seconds
-#    scores = evaluate_model(my_model, "eeg", "motor_imagery", name="my-fm", debug=True)
+#    print(check_model(my_model, "eeg", "_motor_imagery_stream"))  # shapes only, seconds
+#    scores = evaluate_model(my_model, "eeg", "_motor_imagery_stream", name="my-fm", debug=True)
 #
 # See :doc:`Evaluating your own model
 # </neuralbench/auto_examples/quickstart/03_evaluate_your_own_model>` for what
@@ -241,10 +257,10 @@ recalibration allowed.
 # Starter-kit analogs
 # -------------------
 #
-# No public dataset has all of the official task at once -- three mental
-# commands, six sessions, one user at a time -- so the four public corpora the
-# competition points to are split across three NeuralBench tasks. Each covers
-# a different axis of Track 2, and all four are worth training on:
+# The training release of the official corpus (first row) has the three
+# mental commands and both interfaces. The four public corpora the competition
+# points to are split across four NeuralBench tasks; each covers a different
+# axis of Track 2, and all are worth training on:
 #
 # .. list-table::
 #    :header-rows: 1
@@ -253,12 +269,17 @@ recalibration allowed.
 #    * - Command
 #      - Dataset
 #      - What it gives you
-#    * - ``neuralbench eeg motor_imagery --dataset dreyer2023``
-#      - ``Dreyer2023Large`` (recommended warm-up configuration)
+#    * - ``neuralbench eeg _motor_imagery_stream``
+#      - ``Dreyer2026Proteus`` (task default, NEMAR nm000290)
+#      - The training release of the official corpus: the three commands
+#        with the Graz and BrainHero interfaces, 41 EEG channels, split on
+#        held-out subjects.
+#    * - ``neuralbench eeg _motor_imagery_stream --dataset dreyer2023``
+#      - ``Dreyer2023Large`` (warm-up corpus)
 #      - 87 subjects of 2-class MI, split on held-out subjects, and the
 #        corpus Codabench scores against during warm-up.
 #    * - ``neuralbench eeg motor_imagery``
-#      - ``Stieger2021Continuous`` (task default)
+#      - ``Stieger2021Continuous`` (benchmark default)
 #      - The most data by far (62 subjects, 615 h) for the motor-imagery
 #        class, cross-subject, and the source of the published baseline
 #        numbers.
@@ -272,26 +293,21 @@ recalibration allowed.
 #      - Mental calculation against a rest baseline, 36 subjects.
 #
 # Every other MI corpus registered in
-# :doc:`/neuralbench/tasks/eeg/motor_imagery` (BCI Competition IV, Cho2017,
-# Lee2019, ...) can be selected the same way with ``--dataset <name>``.
+# :doc:`/neuralbench/tasks/eeg/motor_imagery` (Cho2017, Lee2019, ...) can be
+# selected with ``neuralbench eeg motor_imagery --dataset <name>``.
 
 # %%
 # Adapting to the competition setup
 # ----------------------------------
 #
-# To match the official Track 2 evaluation regime, two pieces need to
-# change once the official dataset is released:
-#
-# 1. **Dataset source**: register the new MI / Calc / Word study and
-#    set ``data.study.source.name`` to it, with
-#    ``brain_model_output_size: 3``.
-# 2. **Split**: replace the default ``SklearnSplit`` with a
-#    predefined per-subject split where sessions 1-3 are train and
-#    sessions 4-6 are test. The
-#    ``neuralbench.transforms.PredefinedSplit`` already used by
-#    ``mental_imagery``, ``reaction_time`` and ``psychopathology`` is the
-#    right primitive -- the ``test_split_query`` becomes
-#    ``"subject in evaluation_subjects and session in [4, 5, 6]"``.
+# The task already runs on the official corpus, with its three classes. To
+# match the official Track 2 evaluation regime, the **split** has to change:
+# replace the default ``SklearnSplit`` with a predefined per-subject split
+# where sessions 1-3 are train and sessions 4-6 are test. The
+# ``neuralbench.transforms.PredefinedSplit`` already used by
+# ``mental_imagery``, ``reaction_time`` and ``psychopathology`` is the right
+# primitive -- the ``test_split_query`` becomes
+# ``"subject in evaluation_subjects and session in [4, 5, 6]"``.
 #
 # Submissions may dispatch internally to per-subject sub-models using
 # the per-example metadata dictionary ``m`` (subject, session, run,

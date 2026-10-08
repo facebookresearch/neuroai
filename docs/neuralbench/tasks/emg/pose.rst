@@ -48,6 +48,8 @@ Joint angles stay in **radians**, the unit emg2pose trains and logs, so
 ``test/mae`` compares directly against its ``AngleMAE``. The paper's Table 4
 reports that same quantity in degrees: multiply by 57.29578, which puts its
 12.2-18.8 degrees at 0.213-0.328 radians.
+EMG inputs are scaled from SI volts back to microvolts (``scale_factor: 1e6``)
+to match emg2pose's raw HDF5 training scale.
 
 This is the paper's **regression** setting (``regression_vemg2pose``), a plain
 sequence-to-sequence map.  Its **tracking** setting is not implemented: that
@@ -73,7 +75,9 @@ Dataset Notes
   where ``vemg2pose`` regression scores 15.8 +- 1.4 degrees.  ``val`` keeps both
   of its scenarios, matching the validation split emg2pose selects models on.
   Note the paper averages within each user before reporting mean and standard
-  deviation across users, whereas ``test/mae`` pools frames.
+  deviation across users, whereas ``test/mae`` pools frames;
+  ``test/mae_subject_mean`` and ``test/mae_subject_std`` (sample SD) follow
+  the paper.
 * **Rotation augmentation**: training rotates the band by -1, 0 or +1 electrode
   (the paper's Appendix C.4), and never touches validation or test.  emg2pose
   redraws the offset for every window; braindecode's ``BandRotation`` draws one

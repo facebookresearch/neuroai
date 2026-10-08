@@ -279,15 +279,20 @@ def test_topk_acc_from_scores(topk: int, true_labels) -> None:
     assert out == 1.0
 
 
-def test_grouped_metric():
+@pytest.mark.parametrize(
+    "reduction,expected",
+    [(None, {"0": 1.0, "1": 0.5, "2": 0.0}), ("mean", 0.5), ("std", 0.5)],
+)
+def test_grouped_metric(reduction: str | None, expected: tp.Any) -> None:
     metric = GroupedMetric(
         log_name="test_metric",
         metric_name="Accuracy",
         kwargs={"num_classes": 2, "task": "multiclass"},
+        reduction=reduction,
     ).build()
     groups = torch.LongTensor([0, 1, 1, 2])
     metric.update(torch.LongTensor([0, 0, 0, 0]), torch.LongTensor([0, 1, 0, 1]), groups)
-    assert metric.compute() == {"0": 1.0, "1": 0.5, "2": 0.0}
+    assert metric.compute() == expected
 
 
 class Xp(pydantic.BaseModel):

@@ -10,8 +10,10 @@ Data-fetching utilities (STUDY_FOLDER, add_sentences, download_things_images,
 etc.) live in ``neuralfetch.utils``.
 """
 
+import collections
 import errno
 import logging
+import os
 import shutil
 import time
 import typing as tp
@@ -29,8 +31,10 @@ from neuralset.events import study as base
 
 logger = logging.getLogger(__name__)
 
-MNE_RAW_TYPES = {"Meg", "Eeg", "Emg", "Ieeg", "Fnirs"}
-STIMULUS_FILE_TYPES = {"Sound", "Image", "Video"}
+# Fnirs is excluded: mne_bids can only write NIRS by copying a source SNIRF file,
+# not from the preloaded raws this exporter produces.
+MNE_RAW_TYPES = {"Meg", "Eeg", "Emg", "Ieeg"}
+STIMULUS_FILE_TYPES = {"Audio", "Image", "Video"}
 
 # mne_bids requires a concrete write format for preloaded data (our raws are
 # always already loaded, never a passthrough file on disk) -- "auto" is only
@@ -129,9 +133,7 @@ def _write_participants_tsv(results: list[dict], path: Path) -> None:
 
         demographics = result.get("demographics", {})
         info = mne.create_info(ch_names=["STI"], sfreq=1000.0, ch_types=["stim"])
-        subject_info = mne._fiff.meas_info.SubjectInfo(demographics)
-        with info._unlock():
-            info["subject_info"] = subject_info
+        info["subject_info"] = demographics
         raw = mne.io.RawArray(np.zeros((1, 1)), info, verbose=False)
 
         _mne_participants_tsv(
@@ -151,7 +153,7 @@ class BidsExporter(pydantic.BaseModel):
         Root directory for the BIDS output.
     device :
         Neurophysiology recording type.  Must be one of ``"Eeg"``,
-        ``"Meg"``, ``"Ieeg"``, ``"Emg"``, or ``"Fnirs"``.
+        ``"Meg"``, ``"Ieeg"``, or ``"Emg"``.
     task :
         BIDS task label. If ``None``, the ``"task"`` column in the events
         DataFrame is used.
@@ -201,6 +203,11 @@ class BidsExporter(pydantic.BaseModel):
     _study_cls_name: str = pydantic.PrivateAttr(default="")
     _study_module: str = pydantic.PrivateAttr(default="")
     _study_path: Path = pydantic.PrivateAttr(default_factory=Path)
+    # Deepest directory shared by all of the study's stimulus files; set by
+    # export() so every job maps a given source file to the same destination.
+    _stim_root: Path = pydantic.PrivateAttr(default_factory=Path)
+    # timeline_id -> run label, for timelines that would otherwise share a BIDS path
+    _run_overrides: dict[str, str] = pydantic.PrivateAttr(default_factory=dict)
 
     def export(self, study: base.Study) -> Path:
         """Run the full BIDS export for *study*.
@@ -220,7 +227,19 @@ class BidsExporter(pydantic.BaseModel):
         self._study_path = study.path
 
         events = study.run()
+        stim_paths = (
+            events.loc[events["type"].isin(STIMULUS_FILE_TYPES), "filepath"]
+            .dropna()
+            .unique()
+            if "filepath" in events.columns
+            else []
+        )
+        if len(stim_paths):
+            self._stim_root = Path(
+                os.path.commonpath([str(Path(p).parent) for p in stim_paths])
+            )
         grouped = [(tid, df) for tid, df in events.groupby("timeline")]
+        self._run_overrides = self._assign_runs(grouped)
 
         # Create the BIDS root before dispatching jobs. write_raw_bids writes
         # shared root-level files (participants.tsv/json, README) guarded by a
@@ -252,6 +271,87 @@ class BidsExporter(pydantic.BaseModel):
             path,
         )
         return path
+
+    def _bids_entities(
+        self, timeline_df: pd.DataFrame
+    ) -> tuple[str, str | None, str, str | None]:
+        """Resolve ``(subject, session, task, run)`` for one timeline."""
+        # strip study-name prefix e.g. "Mne2013Sample/sample" -> "sample"
+        subject = _pad_label(timeline_df["subject"].iloc[0].split("/")[-1])
+        # TODO: remove if all Studies are now BIDS compliant
+        session = (
+            _pad_label(str(timeline_df["session"].iloc[0]))
+            if "session" in timeline_df.columns and timeline_df["session"].iloc[0]
+            else None
+        )
+        run = (
+            _pad_label(str(timeline_df["run"].iloc[0]))
+            if "run" in timeline_df.columns and timeline_df["run"].iloc[0]
+            else None
+        )
+        # task: parameter > events column
+        if self.task is not None:
+            task = self.task
+        elif "task" in timeline_df.columns:
+            task = str(timeline_df["task"].iloc[0])
+        else:
+            task = ""
+        if not task:
+            raise ValueError(
+                f"Task not found for timeline {timeline_df['timeline'].iloc[0]}. "
+                "Please provide a task name as a parameter or add a 'task' column to the events DataFrame."
+            )
+        return subject, session, task, run
+
+    def _assign_runs(self, grouped: list[tuple[str, pd.DataFrame]]) -> dict[str, str]:
+        """Give a distinct run label to timelines that would share a BIDS path.
+
+        Timelines told apart by a field that is not a BIDS entity (e.g. ``block``)
+        otherwise map to the same file and overwrite each other. Colliding
+        timelines are numbered in timeline order, skipping runs already used by
+        the same subject/session/task.
+        """
+        entities = {tid: self._bids_entities(df) for tid, df in grouped}
+        by_path: dict[tuple, list[str]] = collections.defaultdict(list)
+        used: dict[tuple, set[str]] = collections.defaultdict(set)
+        for tid, (sub, ses, task, run) in entities.items():
+            by_path[(sub, ses, task, run)].append(tid)
+            if run is not None:
+                used[(sub, ses, task)].add(run)
+        overrides: dict[str, str] = {}
+        for (sub, ses, task, run), tids in by_path.items():
+            if len(tids) < 2:
+                continue
+            taken = used[(sub, ses, task)]
+            n = 0
+            for tid in tids:
+                n += 1
+                while _pad_label(str(n)) in taken:
+                    n += 1
+                overrides[tid] = _pad_label(str(n))
+                taken.add(overrides[tid])
+            logger.warning(
+                "%d timelines share sub-%s ses-%s task-%s run-%s; numbering them "
+                "as distinct runs: %s",
+                len(tids),
+                sub,
+                ses,
+                task,
+                run,
+                {tid: overrides[tid] for tid in tids},
+            )
+        return overrides
+
+    def _stimulus_relpath(self, src: Path) -> Path:
+        """Path of stimulus file *src* relative to the BIDS ``stimuli/`` directory.
+
+        Keeps *src*'s path under the shared stimulus root, so distinct files
+        with the same basename in different folders do not overwrite each other.
+        """
+        try:
+            return src.relative_to(self._stim_root)
+        except ValueError:
+            return Path(src.name)
 
     @_infra_bids.apply(
         item_uid=lambda item: item[0],  # timeline_id — unique cache key per timeline
@@ -329,21 +429,8 @@ class BidsExporter(pydantic.BaseModel):
             )
             raw.set_annotations(annotations)
 
-        # Resolve subject — strip study-name prefix e.g. "Mne2013Sample/sample" -> "sample"
-        subject = _pad_label(timeline_df["subject"].iloc[0].split("/")[-1])
-
-        # Resolve optional BIDSPath fields from events columns
-        # TODO: remove if all Studies are now BIDS compliant
-        session = (
-            _pad_label(str(timeline_df["session"].iloc[0]))
-            if "session" in timeline_df.columns and timeline_df["session"].iloc[0]
-            else None
-        )
-        run = (
-            _pad_label(str(timeline_df["run"].iloc[0]))
-            if "run" in timeline_df.columns and timeline_df["run"].iloc[0]
-            else None
-        )
+        subject, session, resolved_task, run = self._bids_entities(timeline_df)
+        run = self._run_overrides.get(timeline_df["timeline"].iloc[0], run)
 
         # TODO: consider making these enum classes
         sex_map = {"unknown": 0, "male": 1, "female": 2}
@@ -365,21 +452,7 @@ class BidsExporter(pydantic.BaseModel):
                 else:
                     demographics[col] = float(timeline_df[col].iloc[0])
 
-        subject_info = mne._fiff.meas_info.SubjectInfo(demographics)
-        raw.info["subject_info"] = subject_info
-
-        # Resolve task: parameter > events column > study class name
-        if self.task is not None:
-            resolved_task = self.task
-        elif "task" in timeline_df.columns:
-            resolved_task = str(timeline_df["task"].iloc[0])
-        else:
-            resolved_task = None
-        if not resolved_task:
-            raise ValueError(
-                f"Task not found for timeline {timeline_df['timeline'].iloc[0]}. "
-                "Please provide a task name as a parameter or add a 'task' column to the events DataFrame."
-            )
+        raw.info["subject_info"] = demographics
 
         bids_path = mne_bids.BIDSPath(
             subject=subject,
@@ -443,13 +516,11 @@ class BidsExporter(pydantic.BaseModel):
             else pd.DataFrame()
         )
         if not stim_file_df.empty:
-            stimuli_dir = path / "stimuli"
-            stimuli_dir.mkdir(exist_ok=True)
-
             for src_path in stim_file_df["filepath"].unique():
                 src = Path(src_path)
-                dst = stimuli_dir / src.name
-                if not dst.exists():
+                dst = path / "stimuli" / self._stimulus_relpath(src)
+                if self.overwrite or not dst.exists():
+                    dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
 
             # Write stimulus event rows to the BIDS events.tsv sidecar.
@@ -467,7 +538,7 @@ class BidsExporter(pydantic.BaseModel):
             }
             bids_events = stim_file_df.copy()
             bids_events["stim_file"] = bids_events["filepath"].apply(
-                lambda p: f"stimuli/{Path(p).name}"
+                lambda p: self._stimulus_relpath(Path(p)).as_posix()
             )
             bids_events = bids_events.rename(columns={"start": "onset"})
             bids_events = bids_events.drop(
@@ -506,7 +577,7 @@ def study_to_bids(
     to parallelise per-timeline writes across SLURM or local workers.
 
     Currently supports neurophysiology modalities only: EEG, MEG, iEEG,
-    EMG, and fNIRS.  Neuroimaging modalities such as fMRI are not yet
+    and EMG.  fNIRS and neuroimaging modalities such as fMRI are not yet
     supported.
 
     Parameters
@@ -517,7 +588,7 @@ def study_to_bids(
         Root directory for the BIDS output.
     device :
         Neurophysiology recording type.  Must be one of ``"Eeg"``,
-        ``"Meg"``, ``"Ieeg"``, ``"Emg"``, or ``"Fnirs"``.
+        ``"Meg"``, ``"Ieeg"``, or ``"Emg"``.
     task :
         BIDS task label. If ``None``, the ``"task"`` column in the events
         DataFrame is used.

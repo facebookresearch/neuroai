@@ -27,7 +27,7 @@ Usage:
         --anonymize-daysback 365
 """
 
-# The export logic lives in neuralfetch.utils.bids; this module is argparse glue.
+# The export logic lives in neuralfetch.utils.bids.export; this module is argparse glue.
 
 from __future__ import annotations
 
@@ -38,10 +38,10 @@ NAME = "export-bids"
 HELP = "Export a study to a BIDS directory tree."
 
 # Devices supported by the BIDS exporter (mirrors
-# ``neuralfetch.utils.bids.MNE_RAW_TYPES``). Defined here so registering the
+# ``neuralfetch.utils.bids.export.MNE_RAW_TYPES``). Defined here so registering the
 # subparser does not import mne/exca; runtime validation happens in
 # ``study_to_bids``.
-_DEVICES = ("Eeg", "Emg", "Fnirs", "Ieeg", "Meg")
+_DEVICES = ("Eeg", "Emg", "Ieeg", "Meg")
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -59,7 +59,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "--device",
         required=True,
         choices=_DEVICES,
-        help="Neurophysiology recording type (e.g. Eeg, Meg, Ieeg, Emg, Fnirs).",
+        help="Neurophysiology recording type (e.g. Eeg, Meg, Ieeg, Emg).",
     )
     parser.add_argument(
         "--path",
@@ -146,7 +146,7 @@ def run(args: argparse.Namespace) -> None:
 
     import neuralset as ns
     from neuralfetch.utils import root_study_folder
-    from neuralfetch.utils.bids import study_to_bids
+    from neuralfetch.utils.bids.export import study_to_bids
 
     folder = args.path or (root_study_folder() / args.study)
 

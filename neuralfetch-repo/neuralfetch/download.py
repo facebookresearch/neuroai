@@ -763,7 +763,6 @@ class Gin(Datalad):
 
     branch: str = "master"
 
-    @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
     def _https_base(self) -> str:
         """``https://...<repo>.git`` -> ``https://...<repo>/raw/<branch>``."""
@@ -800,7 +799,8 @@ class Gin(Datalad):
             first_line = head.split(b"\n", 1)[0].decode("ascii")
         except UnicodeDecodeError:
             return None
-        return first_line[len("/annex/objects/") :]
+        # bare "/annex/objects/<key>" or the hashed "/annex/objects/aB/Cd/<key>/<key>"
+        return Path(first_line).name
 
     def _selected_pointers(self, repo_root: Path) -> list[tuple[str, Path]]:
         """``(annex_key, repo-relative path)`` for every selected pointer file.

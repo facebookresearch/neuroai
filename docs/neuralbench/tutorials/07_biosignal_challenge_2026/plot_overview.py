@@ -92,9 +92,10 @@ re-run the top three submissions of each track.
 #    NeuralBench task and the exact commands that reproduce its baseline.
 # 4. Register for that track on Codabench, from the `competition website
 #    <https://neural-interfaces26.github.io/>`_.
-# 5. Start the track's ``--download`` early -- on the default corpus it is
-#    the long pole, measured in hours, so start on the smaller dataset the
-#    track page names (see `Budgeting disk and the first download`_).
+# 5. Start the track's ``--download`` early -- on the default corpora of
+#    Tracks 1 and 4 it is the long pole, measured in hours, so start on the
+#    smaller dataset the track page names (see `Budgeting disk and the first
+#    download`_).
 # 6. Iterate on your model, then read :doc:`How to Submit a Model
 #    <plot_submission_guide>`.
 
@@ -164,11 +165,16 @@ re-run the top three submissions of each track.
 #      - --
 #      - --
 #      - --
-#      - 25.14 +/- 2.30
+#      - 16.46 +/- 0.17
 #
-# The Sleep column is the benchmark version of the task, ``sleep_onset``.
-# Track 3 uses ``_sleep_onset_stream``, whose test windows differ, so its
-# bMAE is not comparable (see the :doc:`Track 3 page <plot_track3_sleep_onset>`).
+# The BCI and Sleep columns are the benchmark versions of the tasks,
+# ``motor_imagery`` and ``sleep_onset``, on their default datasets
+# (``Stieger2021Continuous`` and Sleep-EDF). Tracks 2 and 3 use
+# ``_motor_imagery_stream`` and ``_sleep_onset_stream``, which default to the
+# competition's training releases instead (``Dreyer2026Proteus`` and
+# ``Interaxon2026Muse``), so their scores are not comparable with these
+# columns (see the :doc:`Track 2 <plot_track2_eeg_to_bci>` and
+# :doc:`Track 3 <plot_track3_sleep_onset>` pages).
 #
 # The pose column is in degrees, to match the published baseline, while
 # the task logs ``val/mae`` in radians: multiply by 180 / pi to compare.
@@ -179,7 +185,7 @@ re-run the top three submissions of each track.
 #
 # ``--download`` is a one-off step per machine, but not a small one, and
 # the track pages put it first for that reason: the default corpora run
-# from a few gigabytes to several hundred, and the upstream server is
+# from about a gigabyte to several hundred, and the upstream server is
 # usually slower than your disk. Check free space before starting one, and
 # run it somewhere you can leave going for hours.
 #
@@ -205,24 +211,24 @@ re-run the top three submissions of each track.
 #      - ~220 GB
 #      - ~13 GB
 #    * - 2 -- BCI
-#      - ``Stieger2021Continuous``
-#      - ~940 GB
-#      - ~96 GB
+#      - ``Dreyer2026Proteus``
+#      - ~1.5 GB
+#      - ~0.7 GB
 #    * - 3 -- Sleep onset
-#      - ``Kemp2000Analysis``
-#      - ~7 GB
-#      - ~18 GB
+#      - ``Interaxon2026Muse``
+#      - ~1.1 GB
+#      - ~1.1 GB
 #    * - 4 -- EMG pose
 #      - ``Salter2024Emg2pose``
 #      - ~330 GB
 #      - ~440 GB
 #
-# Two entries need a footnote. ``Stieger2021Continuous`` ends up on disk
-# three times over -- the NEMAR original, the copy MOABB converts on first
-# read, and a second converted tree -- which is where the ~940 GB comes
-# from rather than any one copy being that large. And Track 4's cache
-# exceeds its raw data because the 20 joint angles are cached as a second
-# 2 kHz pass (~230 GB) alongside the EMG itself (~185 GB).
+# Track 4's cache exceeds its raw data because the 20 joint angles are
+# cached as a second 2 kHz pass (~230 GB) alongside the EMG itself
+# (~185 GB). The benchmark-version defaults behind the BCI and Sleep columns
+# above are larger: ``Stieger2021Continuous`` takes ~940 GB raw (the NEMAR
+# original, the copy MOABB converts on first read, and a second converted
+# tree) and ~96 GB of cache, Sleep-EDF ~7 GB raw and ~18 GB of cache.
 #
 # These figures are larger than the archive sizes the competition website
 # lists, which describe the compressed upstream releases rather than what
@@ -234,15 +240,14 @@ re-run the top three submissions of each track.
 # warms two caches rather than reusing one. Budget per model family you
 # intend to run, not per track.
 #
-# Every track page opens with a cheaper way in, and none of them needs the
-# default corpus to exercise the pipeline end to end. Among Track 1's
-# alternatives, ``Xu2024Alljoined`` is ~5 GB and under a minute to fetch,
-# ``Xu2025Alljoined`` (Alljoined-1.6M) ~8.5 GB and ~8 minutes (mostly its
-# many small sidecar files), and ``Grootswagers2022Human`` ~75 GB. Track 2's
-# ``tangermann2012`` is under 1 GB, and Track 4's ``--download --debug``
-# fetches three subjects instead of 193. Track 3 needs no shortcut at all:
-# Sleep-EDF is ~7 GB and a few minutes to fetch, which is why it is the
-# track to try first.
+# Tracks 2 and 3 need no shortcut: their defaults are the competition's own
+# training releases, each under 2 GB. Tracks 1 and 4 open with a cheaper way
+# in, and neither needs the default corpus to exercise the pipeline end to
+# end. Among Track 1's alternatives, ``Xu2024Alljoined`` is ~5 GB and under
+# a minute to fetch, ``Xu2025Alljoined`` (Alljoined-1.6M) ~8.5 GB and ~8
+# minutes (mostly its many small sidecar files), and
+# ``Grootswagers2022Human`` ~75 GB. Track 4's ``--download --debug``
+# fetches three subjects instead of 193.
 
 # %%
 # How much wall-clock to expect
@@ -306,10 +311,10 @@ re-run the top three submissions of each track.
 # .. code-block:: bash
 #
 #    # 1. Run the three EEG tracks (cached automatically)
-#    neuralbench eeg image motor_imagery _sleep_onset_stream -m eegnet reve
+#    neuralbench eeg image _motor_imagery_stream _sleep_onset_stream -m eegnet reve
 #
 #    # 2. Aggregate cached results -- no retraining
-#    neuralbench eeg image motor_imagery _sleep_onset_stream -m eegnet reve --plot-cached
+#    neuralbench eeg image _motor_imagery_stream _sleep_onset_stream -m eegnet reve --plot-cached
 #
 #    # 3. Track 4 lives under another device -- aggregate separately
 #    neuralbench emg pose -m vemg2pose --plot-cached
@@ -355,26 +360,29 @@ re-run the top three submissions of each track.
 # Known gaps in this starter kit
 # -------------------------------
 #
-# The competition releases its own corpora through NeuralBench when
-# submissions open. Until then the track pages run on the closest open
-# datasets, so three pieces are still missing here:
+# The Track 2 and Track 3 pages run on the training releases of the
+# competition corpora, but three pieces of the competition setup are still
+# missing here:
 #
-# 1. **Official Track 2 dataset (MI / Calc / Word, 20 subjects, 6
-#    sessions, Graz + BrainHero).** The task still defaults to
-#    ``Stieger2021Continuous`` (4 motor-imagery classes), which is also
-#    what the published baseline numbers come from. Add
-#    ``--dataset dreyer2023`` for the **recommended warm-up
-#    configuration**: ``Dreyer2023Large``, 2 classes on held-out subjects,
-#    the corpus Codabench currently scores against.
+# 1. **Official Track 2 split (MI / Calc / Word, 20 subjects, 6
+#    sessions, Graz + BrainHero).** The training release is on NEMAR as
+#    ``nm000290`` (112 runs from 14 sessions of 10 participants, 41 EEG
+#    channels at 500 Hz), and is the default dataset of
+#    ``_motor_imagery_stream``, as a local subject-disjoint baseline, not
+#    the official cross-session split or the sealed evaluation. Add
+#    ``--dataset dreyer2023`` for ``Dreyer2023Large``, 2 classes on held-out
+#    subjects, the corpus Codabench currently scores the warm-up against.
 #    ``Scherer2015Individually`` covers the cross-session, multi-command
 #    side of the task.
-# 2. **Muse sleep-onset training set.** More details to come. The
-#    Track 3 page currently runs on ``Kemp2000Analysis`` (Sleep-EDF) -- and
-#    the additional ``Ghassemi2018You`` / ``Alvarez2022Haaglanden`` PSG
-#    datasets -- with the same ``SleepOnsetTargetExtractor`` + ``bmae``
-#    metric the competition will use. Note that these are clinical
-#    polysomnography, so the starter kit adds a device gap the competition
-#    itself does not have: there, training and evaluation are both Muse.
+# 2. **Sealed Muse sleep-onset score.** The training set is on NEMAR as
+#    ``nm000287`` (540 recordings from 203 participants, four EEG channels
+#    at 128 Hz), and is the default dataset of ``_sleep_onset_stream``, as a
+#    local subject-disjoint baseline. It uses unweighted ``bmae``, not the
+#    sealed Muse weighted score. The supplied 500/40 session split remains
+#    available through NeuralFetch. Sleep-EDF (``--dataset
+#    kemp2000analysis``, the warm-up set) and the additional clinical PSG
+#    datasets remain proxy datasets; see Track 3 for the evaluation
+#    limitations.
 # 3. **Hidden evaluation sets.** All four tracks are scored against labels
 #    that stay confidential (the Alljoined evaluation cohort, later
 #    Graz/BrainHero sessions, the Muse evaluation cohort, and the EMG2Pose

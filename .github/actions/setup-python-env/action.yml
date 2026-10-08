@@ -16,6 +16,9 @@ outputs:
   data-cache-hit:
     description: Whether the data cache (HF / Torch / neuralset / MNE) was restored.
     value: ${{ steps.data-cache.outputs.cache-hit }}
+  venv-cache-hit:
+    description: Whether the .venv cache was restored.
+    value: ${{ steps.cache-venv.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -30,6 +33,7 @@ runs:
         {
           echo "MONTH=$MONTH"
           echo "DATA_CACHE_KEY=data-v1-$MONTH"
+          echo "VENV_CACHE_KEY=venv-v1-$MONTH-main"
           echo "DATA_CACHE_PATH<<EOF"
           echo "~/.cache/huggingface"
           echo "~/.cache/torch/hub"
@@ -49,7 +53,7 @@ runs:
       uses: actions/cache/restore@v4
       with:
         path: ./.venv
-        key: venv-v1-${{ env.MONTH }}-main
+        key: ${{ env.VENV_CACHE_KEY }}
 
     - name: Create .venv (on cache miss)
       if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -81,14 +85,6 @@ runs:
         source .venv/bin/activate
         python -m spacy download en_core_web_lg
         python -m spacy download fr_core_news_lg
-
-    # all jobs install the same packages, so the cache-key race is benign
-    - name: Save .venv cache (main only)
-      if: steps.cache-venv.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
-      uses: actions/cache/save@v4
-      with:
-        path: ./.venv
-        key: venv-v1-${{ env.MONTH }}-main
 
     - name: Print installed packages
       shell: bash

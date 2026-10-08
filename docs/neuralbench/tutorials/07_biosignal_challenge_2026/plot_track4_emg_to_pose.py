@@ -203,7 +203,10 @@ wristband placement and kinematic context at once.
 # ``BAD_IK`` events mark intervals without inverse-kinematics labels, and any
 # window overlapping one is dropped from every split; padded recording tails
 # are not segmented into training windows either. Joint angles stay in the
-# radians emg2pose trains on, so the loss and metrics are radians too.
+# radians emg2pose trains on, so the loss and metrics are radians too. EMG is
+# scaled from SI volts to microvolts (``scale_factor: 1e6``) to match emg2pose.
+# Alongside pooled ``test/mae``, the task logs the mean and sample SD of the
+# per-user MAE as ``test/mae_subject_mean`` and ``test/mae_subject_std``.
 #
 # .. warning::
 #
