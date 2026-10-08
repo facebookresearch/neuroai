@@ -45,7 +45,7 @@ def _get_punct_model() -> tp.Any:
                 "token-classification",
                 _PUNCT_CHECKPOINT,
                 aggregation_strategy="none",
-                device=0 if torch.cuda.is_available() else -1,
+                device=torch.cuda.current_device() if torch.cuda.is_available() else -1,
             )
 
     return _Pinned()
