@@ -533,15 +533,12 @@ def test_ensure_texts_encloses_words() -> None:
 @pytest.mark.skipif("CI" in os.environ, reason="DL punctuation model not in CI")
 def test_ensure_texts_fullstop() -> None:
     _, df = _make_test_events()
+    df["text"] = df.text.str.rstrip(".")  # else restoration has nothing to add
     df = ns.events.standardize_events(df)
-    try:
-        result = _transf.EnsureTexts(punctuation="fullstop")(df)
-    except TypeError as e:
-        if "grouped_entities" in str(e):
-            pytest.skip("deepmultilingualpunctuation incompatible with transformers")
-        raise
+    result = _transf.EnsureTexts(punctuation="fullstop")(df)
     text_row = result[result.type == "Text"].iloc[0]
     assert text_row.text != " ".join(df[df.type == "Word"].text)
+    assert "." in text_row.text
 
 
 @pytest.mark.parametrize("use_extra", [False, True])
