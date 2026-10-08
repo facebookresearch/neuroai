@@ -288,6 +288,36 @@ def test_hf_dinov2(cat_event: etypes.Image) -> None:
     assert extractor.model.config.id2label[idx] == "tabby, tabby cat"  # type: ignore
 
 
+def test_image_and_video_event_types(tmp_path: Path) -> None:
+    from .test_video import make_video_event
+
+    fps = [tmp_path / "images" / f"im{k}.jpg" for k in range(2)]
+    for fp in fps:
+        create_image(fp)
+    im0, im1 = (
+        etypes.Image(start=s, duration=1, filepath=fp, timeline="foo")
+        for s, fp in zip([0, 8], fps)
+    )
+    video = make_video_event(tmp_path / "video")
+    params: tp.Any = dict(
+        frequency=0.5,
+        infra={"folder": tmp_path / "cache"},
+        device="cpu",
+        model_name="facebook/dinov2-small-imagenet1k-1-layer",
+    )
+    mixed = ns.extractors.HuggingFaceImage(event_types=("Image", "Video"), **params)
+    outs = list(mixed._get_data([im0, video, im1]))
+    assert [o.shape for o in outs] == [(384,), (384, 3), (384,)]
+    image = ns.extractors.HuggingFaceImage(event_types="Image", **params)
+    vid = ns.extractors.HuggingFaceImage(event_types="Video", **params)
+    expected = list(image._get_data([im0, im1]))
+    expected.insert(1, next(vid._get_data([video])))
+    for out, exp in zip(outs, expected):
+        np.testing.assert_allclose(out, exp, rtol=1e-4, atol=1e-5)
+    with pytest.raises(ValueError):
+        ns.extractors.HuggingFaceImage(event_types=("Image", "Audio"))
+
+
 @pytest.mark.parametrize("imsize", [None, 512])
 def test_hog(cat_event: etypes.Image, imsize: None | int) -> None:
     pytest.importorskip("skimage")

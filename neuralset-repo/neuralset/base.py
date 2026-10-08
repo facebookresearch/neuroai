@@ -291,6 +291,8 @@ class TimedArray:
        fast access without loading full arrays into memory.
     """
 
+    _INIT_PARAMS: tp.ClassVar[dict[type[tp.Any], tuple[str, ...]]] = {}
+
     def __init__(
         self,
         *,  # forbid positional
@@ -483,10 +485,12 @@ class TimedArray:
                 raise RuntimeError(
                     "Cannot copy a TimedArray with aggregated contribution counts"
                 )
-        names = list(inspect.signature(type(self).__init__).parameters)[1:]  # drop self
-        kw = {name: getattr(self, name) for name in names}
+        cls = type(self)
+        if cls not in self._INIT_PARAMS:  # signature() is ~10us, copy is used intensely
+            self._INIT_PARAMS[cls] = tuple(inspect.signature(cls).parameters)
+        kw = {name: getattr(self, name) for name in self._INIT_PARAMS[cls]}
         kw.update(changes)
-        return type(self)(**kw)
+        return cls(**kw)
 
     def overlap(self: _TA, start: float, duration: float) -> _TA:
         """Returns the sub TimedArray overlapping with the provided start

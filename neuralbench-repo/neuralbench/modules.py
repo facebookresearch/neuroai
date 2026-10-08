@@ -60,6 +60,55 @@ class LoraConfig(pydantic.BaseModel):
         )
 
 
+# TODO: delete through route_bypassed_qkv_lora once braindecode > 1.8.1 (braindecode#1194)
+class _AddDelta(nn.Module):
+    def __init__(self, delta: torch.Tensor) -> None:
+        super().__init__()
+        self.delta = delta
+
+    def forward(self, weight: torch.Tensor) -> torch.Tensor:
+        return weight + self.delta
+
+
+def _merge_qkv_lora(attn: nn.Module, args: tp.Any) -> None:
+    qkv: tp.Any = attn.qkv  # a peft LoraLayer
+    if qkv.disable_adapters or qkv.merged:
+        return
+    delta = sum(
+        qkv.get_delta_weight(name) for name in qkv.active_adapters if name in qkv.lora_A
+    )
+    if isinstance(delta, torch.Tensor):
+        nn.utils.parametrize.register_parametrization(
+            qkv.base_layer, "weight", _AddDelta(delta)
+        )
+
+
+def _unmerge_qkv_lora(attn: nn.Module, args: tp.Any, output: tp.Any) -> None:
+    qkv: tp.Any = attn.qkv
+    base = qkv.base_layer
+    if nn.utils.parametrize.is_parametrized(base, "weight"):
+        nn.utils.parametrize.remove_parametrizations(
+            base, "weight", leave_parametrized=False
+        )
+
+
+def route_bypassed_qkv_lora(model: nn.Module) -> int:
+    """Make LoRA on ``qkv`` reach BEiT-style attention; return the modules patched.
+
+    BEiT-style attention (LaBraM, EEG-DINO) reads ``qkv.weight`` through
+    ``F.linear`` and never calls ``qkv``; each forward sees ``W + delta`` instead.
+    """
+    from peft.tuners.lora import Linear as LoraLinear
+
+    patched = 0
+    for attn in model.modules():
+        if isinstance(getattr(attn, "qkv", None), LoraLinear) and hasattr(attn, "q_bias"):
+            attn.register_forward_pre_hook(_merge_qkv_lora)
+            attn.register_forward_hook(_unmerge_qkv_lora, always_call=True)
+            patched += 1
+    return patched
+
+
 class IndexSelect(nn.Module):
     """Select specific indices along a dimension, squeezing if only one index is selected."""
 
@@ -628,6 +677,12 @@ class DownstreamWrapper(pydantic.BaseModel):
                 wrapper_model.wrapped_model,  # type: ignore[arg-type]
                 peft_cfg,
             )
+            # eval fast path skips the adapters; process-wide switch
+            torch.backends.mha.set_fastpath_enabled(False)
+            if route_bypassed_qkv_lora(wrapper_model.wrapped_model) and (
+                self.lora_config.lora_dropout
+            ):
+                LOGGER.warning("lora_dropout is not applied to BEiT-style qkv adapters.")
 
         # Sanity check (wrapper handles preprocessing internally)
         wrapper_output = wrapper_model(**dummy_batch)

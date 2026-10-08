@@ -218,14 +218,14 @@ class HuggingFaceVideo(extractor_base.BaseExtractor, hf.HuggingFaceMixin):
                 data = np.array([np.array(pi) for pi in pil_imgs])
                 embd = self._embed_clip(data)
                 if not output.size:
-                    output = np.zeros((len(times),) + embd.shape)
+                    output = np.zeros((len(times),) + embd.shape, dtype=np.float32)
                     logger.debug("Created Tensor with size %s", output.shape)
                 output[k] = embd
             video.close()
             # set first (time) dim to last
             output = output.transpose(list(range(1, output.ndim)) + [0])
             yield nsbase.TimedArray(
-                data=output.astype(np.float32),
+                data=output,
                 frequency=self.frequency,
                 start=nsbase._UNSET_START,
                 duration=event.duration,

@@ -75,8 +75,8 @@ downstream_model_wrapper:
   # LUNA, REVE).
   aggregation: mean
   probe_config: linear
-  # nn.MultiheadAttention packs Q/K/V into in_proj_weight: only out_proj is patchable
+  # whole nn.MultiheadAttention: it never calls out_proj
   lora_target_modules:
-    - out_proj
+    - self_attn
 
 # Paper config (Kostas et al. 2021): Adam lr 1e-5-5e-5 wd 0.01, cosine+10% warmup, full FT, linear head on CLS.

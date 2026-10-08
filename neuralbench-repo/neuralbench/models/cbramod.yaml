@@ -25,8 +25,9 @@ downstream_model_wrapper:
   model_output_key: null
   aggregation: mean
   probe_config: linear
-  # self_attn_{s,t} are nn.MultiheadAttention: only their out_proj is patchable
+  # whole nn.MultiheadAttention: it never calls out_proj
   lora_target_modules:
-    - out_proj
+    - self_attn_s
+    - self_attn_t
 
 # Paper config (Wang et al. 2025): AdamW lr 1e-4 wd 5e-2, CosineAnnealingLR, 50ep, flatten + MLP head (dropout 0.1), full FT, label smoothing 0.1.

@@ -122,7 +122,7 @@ def test_mixed_type_column_parquet(tmp_path: Path) -> None:
         ]
     )
     cd: tp.Any = cachedict.CacheDict(folder=tmp_path)
-    with cd.writer() as writer:
+    with cd.write() as writer:
         writer["test"] = events
     loaded = cd["test"]
     assert set(loaded["foo"].astype(str)) == {"1", "x"}

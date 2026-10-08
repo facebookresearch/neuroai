@@ -520,6 +520,27 @@ class AddDefaultEvents(_transf.EventsTransform):
         return events
 
 
+class AddOnsetEvents(_transf.EventsTransform):
+    """Add one ``Event`` per distinct onset of ``event_types``, copied from its longest event.
+
+    Triggering on ``Event`` instead of on ``event_types`` yields one segment per onset
+    when several events share it, while extractors still see every event.
+
+    Parameters
+    ----------
+    event_types : list of str
+        Event types whose onsets are marked.
+    """
+
+    event_types: list[str]
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        selected = events[events.type.isin(self.event_types)]
+        longest_first = selected.sort_values("duration", ascending=False, kind="stable")
+        onsets = longest_first.drop_duplicates(["timeline", "start"]).assign(type="Event")
+        return pd.concat([events, onsets], ignore_index=True)
+
+
 class OffsetEvents(_transf.EventsTransform):
     """Offset selected events by specified amounts.
 

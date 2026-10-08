@@ -336,7 +336,7 @@ _PT_CBRAMOD = frozenset(
 )
 _PT_LABRAM = frozenset(
     {
-        "Schalk2004Bci",
+        "Schalk2004Bci2000",
         "Hamid2020Tuar",
         "Veloso2017Tuep",
         "Shah2018Tusz",

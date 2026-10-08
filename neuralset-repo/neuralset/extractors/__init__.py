@@ -38,6 +38,7 @@ from .neuro import (
     BaseFmriProjector,
     ChannelPositions,
     CiftiRoiProjector,
+    EcgExtractor,
     EegExtractor,
     EmgExtractor,
     FmriCleaner,

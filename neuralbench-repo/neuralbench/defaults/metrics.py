@@ -146,12 +146,18 @@ def get_sleep_onset_metric_configs(
 
 
 retrieval_metrics = [
-    {"log_name": "batch_median_rank", "name": "Rank", "reduction": "median"},
-    {"log_name": "batch_mean_rank", "name": "Rank", "reduction": "mean"},
-    {"log_name": "batch_std_rank", "name": "Rank", "reduction": "std"},
-    {"log_name": "batch_top1_acc", "name": "TopkAcc", "topk": 1},
+    # batch analogues of test_full_retrieval_metrics; *_mean is the val monitor
+    {
+        "log_name": "batch_inv_norm_rank_median",
+        "name": "InverseNormalizedRank",
+        "reduction": "median",
+    },
+    {
+        "log_name": "batch_inv_norm_rank_mean",
+        "name": "InverseNormalizedRank",
+        "reduction": "mean",
+    },
     {"log_name": "batch_top5_acc", "name": "TopkAcc", "topk": 5},
-    {"log_name": "batch_top10_acc", "name": "TopkAcc", "topk": 10},
     {
         "log_name": "batch_pearson_corr",
         "name": "OnlinePearsonCorr",
@@ -162,46 +168,36 @@ retrieval_metrics = [
 
 
 test_full_retrieval_metrics = [
+    # headline: inv_norm_rank_mean (retrieval AUC); rest logged for comparison
     {
-        "log_name": "median_retrieval_rank",
-        "name": "Rank",
+        "log_name": "inv_norm_rank_median",
+        "name": "InverseNormalizedRank",
         "reduction": "median",
     },
     {
-        "log_name": "median_retrieval_rank_subject-ind",
-        "name": "Rank",
+        "log_name": "inv_norm_rank_median_instance-agg",
+        "name": "InverseNormalizedRank",
         "reduction": "median",
     },
     {
-        "log_name": "mean_retrieval_rank",
-        "name": "Rank",
+        "log_name": "inv_norm_rank_median_subject-agg",
+        "name": "InverseNormalizedRank",
+        "reduction": "median",
+    },
+    {
+        "log_name": "inv_norm_rank_mean",
+        "name": "InverseNormalizedRank",
         "reduction": "mean",
     },
     {
-        "log_name": "std_retrieval_rank",
-        "name": "Rank",
-        "reduction": "std",
+        "log_name": "inv_norm_rank_mean_instance-agg",
+        "name": "InverseNormalizedRank",
+        "reduction": "mean",
     },
     {
-        "log_name": "median_retrieval_rank_instance-agg",
-        "name": "Rank",
-        "reduction": "median",
-    },
-    {
-        "log_name": "median_retrieval_rank_subject-agg",
-        "name": "Rank",
-        "reduction": "median",
-    },
-    {"log_name": "top1_acc", "name": "TopkAcc", "topk": 1},
-    {
-        "log_name": "top1_acc_instance-agg",
-        "name": "TopkAcc",
-        "topk": 1,
-    },
-    {
-        "log_name": "top1_acc_subject-agg",
-        "name": "TopkAcc",
-        "topk": 1,
+        "log_name": "inv_norm_rank_mean_subject-agg",
+        "name": "InverseNormalizedRank",
+        "reduction": "mean",
     },
     {"log_name": "top5_acc", "name": "TopkAcc", "topk": 5},
     {
@@ -213,16 +209,5 @@ test_full_retrieval_metrics = [
         "log_name": "top5_acc_subject-agg",
         "name": "TopkAcc",
         "topk": 5,
-    },
-    {"log_name": "top10_acc", "name": "TopkAcc", "topk": 10},
-    {
-        "log_name": "top10_acc_instance-agg",
-        "name": "TopkAcc",
-        "topk": 10,
-    },
-    {
-        "log_name": "top10_acc_subject-agg",
-        "name": "TopkAcc",
-        "topk": 10,
     },
 ]

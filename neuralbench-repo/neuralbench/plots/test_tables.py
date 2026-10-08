@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from neuralbench.aggregator import BenchmarkAggregator
@@ -15,6 +17,8 @@ from neuralbench.plots.tables import (
     build_results_df,
     filter_results_for_eval_mode,
     foundation_eval_modes,
+    make_rank_table,
+    make_results_table,
 )
 
 _DEFAULT_MAPPING: dict[str, str] = BenchmarkAggregator.model_fields[
@@ -28,6 +32,7 @@ def _row(
     brain_model_name: str = "EEGNet",
     eval_mode: str | None = None,
     seed: int = 0,
+    task_name: str = "sleep_onset",
     **metric_values: float,
 ) -> dict:
     """Build one synthetic result row with the columns ``build_results_df`` reads.
@@ -38,7 +43,7 @@ def _row(
     row: dict = {
         "loss": {"name": loss_name},
         "brain_model_name": brain_model_name,
-        "task_name": "sleep_onset",
+        "task_name": task_name,
         "seed": seed,
         **metric_values,
     }
@@ -251,3 +256,37 @@ def test_filter_results_for_eval_mode_keeps_non_fm_reference():
     df = build_results_df(subset, _DEFAULT_MAPPING, suffix_eval_mode=False)
     # NtReve@finetune dropped; NtReve@linear_probe + EEGNet kept, both bare.
     assert set(df["model_name"]) == {"REVE", "EEGNet"}
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [((42.0,), "42.000"), ((42.0, 44.0), "43.000 \u00b1 1.414")],
+)
+def test_results_table_reports_spread_only_when_seeds_define_one(
+    tmp_path: Path, values: tuple[float, ...], expected: str
+):
+    results = [
+        _row(loss_name="MultiLoss", seed=seed) | {"test/bmae": value}
+        for seed, value in enumerate(values)
+    ]
+    table = make_results_table(build_results_df(results, _DEFAULT_MAPPING), tmp_path)
+    assert table.iloc[0, 0] == expected
+
+
+def test_rank_table_average_covers_only_tasks_every_model_ranked(tmp_path: Path):
+    # Chance alone scores "age", so averaging it in would rank models on
+    # different task sets.
+    results = [
+        _row(loss_name="MultiLoss", brain_model_name=model, task_name=task)
+        | {"test/bmae": value}
+        for model, task, value in [
+            ("EEGNet", "sleep_onset", 1.0),
+            ("chance", "sleep_onset", 2.0),
+            ("chance", "age", 3.0),
+        ]
+    ]
+    df = build_results_df(results, _DEFAULT_MAPPING)
+    with pytest.warns(UserWarning, match="age"):
+        table = make_rank_table(df, tmp_path)
+    # averaging "age" in would lift chance to 1.5 on a task EEGNet never ran
+    assert table.loc["average"].to_dict() == {"EEGNet": 1.0, "chance": 2.0}

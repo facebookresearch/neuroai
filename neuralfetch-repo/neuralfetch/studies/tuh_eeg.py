@@ -556,11 +556,15 @@ class Harati2015Tuev(_BaseTuhEeg):
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=518,
         num_subjects=370,
-        num_events_in_query=20,
+        num_events_in_query=19,
         event_types_in_query={"Eeg", "Artifact", "EpileptiformActivity"},
         data_shape=(23, 306500),
         frequency=250.0,
     )
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
@@ -610,9 +614,14 @@ class Harati2015Tuev(_BaseTuhEeg):
         if condense_events:
             annots_df = self._condense_events(annots_df)
         if merge_channels:
-            groups = annots_df.groupby(["type", "start", "duration", "state"], sort=False)
-            annots_df = groups.channel.apply(
-                lambda x: "{" + ",".join([str(int(x)) for x in sorted(x)]) + "}"
+            # not keyed on duration: it varies across channels for one event
+            groups = annots_df.groupby(["type", "start", "state"], sort=False)
+            annots_df = groups.agg(
+                duration=("duration", "max"),
+                channel=(
+                    "channel",
+                    lambda ch: "{" + ",".join(str(int(c)) for c in sorted(ch)) + "}",
+                ),
             ).reset_index()
         return pd.concat([eeg_df, annots_df], ignore_index=True)
 

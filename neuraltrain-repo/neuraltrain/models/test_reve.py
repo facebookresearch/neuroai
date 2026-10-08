@@ -10,7 +10,7 @@ import braindecode.models
 import pytest
 import torch
 
-from .common import INVALID_POS_VALUE
+from .common import INVALID_POS_VALUE, resolve_with_anode_fallback
 from .reve import NtReve, _ReveWrapper
 
 BANK_CH_NAMES = ["Fp1", "Fp2", "C3", "C4", "O1", "O2", "Fz", "Cz"]
@@ -132,7 +132,7 @@ def test_remap_chs_info():
 
 
 # ---------------------------------------------------------------------------
-# NtReve._derive_bipolar_position (anode fallback)
+# NtReve._bank_lookup (case folding) + shared anode fallback
 # ---------------------------------------------------------------------------
 
 
@@ -145,24 +145,25 @@ def _make_mock_bank(names: list[str]):
 
 
 @pytest.mark.parametrize(
-    "ch_name, bank_names, expect_result",
+    "ch_name, bank_names, expected",
     [
-        ("Fp1-F3", ["Fp1", "F3", "Cz"], True),
-        ("Fp1-F3", ["F3", "Cz"], False),
-        ("Fp1", ["Fp1", "Cz"], False),
-        ("BOGUS", ["Fp1", "Cz"], False),
+        ("Fp1", ["Fp1", "Cz"], "Fp1"),
+        ("FP1", ["Fp1", "Cz"], "Fp1"),
+        ("Fp1-F3", ["Fp1", "F3", "Cz"], "Fp1"),
+        ("FP1-F3", ["Fp1", "F3", "Cz"], "Fp1"),
+        ("Fp1-F3", ["F3", "Cz"], None),
+        ("BOGUS", ["Fp1", "Cz"], None),
     ],
 )
-def test_derive_bipolar_position(ch_name, bank_names, expect_result):
-    """Bipolar lookup returns anode position when available, None otherwise."""
+def test_bank_lookup_resolves_case_and_anode(ch_name, bank_names, expected):
     bank = _make_mock_bank(bank_names)
-    result = NtReve._derive_bipolar_position(ch_name, bank)
-    if expect_result:
-        anode = ch_name.split("-")[0]
-        assert result is not None
-        assert torch.equal(result, bank.embedding[bank.mapping[anode]])
-    else:
-        assert result is None
+    position, used_anode = resolve_with_anode_fallback(ch_name, NtReve._bank_lookup(bank))
+    if expected is None:
+        assert position is None, f"{ch_name!r} unexpectedly resolved in {bank_names}"
+        return
+    assert position is not None, f"{ch_name!r} should resolve in {bank_names}"
+    assert torch.equal(position, bank.embedding[bank.mapping[expected]])
+    assert used_anode == ("-" in ch_name), "anode flag must mark bipolar resolution"
 
 
 # ---------------------------------------------------------------------------

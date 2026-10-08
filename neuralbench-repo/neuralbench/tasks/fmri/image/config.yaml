@@ -61,7 +61,7 @@ brain_model_config:
   output_head_config:
     hidden_sizes:
       - *brain_model_output_size
-trainer_config.monitor: val/batch_top5_acc
+trainer_config.monitor: val/batch_inv_norm_rank_mean
 trainer_config.mode: max
 loss:
   name: ClipLoss

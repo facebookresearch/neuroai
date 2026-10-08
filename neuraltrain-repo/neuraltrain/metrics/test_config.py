@@ -6,13 +6,17 @@
 
 import typing as tp
 
+import numpy as np
 import pydantic
 import pytest
 import torch
 import torchmetrics
 
 from . import BaseMetric
-from .base import MeanSquaredError  # type: ignore[attr-defined]
+from .base import (  # type: ignore[attr-defined]
+    MeanSquaredError,
+    PearsonCorrCoef,
+)
 from .metrics import Rank, TopkAcc
 
 
@@ -68,3 +72,18 @@ def test_torchmetrics_config(kwargs: dict[str, tp.Any]) -> None:
 def test_torchmetrics_config_validation() -> None:
     with pytest.raises(TypeError):
         MeanSquaredError(log_name="blublu", kwargs={"squared": 12}).build()
+
+
+def test_pearsonr_survives_one_outlying_prediction() -> None:
+    metric = PearsonCorrCoef(log_name="pearsonr").build().clone()
+    gen = torch.Generator().manual_seed(0)
+    target = torch.randn(20_000, generator=gen) * 4 + 10
+    prediction = 0.3 * target + torch.randn(20_000, generator=gen) * 10
+    prediction[0] = 700.0
+    expected = np.corrcoef(prediction, target)[0, 1]
+
+    for _ in range(2):  # the dtype must also survive the per-epoch reset
+        for i in range(0, len(target), 64):
+            metric.update(prediction[i : i + 64], target[i : i + 64])
+        assert metric.compute().item() == pytest.approx(expected, abs=1e-6)
+        metric.reset()

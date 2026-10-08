@@ -29,7 +29,7 @@ class Singh2021Timing(study.Study):
 
     Experimental Design:
         - EEG recordings (63-channel, 500 Hz)
-        - 120 participants (83 PD, 37 controls), 138 timelines
+        - 120 participants (83 PD, 37 controls), 129 timelines
         - 80 trials per session (40 per interval type)
         - Paradigm: peak-interval timing task with visual distractors
 
@@ -68,31 +68,12 @@ class Singh2021Timing(study.Study):
     )
     _SUBJECT_RUNS: tp.ClassVar[dict[str, tp.Iterable[int]]] = {
         "Control": set(range(1025, 1420, 10)) - set((1045, 1165, 1355)),
-        "PD": (
-            set(range(1005, 1870, 10))
-            | set(
-                [
-                    2445,
-                    2515,
-                    2565,
-                    2625,
-                    2815,
-                    2835,
-                    2845,
-                    2845,
-                    2855,
-                    2865,
-                    3445,
-                    3515,
-                    3565,
-                    3625,
-                ]
-            )
-        )
+        "PD": (set(range(1005, 1870, 10)) | set([3445, 3515, 3565, 3625]))
         - set((1205, 1255, 1345, 1355, 1495, 1545, 1805, 1825)),
     }
     # There are 9 PD subjects with two sessions, but recorded under a different subject name in
     # session 2 (see README in url above)
+    # session-2 names are not also subjects: one file in two subjects leaks across splits
     _SUBJECT_ALIASES: tp.ClassVar[dict[str, str]] = {
         "PD1815": "PD2815",
         "PD1835": "PD2835",
@@ -105,8 +86,8 @@ class Singh2021Timing(study.Study):
         "PD3625": "PD2625",
     }
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
-        num_timelines=138,
-        num_subjects=129,
+        num_timelines=129,
+        num_subjects=120,
         num_events_in_query=882,  # query=1st timeline
         event_types_in_query={"Eeg", "Stimulus"},
         data_shape=(63, 733750),

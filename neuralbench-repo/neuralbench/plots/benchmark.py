@@ -8,7 +8,7 @@
 
 This module is the entry point for building every plot and table that
 ``neuralbench`` ships.  Public plot functions live in cohesive sibling
-modules (``bar_charts``, ``non_eeg``, ``rank_chart``, ``ranking``,
+modules (``bar_charts``, ``rank_chart``, ``ranking``,
 ``tables``, ``variability``, ``normalized_summary``); this file is the
 thin orchestrator on top.
 """
@@ -23,6 +23,7 @@ import matplotlib
 import seaborn as sns
 from tqdm import tqdm
 
+from neuralbench.plots._constants import DEFAULT_EVAL_MODE
 from neuralbench.plots._filters import filter_core_dataset
 from neuralbench.plots.adaptation import plot_adaptation_comparison
 from neuralbench.plots.bar_charts import (  # noqa: F401  (re-exports)
@@ -31,7 +32,6 @@ from neuralbench.plots.bar_charts import (  # noqa: F401  (re-exports)
     plot_bar_chart,
     plot_full_bar_chart,
 )
-from neuralbench.plots.non_eeg import plot_non_eeg_bar_chart
 from neuralbench.plots.normalized_summary import plot_normalized_lines_summary
 from neuralbench.plots.rank_chart import plot_core_rank_boxplot
 from neuralbench.plots.ranking import (  # noqa: F401  (re-exports)
@@ -48,20 +48,20 @@ from neuralbench.plots.tables import (
 )
 from neuralbench.plots.variability import plot_full_variability_panel
 
-OUTPUT_SUBFOLDERS: tuple[str, str, str, str] = ("core", "full", "other", "adaptation")
-"""Four output groups written by :func:`plot_all_results`.
+OUTPUT_SUBFOLDERS: tuple[str, str, str] = ("core", "full", "other")
+"""Output groups written by :func:`plot_all_results`.
 
-* ``core``       -- single-dataset (core-study) plots and tables for the
+* ``core/<eval_mode>/`` -- single-dataset (core-study) plots and tables for the
   NeuralBench-Core variant (one dataset per task).
-* ``full``       -- per-dataset breakdowns and variability analyses for the
-  NeuralBench-Full variant (all datasets per task).
-* ``other``      -- everything else (data scaling, computational stats,
-  LaTeX tables produced by external scripts).
-* ``adaptation`` -- cross-strategy foundation-model views (per-task comparison
-  + global rank boxplot), populated only with multiple FM ``eval_mode`` values.
+* ``core/all_strategies/`` -- cross-strategy foundation-model views (per-task
+  comparison + global rank boxplot), only with several FM ``eval_mode`` values.
+* ``full/<eval_mode>/`` -- per-dataset breakdowns and variability analyses for
+  the NeuralBench-Full variant (all datasets per task).
+* ``other/`` -- everything else (data scaling, computational stats).
 
-With several strategies present, ``core`` and ``full`` are emitted once per
-strategy into ``core/<eval_mode>/`` and ``full/<eval_mode>/``.
+There is one ``<eval_mode>`` folder per foundation-model adaptation strategy
+(:data:`DEFAULT_EVAL_MODE` when there are no FM results), each also holding
+every baseline and task-specific model as the shared reference.
 """
 
 
@@ -69,13 +69,12 @@ strategy into ``core/<eval_mode>/`` and ``full/<eval_mode>/``.
 class _Step:
     """One artefact produced by :func:`plot_all_results`.
 
-    The *group* must be one of :data:`OUTPUT_SUBFOLDERS`.  Steps are
-    executed in order and short-circuit gracefully when the underlying
-    plot/table function returns ``None`` (e.g. no multi-dataset task).
+    Steps are executed in order and short-circuit gracefully when the
+    underlying plot/table function returns ``None`` (e.g. no multi-dataset task).
     """
 
     label: str
-    group: tp.Literal["core", "full", "other", "adaptation"]
+    group: tp.Literal["core", "full"]
     fn: tp.Callable[[], tp.Any]
 
 
@@ -93,11 +92,6 @@ def _core_full_steps(
     return [
         # ---------------- NeuralBench-Core outputs ----------------
         _Step("core_bar_chart", "core", lambda: plot_bar_chart(core_df, core_dir)),
-        _Step(
-            "core_non_eeg_bar_chart",
-            "core",
-            lambda: plot_non_eeg_bar_chart(core_df, core_dir),
-        ),
         _Step(
             "core_rank_boxplot",
             "core",
@@ -184,35 +178,33 @@ def plot_all_results(
     core_dir = out_dir / "core"
     full_dir = out_dir / "full"
     other_dir = out_dir / "other"
-    adaptation_dir = out_dir / "adaptation"
-    for d in (core_dir, full_dir, other_dir, adaptation_dir):
-        d.mkdir(parents=True, exist_ok=True)
+    other_dir.mkdir(parents=True, exist_ok=True)
 
     core_df = filter_core_dataset(full_df)
-    fm_modes = foundation_eval_modes(results)
+    fm_modes = foundation_eval_modes(results) or [DEFAULT_EVAL_MODE]
 
-    if len(fm_modes) < 2:
-        _run_steps(_core_full_steps(core_df, full_df, core_dir, full_dir))
-    else:
-        # one unsuffixed set per strategy, each keeping every baseline / classic
-        steps: list[_Step] = []
-        for mode in fm_modes:
-            sub_full = build_results_df(
-                filter_results_for_eval_mode(results, mode),
-                loss_to_metric_mapping,
-                suffix_eval_mode=False,
-            )
-            sub_core = filter_core_dataset(sub_full)
-            core_m = core_dir / mode
-            full_m = full_dir / mode
-            core_m.mkdir(parents=True, exist_ok=True)
-            full_m.mkdir(parents=True, exist_ok=True)
-            steps += _core_full_steps(sub_core, sub_full, core_m, full_m)
-        _run_steps(steps)
+    # one unsuffixed set per strategy, each keeping every baseline / classic
+    steps: list[_Step] = []
+    for mode in fm_modes:
+        sub_full = build_results_df(
+            filter_results_for_eval_mode(results, mode),
+            loss_to_metric_mapping,
+            suffix_eval_mode=False,
+        )
+        sub_core = filter_core_dataset(sub_full)
+        core_m = core_dir / mode
+        full_m = full_dir / mode
+        core_m.mkdir(parents=True, exist_ok=True)
+        full_m.mkdir(parents=True, exist_ok=True)
+        steps += _core_full_steps(sub_core, sub_full, core_m, full_m)
+    _run_steps(steps)
+
+    if len(fm_modes) > 1:
         # every model x strategy together, on the suffixed names
-        plot_core_rank_boxplot(core_df, adaptation_dir, stem="adaptation_rank_boxplot")
-
-    plot_adaptation_comparison(core_df, adaptation_dir)
+        strategies_dir = core_dir / "all_strategies"
+        strategies_dir.mkdir(parents=True, exist_ok=True)
+        plot_core_rank_boxplot(core_df, strategies_dir, stem="adaptation_rank_boxplot")
+        plot_adaptation_comparison(core_df, strategies_dir)
 
     # brainai-only extras, emitted once
     plot_data_scaling, make_data_scaling_table = _load_optional_scaling()

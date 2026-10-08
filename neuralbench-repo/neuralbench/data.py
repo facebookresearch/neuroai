@@ -21,6 +21,7 @@ from .extractors import SleepOnsetTargetExtractor  # noqa: F401
 from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
+    AddOnsetEvents,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
@@ -50,8 +51,8 @@ class BaseSampler(ns.base.NamedModel):
     samplers are selected from YAML via the ``name`` discriminator, e.g.
     ``sampler: {name: ClassificationSampler}``.
 
-    Only the training DataLoader uses the configured sampler; the val and
-    test order is set by ``Data.val_shuffle`` and ``Data.test_shuffle``.
+    Only the training DataLoader uses the configured sampler; validation and
+    test order is set by the ``Data`` shuffle options.
     """
 
     def build(
@@ -153,6 +154,9 @@ class Data(ns.BaseModel):
     duration: float | None = 3
     stride: float | None = None
     stride_drop_incomplete: bool = True
+    # Drop segments missing an event for one of the extractors, rather than
+    # extracting an invalid target for them.
+    drop_incomplete: bool = False
     # Targets are NaN wherever the label is invalid (emg/pose IK failures). 1.0 drops
     # any segment holding one, which ``BrainModule`` would otherwise mask frame by frame.
     min_finite_target_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -255,6 +259,7 @@ class Data(ns.BaseModel):
             trigger_query=f"type in {trigger_event_type}",
             stride=self.stride,
             stride_drop_incomplete=self.stride_drop_incomplete,
+            drop_incomplete=self.drop_incomplete,
             extractors=extractors,  # type: ignore[arg-type]
         )
         dataset = segmenter.apply(events)
@@ -323,7 +328,7 @@ class Data(ns.BaseModel):
             split_dataset = dataset.select(dataset.triggers.split == split)
             LOGGER.info(f"# {split} segments: {len(split_dataset)} \n")
 
-            sampler = None
+            sampler: tp.Iterable[int] | None = None
             if split == "train" and self.sampler is not None:
                 sampler = self.sampler.build(split_dataset, generator=sampler_gen)
 

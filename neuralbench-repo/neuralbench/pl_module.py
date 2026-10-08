@@ -274,6 +274,12 @@ class BrainModule(pl.LightningModule):
     def on_test_epoch_end(self) -> None:
         self._log_metrics("test")
 
+    def on_fit_start(self) -> None:
+        # trainer.validate leaves inference-tensor states; fit validates under no_grad
+        for metric in self.metrics.values():
+            assert isinstance(metric, Metric)
+            metric.reset()
+
     def training_step(self, batch: Batch, batch_idx: int):
         loss, _, _ = self._run_step(batch, step_name="train", batch_idx=batch_idx)
         return loss

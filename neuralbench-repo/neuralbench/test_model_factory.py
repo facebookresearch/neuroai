@@ -9,11 +9,13 @@
 import typing as tp
 from collections.abc import Callable
 
+import pytest
 import torch
 from torch import nn
 
 from neuraltrain.models.base import BaseBrainModelConfig
 
+from . import model_factory as _model_factory
 from .data import Data
 from .model_factory import build_brain_model
 from .modules import ChannelProjection, DownstreamWrapper
@@ -27,6 +29,24 @@ class _Passthrough(BaseBrainModelConfig):
 
 
 _RECORDED_N_OUTPUTS: list[int | None] = []
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected"),
+    [
+        ((2, 7, 11), (7, 11)),
+        ((2, 3, 4, 5, 11), (3 * 4 * 5, 11)),
+    ],
+)
+def test_infer_neuro_shape(
+    shape: tuple[int, ...],
+    expected: tuple[int, int],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO", logger=_model_factory.LOGGER.name)
+    assert _model_factory._infer_neuro_shape(torch.empty(shape)) == expected
+    if len(shape) > 3:
+        assert "input tensor remains unflattened" in caplog.text
 
 
 class _RecordHeadWidth(BaseBrainModelConfig):
@@ -126,15 +146,34 @@ def test_build_brain_model_sizes_head_from_dense_target_channel_axis(
     # surfaces later as a shape mismatch in the loss.
     data = build_data(seed=0, target={"name": "MneRaw", "event_types": "Eeg"})
     loader = data.prepare()["train"]
-    target = next(iter(loader)).data["target"]
+    batch = next(iter(loader))
+    target = batch.data["target"]
     assert target.ndim == 3, "fixture no longer yields a dense target"
 
+    # Exercise the full factory with a volumetric neuro tensor while preserving
+    # the same number of spatial locations and temporal samples.
+    neuro = batch.data["neuro"]
+    batch.data["neuro"] = neuro.reshape(
+        neuro.shape[0],
+        1,
+        1,
+        neuro.shape[1],
+        neuro.shape[2],
+    )
+
+    class _SingleBatchLoader:
+        def __init__(self) -> None:
+            self.dataset = loader.dataset
+
+        def __iter__(self):
+            return iter([batch])
+
     _RECORDED_N_OUTPUTS.clear()
-    build_brain_model(
+    model, _, _, _ = build_brain_model(
         brain_model_config=_RecordHeadWidth(),
         downstream_model_wrapper=None,
         pretrained_weights_fname=None,
-        train_loader=loader,
+        train_loader=tp.cast(tp.Any, _SingleBatchLoader()),
     )
 
     n_channels, n_times = target.shape[1], target.shape[2]
@@ -142,3 +181,4 @@ def test_build_brain_model_sizes_head_from_dense_target_channel_axis(
         f"head sized {_RECORDED_N_OUTPUTS} rather than {[n_channels]} channels "
         f"(the window is {n_times} samples long)."
     )
+    assert model(batch.data["neuro"]).shape == batch.data["neuro"].shape

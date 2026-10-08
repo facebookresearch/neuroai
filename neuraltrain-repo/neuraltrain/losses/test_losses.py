@@ -6,8 +6,11 @@
 
 import pytest
 import torch
+import torch.distributed as dist
+import torch.multiprocessing as mp
 from torch import nn
 
+from . import base, losses
 from .losses import ClipLoss, MultiLoss, SigLipLoss
 
 
@@ -145,3 +148,131 @@ def test_multi_loss_multi_heads(multi_pred_heads, multi_targets):
 
     out = loss(y_pred, y_true)
     assert not out["total"].isnan()
+
+
+class _ProjectionLoss(nn.Module):
+    def __init__(self, distributed: bool) -> None:
+        super().__init__()
+        self.projection = nn.Linear(5, 4, bias=False)
+        loss_type = losses.DistributedClipLoss if distributed else ClipLoss
+        self.loss = loss_type(
+            norm_kind="xy",
+            temperature=True,
+            symmetric=True,
+            reduction="mean",
+        )
+
+    def forward(self, inputs: torch.Tensor, candidates: torch.Tensor) -> torch.Tensor:
+        return self.loss(self.projection(inputs), candidates)
+
+
+def _global_inputs() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    generator = torch.Generator().manual_seed(12)
+    return (
+        torch.randn(6, 5, generator=generator),
+        torch.randn(6, 4, generator=generator),
+        torch.randn(4, 5, generator=generator),
+    )
+
+
+def _distributed_clip_worker(
+    rank: int,
+    world_size: int,
+    rendezvous: str,
+) -> None:
+    dist.init_process_group(
+        "gloo",
+        init_method=f"file://{rendezvous}",
+        rank=rank,
+        world_size=world_size,
+    )
+    try:
+        inputs, candidates, weight = _global_inputs()
+        batch_size = inputs.shape[0] // world_size
+        rank_slice = slice(rank * batch_size, (rank + 1) * batch_size)
+        local_inputs = inputs[rank_slice].clone().requires_grad_(True)
+        local_candidates = candidates[rank_slice].clone().requires_grad_(True)
+
+        module = _ProjectionLoss(distributed=True)
+        module.projection.weight.data.copy_(weight)
+        ddp_module = nn.parallel.DistributedDataParallel(module)
+        actual = ddp_module(local_inputs, local_candidates)
+        actual.backward()
+
+        uneven_values = torch.randn(2 + rank, 4)
+        uneven_loss = losses.DistributedClipLoss(
+            norm_kind="y", temperature=False, symmetric=False
+        )
+        uneven_loss.eval()
+        assert uneven_loss(uneven_values, uneven_values).ndim == 0
+        uneven_loss.train()
+        with pytest.raises(ValueError, match="drop_last=True"):
+            uneven_loss(uneven_values, uneven_values)
+
+        reference_inputs = inputs.clone().requires_grad_(True)
+        reference_candidates = candidates.clone().requires_grad_(True)
+        reference = _ProjectionLoss(distributed=False)
+        reference.projection.weight.data.copy_(weight)
+        expected = reference(reference_inputs, reference_candidates)
+        expected.backward()
+
+        assert local_inputs.grad is not None
+        assert local_candidates.grad is not None
+        assert reference_inputs.grad is not None
+        assert reference_candidates.grad is not None
+        torch.testing.assert_close(actual, expected)
+        torch.testing.assert_close(
+            module.projection.weight.grad, reference.projection.weight.grad
+        )
+        torch.testing.assert_close(
+            module.loss.temperature.grad, reference.loss.temperature.grad
+        )
+        torch.testing.assert_close(
+            local_inputs.grad / world_size, reference_inputs.grad[rank_slice]
+        )
+        torch.testing.assert_close(
+            local_candidates.grad / world_size,
+            reference_candidates.grad[rank_slice],
+        )
+    finally:
+        dist.destroy_process_group()
+
+
+def test_distributed_clip_loss(tmp_path) -> None:
+    config = {
+        "name": "DistributedClipLoss",
+        "norm_kind": "xy",
+        "temperature": True,
+        "symmetric": True,
+        "reduction": "mean",
+    }
+    distributed = base.BaseLoss(**config).build()
+    assert isinstance(distributed, losses.DistributedClipLoss)
+    reference = ClipLoss(
+        norm_kind="xy",
+        temperature=True,
+        symmetric=True,
+        reduction="mean",
+    )
+    distributed.load_state_dict(reference.state_dict())
+
+    torch.manual_seed(0)
+    estimate = torch.randn(6, 4, requires_grad=True)
+    candidate = torch.randn(6, 4, requires_grad=True)
+    actual = distributed(estimate, candidate)
+    expected = reference(estimate, candidate)
+    torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+    actual_gradients = torch.autograd.grad(
+        actual, (estimate, candidate), retain_graph=True
+    )
+    expected_gradients = torch.autograd.grad(expected, (estimate, candidate))
+    for actual_gradient, expected_gradient in zip(actual_gradients, expected_gradients):
+        torch.testing.assert_close(actual_gradient, expected_gradient, rtol=0, atol=0)
+
+    world_size = 2
+    mp.spawn(
+        _distributed_clip_worker,
+        args=(world_size, str(tmp_path / "rendezvous")),
+        nprocs=world_size,
+        join=True,
+    )

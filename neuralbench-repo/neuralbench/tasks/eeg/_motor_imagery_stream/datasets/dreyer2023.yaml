@@ -11,6 +11,8 @@
 # train only, where overlap with A is harmless.
 
 data:
+  # no electrode locations recorded (NaN ch_locs)
+  channel_positions.layout_or_montage_name: standard_1005
   study:
     source:
       name: Dreyer2023Large

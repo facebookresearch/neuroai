@@ -121,11 +121,13 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
     ----------
     model_name : str, default="facebook/dinov2-base"
         HuggingFace model identifier.
+    event_types : "Image", "Video" or ("Image", "Video")
+        Video events are embedded frame by frame at ``frequency``.
 
     """
 
     # class attributes
-    event_types: tp.Literal["Image", "Video"] = "Image"
+    event_types: str | tuple[str, ...] = "Image"
     requirements: tp.ClassVar[tuple[str, ...]] = (
         "torchvision>=0.15.2",
         "transformers>=4.29.2",
@@ -191,19 +193,27 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
     @infra.apply(
         item_uid=_huggingface_image_event_uid,
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
-        cache_type="MemmapArrayFile",
+        cache_type="MemmapArray",
     )
     def _get_data(
         self, events: tp.Sequence[etypes.Image | etypes.Video]
     ) -> tp.Iterator[np.ndarray]:
-        if self.event_types == "Video":
-            for event in tp.cast(tp.Sequence[etypes.Video], events):
+        # Outputs must follow input order, so batch consecutive images only.
+        images: list[etypes.Image] = []
+        for event in events:
+            if isinstance(event, etypes.Video):
+                if images:
+                    yield from self._iter_image_latents(
+                        images, aggregate_layers=self.cache_n_layers is None
+                    )
+                    images = []
                 yield self._get_video_data(event)
-            return
-        yield from self._iter_image_latents(
-            tp.cast(tp.Sequence[etypes.Image], events),
-            aggregate_layers=self.cache_n_layers is None,
-        )
+            else:
+                images.append(event)
+        if images:
+            yield from self._iter_image_latents(
+                images, aggregate_layers=self.cache_n_layers is None
+            )
 
     def _get_video_data(self, event: etypes.Video) -> np.ndarray:
         if self.frequency == 0:
@@ -228,6 +238,12 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
             video.close()
 
     def model_post_init(self, log__):
+        types = (
+            (self.event_types,) if isinstance(self.event_types, str) else self.event_types
+        )
+        if not types or not set(types) <= {"Image", "Video"}:
+            msg = f"HuggingFaceImage event_types must be Image and/or Video, got {self.event_types!r}"
+            raise ValueError(msg)
         if self.imsize is not None:
             utils.warn_once(
                 f'The effect of "imsize"={self.imsize} might be cancelled by '
@@ -270,9 +286,8 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
         start: float,
         duration: float,
     ) -> tp.Iterable[base.TimedArray]:
-        if self.event_types == "Video":
-            video_events = tp.cast(list[etypes.Video], events)
-            for event, latents in zip(video_events, self._get_data(video_events)):
+        for event, latents in zip(events, self._get_data(events)):
+            if isinstance(event, etypes.Video):
                 freq = event.frequency if self.frequency == "native" else self.frequency
                 tarray = base.TimedArray(
                     data=np.asarray(latents),
@@ -286,23 +301,18 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
                 if self.cache_n_layers is not None:
                     sub.data = self._aggregate_layers(sub.data)
                 yield sub
-        elif self.event_types == "Image":
-            for image_event, latents in zip(events, self._get_data(events)):
+            else:
                 if self.cache_n_layers is not None:
                     latents = self._aggregate_layers(latents)
                 yield base.TimedArray(
                     frequency=0,
-                    duration=image_event.duration,
-                    start=image_event.start,
+                    duration=event.duration,
+                    start=event.start,
                     data=np.asarray(latents),
                 )
-            return
-        else:
-            msg = f"Unsupported event_types={self.event_types!r} for HuggingFaceImage"
-            raise ValueError(msg)
 
     def get_static(self, event: etypes.Image) -> torch.Tensor:
-        if self.event_types == "Video":
+        if isinstance(event, etypes.Video):
             raise TypeError("Use HuggingFaceImage.__call__ for Video events.")
         # layer * patches * size
         latent = next(self._get_data([event]))
@@ -372,7 +382,7 @@ class BaseClassicImageExtractor(extractor_base.BaseStatic):
 
     @infra.apply(
         item_uid=lambda event: str(event.study_relative_path()),
-        cache_type="MemmapArrayFile",
+        cache_type="MemmapArray",
     )
     def _get_data(self, events: list[etypes.Image]) -> tp.Iterator[np.ndarray]:
         logger.info("Computing %s for %s images.", type(self).__name__, len(events))
@@ -382,7 +392,7 @@ class BaseClassicImageExtractor(extractor_base.BaseStatic):
             if self.imsize is not None:
                 image = image.resize((self.imsize, self.imsize))
 
-            yield self._get_image_features(np.array(image))
+            yield np.asarray(self._get_image_features(np.array(image)), dtype=np.float32)
 
     def _get_image_features(self, image: np.ndarray) -> np.ndarray:
         raise NotImplementedError

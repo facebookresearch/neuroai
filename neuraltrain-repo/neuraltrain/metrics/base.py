@@ -11,6 +11,8 @@ from inspect import isclass
 
 import exca
 import pydantic
+import torch
+import torchmetrics
 from torchmetrics import Metric
 
 from neuraltrain.metrics import metrics
@@ -64,8 +66,20 @@ class BaseTorchMetric(BaseMetric):
         return self._METRIC_CLASS(**self.kwargs)
 
 
-# Generate config classes for all torchmetrics
+class PearsonCorrCoef(BaseTorchMetric):
+    """:class:`torchmetrics.PearsonCorrCoef` accumulated in float64."""
+
+    _METRIC_CLASS: tp.ClassVar[type[Metric]] = torchmetrics.PearsonCorrCoef
+
+    def build(self) -> Metric:
+        # float32 returns NaN once var / max_abs_dev**2 < sqrt(eps)
+        return super().build().set_dtype(torch.float64)
+
+
+# Generate config classes for all other torchmetrics
 for metric_name, metric_class in TORCHMETRICS_NAMES.items():
+    if metric_name == PearsonCorrCoef.__name__:
+        continue
     torch_config_cls: type[BaseTorchMetric] = pydantic.create_model(  # type: ignore[assignment]
         metric_name,
         __base__=BaseTorchMetric,

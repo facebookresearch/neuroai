@@ -8,7 +8,8 @@
 
 The four tables that drive the bar-chart badges and the core/full
 filtering all originate from the same on-disk structure under
-``neuralbench/tasks/{device}/{task_name}/``:
+``{task_root}/{device}/{task_name}/``, for every task root the registry
+discovers (the shipped tree plus any registered extension):
 
 * ``config.yaml`` -- the task default study and split.
 * ``datasets/*.yaml`` -- per-dataset overrides for multi-dataset
@@ -20,7 +21,6 @@ each consumer is a small (~5 line) function.
 Public helpers
 --------------
 * :func:`iter_task_yamls` -- the shared filesystem walker.
-* :func:`build_task_device_map` -- ``{(task, study): "eeg"|"meg"|"fmri"}``.
 * :func:`build_task_split_map` -- ``{(task, study): SplitKind}``.
 * :func:`build_task_n_examples_map` -- ``{(task, study): n_examples}``
   derived from the sibling ``brainai`` package's
@@ -48,18 +48,11 @@ from neuralbench.plots._style import SplitKind
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_TASKS_DIR: Path = Path(__file__).resolve().parent.parent / "tasks"
-"""On-disk location of the per-device task config tree."""
-
 # Strict pattern: matches ``source: name: <id>`` directly, with no
-# intermediate fields.  Used by the device map and default-study lookup
-# to mirror the historical ``benchmark.py`` semantics exactly.
+# intermediate fields.  Used by the default-study lookup to mirror the
+# historical ``benchmark.py`` semantics exactly.
 _CONFIG_NAME_STRICT: re.Pattern[str] = re.compile(
     r"^data:\s*\n\s+study:\s*\n\s+source:\s*\n\s+name:\s*(\S+)",
-    re.MULTILINE,
-)
-_DATASET_NAME_STRICT: re.Pattern[str] = re.compile(
-    r"(?:^|\n)\s+source:\s*\n\s+name:\s*(\S+)",
     re.MULTILINE,
 )
 
@@ -108,73 +101,68 @@ class _TaskYamlSpec:
     is_dataset_override: bool
 
 
+def _task_roots(tasks_dir: Path | None) -> list[Path]:
+    """Task trees to walk: an explicit *tasks_dir*, else every registered root.
+
+    Deferring to the registry keeps the badges and device grouping in step with
+    task discovery, so extension-provided tasks are not silently unlabelled.
+    """
+    if tasks_dir is not None:
+        return [tasks_dir]
+    # deferred: registry imports neuralbench.plots._models at its module bottom
+    from neuralbench import registry
+
+    return registry._all_task_roots()
+
+
 def iter_task_yamls(
     tasks_dir: Path | None = None,
 ) -> Iterator[_TaskYamlSpec]:
     """Yield one :class:`_TaskYamlSpec` per discovered yaml.
 
-    The walk visits ``tasks_dir/{device}/{task}/config.yaml`` first,
-    then any ``tasks_dir/{device}/{task}/datasets/*.yaml`` -- both in
-    sorted order so consumers produce deterministic output without
-    needing their own sort step.
+    The walk visits ``{root}/{device}/{task}/config.yaml`` first, then any
+    ``{root}/{device}/{task}/datasets/*.yaml`` -- both in sorted order so
+    consumers produce deterministic output without needing their own sort
+    step.  Roots are walked in registry order; see :func:`_task_roots`.
 
     Hidden directories (those whose name starts with ``_``) are
     skipped at every level.
     """
-    base = tasks_dir if tasks_dir is not None else DEFAULT_TASKS_DIR
-    for device_dir in sorted(base.iterdir()):
-        if not device_dir.is_dir() or device_dir.name.startswith("_"):
+    for base in _task_roots(tasks_dir):
+        if not base.is_dir():
             continue
-        device = device_dir.name
-        for task_dir in sorted(device_dir.iterdir()):
-            if not task_dir.is_dir() or task_dir.name.startswith("_"):
+        for device_dir in sorted(base.iterdir()):
+            if not device_dir.is_dir() or device_dir.name.startswith("_"):
                 continue
-            task_name = task_dir.name
-            config_path = task_dir / "config.yaml"
-            if config_path.exists():
-                yield _TaskYamlSpec(
-                    device=device,
-                    task_name=task_name,
-                    yaml_path=config_path,
-                    yaml_text=config_path.read_text("utf8"),
-                    is_dataset_override=False,
-                )
-            datasets_dir = task_dir / "datasets"
-            if datasets_dir.exists():
-                for ds_path in sorted(datasets_dir.glob("*.yaml")):
+            device = device_dir.name
+            for task_dir in sorted(device_dir.iterdir()):
+                if not task_dir.is_dir() or task_dir.name.startswith("_"):
+                    continue
+                task_name = task_dir.name
+                config_path = task_dir / "config.yaml"
+                if config_path.exists():
                     yield _TaskYamlSpec(
                         device=device,
                         task_name=task_name,
-                        yaml_path=ds_path,
-                        yaml_text=ds_path.read_text("utf8"),
-                        is_dataset_override=True,
+                        yaml_path=config_path,
+                        yaml_text=config_path.read_text("utf8"),
+                        is_dataset_override=False,
                     )
+                datasets_dir = task_dir / "datasets"
+                if datasets_dir.exists():
+                    for ds_path in sorted(datasets_dir.glob("*.yaml")):
+                        yield _TaskYamlSpec(
+                            device=device,
+                            task_name=task_name,
+                            yaml_path=ds_path,
+                            yaml_text=ds_path.read_text("utf8"),
+                            is_dataset_override=True,
+                        )
 
 
 # ---------------------------------------------------------------------------
 # Builders
 # ---------------------------------------------------------------------------
-
-
-def build_task_device_map(
-    tasks_dir: Path | None = None,
-) -> dict[tuple[str, str], str]:
-    """Return ``{(task_name, study_name): device}`` from on-disk task configs.
-
-    Uses the strict ``source.name`` pattern (no intermediate fields)
-    because the device-map only cares about top-level study-source
-    declarations; tolerant matches would over-include unrelated
-    ``source:`` blocks under ``target:``, ``neuro:``, etc.
-    """
-    out: dict[tuple[str, str], str] = {}
-    for spec in iter_task_yamls(tasks_dir):
-        pattern = (
-            _DATASET_NAME_STRICT if spec.is_dataset_override else _CONFIG_NAME_STRICT
-        )
-        m = pattern.search(spec.yaml_text)
-        if m is not None:
-            out[(spec.task_name, m.group(1))] = spec.device
-    return out
 
 
 def build_task_split_map(
@@ -187,24 +175,15 @@ def build_task_split_map(
     so multi-dataset paradigms still receive a badge.
     """
     out: dict[tuple[str, str], SplitKind] = {}
-    task_default: dict[tuple[str, str], SplitKind] = {}
-    # Track the most recently-seen task-level (study, kind) so dataset
-    # yamls without their own split spec can inherit it.  Two-pass logic
-    # (group by task) is unnecessary: ``iter_task_yamls`` yields the
-    # config.yaml before any of its sibling datasets, so a single-pass
-    # walk with a per-task cache is sufficient.
-    last_task_kind: SplitKind | None = None
+    # key: (device, task_name); a task's config.yaml is yielded before any dataset yaml
+    task_kind: dict[tuple[str, str], SplitKind] = {}
     for spec in iter_task_yamls(tasks_dir):
         if not spec.is_dataset_override:
             m = _CONFIG_NAME_TOLERANT.search(spec.yaml_text)
             if m is not None:
-                study_name = m.group(1)
                 kind = classify_split_yaml(spec.yaml_text)
-                out[(spec.task_name, study_name)] = kind
-                task_default[(spec.task_name, study_name)] = kind
-                last_task_kind = kind
-            else:
-                last_task_kind = None
+                out[(spec.task_name, m.group(1))] = kind
+                task_kind[(spec.device, spec.task_name)] = kind
             continue
         m = _DATASET_NAME_TOLERANT.search(spec.yaml_text)
         if m is None:
@@ -212,8 +191,8 @@ def build_task_split_map(
         ds_study = m.group(1)
         if re.search(r"(split_by|test_split_query|valid_split_by):", spec.yaml_text):
             out[(spec.task_name, ds_study)] = classify_split_yaml(spec.yaml_text)
-        elif last_task_kind is not None:
-            out[(spec.task_name, ds_study)] = last_task_kind
+        elif (spec.device, spec.task_name) in task_kind:
+            out[(spec.task_name, ds_study)] = task_kind[(spec.device, spec.task_name)]
     return out
 
 

@@ -16,6 +16,7 @@ from neuralset.events import standardize_events
 from .main import Data
 from .transforms import (
     AddDefaultEvents,
+    AddOnsetEvents,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
@@ -668,6 +669,29 @@ def test_add_default_events_with_overlap():
 
     assert output.shape[0] == 5
     assert output[output.state == "bckg"].shape[0] == 2
+
+
+def test_add_onset_events():
+    eeg = dict(type="Eeg", start=0.0, duration=60.0, frequency=100.0, filepath=":.fif")
+    labels = [
+        ("Artifact", 10.0, 2.0, "eyem"),
+        ("Artifact", 10.0, 5.0, "artf"),
+        ("Seizure", 10.0, 3.0, "seiz"),
+        ("Artifact", 20.0, 1.0, "artf"),
+    ]
+    rows = [eeg] + [
+        dict(type=t, start=s, duration=d, state=state) for t, s, d, state in labels
+    ]
+    events = standardize_events(
+        pd.DataFrame(rows).assign(subject="1", timeline="tl", split="train")
+    )
+
+    output = AddOnsetEvents(event_types=["Artifact", "Seizure"])(events)
+
+    onsets = output[output.type == "Event"].sort_values("start")
+    assert list(zip(onsets.start, onsets.duration)) == [(10.0, 5.0), (20.0, 1.0)]
+    assert (onsets.split == "train").all()
+    assert len(output) == len(events) + 2
 
 
 def test_offset_events(events):

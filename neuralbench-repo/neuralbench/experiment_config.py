@@ -29,6 +29,8 @@ from neuralbench.registry import (
     _resolve_dataset_stem,
     _resolve_model_config_path,
     _resolve_task_dir,
+    _task_dataset_paths,
+    load_default_config,
     load_yaml_config,
 )
 
@@ -129,14 +131,11 @@ def merge_task_config(
 ) -> ConfDict:
     """Layer a task config, and an optional dataset variant, over the base defaults.
 
-    *base* defaults to ``defaults/config.yaml``; callers pass their own copy of
-    it when it already carries run-level overrides (checkpoint, W&B).
+    *base* defaults to ``defaults/config.yaml`` overlaid with *device*'s
+    defaults; callers pass their own copy of it when it already carries
+    run-level overrides (checkpoint, W&B).
     """
-    config = (
-        ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
-        if base is None
-        else base.copy()
-    )
+    config = ConfDict(load_default_config(device)) if base is None else base.copy()
     task_config_fname = _resolve_task_dir(device, task_name) / "config.yaml"
     config.update(load_yaml_config(task_config_fname))
     if dataset is not None:
@@ -154,9 +153,8 @@ def _merge_dataset_config(
     stem = _resolve_dataset_stem(device, task_name, dataset)
     if stem is None:
         return
-    source_defaults = dict(config["data.study.source"])
-    dataset_fname = _resolve_task_dir(device, task_name) / "datasets" / f"{stem}.yaml"
-    config.update(load_yaml_config(dataset_fname))
+    source_defaults = {k: config["data.study.source"][k] for k in ("path", "infra")}
+    config.update(load_yaml_config(_task_dataset_paths(device, task_name)[stem]))
     # =replace= may wipe source; restore default path/infra
     for k, v in source_defaults.items():
         config["data.study.source"].setdefault(k, v)
@@ -370,7 +368,7 @@ def build_experiment_configs(
     _warn_slurm_partition(debug, prepare=prepare, download=download)
     _warn_unsupported_gpu()
 
-    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+    config = ConfDict(load_default_config(device))
     # A blank W&B host means logging is off for the whole pipeline (mirrors
     # the debug-mode overlay).
     wandb_cfg = config.get("wandb_config")

@@ -145,7 +145,7 @@ def test_standard_text_enhancement(
     df = _transf.AddSentenceToWords()(df)
     # in a standard pipeline, this could be cached at some point, which may change some values
     cd: tp.Any = CacheDict(folder=tmp_path)
-    with cd.writer() as writer:
+    with cd.write() as writer:
         writer["test"] = df
     df = cd["test"]
     df = cd["test"]

@@ -112,7 +112,7 @@ def test_success_writer_reruns_on_overwrite(tmp_path: Path) -> None:
         assert not already_done
         assert not success_fname.exists()
 
-    assert success_fname.read_text() == "done"
+    assert success_fname.read_text("utf8") == "done"
 
 
 def test_success_writer_drops_marker_when_overwrite_fails(tmp_path: Path) -> None:

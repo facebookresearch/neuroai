@@ -4,7 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Adaptation-strategy comparison plot for the ``adaptation/`` output group.
+"""Adaptation-strategy comparison plot for the ``core/all_strategies/`` outputs.
 
 :func:`plot_adaptation_comparison` answers "for each foundation model and task,
 which adaptation strategy wins, and by how much?".  It is a no-op unless the

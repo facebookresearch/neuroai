@@ -47,7 +47,7 @@ class BaseText(BaseStatic):
     @infra.apply(
         item_uid=lambda event: f"{event.language}:{event.text}",
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
-        cache_type="MemmapArrayFile",
+        cache_type="MemmapArray",
     )
     def _get_data(self, events: list[_ev.etypes.Text]) -> tp.Iterator[np.ndarray]:
         if len(events) > 1:
@@ -394,7 +394,7 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
     @infra.apply(
         item_uid=lambda event: f"{event.text}_{getattr(event, 'context', '')}",
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
-        cache_type="MemmapArrayFile",
+        cache_type="MemmapArray",
     )
     def _get_data(
         self, events: list[_ev.etypes.Word | _ev.etypes.Sentence]

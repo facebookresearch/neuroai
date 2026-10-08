@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import functools
 import hashlib
 import inspect
 import logging
@@ -24,10 +25,11 @@ from exca import MapInfra
 from exca.cachedict import DumpContext
 from exca.helpers import DiscriminatedModel
 from mne._fiff.pick import _VALID_CHANNEL_TYPES  # type: ignore
+from mne.annotations import _annotations_starts_stops  # type: ignore
 from tqdm import tqdm
 
 import neuralset as ns
-from neuralset import base, utils
+from neuralset import base, quantize, utils
 from neuralset.base import TimedArray
 from neuralset.events import etypes, eventquery
 
@@ -62,6 +64,12 @@ def _overlap(
     start = max(starts)
     stop = min(stops)
     return start, max(0, stop - start)
+
+
+@functools.lru_cache(maxsize=None)
+def _fir_n_samples(sfreq: float, l_freq: float | None, h_freq: float | None) -> int:
+    """Length of the FIR design MNE builds."""
+    return len(mne.filter.create_filter(None, sfreq, l_freq, h_freq, verbose=False))
 
 
 @DumpContext.register
@@ -153,7 +161,7 @@ class FmriTimedArray(TimedArray):
     header: dict[str, tp.Any]  # narrow down typing (not optional)
 
     def to_native(self, time_index: int | None = None) -> tp.Any:
-        """Reconstruct a NIfTI image. Only valid for unprojected volumetric data."""
+        """Reconstruct the NIfTI image as read. Unprojected volumetric data only."""
         affine = self.header.get("affine")
         if affine is None:
             raise ValueError(
@@ -210,6 +218,12 @@ class MneRaw(BaseExtractor):
     filter : tuple of (float or None, float or None), optional
         Band-pass filter limits as ``(l_freq, h_freq)``. If None, no band-pass
         filtering is applied.
+    on_filter_too_long : {"raise", "drop"}, default="raise"
+        What to do when the highpass and/or lowpass of ``filter`` needs an FIR
+        design longer than the recording (its longest segment between ``EDGE`` /
+        ``BAD_ACQ_SKIP`` annotations), so the output would be dominated by edge
+        artifacts: ``"raise"`` rejects the recording, ``"drop"`` skips only
+        the offending cutoff(s) and applies the other one.
     apply_hilbert : bool, default=False
         If True, applies the Hilbert transform to extract the signal envelope.
     notch_filter : float or list of float, optional
@@ -223,6 +237,8 @@ class MneRaw(BaseExtractor):
     scaler : {"RobustScaler", "StandardScaler"}, optional
         Optional scaling strategy to normalize channel data using scikit-learn
         scalers.
+    store_dtype : {"float32", "float16"}, default="float32"
+        Cache dtype. Reads always return float32.
     scale_factor : float, optional
         Optional multiplicative factor applied to the data after scaling, but before clamping. E.g,
         can be used to convert from V to mV or uV.
@@ -255,7 +271,7 @@ class MneRaw(BaseExtractor):
 
     """
 
-    event_types: tp.Literal["Meg", "Eeg", "Emg", "Fnirs", "Ieeg"] = "Meg"
+    event_types: tp.Literal["Meg", "Eeg", "Ecg", "Emg", "Fnirs", "Ieeg"] = "Meg"
 
     frequency: tp.Literal["native"] | float = "native"
     offset: float = 0.0
@@ -263,6 +279,7 @@ class MneRaw(BaseExtractor):
     picks: str | tuple[str, ...] = pydantic.Field(("data",), min_length=1)
     apply_proj: bool = False
     filter: tuple[float | None, float | None] | None = None
+    on_filter_too_long: tp.Literal["raise", "drop"] = "raise"
     apply_hilbert: bool = False
     notch_filter: float | list[float] | None = None
     drop_bads: bool = False
@@ -273,6 +290,7 @@ class MneRaw(BaseExtractor):
         version="1",
     )
     scaler: None | tp.Literal["RobustScaler", "StandardScaler"] = None
+    store_dtype: tp.Literal["float32", "float16"] = "float32"
     scale_factor: float | None = None
     clamp: float | None = None
     fill_non_finite: float | None = None
@@ -362,15 +380,7 @@ class MneRaw(BaseExtractor):
 
         if self.filter is not None:
             raw.load_data()
-            l_freq, h_freq = self.filter
-            # Ignore lowpass filter if cutoff is higher than Nyquist frequency
-            if h_freq is not None and h_freq >= raw.info["sfreq"] / 2:
-                logger.warning(
-                    "Lowpass filter cutoff frequency is higher than or equal to the Nyquist frequency. "
-                    "Setting it to None."
-                )
-                h_freq = None
-            raw.filter(l_freq, h_freq, n_jobs=self.mne_cpus, verbose=False)
+            raw = self._band_filter(raw, self.filter, event)
 
         if self.apply_hilbert:
             raw.load_data()
@@ -411,7 +421,11 @@ class MneRaw(BaseExtractor):
     )
     def _get_data(self, events: tp.Sequence[etypes.MneRaw]) -> tp.Iterator[MneTimedArray]:
         for event in events:
-            yield self._preprocess_raw(event.read(), event)
+            ta = self._preprocess_raw(event.read(), event)
+            # not in _preprocess_raw, which subclasses override without super()
+            if self.store_dtype == "float16":
+                ta.data = quantize.Float16StoredArray(ta.data)  # type: ignore[assignment]
+            yield ta
 
     def _get_timed_arrays(
         self, events: list[etypes.MneRaw], start: float, duration: float
@@ -533,9 +547,77 @@ class MneRaw(BaseExtractor):
         else:
             logger.info("Applying notch filter with notch_freqs=%s", sorted(notch_freqs))
             raw = raw.notch_filter(
-                notch_freqs, phase="zero", filter_length="auto", n_jobs=mne_cpus
+                notch_freqs,
+                picks="all",  # see the picks note in _band_filter
+                phase="zero",
+                filter_length="auto",
+                n_jobs=mne_cpus,
             )
         return raw
+
+    def _band_filter(
+        self,
+        raw: mne.io.Raw,
+        freqs: tuple[float | None, float | None],
+        event: etypes.MneRaw,
+    ) -> mne.io.Raw:
+        l_freq, h_freq = freqs
+        sfreq = raw.info["sfreq"]
+        # Ignore lowpass filter if cutoff is higher than Nyquist frequency
+        if h_freq is not None and h_freq >= sfreq / 2:
+            logger.warning(
+                "Lowpass filter cutoff frequency is higher than or equal to the Nyquist frequency. "
+                "Setting it to None."
+            )
+            h_freq = None
+        # raw.filter filters each span between these annotations separately
+        skip_by_annotation = ("edge", "bad_acq_skip")
+        onsets, ends = _annotations_starts_stops(raw, skip_by_annotation, invert=True)
+        n_times = (ends - onsets).max(initial=0)
+        # bandpass FIR length is the max of the two one-sided lengths
+        n_fir = {
+            "highpass": _fir_n_samples(sfreq, l_freq, None),
+            "lowpass": _fir_n_samples(sfreq, None, h_freq),
+        }
+        too_long = {side: n for side, n in n_fir.items() if n > n_times}
+        if too_long:
+            culprits = ", ".join(
+                f"{side} ({n / sfreq:.1f} s FIR)" for side, n in too_long.items()
+            )
+            if self.on_filter_too_long == "raise":
+                raise ValueError(
+                    f"filter=({l_freq}, {h_freq}): {culprits} longer than the "
+                    f"{n_times / sfreq:.1f} s longest contiguous segment of "
+                    f"{event!r}; the result would be dominated by edge artifacts. "
+                    f"Move the highpass cutoff away from 0 or the lowpass cutoff "
+                    f"away from Nyquist, or set on_filter_too_long='drop' to skip "
+                    f"them."
+                )
+            logger.warning(
+                "Dropping %s of filter=(%s, %s) for %r: longer than the %.1f s "
+                "longest contiguous segment.",
+                culprits,
+                l_freq,
+                h_freq,
+                event,
+                n_times / sfreq,
+            )
+            if "highpass" in too_long:
+                l_freq = None
+            if "lowpass" in too_long:
+                h_freq = None
+        if l_freq is None and h_freq is None:
+            return raw
+        # picks="all": _pick_channels already narrowed to self.picks, and MNE's
+        # default would re-narrow to "data", skipping ecg/eog/emg/misc picks
+        return raw.filter(
+            l_freq,
+            h_freq,
+            picks="all",
+            skip_by_annotation=skip_by_annotation,
+            n_jobs=self.mne_cpus,
+            verbose=False,
+        )
 
 
 class MegExtractor(MneRaw):
@@ -545,7 +627,11 @@ class MegExtractor(MneRaw):
     Parameters
     ----------
     picks: default = ("meg",)
-        pick "meg" channels by default.
+        pick "meg" channels by default. On systems whose files carry
+        gradient-compensation information (CTF, but not Elekta or KIT), MNE
+        resolves ``"meg"`` to the reference channels as well: 300 rather than
+        272 on a CTF-275. Those sit away from the head and measure the room,
+        so pass ``("mag", "grad")`` to get head sensors only on every system.
     """
 
     event_types: tp.Literal["Meg"] = "Meg"
@@ -578,6 +664,26 @@ class EmgExtractor(MneRaw):
 
     event_types: tp.Literal["Emg"] = "Emg"
     picks: tuple[str, ...] = pydantic.Field(("emg",), min_length=1)
+
+
+class EcgExtractor(MneRaw):
+    """
+    ECG feature extractor.
+
+    Parameters
+    ----------
+    event_types: default = "Ecg"
+        set ``"Eeg"`` when the cardiac lead is an auxiliary channel of an EEG
+        or PSG recording, which is how most studies carry it -- the study then
+        emits no event of its own for the lead.
+    picks: default = ("ecg",)
+        pick "ecg" channels by default. A study that leaves its cardiac
+        channel typed as ``eeg`` will not be picked up -- fix the channel type
+        in the study rather than naming the channel here.
+    """
+
+    event_types: tp.Literal["Ecg", "Eeg"] = "Ecg"
+    picks: tuple[str, ...] = pydantic.Field(("ecg",), min_length=1)
 
 
 class IeegExtractor(MneRaw):
@@ -720,6 +826,8 @@ class SpikesExtractor(BaseExtractor):
         window in seconds relative to the segment start.
     scaler : {"RobustScaler", "StandardScaler"}, optional
         Scaling strategy to normalize channel data using scikit-learn scalers.
+    store_dtype : {"float32", "float16"}, default="float32"
+        Cache dtype. Reads always return float32.
     scale_factor : float, optional
         Multiplicative factor applied to the data after scaling but before clamping.
     clamp : float, optional
@@ -735,6 +843,7 @@ class SpikesExtractor(BaseExtractor):
     offset: float = 0.0
     baseline: tuple[float, float] | None = None
     scaler: None | tp.Literal["RobustScaler", "StandardScaler"] = None
+    store_dtype: tp.Literal["float32", "float16"] = "float32"
     scale_factor: float | None = None
     clamp: float | None = None
     channel_order: tp.Literal["unique", "original"] = "unique"
@@ -859,7 +968,10 @@ class SpikesExtractor(BaseExtractor):
     )
     def _get_data(self, events: tp.Sequence[etypes.Spikes]) -> tp.Iterator[TimedArray]:
         for event in events:
-            yield self._preprocess_spikes(event)
+            ta = self._preprocess_spikes(event)
+            if self.store_dtype == "float16":
+                ta.data = quantize.Float16StoredArray(ta.data)  # type: ignore[assignment]
+            yield ta
 
     def _get_timed_arrays(
         self, events: list[etypes.Spikes], start: float, duration: float
@@ -1048,9 +1160,7 @@ class FnirsExtractor(MneRaw):
 
         if self.filter is not None:
             raw.load_data()
-            raw.filter(
-                self.filter[0], self.filter[1], n_jobs=self.mne_cpus, verbose=False
-            )
+            raw = self._band_filter(raw, self.filter, event)
 
         if self.enhance_negative_correlation:
             import mne_nirs
@@ -1102,6 +1212,20 @@ class FmriCleaner(pydantic.BaseModel):
     filter: tp.Literal["butterworth", "cosine"] | None = None
     ensure_finite: bool = True
 
+    @pydantic.model_validator(mode="after")
+    def _require_filter_for_bandpass(self) -> "FmriCleaner":
+        # ``filter=None`` maps to nilearn ``filter=False`` (no filtering), so a
+        # high_pass/low_pass cutoff without an explicit filter would be silently
+        # dropped.  Fail fast instead of losing the bandpass.
+        if self.filter is None and (
+            self.high_pass is not None or self.low_pass is not None
+        ):
+            raise ValueError(
+                "high_pass/low_pass require an explicit filter "
+                "('butterworth' or 'cosine'); filter=None disables bandpass."
+            )
+        return self
+
     def clean(self, data: np.ndarray, t_r: float) -> np.ndarray:
         if (
             self.detrend
@@ -1143,7 +1267,8 @@ class BaseFmriProjector(DiscriminatedModel, discriminator_key="name"):
         Parameters
         ----------
         rec
-            NIfTI-like recording (4-D volumetric or 2-D surface).
+            NIfTI-like recording (4-D volumetric or 2-D surface), or a 2-D
+            surface array when no image geometry is involved.
         **kwargs
             Subclass-specific options (e.g. ``standardize`` for atlas maskers).
 
@@ -1235,7 +1360,7 @@ class SurfaceProjector(BaseFmriProjector):
                 msg = f"The detected number of vertices ({rec.shape[0]}) is not in {list(FSAVERAGE_SIZES.values())}"
                 raise ValueError(msg)
             n_vertices_resampled = FSAVERAGE_SIZES.get(self.mesh)
-            data = rec.get_fdata()
+            data = rec.get_fdata() if hasattr(rec, "get_fdata") else np.asarray(rec)
             if n_vertices < n_vertices_resampled:
                 raise NotImplementedError(
                     f"Cannot upsample from {n_vertices} vertices to {n_vertices_resampled} vertices"
@@ -1315,6 +1440,14 @@ class AtlasProjector(BaseFmriProjector):
     atlas_kwargs : dict | None
         Keyword arguments forwarded to the nilearn fetch function.
         Validated against the function signature at init time.
+    resampling_target : {"data", "labels"}
+        Grid the masker resamples onto (nilearn ``NiftiLabelsMasker``).
+        ``"data"`` (default) resamples the atlas down to each scan's grid, so a
+        small parcel can vanish and the parcel count varies between scans.
+        ``"labels"`` resamples each scan onto the fixed atlas grid, so every scan
+        yields the same parcels -- required to stack ROI features across subjects
+        (e.g. connectivity); pair with a low-resolution atlas (``resolution_mm=2``)
+        to keep the resample affordable.
 
     Examples
     --------
@@ -1324,6 +1457,7 @@ class AtlasProjector(BaseFmriProjector):
 
     atlas: str
     atlas_kwargs: dict[str, tp.Any] | None = None
+    resampling_target: tp.Literal["data", "labels"] = "data"
     _masker: tp.Any = pydantic.PrivateAttr(default=None)
 
     def model_post_init(self, __context: tp.Any) -> None:
@@ -1361,10 +1495,11 @@ class AtlasProjector(BaseFmriProjector):
                 maps = nib.load(maps)
             if maps.get_fdata().ndim == 3:  # deterministic atlas
                 masker = NiftiLabelsMasker(
-                    labels_img=maps,
+                    labels_img=maps, resampling_target=self.resampling_target
                 )
-            else:  # probabilistic atlas
-                masker = NiftiMapsMasker(maps_img=maps)
+            else:  # probabilistic atlas: "labels" has no meaning, map it to "maps"
+                target = "maps" if self.resampling_target == "labels" else "data"
+                masker = NiftiMapsMasker(maps_img=maps, resampling_target=target)
             self._masker = masker
         return self._masker
 
@@ -1372,7 +1507,7 @@ class AtlasProjector(BaseFmriProjector):
         if len(rec.shape) != 4:
             raise ValueError(f"Atlas projection requires 4D data, got {rec.shape}")
         masker = self._get_masker()
-        return masker.fit_transform(rec).T
+        return masker.fit_transform(rec).T  # (n_parcels, time)
 
 
 class _RoiSubsetProjector(BaseFmriProjector):
@@ -1843,6 +1978,8 @@ class FmriExtractor(BaseExtractor):
         Full width at half maximum (in mm) for isotropic spatial smoothing
         via ``nilearn.image.smooth_img``. Applied after masking and before
         projection. ``None`` skips smoothing.
+    store_dtype : {"float32", "float16"}, default="float32"
+        Cache dtype. Reads always return float32.
     """
 
     requirements: tp.ClassVar[tp.Any] = ("nilearn",)
@@ -1857,6 +1994,7 @@ class FmriExtractor(BaseExtractor):
     from_space: str | None = None
     from_preproc: str | tuple[str, ...] | None = None
     fwhm: float | None = None
+    store_dtype: tp.Literal["float32", "float16"] = "float32"
     infra: MapInfra = MapInfra(
         timeout_min=120,
         cpus_per_task=10,
@@ -2125,7 +2263,10 @@ class FmriExtractor(BaseExtractor):
     )
     def _get_data(self, events: list[etypes.Fmri]) -> tp.Iterable[TimedArray]:
         for event in tqdm(events, disable=len(events) < 2, desc="Computing fmri data"):
-            yield self._preprocess_event(event)
+            ta = self._preprocess_event(event)
+            if self.store_dtype == "float16":
+                ta.data = quantize.Float16StoredArray(ta.data)  # type: ignore[assignment]
+            yield ta
 
     def _get_timed_arrays(
         self, events: list[etypes.Fmri], start: float, duration: float
@@ -2375,7 +2516,8 @@ class ChannelPositions(BaseStatic):
             positions = positions.reshape(len(ta_ch_names), n_spatial_dims)
 
         channel_idx = self._neuro._get_channels(ta_ch_names)
-        out = torch.full((len(self._neuro._channels), n_spatial_dims), self.INVALID_VALUE)
+        n_channels = max(self._neuro._channels.values()) + 1
+        out = torch.full((n_channels, n_spatial_dims), self.INVALID_VALUE)
         out[channel_idx, :] = torch.from_numpy(positions).float()
 
         return out
@@ -2436,10 +2578,9 @@ class HrfConvolve(BaseExtractor):
             msg = "HrfConvolve requires a cache (folder=my/cache or keep_in_ram=True)."
             raise ValueError(msg)
 
-        if isinstance(self.extractor, BaseStatic) and self.extractor.frequency == 0.0:
-            raise ValueError(
-                "HrfConvolve cannot crop a static extractor as it is timeless."
-            )
+        if self.extractor.frequency == 0:
+            msg = "HrfConvolve cannot convolve an extractor with no time axis."
+            raise ValueError(msg)
         self.event_types = self.extractor.event_types
         super().model_post_init(log__)
 

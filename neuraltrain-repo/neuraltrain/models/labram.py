@@ -9,9 +9,10 @@
 Includes the following adaptations:
 
 * Channel name remapping via an explicit user-provided mapping.
-* Dynamic channel resolution at forward time using ``channel_positions`` to
-  detect which channels are valid per sample, and ``ch_names`` to name them
-  when the caller's montage differs from the one built with.
+* Fixed, batch-independent channel selection: every channel that resolves to a
+  ``LABRAM_CHANNEL_ORDER`` name is kept and unmapped channels are dropped,
+  with ``ch_names`` naming them when the caller's montage differs from the one
+  built with.
 * Dynamic temporal resolution at forward time, so one instance serves any
   window length: the pretrained temporal embedding is sliced per call
   (interpolated when a window needs more patches than pretraining had).
@@ -26,10 +27,9 @@ import torch.nn.functional as F
 
 from .base import BaseBrainDecodeModel, RequiredBuildField
 from .common import (
-    INVALID_POS_VALUE,
     apply_temporal_adjustment,
     compute_temporal_adjustment,
-    parse_bipolar_name,
+    resolve_with_anode_fallback,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def _build_channel_remapping(
     ch_names: list[str],
     channel_mapping: dict[str, str] | None = None,
-) -> tuple[dict[str, str], set[str]]:
+) -> dict[str, str]:
     """Map dataset channel names to LaBraM channel names.
 
     Mapping priority (per channel):
@@ -49,45 +49,40 @@ def _build_channel_remapping(
     3. Bipolar fallback -- for names like ``"Fp1-F3"``, try matching the anode
        (``"Fp1"``) against ``LABRAM_CHANNEL_ORDER``.
 
+    Every value is canonicalised, including the user's own: braindecode matches
+    ``ch_names`` exactly and hard-raises on an unknown name, so a mis-cased
+    override would otherwise slip past the known-channel filter in
+    :func:`_resolve_channels` and crash inside the model.
+
     Returns
     -------
     remap : dict
-        Mapping from every matched channel name to its LaBraM counterpart
-        (always in ``LABRAM_CHANNEL_ORDER`` casing for cases 2 and 3;
-        whatever the user supplied for case 1).  Channels that cannot be
+        Mapping from every matched channel name to its
+        ``LABRAM_CHANNEL_ORDER``-cased counterpart.  Channels that cannot be
         mapped are **not** included (they are then dropped by
         :func:`_resolve_channels`).
-    positionless : set
-        Subset of ``remap`` keys for channels that are not expected to carry
-        montage positions -- i.e. those resolved via the bipolar anode
-        fallback (case 3) or explicit user ``channel_mapping`` (case 1).
-        Regular case-insensitive matches (case 2) are excluded because such
-        channels do have known positions and should be gated by the
-        per-sample position validity check at forward time.
     """
     from braindecode.models.labram import LABRAM_CHANNEL_ORDER
 
     labram_upper = {ch.upper(): ch for ch in LABRAM_CHANNEL_ORDER}
 
+    def canonicalise(name: str) -> str | None:
+        return labram_upper.get(name.upper())
+
     result: dict[str, str] = {}
-    positionless: set[str] = set()
     n_bipolar_fallback = 0
     for name in ch_names:
         if channel_mapping and name in channel_mapping:
-            result[name] = channel_mapping[name]
-            positionless.add(name)
+            override = canonicalise(channel_mapping[name])
+            if override is not None:
+                result[name] = override
             continue
-        canonical = labram_upper.get(name.upper())
-        if canonical is not None:
-            result[name] = canonical
+        canonical, used_anode = resolve_with_anode_fallback(name, canonicalise)
+        if canonical is None:
             continue
-        pair = parse_bipolar_name(name)
-        if pair is not None:
-            anode_canonical = labram_upper.get(pair[0].upper())
-            if anode_canonical is not None:
-                result[name] = anode_canonical
-                positionless.add(name)
-                n_bipolar_fallback += 1
+        result[name] = canonical
+        if used_anode:
+            n_bipolar_fallback += 1
 
     if n_bipolar_fallback:
         logger.info(
@@ -95,13 +90,13 @@ def _build_channel_remapping(
             n_bipolar_fallback,
         )
 
-    return result, positionless
+    return result
 
 
 def _resolve_channels(
     ch_names: list[str],
     channel_mapping: dict[str, str] | None = None,
-) -> tuple[list[str], torch.Tensor, torch.Tensor]:
+) -> tuple[list[str], torch.Tensor]:
     """Derive what :class:`_LabramChannelWrapper` needs from *ch_names*.
 
     Returns, in the order of *ch_names*:
@@ -109,12 +104,6 @@ def _resolve_channels(
     * ``labram_names`` -- the LaBraM-cased name to forward to the inner model
       for each channel (channels with no LaBraM mapping keep their original
       name; see ``known`` below for how those are then filtered out).
-    * ``positionless`` -- channels that have a valid LaBraM mapping but no
-      montage position (bipolar derivations resolved via anode fallback, or
-      channels added via an explicit ``channel_mapping``).  These are kept
-      regardless of their per-sample ``channel_positions`` row, so e.g.
-      SleepEDF's bipolar ``Fpz-Cz`` or Geodesic E-numbers reach LaBraM even
-      when ``set_montage`` could not assign them coordinates.
     * ``known`` -- channels whose resolved name is in
       ``LABRAM_CHANNEL_ORDER`` (case-insensitively).  Channels that fail this
       check (e.g. unmapped EGI ``E5``, ``E7``, ...) are filtered out entirely
@@ -126,7 +115,7 @@ def _resolve_channels(
     """
     from braindecode.models.labram import LABRAM_CHANNEL_ORDER
 
-    remap, positionless = _build_channel_remapping(ch_names, channel_mapping)
+    remap = _build_channel_remapping(ch_names, channel_mapping)
     labram_names = [remap.get(name, name) for name in ch_names]
 
     labram_upper = {ch.upper() for ch in LABRAM_CHANNEL_ORDER}
@@ -140,11 +129,7 @@ def _resolve_channels(
             unknown,
         )
 
-    return (
-        labram_names,
-        torch.tensor([name in positionless for name in ch_names], dtype=torch.bool),
-        torch.tensor(known, dtype=torch.bool),
-    )
+    return labram_names, torch.tensor(known, dtype=torch.bool)
 
 
 class _LabramChannelWrapper(nn.Module):
@@ -155,13 +140,15 @@ class _LabramChannelWrapper(nn.Module):
     bare ``Labram`` serves exactly the montage and window length it was built
     for.  This wrapper resolves both per call instead.
 
-    **Channels.**  Names and masks come from :func:`_resolve_channels`,
+    **Channels.**  Names and the known mask come from :func:`_resolve_channels`,
     memoized per name list so the common case -- every batch carrying the
-    montage built with -- resolves once.  At forward time the per-sample
-    position mask is OR-combined with the positionless mask, AND-combined
-    with the known mask, then intersected across the batch (LaBraM's
-    ``ch_names`` is per-batch, so heterogeneous batches fall back to the
-    channels valid in every sample).
+    montage built with -- resolves once.  Selection is exactly that mask, so it
+    depends only on the names and never on the batch or on the per-sample
+    ``channel_positions``.  That keeps the forwarded channel count (and hence
+    the token count) identical across the build dummy pass and every
+    train/val/test batch, which is what lets fixed-size ``flatten`` probes work.
+    Bipolar derivations resolved via the anode and explicit ``channel_mapping``
+    entries survive because they resolve to a LaBraM-cased name.
 
     **Window length.**  ``temporal_embedding`` moves onto the wrapper so it
     can be cut to the number of patches the input actually carries, while the
@@ -214,14 +201,10 @@ class _LabramChannelWrapper(nn.Module):
         self.temporal_embedding = model._parameters.pop("temporal_embedding", None)
 
         self._union_ch_names = list(union_ch_names)
-        self._resolved: dict[
-            tuple[str, ...], tuple[list[str], torch.Tensor, torch.Tensor]
-        ] = {}
+        self._resolved: dict[tuple[str, ...], tuple[list[str], torch.Tensor]] = {}
         self._resolve(self._union_ch_names)
 
-    def _resolve(
-        self, ch_names: list[str]
-    ) -> tuple[list[str], torch.Tensor, torch.Tensor]:
+    def _resolve(self, ch_names: list[str]) -> tuple[list[str], torch.Tensor]:
         key = tuple(ch_names)
         if key not in self._resolved:
             self._resolved[key] = _resolve_channels(ch_names, self.channel_mapping)
@@ -250,18 +233,19 @@ class _LabramChannelWrapper(nn.Module):
         channel_positions: torch.Tensor,
         ch_names: list[str] | None = None,
     ) -> torch.Tensor:
-        """Forward pass with dynamic channel and window-length selection.
+        """Forward pass with fixed channel selection and dynamic window length.
 
         Parameters
         ----------
         x : (B, n_channels, n_times)
         channel_positions : (B, n_channels, n_spatial_dims)
+            Accepted for framework/API compatibility; unused for selection.
         ch_names : list of str, optional
             Names of the channels of *x*, defaulting to the montage the
             wrapper was built with.  Pass it whenever the incoming montage
             differs -- LaBraM cannot name an electrode from its coordinates.
         """
-        labram_names, positionless, known = self._resolve(
+        labram_names, known = self._resolve(
             ch_names if ch_names is not None else self._union_ch_names
         )
         if len(labram_names) != x.shape[1]:
@@ -272,11 +256,7 @@ class _LabramChannelWrapper(nn.Module):
                 "'ch_names' at forward time."
             )
 
-        valid = (channel_positions != INVALID_POS_VALUE).any(dim=-1)
-        valid = valid | positionless.to(valid.device)
-        valid = valid & known.to(valid.device)
-        # Intersect across the batch: braindecode's ``ch_names`` is per-batch.
-        common = valid.all(dim=0)
+        common = known.to(x.device)
         names = [labram_names[i] for i in common.nonzero(as_tuple=True)[0].tolist()]
 
         pad_right, truncate_right = compute_temporal_adjustment(
@@ -302,9 +282,9 @@ class NtLabram(BaseBrainDecodeModel):
        already match ``LABRAM_CHANNEL_ORDER`` (case-insensitively) need no
        entry.
     2. **Forward-time adaptation** -- the model is wrapped in
-       :class:`_LabramChannelWrapper`, which picks the valid channels and the
-       number of time patches from each batch, so one instance serves any
-       montage and window length.
+       :class:`_LabramChannelWrapper`, which keeps the channels resolving to a
+       LaBraM name and picks the number of time patches from each batch, so
+       one instance serves any montage and window length.
 
     Parameters
     ----------

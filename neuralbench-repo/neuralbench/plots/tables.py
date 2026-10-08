@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import typing as tp
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +29,12 @@ _FEATURE_BASED_LABEL = "feature_based"
 
 # the only models run with more than one adaptation strategy
 _FM_DISPLAY_SET: frozenset[str] = frozenset(FM_DISPLAY)
+
+# Metrics logged as a fraction but reported (and given a perfect score in
+# :data:`neuralbench.plots._constants.METRIC_PERFECT_SCORE`) as a percentage.
+SCALE_TO_PERCENT: frozenset[str] = frozenset(
+    {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
+)
 
 # ---------------------------------------------------------------------------
 # Result aggregation
@@ -85,6 +92,15 @@ def _disambiguate_model_variants(df: pd.DataFrame) -> pd.DataFrame:
 
     labels = df["model_name"].copy()
     for base, idx in df.groupby("model_name").groups.items():
+        # The collapsed classical baseline intentionally uses a different
+        # task-appropriate sklearn pipeline per task (see
+        # ``_collapse_feature_based_baselines`` / ``FEATURE_BASED_BY_TASK``),
+        # so its ``model_variant`` differs across tasks.  Those are not
+        # competing configs on one task -- they are one headline "Handcrafted"
+        # baseline -- so keep it as a single entry instead of splitting it into
+        # per-pipeline ``Handcrafted [cfg=...]`` rows.
+        if base == MODEL_DISPLAY_NAMES.get(_FEATURE_BASED_LABEL, "Handcrafted"):
+            continue
         tags = variant.loc[idx]
         if tags.nunique() <= 1:
             continue  # single config -> keep the clean display name
@@ -223,8 +239,7 @@ def build_results_df(
             "neuralbench.aggregator.Aggregator.loss_to_metric_mapping."
         )
     df["metric_value"] = df.apply(lambda x: x[x["metric_name"]], axis=1)
-    _SCALE_TO_PERCENT = {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
-    df.loc[df.metric_name.isin(_SCALE_TO_PERCENT), "metric_value"] *= 100.0
+    df.loc[df.metric_name.isin(SCALE_TO_PERCENT), "metric_value"] *= 100.0
     _check_no_collisions(df)
     return df
 
@@ -232,6 +247,13 @@ def build_results_df(
 # ---------------------------------------------------------------------------
 # Results tables
 # ---------------------------------------------------------------------------
+
+
+def _format_mean_std(mean: float, std: float) -> str:
+    """Render ``mean +/- std``, dropping the spread a single seed cannot define."""
+    if pd.isna(std):
+        return f"{mean:0.3f}"
+    return f"{mean:0.3f} \u00b1 {std:0.3f}"
 
 
 def make_results_table(
@@ -245,9 +267,7 @@ def make_results_table(
     agg_df = df.groupby([facet_column, "metric_name", color_column]).metric_value.agg(
         ["mean", "std"]
     )
-    agg_df["perf"] = agg_df.apply(
-        lambda x: f"{x['mean']:0.3f} \u00b1 {x['std']:0.3f}", axis=1
-    )
+    agg_df["perf"] = agg_df.apply(lambda x: _format_mean_std(x["mean"], x["std"]), axis=1)
     wide_df = agg_df.reset_index().pivot(
         index=[facet_column, "metric_name"],
         columns=color_column,
@@ -262,9 +282,20 @@ def make_rank_table(
     df: pd.DataFrame,
     output_dir: Path,
 ) -> pd.DataFrame:
-    """Build a per-task rank table with an average row and save as CSV."""
+    """Build a per-task rank table with an average row and save as CSV.
+
+    The average covers only tasks every model ranked on, so a model missing a
+    score somewhere is not flattered by averaging over an easier task subset.
+    """
     rank_df = compute_task_ranks(df)
-    rank_df.loc["average"] = rank_df.mean(axis=0)
+    shared = rank_df.dropna()
+    partial = sorted(set(rank_df.index) - set(shared.index))
+    if partial:
+        warnings.warn(
+            f"Averaging ranks over {len(shared)} of {len(rank_df)} tasks: "
+            f"{partial} lack a score for at least one model"
+        )
+    rank_df.loc["average"] = shared.mean(axis=0)
     output_dir.mkdir(parents=True, exist_ok=True)
     rank_df.to_csv(output_dir / "core_rank_table.csv")
     return rank_df
@@ -286,7 +317,7 @@ def make_full_table(
     agg = sub.groupby(["task_name", "dataset_name", "metric_name", "model_name"])[
         "metric_value"
     ].agg(["mean", "std"])
-    agg["perf"] = agg.apply(lambda x: f"{x['mean']:0.3f} \u00b1 {x['std']:0.3f}", axis=1)
+    agg["perf"] = agg.apply(lambda x: _format_mean_std(x["mean"], x["std"]), axis=1)
     wide = agg.reset_index().pivot(
         index=["task_name", "dataset_name", "metric_name"],
         columns="model_name",

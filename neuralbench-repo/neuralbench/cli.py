@@ -20,6 +20,7 @@ import traceback
 import typing as tp
 
 from neuralbench.experiment_config import build_experiment_configs
+from neuralbench.plots._constants import DEFAULT_EVAL_MODE
 from neuralbench.registry import (
     ALL_DEVICES,
     ALL_DOWNSTREAM_WRAPPERS,
@@ -142,6 +143,8 @@ def run_benchmark(
         # ConfDicts, which the pydantic model coerces into Experiment instances.
         experiments=configs,  # type: ignore[arg-type]
         debug=debug,
+        device=device,
+        eval_mode=DEFAULT_EVAL_MODE if downstream_wrapper is None else None,
     )
 
     if not plot_cached:

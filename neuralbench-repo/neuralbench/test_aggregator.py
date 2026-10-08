@@ -41,6 +41,16 @@ def test_infer_eval_mode_without_wrapper_is_finetune():
     assert _eval_mode(None) == "finetune"
 
 
+def test_eval_mode_overrides_the_inferred_tag(monkeypatch):
+    inferred = [{"eval_mode": "finetune"}, {"eval_mode": "finetune_mean"}]
+    monkeypatch.setattr(
+        BenchmarkAggregator, "_collect_results_parallel", lambda self: inferred
+    )
+    agg = BenchmarkAggregator(experiments=[], eval_mode="default")
+    results = agg._collect_results(cached_only=True)
+    assert {r["eval_mode"] for r in results} == {"default"}
+
+
 def test_every_shipped_task_loss_has_a_headline_metric():
     mapping = BenchmarkAggregator.model_fields["loss_to_metric_mapping"].default
     defaults = load_yaml_config(DEFAULTS_DIR / "config.yaml")

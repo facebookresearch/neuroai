@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -122,12 +123,13 @@ def plot_core_rank_boxplot(
     *,
     watermark: str | None = None,
     stem: str = "core_rank_boxplot",
-) -> Path:
+) -> Path | None:
     """Box chart of per-task normalized ranks, sorted by mean, colored by group.
 
     Ranks are min-max normalized to ``[0, 1]`` (best model = 0, worst
     model = 1) so the x-axis scale is independent of the number of
-    models being compared.
+    models being compared.  Returns ``None`` (without writing any file)
+    when fewer than 2 models leave nothing to rank.
     """
     long_df = _prepare_rank_data(df)
 
@@ -135,10 +137,14 @@ def plot_core_rank_boxplot(
     model_order = mean_ranks.index.tolist()
     n_models = len(model_order)
 
+    # Unguarded, a single-model cache aborts --plot-cached before the remaining
+    # tables are written, making finished runs look like they have no results.
     if n_models < 2:
-        raise ValueError(
-            f"Normalized-rank boxplot requires at least 2 models; got {n_models}."
+        warnings.warn(
+            f"Skipping normalized-rank boxplot: needs at least 2 models, "
+            f"got {model_order}"
         )
+        return None
     long_df["norm_rank"] = (long_df["rank"] - 1.0) / (n_models - 1)
 
     display_models = long_df["model_name"].unique().tolist()

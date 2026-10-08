@@ -5,11 +5,13 @@
 # LICENSE file in the root directory of this source tree.
 
 import functools
+from pathlib import Path
 
 import pytest
 import torch
 from exca import ConfDict
 
+from neuralbench import registry
 from neuralbench.data import Data
 from neuralbench.defaults.metrics import (
     get_classification_metric_configs,
@@ -116,6 +118,36 @@ def test_unsupported_gpu_check_survives_a_driver_error(
     monkeypatch.setattr(torch.cuda, "get_device_capability", _too_old)
     with pytest.warns(UserWarning, match="driver too old"):
         _warn_unsupported_gpu()
+
+
+def test_plugin_root_adds_dataset_to_shipped_task(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "eeg" / "seizure" / "datasets" / "plugin2026.yaml"
+    dataset.parent.mkdir(parents=True)
+    dataset.write_text("data:\n  study:\n    source:\n      name: Plugin2026Eeg\n")
+    monkeypatch.setattr(
+        registry, "_all_task_roots", lambda: [registry.BASE_DIR / "tasks", tmp_path]
+    )
+    config = merge_task_config("eeg", "seizure", "plugin2026")
+    assert config["data.study.source.name"] == "Plugin2026Eeg"
+    assert config["data.study.split.split_by"] == "subject", "task split not inherited"
+
+
+def test_replaced_study_drops_default_study_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dataset = tmp_path / "eeg" / "word" / "datasets" / "plugin2026.yaml"
+    dataset.parent.mkdir(parents=True)
+    dataset.write_text(
+        "data:\n  study:\n    =replace=: true\n    source:\n      name: Plugin2026Eeg\n"
+    )
+    monkeypatch.setattr(
+        registry, "_all_task_roots", lambda: [registry.BASE_DIR / "tasks", tmp_path]
+    )
+    source = merge_task_config("eeg", "word", "plugin2026")["data.study.source"]
+    assert "query" not in source, f"default study's query leaked: {source['query']!r}"
+    assert {"path", "infra"} <= set(source)
 
 
 @pytest.mark.parametrize("preset", list(ALL_DOWNSTREAM_WRAPPERS))

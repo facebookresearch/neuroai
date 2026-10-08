@@ -12,6 +12,7 @@ lifecycle class focused on orchestration.
 
 import inspect
 import logging
+import math
 import typing as tp
 
 import torch
@@ -37,6 +38,25 @@ from .utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _infer_neuro_shape(neuro: torch.Tensor) -> tuple[int, int]:
+    """Return spatial location count and temporal length without reshaping data."""
+    if neuro.ndim < 3:
+        raise ValueError(
+            "Neuro tensors must have batch, spatial, and temporal axes; "
+            f"got shape {tuple(neuro.shape)}."
+        )
+    spatial_shape = tuple(neuro.shape[1:-1])
+    n_spatial_locations = math.prod(spatial_shape)
+    if len(spatial_shape) > 1:
+        LOGGER.info(
+            "Treating multidimensional spatial shape %s as %d locations "
+            "for model construction; input tensor remains unflattened.",
+            spatial_shape,
+            n_spatial_locations,
+        )
+    return n_spatial_locations, int(neuro.shape[-1])
 
 
 def build_dummy_batch(
@@ -141,8 +161,9 @@ def build_brain_model(
     models that read channel identity by name rather than by position.
     """
     batch = next(iter(train_loader))
-    n_spatial_locations, n_temporal_samples = batch.data["neuro"].shape[1:]
-    LOGGER.info(f"Neuro shape: {batch.data['neuro'].shape}")
+    neuro = batch.data["neuro"]
+    n_spatial_locations, n_temporal_samples = _infer_neuro_shape(neuro)
+    LOGGER.info(f"Neuro shape: {neuro.shape}")
     LOGGER.info(f"Target shape: {batch.data['target'].shape}")
 
     feat = batch.data["target"]
@@ -181,6 +202,16 @@ def build_brain_model(
             frequency = float(freq)
         if hasattr(neuro_extractor, "_channels"):
             ch_names = list(neuro_extractor._channels.keys())
+            # Some extractors may fold a second axis into the spatial one (e.g.
+            # channel x frequency flattening for spectrogram extractors
+            if len(ch_names) != n_spatial_locations:
+                LOGGER.warning(
+                    "Neuro extractor names %d channels but the spatial axis is %d "
+                    "wide; dropping channel names.",
+                    len(ch_names),
+                    n_spatial_locations,
+                )
+                ch_names = None
         # Surface-sampled data (e.g. fMRI on fsaverage) exposes a mesh
         # resolution that surface models need; carry its enum name as a string.
         mesh_attr = getattr(neuro_extractor, "mesh_resolution", None)

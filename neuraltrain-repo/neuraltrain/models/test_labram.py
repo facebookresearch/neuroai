@@ -63,11 +63,14 @@ def _make_wrapper(names, channel_mapping=None):
 
 
 @requires_labram_channel_order
-def test_wrapper_filters_to_valid_channels():
+def test_wrapper_selects_all_known_channels_regardless_of_positions():
+    """Selection is fixed to the known/mapped channels and ignores per-sample
+    ``channel_positions`` validity (batch-independent)."""
     wrapper, inner = _make_wrapper(CH_NAMES)
 
     B, C, T, D = 2, len(CH_NAMES), 100, 2
     x = torch.randn(B, C, T)
+    # Mark most positions invalid; selection must ignore this.
     pos = torch.full((B, C, D), INVALID_POS_VALUE)
     pos[:, 0, :] = 0.5  # Fp1
     pos[:, 2, :] = 0.5  # C3
@@ -75,8 +78,9 @@ def test_wrapper_filters_to_valid_channels():
 
     wrapper(x, pos)
 
-    assert inner.last_ch_names == ["FP1", "C3", "O1"]
-    assert inner.last_x_shape == (B, 3, T)
+    # All CH_NAMES are in LABRAM_CHANNEL_ORDER, so every channel is forwarded.
+    assert inner.last_ch_names == [name.upper() for name in CH_NAMES]
+    assert inner.last_x_shape == (B, C, T)
 
 
 @requires_labram_channel_order
@@ -117,20 +121,33 @@ def test_wrapper_drops_unmapped_egi_channels():
 
 
 @requires_labram_channel_order
-def test_wrapper_heterogeneous_batch_uses_intersection():
+def test_wrapper_channel_selection_is_batch_independent():
+    """The forwarded channel count is identical regardless of batch size or
+    per-sample position pattern.
+
+    This is the invariant that lets fixed-size ``flatten`` probes work: the
+    probe is sized from a 1-sample build pass, and every train/val/test batch
+    must forward the same number of channels. A per-batch intersection violates
+    this (a 1-sample build sees more channels than a multi-sample batch),
+    breaking the probe on datasets with heterogeneous per-sample channel
+    validity (e.g. cvep burst-VEP).
+    """
     wrapper, inner = _make_wrapper(CH_NAMES)
 
     B, C, T, D = 2, len(CH_NAMES), 50, 2
     pos = torch.full((B, C, D), INVALID_POS_VALUE)
-    pos[0, 0, :] = 0.5  # sample 0: Fp1
-    pos[0, 1, :] = 0.5  # sample 0: Fp2
-    pos[1, 0, :] = 0.5  # sample 1: Fp1
-    pos[1, 2, :] = 0.5  # sample 1: C3 (differs!)
+    pos[0, 0, :] = 0.5  # sample 0: Fp1 only
+    pos[1, 2, :] = 0.5  # sample 1: C3 only (heterogeneous)
 
     wrapper(torch.randn(B, C, T), pos)
+    multi_shape = inner.last_x_shape
 
-    assert inner.last_ch_names == ["FP1"]
-    assert inner.last_x_shape == (B, 1, T)
+    wrapper(torch.randn(1, C, T), pos[:1])  # as when sizing the probe at build
+    single_shape = inner.last_x_shape
+
+    assert inner.last_ch_names == [name.upper() for name in CH_NAMES]
+    assert multi_shape == (B, C, T)
+    assert single_shape == (1, C, T)
 
 
 @requires_labram_channel_order
@@ -190,33 +207,46 @@ def test_build_channel_remapping():
     already match its internal table.
     """
     # Direct case-2 match: dataset-cased names map to LABRAM-cased canonical.
-    remap, positionless = _build_channel_remapping(["Fp1", "Cz", "O2"])
-    assert remap == {"Fp1": "FP1", "Cz": "CZ", "O2": "O2"}
-    assert positionless == set()
+    assert _build_channel_remapping(["Fp1", "Cz", "O2"]) == {
+        "Fp1": "FP1",
+        "Cz": "CZ",
+        "O2": "O2",
+    }
 
     # Case-insensitive match still resolves, output is canonical.
-    remap, positionless = _build_channel_remapping(["fp1", "cZ"])
-    assert remap == {"fp1": "FP1", "cZ": "CZ"}
-    assert positionless == set()
+    assert _build_channel_remapping(["fp1", "cZ"]) == {"fp1": "FP1", "cZ": "CZ"}
 
-    # Unknown channels excluded
-    remap, positionless = _build_channel_remapping(["Fp1", "NONEXISTENT"])
-    assert remap == {"Fp1": "FP1"}
-    assert positionless == set()
+    # Unknown channels excluded.
+    assert _build_channel_remapping(["Fp1", "NONEXISTENT"]) == {"Fp1": "FP1"}
 
-    # Explicit mapping overrides name matching; explicit entries are
-    # treated as positionless because they typically denote channel
-    # systems whose montage positions cannot be resolved.
-    remap, positionless = _build_channel_remapping(
-        ["E1", "Fp1", "Cz"], {"E1": "FP1", "Fp1": "FP2"}
+    # Explicit mapping overrides name matching.
+    assert _build_channel_remapping(["E1", "Fp1", "Cz"], {"E1": "FP1", "Fp1": "FP2"}) == {
+        "E1": "FP1",
+        "Fp1": "FP2",
+        "Cz": "CZ",
+    }
+
+    # Bipolar names resolve through their anode.
+    assert _build_channel_remapping(["Fp1-F3", "Cz"]) == {
+        "Fp1-F3": "FP1",
+        "Cz": "CZ",
+    }
+
+
+@requires_labram_channel_order
+def test_build_channel_remapping_canonicalises_explicit_overrides():
+    """An override is canonicalised, and a meaningless one is dropped.
+
+    Left as-is, a mis-cased override would pass the known-channel filter and
+    then hard-raise inside braindecode.
+    """
+    remap = _build_channel_remapping(
+        ["E1", "E2", "Cz"], {"E1": "fp1", "E2": "NOT_AN_ELECTRODE"}
     )
-    assert remap == {"E1": "FP1", "Fp1": "FP2", "Cz": "CZ"}
-    assert positionless == {"E1", "Fp1"}
 
-    # Bipolar fallback channels are positionless.
-    remap, positionless = _build_channel_remapping(["Fp1-F3", "Cz"])
-    assert remap == {"Fp1-F3": "FP1", "Cz": "CZ"}
-    assert positionless == {"Fp1-F3"}
+    assert remap == {"E1": "FP1", "Cz": "CZ"}, (
+        "'fp1' must arrive as 'FP1'; an unresolvable override must not survive"
+    )
 
 
 # ---------------------------------------------------------------------------

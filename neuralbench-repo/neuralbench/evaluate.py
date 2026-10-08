@@ -91,6 +91,7 @@ def evaluate_model(
     device: str,
     task: str | list[str],
     *,
+    dataset: str | list[str] | None = None,
     name: str = "external",
     overrides: tp.Mapping[str, tp.Any] | None = None,
     downstream_wrapper: str | list[str] = "linear_probe_mean",
@@ -119,9 +120,11 @@ def evaluate_model(
         (e.g. LaBraM).  It is serialized once to the cache folder and reloaded
         fresh for each experiment.  Run :func:`check_model` first.
     device, task
-        As on the CLI; ``task="all"`` runs every validated task for the device,
-        which with the default ``dataset=None`` is the device's Core suite and
-        with ``dataset="all"`` its Full suite.
+        As on the CLI; ``task="all"`` runs every validated task for the device.
+    dataset
+        Dataset variant(s), or ``"all"`` for every variant a task registers;
+        ``None`` is the task's base config.  So ``task="all"`` with the default
+        is the device's Core suite, and with ``dataset="all"`` its Full suite.
     name
         Label for this model in the results frame.
     overrides
@@ -148,7 +151,7 @@ def evaluate_model(
         locally.  For checking that a model trains at all, not for results.
     **selection
         Remaining :func:`neuralbench.cli.run_benchmark` arguments
-        (``dataset``, ``force``, ...).
+        (``force``, ``grid``, ...).
     """
     config = _external_config(model)
     overlay = {
@@ -160,6 +163,7 @@ def evaluate_model(
     phase = dict(
         device=device,
         task=task,
+        dataset=dataset,
         overrides=overrides,
         downstream_wrapper=downstream_wrapper,
         cluster=cluster,

@@ -20,6 +20,7 @@ import typing as tp
 from pathlib import Path
 from warnings import warn
 
+import exca
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,78 @@ def _resolve_task_dir(device: str, task_name: str) -> Path:
     raise FileNotFoundError(f"No task directory found for '{device}/{task_name}'")
 
 
+def _task_dataset_paths(device: str, task_name: str) -> dict[str, Path]:
+    """Map each dataset stem of *task_name* to its ``datasets/<stem>.yaml``.
+
+    Scans every task root, so a plugin can add datasets to a task shipped by
+    another root; earlier roots win on collision.
+    """
+    paths: dict[str, Path] = {}
+    for root in _all_task_roots():
+        for f in sorted((root / device / task_name / "datasets").glob("*.yaml")):
+            paths.setdefault(f.stem, f)
+    return paths
+
+
+# ---------------------------------------------------------------------------
+# Defaults discovery
+# ---------------------------------------------------------------------------
+
+
+def _all_defaults_roots() -> list[Path]:
+    """Return internal + external ``defaults/`` roots.
+
+    A plugin ships ``<device>/config.yaml`` and ``debug_study.yaml`` in a
+    ``defaults/`` directory beside its ``tasks/`` entry-point root.
+    """
+    roots = [DEFAULTS_DIR]
+    for ext_dir in _discover_entry_point_dirs("neuralbench.tasks"):
+        candidate = ext_dir / "defaults"
+        if candidate.is_dir():
+            roots.append(candidate)
+    return roots
+
+
+def _resolve_device_default_path(device: str) -> Path | None:
+    """Return the first ``<root>/<device>/config.yaml`` found, or ``None``.
+
+    ``None`` means no device overlay ships for *device*, and the loader
+    falls back to the base config alone.
+    """
+    for root in _all_defaults_roots():
+        candidate = root / device / "config.yaml"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_default_config(device: str | None = None) -> dict[str, tp.Any]:
+    """Load ``defaults/config.yaml``, overlaid with *device*'s defaults if any.
+
+    The same baseline ``run_benchmark`` starts from, before task / model /
+    dataset / grid overrides. ``device=None`` returns the base config alone.
+    """
+    config = exca.ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml") or {})
+    device_path = None if device is None else _resolve_device_default_path(device)
+    if device_path is not None:
+        config.update(load_yaml_config(device_path) or {})
+    return dict(config)
+
+
+def _build_debug_study_queries() -> dict[str, str | None]:
+    """Collect the ``-d`` subsetting query per study, across all defaults roots.
+
+    A plugin keeps the queries for the studies it ships in its own
+    ``defaults/debug_study.yaml``; later roots win on collision.
+    """
+    queries: dict[str, str | None] = {}
+    for root in _all_defaults_roots():
+        path = root / "debug_study.yaml"
+        if path.exists():
+            queries.update(load_yaml_config(path) or {})
+    return queries
+
+
 # ---------------------------------------------------------------------------
 # Model scanning
 # ---------------------------------------------------------------------------
@@ -211,15 +284,16 @@ def _task_datasets(device: str, task_name: str) -> tuple[tuple[str, str | None],
     The default study is set in ``config.yaml`` and has no file (stem ``None``);
     a variant that does not set a study inherits the default one.
     """
-    task_dir = _resolve_task_dir(device, task_name)
-    config = load_yaml_config(task_dir / "config.yaml", safe=True)
+    config = load_yaml_config(
+        _resolve_task_dir(device, task_name) / "config.yaml", safe=True
+    )
     assert config is not None
     default_study = config["data"]["study"]["source"]["name"]
     pairs: list[tuple[str, str | None]] = [(default_study, None)]
-    for f in sorted((task_dir / "datasets").glob("*.yaml")):
+    for stem, f in sorted(_task_dataset_paths(device, task_name).items()):
         ds_config = load_yaml_config(f, safe=True) or {}
         name = ds_config.get("data", {}).get("study", {}).get("source", {}).get("name")
-        pairs.append((name or default_study, f.stem))
+        pairs.append((name or default_study, stem))
     return tuple(pairs)
 
 
@@ -252,9 +326,7 @@ ALL_MODELS = _build_all_models()
 ALL_DOWNSTREAM_WRAPPERS: dict[str, dict[str, tp.Any]] = (
     load_yaml_config(DEFAULTS_DIR / "downstream_wrappers.yaml") or {}
 )
-DEBUG_STUDY_QUERIES: dict[str, str | None] = (
-    load_yaml_config(DEFAULTS_DIR / "debug_study.yaml") or {}
-)
+DEBUG_STUDY_QUERIES: dict[str, str | None] = _build_debug_study_queries()
 ALL_DATASETS = _build_all_datasets(TASKS)
 
 
@@ -330,16 +402,40 @@ BASELINE_MODELS: list[str] = [
     *sorted(SKLEARN_BASELINE_MODELS),
 ]
 
+# ECG reuses the EEG architectures -- a lead is just a time series -- minus the
+# ones a *single* channel breaks, verified by building each on ``n_chans=1``:
+#
+# - ``deep4net`` / ``shallow_fbcsp_net`` wrap braindecode's ``CombinedConv``,
+#   which cannot be built on one channel at all and dies in
+#   ``.mm(time_bias.unsqueeze(-1))`` with "self must be a matrix".
+# - the position-aware models (``simpleconv_time_agg``, ``luna``, ``reve``) need
+#   channel geometry, and no montage names an ECG lead, so its positions degrade
+#   to ``INVALID_VALUE``; ``labram`` likewise keys its patch embedding off 10-20
+#   channel names.  ``bendr`` builds but goes degenerate / NaN.
+ECG_INCOMPATIBLE_MODELS: frozenset[str] = frozenset(
+    {
+        "deep4net",
+        "shallow_fbcsp_net",
+        "simpleconv_time_agg",
+        "labram",
+        "luna",
+        "reve",
+        "bendr",
+    }
+)
+
 DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "eeg": CLASSIC_MODELS,
     "meg": CLASSIC_MODELS,
     "fmri": _cli_names(family="classic", device="fmri"),
     "emg": _cli_names(family="classic", device="emg"),
+    "ecg": [m for m in CLASSIC_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 DEVICE_FM_MODELS: dict[str, list[str]] = {
     "eeg": FM_MODELS,
     "meg": FM_MODELS,
     "fmri": _cli_names(family="foundation", device="fmri"),
+    "ecg": [m for m in FM_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 # Per-device classical baseline lists.
 #
@@ -350,15 +446,20 @@ DEVICE_FM_MODELS: dict[str, list[str]] = {
 #   and a linear head regardless of channel count.  On ~272-306 MEG sensors
 #   the tangent-space dimension is C(C+1)/2 ≈ 37k-47k features; OAS shrinkage
 #   and the default ``max_fit_samples=20_000`` cap keep the linear head
-#   feasible.  Xdawn (per-class ERP filter, explodes on 29-way multiclass) and
-#   CoSpectra (frequency-tuned narrowband spectral features) remain excluded.
+#   feasible.  Xdawn covers the ERP tasks, bounded off high-way targets by
+#   ``FEATURE_BASED_BY_TASK``; CoSpectra (narrowband) stays excluded.
 # - fMRI has no classical pyriemann / covariance analogue that transfers
 #   meaningfully from a channel basis to a voxel basis, so only the constant
 #   predictors are kept.
+# - ECG keeps the Riemannian TS pipelines, which on one lead reduce to a linear
+#   head on log-variance -- degenerate but well-defined, and they are what the
+#   published ECG numbers were measured against.  Xdawn is dropped because its
+#   spatial filtering has no meaning on a single channel.
 DEVICE_BASELINE_MODELS: dict[str, list[str]] = {
     "eeg": BASELINE_MODELS,
-    "meg": ["chance", "dummy", "cov_ts_lr", "cov_ts_ridge"],
+    "meg": ["chance", "dummy", "xdawn_ts_lr", "cov_ts_lr", "cov_ts_ridge"],
     "fmri": ["chance", "dummy"],
+    "ecg": ["chance", "dummy", "cov_ts_lr", "cov_ts_ridge"],
 }
 
 # ---------------------------------------------------------------------------
@@ -379,7 +480,10 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
     "n2pc": "xdawn_ts_lr",
     "n400": "xdawn_ts_lr",
     "mismatch_negativity": "xdawn_ts_lr",
+    "acoustic_change": "xdawn_ts_lr",
+    "stimulus_congruency": "xdawn_ts_lr",
     "audiovisual_stimulus": "xdawn_ts_lr",
+    "auditory_stimulus": "xdawn_ts_lr",
     # Oscillatory / BCI classification (moabb TSLR convention).
     "motor_imagery": "cov_ts_lr",
     "motor_execution": "cov_ts_lr",
@@ -391,6 +495,7 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
     "emotion": "cov_ts_lr",
     # Clinical / state classification -- same Riemann-TS features but the
     # discriminative signal is spectral-power rather than event-locked.
+    "asd_diagnosis": "cov_ts_lr",
     "dementia_diagnosis": "cov_ts_lr",
     "depression_diagnosis": "cov_ts_lr",
     "parkinsons_diagnosis": "cov_ts_lr",

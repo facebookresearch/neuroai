@@ -23,7 +23,7 @@ data:
       name: HuggingFaceVideo
       model_name: "facebook/vjepa2-vitg-fpc64-256"
       frequency: 4
-      use_audio: False
+      num_frames: 64  # matches the fpc64 checkpoint (64 frames per clip)
       aggregation: trigger
       infra:
         cluster: !!python/name:neuralbench.config_manager.CLUSTER
@@ -36,7 +36,7 @@ data:
   duration: 2.0
   summary_columns: [concept, category]
 brain_model_output_size: &brain_model_output_size 1408
-trainer_config.monitor: val/batch_top5_acc
+trainer_config.monitor: val/batch_inv_norm_rank_mean
 trainer_config.mode: max
 loss:
   name: ClipLoss

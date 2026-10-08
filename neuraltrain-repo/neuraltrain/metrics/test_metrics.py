@@ -12,6 +12,7 @@ import pytest
 import torch
 from sklearn.metrics import balanced_accuracy_score, root_mean_squared_error
 from torchmetrics import PearsonCorrCoef
+from torchmetrics.retrieval import RetrievalAUROC, RetrievalHitRate
 
 from neuraltrain.metrics import BaseMetric
 
@@ -231,6 +232,92 @@ def test_rank_half_bin():
     out = metric(y_pred, y_true, y_pred_labels, y_true_labels)
 
     assert out == 0.5
+
+
+@pytest.mark.parametrize("reduction", ["mean", "median"])
+def test_inverse_normalized_rank(reduction):
+    F = 8
+    # Item i has 0-based rank i in y_true, so ranks are [0, 1, ..., F-1].
+    template = torch.rand(1, F)
+    y_pred = template.repeat(F, 1)
+    y_true = torch.triu(y_pred)
+    y_true_labels = torch.arange(y_true.shape[0]).tolist()
+    y_pred_labels = torch.arange(y_pred.shape[0]).tolist()
+
+    metric = metrics.InverseNormalizedRank(reduction)
+    out = metric(y_pred, y_true, y_pred_labels, y_true_labels)
+
+    # reduction(1 - ranks / (N - 1)); ranks == arange(F), N == F.
+    reduce_fn = {"mean": torch.mean, "median": torch.median}[reduction]
+    expected = reduce_fn(1.0 - torch.arange(F).float() / (F - 1))
+    assert torch.isclose(out, expected)
+    assert metric.higher_is_better is True
+
+    with pytest.raises(ValueError):
+        metrics.InverseNormalizedRank("std")
+
+
+def _retrieval_triples(scores: torch.Tensor) -> tuple[torch.Tensor, ...]:
+    """Turn an ``(N, M)`` similarity matrix with a diagonal ground truth into
+    the ``(preds, target, indexes)`` layout torchmetrics retrieval expects."""
+    n, m = scores.shape
+    preds = scores.reshape(-1)
+    target = torch.zeros(n, m, dtype=torch.bool)
+    target[torch.arange(n), torch.arange(n)] = True
+    target = target.reshape(-1)
+    indexes = torch.arange(n).repeat_interleave(m)
+    return preds, target, indexes
+
+
+@pytest.mark.parametrize("with_labels", [False, True])
+def test_inverse_normalized_rank_matches_retrieval_auroc(with_labels: bool) -> None:
+    torch.manual_seed(0)
+    n, f = 12, 8
+    x = torch.randn(n, f)
+    y = torch.randn(n, f)  # 1:1 diagonal ground truth
+
+    metric = metrics.InverseNormalizedRank("mean")
+    if with_labels:
+        labels = list(range(n))
+        out = metric(x, y, labels, labels)
+    else:
+        out = metric(x, y)
+
+    scores = metrics.Rank._compute_sim(x, y)
+    expected = RetrievalAUROC()(*_retrieval_triples(scores))
+    assert torch.allclose(out.float(), expected.float(), atol=1e-6)
+
+
+def test_inverse_normalized_rank_ties_and_multi_update() -> None:
+    torch.manual_seed(1)
+    n, f = 10, 6
+    metric = metrics.InverseNormalizedRank("mean")
+    all_scores = []
+    for _ in range(3):
+        x = torch.randn(n, f)
+        y = torch.randn(n, f)
+        y[0] = y[1]  # induce a tie in the candidate set
+        metric.update(x, y)
+        all_scores.append(metrics.Rank._compute_sim(x, y))
+
+    out = metric.compute()
+    aurocs = [RetrievalAUROC()(*_retrieval_triples(s)) for s in all_scores]
+    expected = torch.stack(aurocs).mean()  # equal query counts per update
+    assert torch.allclose(out.float(), expected.float(), atol=1e-6)
+
+
+@pytest.mark.parametrize("topk", [1, 3, 5])
+def test_topk_acc_matches_hit_rate(topk: int) -> None:
+    torch.manual_seed(0)
+    n, f = 16, 8
+    x = torch.randn(n, f)
+    y = torch.randn(n, f)
+
+    out = metrics.TopkAcc(topk)(x, y)
+    expected = RetrievalHitRate(top_k=topk)(
+        *_retrieval_triples(metrics.Rank._compute_sim(x, y))
+    )
+    assert torch.allclose(out.float(), expected.float(), atol=1e-6)
 
 
 @pytest.mark.parametrize("topk", [1, 3, 5])

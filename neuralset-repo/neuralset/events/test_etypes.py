@@ -264,6 +264,7 @@ def test_event_type_list() -> None:
         "MneRaw",
         "Eeg",
         "Meg",
+        "Ecg",
         "Emg",
         "BidsEmg",
         "Fnirs",

@@ -11,8 +11,11 @@ head, probe_layer capture, preprocessor / channel-adapter wiring, dict-output
 routing, LoRA injection) and ``ChannelProjection`` (identity / bipolar inits).
 """
 
+import functools
+
 import pytest
 import torch
+from braindecode.models import BENDR, CBraMod, Labram
 from torch import nn
 
 from neuraltrain.models.common import ChannelMerger, FourierEmb
@@ -24,6 +27,7 @@ from .modules import (
     DownstreamWrapperModel,
     LoraConfig,
 )
+from .registry import _resolve_model_config_path, load_yaml_config
 
 # ---------------------------------------------------------------------------
 # DownstreamWrapper -- basic + probe_layer
@@ -552,11 +556,13 @@ class _TinyAttn(nn.Module):
 _QKVO = ["to_q", "to_k", "to_v", "to_out"]
 
 
-def _lora_wrapper(*, targets, r=4, target_modules=None) -> DownstreamWrapper:
+def _lora_wrapper(
+    *, targets, r=4, target_modules=None, aggregation="mean"
+) -> DownstreamWrapper:
     """A frozen-backbone LoRA wrapper; only the target lists vary between tests."""
     return DownstreamWrapper(
         layers_to_unfreeze=[""],
-        aggregation="mean",
+        aggregation=aggregation,
         probe_config="linear",
         lora_config=LoraConfig(
             r=r, lora_alpha=2 * r, lora_dropout=0.0, target_modules=target_modules
@@ -666,3 +672,55 @@ def test_downstream_wrapper_lora_dotted_target_skips_decoy_proj():
     assert any("attn.proj." in n for n in lora_names)
     assert not any("patch_embed" in n for n in lora_names)
     assert not any("tokenizer" in n for n in lora_names)
+
+
+@pytest.mark.parametrize(
+    "model_name, model, n_chans, n_times",
+    [
+        (
+            "bendr",
+            functools.partial(
+                BENDR,
+                encoder_h=32,
+                contextualizer_hidden=64,
+                transformer_layers=1,
+                transformer_heads=2,
+            ),
+            4,
+            1024,
+        ),
+        ("cbramod", functools.partial(CBraMod, return_encoder_output=True), 4, 400),
+        ("labram", Labram, 128, 200),
+    ],
+)
+def test_downstream_wrapper_lora_yaml_targets_reach_eval_output(
+    model_name, model, n_chans, n_times
+):
+    config = load_yaml_config(_resolve_model_config_path(model_name))
+    assert config is not None
+    targets = config["downstream_model_wrapper"]["lora_target_modules"]
+    torch.manual_seed(0)
+    batch = {"x": torch.randn(2, n_chans, n_times)}
+    backbone = model(n_chans=n_chans, n_times=n_times, n_outputs=2)
+    wrapper = _lora_wrapper(targets=targets, aggregation="flatten")
+    wrapped = wrapper.build(backbone, batch, 3)
+
+    wrapped(**batch).sum().backward()
+    lora_b = {n: p for n, p in _lora_params(wrapped).items() if ".lora_B" in n}
+    assert all(p.grad is not None and p.grad.abs().sum() > 0 for p in lora_b.values())
+    base = [p for n, p in wrapped.wrapped_model.named_parameters() if "lora_" not in n]
+    assert all(p.grad is None for p in base)
+    layers = [m for n, m in wrapped.named_modules() if n.endswith(".base_layer")]
+    assert layers and not any(nn.utils.parametrize.is_parametrized(m) for m in layers)
+
+    wrapped.eval()
+    with torch.no_grad():
+        ref = wrapped(**batch)
+        for target in targets:
+            target_b = [p for n, p in lora_b.items() if f"{target}.lora_B" in n]
+            assert target_b, target
+            for p in target_b:
+                p.add_(torch.randn_like(p))
+            out = wrapped(**batch)
+            assert not torch.allclose(out, ref), f"LoRA on {target} is inert"
+            ref = out

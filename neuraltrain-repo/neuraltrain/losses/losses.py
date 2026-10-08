@@ -11,6 +11,7 @@ that a loss function can be defined in an experiment configuration.
 """
 
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
 
@@ -127,6 +128,88 @@ class ClipLoss(nn.Module):
         else:
             loss = loss_e
         return loss
+
+
+class _GatherWithGrad(torch.autograd.Function):
+    """All-gather tensors using the collective's autograd adjoint."""
+
+    @staticmethod
+    def forward(ctx, tensor):  # type: ignore[override]
+        if not dist.is_available() or not dist.is_initialized():
+            return (tensor,)
+        world_size = dist.get_world_size()
+        if world_size == 1:
+            return (tensor,)
+        gathered = [torch.empty_like(tensor) for _ in range(world_size)]
+        dist.all_gather(gathered, tensor)
+        return tuple(gathered)
+
+    @staticmethod
+    def backward(ctx, *gradients):  # type: ignore[override]
+        if not dist.is_available() or not dist.is_initialized():
+            return gradients[0]
+        world_size = dist.get_world_size()
+        if world_size == 1:
+            return gradients[0]
+
+        # Every rank evaluates the same global objective. Summing the gradient
+        # for each source slice here offsets DDP's later parameter-gradient
+        # averaging and reproduces a single-process global-batch update.
+        all_gradients = torch.stack(gradients)
+        dist.all_reduce(all_gradients, op=dist.ReduceOp.SUM)
+        return all_gradients[dist.get_rank()]
+
+
+class DistributedClipLoss(ClipLoss):
+    """CLIP loss over the simultaneous global batch during distributed training.
+
+    Estimates and their aligned candidates are gathered from every rank with
+    autograd support before :class:`ClipLoss` computes the objective. Evaluation
+    and non-distributed execution use :class:`ClipLoss` directly.
+
+    Multi-rank training requires equal local batch sizes on every rank and the
+    same number of estimates and candidates per rank.
+    """
+
+    @staticmethod
+    def _world_size() -> int:
+        if not dist.is_available() or not dist.is_initialized():
+            return 1
+        return dist.get_world_size()
+
+    def _validate_equal_batches(
+        self, estimate: torch.Tensor, candidate: torch.Tensor
+    ) -> None:
+        world_size = self._world_size()
+        if world_size == 1:
+            return
+        sizes = torch.tensor(
+            [estimate.shape[0], candidate.shape[0]],
+            dtype=torch.int64,
+            device=estimate.device,
+        )
+        gathered_sizes = [torch.empty_like(sizes) for _ in range(world_size)]
+        dist.all_gather(gathered_sizes, sizes)
+        rank_sizes = [tuple(values.tolist()) for values in gathered_sizes]
+        if len(set(rank_sizes)) != 1 or any(
+            n_estimate != n_candidate for n_estimate, n_candidate in rank_sizes
+        ):
+            raise ValueError(
+                "DistributedClipLoss requires equal aligned estimate/candidate "
+                f"batch sizes on every rank, got {rank_sizes}; use drop_last=True"
+            )
+
+    @staticmethod
+    def _gather(tensor: torch.Tensor) -> torch.Tensor:
+        gathered = _GatherWithGrad.apply(tensor.contiguous())
+        return torch.cat(gathered, dim=0)
+
+    def forward(self, estimate: torch.Tensor, candidate: torch.Tensor) -> torch.Tensor:
+        if self.training and self._world_size() > 1:
+            self._validate_equal_batches(estimate, candidate)
+            estimate = self._gather(estimate)
+            candidate = self._gather(candidate)
+        return super().forward(estimate, candidate)
 
 
 class SigLipLoss(ClipLoss):

@@ -9,6 +9,7 @@
 import collections
 import concurrent.futures
 import dataclasses
+import functools
 import logging
 import typing as tp
 import warnings
@@ -233,26 +234,6 @@ def prepare_extractors(
             extractor.prepare(events)
 
 
-def _get_pad_lengths(
-    extractors: tp.Mapping[str, Feat],
-    pad_duration: float | None,  # in seconds
-) -> dict[str, int]:
-    """Precompute pad length in samples for each extractor if applicable
-    extractors: mapping of Extractors
-        the extractors
-    pad_duration: float or None
-        padding duration in seconds (if any)
-    """
-    pad_lengths: dict[str, int] = {}
-    if pad_duration is None:
-        return pad_lengths
-    for name, f in extractors.items():
-        if isinstance(f, Feat):
-            freq = base.Frequency(f.frequency)
-            pad_lengths[name] = freq.to_ind(pad_duration)
-    return pad_lengths
-
-
 def _pad_to(tensor: torch.Tensor, pad_len: int | None):
     """Pad last dimension to a given length"""
     if pad_len is None:
@@ -278,7 +259,7 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
         the list of segment instances defining the dataset
     pad_duration: float | tp.Literal["auto"] | None
         pad the segments to the maximum duration or to a specific duration
-            None: no padding. Will throw error if segment durations vary.
+            None: no padding. Collation will fail if item shapes vary.
             "auto": will pad with the max(segments.duration)
     remove_incomplete_segments: bool
         remove segments which do not contain events for one of the extractors
@@ -320,7 +301,6 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
         self.segments = _remove_incomplete_segments(
             list(segments), extractors, remove_incomplete_segments
         )
-        self._pad_lengths: None | dict[str, int] = None
         transforms = transforms or {}
         additional = set(transforms) - set(extractors)
         if additional:
@@ -347,8 +327,6 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
         """
         if not batches:
             return Batch(data={}, segments=[])
-        if len(batches) == 1:
-            return batches[0]
         if not batches[0].data:
             raise ValueError(f"No extractor in first batch: {batches[0]}")
         # move everything to pytorch if first one is numpy
@@ -356,28 +334,28 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
         for name in batches[0].data:
             data = [b.data[name] for b in batches]
             try:
-                extractors[name] = torch.cat(data, axis=0)  # type: ignore
-            except Exception:
+                rows = [row for d in data for row in d]
+                extractors[name] = self.extractors[name].collate(rows)
+            except Exception as e:
                 string = f"Failed to collate data with shapes {[d.shape for d in data]}\n"
                 logger.warning(string)
+                e.add_note("Set `pad_duration` to `auto` if segment durations vary.")
                 raise
         segments = [s for b in batches for s in b.segments]
         return Batch(data=extractors, segments=segments)
 
-    def _check_padding(self) -> None:  # check if padding is needed
-        if self._pad_lengths is not None:
-            return
-        if self.pad_duration is None:
-            if len(set([s.duration for s in self.segments])) > 1:
-                msg = "Segments have different durations, so they cannot be collated into batches."
-                msg += " Set `pad_duration` to `auto` to pad the segments to the maximum duration."
-                raise ValueError(msg)
-            pad_duration = self.pad_duration
-        elif self.pad_duration == "auto":
+    @functools.cached_property
+    def _pad_lengths(self) -> dict[str, int]:  # in samples, per extractor
+        pad_duration = self.pad_duration
+        if pad_duration is None:
+            return {}
+        if pad_duration == "auto":
             pad_duration = max([s.duration for s in self.segments])
-        else:
-            pad_duration = self.pad_duration
-        self._pad_lengths = _get_pad_lengths(self.extractors, pad_duration)
+        return {
+            name: base.Frequency(f.frequency).to_ind(pad_duration)
+            for name, f in self.extractors.items()
+            if isinstance(f, Feat)
+        }
 
     def __len__(self) -> int:
         return len(self.segments)
@@ -385,15 +363,11 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
     def __getitem__(self, idx: int | slice) -> Batch:
         if not isinstance(idx, (int, slice)):
             raise ValueError(f"idx must be int or slice, got {type(idx)}")
-
-        self._check_padding()
         if isinstance(idx, slice):
             indices = list(range(len(self))[idx])
             if not indices:
                 return self.collate_fn([])
             return self._subselect(indices).load_all()
-
-        assert isinstance(self._pad_lengths, dict)  # for mpy
 
         seg = self.segments[idx]
         events = seg.ns_events
@@ -417,15 +391,27 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
 
     def build_dataloader(self, **kwargs: tp.Any) -> torch.utils.data.DataLoader:
         """Returns a dataloader for this dataset"""
-        self._check_padding()
         return torch.utils.data.DataLoader(self, collate_fn=self.collate_fn, **kwargs)
 
-    def load_all(self, num_workers: int = 0) -> Batch:
-        """Returns a single batch with all the dataset data, un-shuffled"""
+    def load_all(self, num_workers: int = 0, batch_size: int | None = None) -> Batch:
+        """Returns a single batch with all the dataset data, un-shuffled
+
+        Parameters
+        ----------
+        num_workers: int
+            number of dataloader workers
+        batch_size: int | None
+            size of the batches collated before being gathered, which matters
+            for extractors with a batch-level ``collate``. Defaults to a split
+            for parallelism.
+        """
+        if not len(self):
+            raise ValueError("cannot load_all an empty dataset (no segments)")
         num_workers = min(num_workers, len(self))
-        batch_size = len(self)
-        if num_workers > 1:
-            batch_size = max(1, len(self) // (3 * num_workers))
+        if batch_size is None:
+            batch_size = len(self)
+            if num_workers > 1:
+                batch_size = max(1, len(self) // (3 * num_workers))
         if num_workers == 1:
             num_workers = 0  # simplifies debugging
         loader = self.build_dataloader(
@@ -433,7 +419,19 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
             batch_size=batch_size,
             shuffle=False,
         )
-        return self.collate_fn(list(loader))
+        batches = list(loader)
+        # gathers collated batches: collation must not run twice
+        data = {}
+        for name in batches[0].data:
+            tensors = [b.data[name] for b in batches]
+            if len({t.shape[1:] for t in tensors}) > 1:
+                shapes = sorted({tuple(t.shape[1:]) for t in tensors})
+                msg = f"cannot gather {name!r} batches of per-segment shapes {shapes}: "
+                msg += "its collate must produce the same shape for every batch "
+                msg += "(or set batch_size to the dataset length, or pad_duration)"
+                raise ValueError(msg)
+            data[name] = torch.cat(tensors)
+        return Batch(data=data, segments=[s for b in batches for s in b.segments])
 
     def as_one_batch(self, num_workers: int = 0) -> Batch:
         """Deprecated: use :meth:`load_all` instead."""
@@ -488,7 +486,7 @@ class Segmenter(base.Step):
         (start, stop) block.
     padding: optional float | tp.Literal["auto"] | None
         pad the segments to the maximum duration or to a specific duration.
-            None: no padding. Will throw error if segment durations vary.
+            None: no padding. Collation will fail if item shapes vary.
             "auto": will pad with the max(segments.duration)
     drop_incomplete: bool
         remove segments which do not contain events for one of the extractors

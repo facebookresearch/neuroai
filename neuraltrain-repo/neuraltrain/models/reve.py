@@ -32,7 +32,7 @@ import torch
 import torch.nn as nn
 
 from .base import BaseBrainDecodeModel, RequiredBuildField
-from .common import INVALID_POS_VALUE, parse_bipolar_name
+from .common import INVALID_POS_VALUE, resolve_with_anode_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class NtReve(BaseBrainDecodeModel):
 
     1. **Channel remapping** -- an explicit ``channel_mapping`` dict maps
        dataset channel names to REVE position-bank names.  Channels whose
-       names already appear in the bank (exact match) need no entry.
+       names already appear in the bank (case-insensitively) need no entry.
     2. **Pretrained loading** -- bypasses the base-class restriction on
        ``n_times`` for pretrained models, since REVE needs it to size its
        ``final_layer``.
@@ -147,22 +147,23 @@ class NtReve(BaseBrainDecodeModel):
         ]
 
     @staticmethod
-    def _derive_bipolar_position(
-        name: str,
-        bank: tp.Any,
-    ) -> torch.Tensor | None:
-        """Look up the anode position for a bipolar channel name.
+    def _bank_lookup(bank: tp.Any) -> tp.Callable[[str], torch.Tensor | None]:
+        """Build a case-insensitive position lookup into *bank*.
 
-        Returns ``None`` when *name* is not a valid bipolar pair or the anode
-        electrode is missing from *bank*.
+        REVE's bank mixes casings (``Fp1``, ``AFz``) and duplicates only some of
+        them in upper case, so an exact-match lookup drops channels that arrive
+        in all caps.  Case variants share coordinates, so folding case cannot
+        select a wrong position.  Returns ``None`` for an unknown name.
         """
-        pair = parse_bipolar_name(name)
-        if pair is None:
-            return None
-        anode = pair[0]
-        if anode not in bank.mapping:
-            return None
-        return bank.embedding[bank.mapping[anode]]
+        by_upper = {name.upper(): name for name in bank.mapping}
+
+        def lookup(name: str) -> torch.Tensor | None:
+            canonical = by_upper.get(name.upper())
+            if canonical is None:
+                return None
+            return bank.embedding[bank.mapping[canonical]]
+
+        return lookup
 
     def build(
         self,
@@ -183,12 +184,14 @@ class NtReve(BaseBrainDecodeModel):
         channel_indices: list[int] | None = None
         bank_positions: torch.Tensor | None = None
         n_derived = 0
+        exact_bank_match = True  # REVE's own chs_info lookup is case-sensitive
 
         if chs_info is not None:
             from braindecode.models.reve import RevePositionBank
 
             bank = RevePositionBank()
             n_original = len(chs_info)
+            lookup = self._bank_lookup(bank)
 
             valid_indices: list[int] = []
             valid_chs: list[dict[str, tp.Any]] = []
@@ -197,19 +200,15 @@ class NtReve(BaseBrainDecodeModel):
 
             for i, ch in enumerate(chs_info):
                 name = ch["ch_name"]
-                if name in bank.mapping:
-                    valid_indices.append(i)
-                    valid_chs.append(ch)
-                    positions.append(bank.embedding[bank.mapping[name]])
-                else:
-                    derived = self._derive_bipolar_position(name, bank)
-                    if derived is not None:
-                        valid_indices.append(i)
-                        valid_chs.append(ch)
-                        positions.append(derived)
-                        n_derived += 1
-                    else:
-                        dropped.append(name)
+                position, used_anode = resolve_with_anode_fallback(name, lookup)
+                if position is None:
+                    dropped.append(name)
+                    continue
+                valid_indices.append(i)
+                valid_chs.append(ch)
+                positions.append(position)
+                if used_anode:
+                    n_derived += 1
 
             if dropped:
                 logger.warning(
@@ -243,12 +242,13 @@ class NtReve(BaseBrainDecodeModel):
             )
 
             bank_positions = torch.stack(positions)
+            exact_bank_match = all(ch["ch_name"] in bank.mapping for ch in valid_chs)
 
         build_kwargs: dict[str, tp.Any] = {
             "n_chans": n_chans,
             "n_times": n_temporal_samples,
         }
-        if chs_info is not None and n_derived == 0:
+        if chs_info is not None and exact_bank_match:
             build_kwargs["chs_info"] = chs_info
 
         encoder_only = n_outputs is None
@@ -260,7 +260,7 @@ class NtReve(BaseBrainDecodeModel):
 
         model = self._construct(**build_kwargs)
 
-        if bank_positions is not None and n_derived > 0:
+        if bank_positions is not None and not exact_bank_match:
             model.default_pos = bank_positions
 
         return _ReveWrapper(model, channel_indices, encoder_only, bank_positions)

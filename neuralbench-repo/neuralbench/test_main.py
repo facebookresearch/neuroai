@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torchmetrics
 from exca import TaskInfra
 from exca.cachedict import CacheDict
 from torch import nn
@@ -113,6 +114,37 @@ def test_augmentation_rolls_the_channel_axis_in_training_only(training: bool) ->
 
     expected = [3.0, 0.0, 1.0, 2.0] if training else [0.0, 1.0, 2.0, 3.0]
     assert out[0, :, 0].tolist() == expected, "augmentation ran on the wrong axis/split"
+
+
+def test_fit_after_validate_updates_metrics_on_cpu(monkeypatch) -> None:
+    module = BrainModule(
+        model=nn.Linear(4, 2),
+        loss=nn.BCEWithLogitsLoss(),
+        metrics={"exact_match": torchmetrics.ExactMatch(task="multilabel", num_labels=2)},
+        lightning_optimizer_config=tp.cast(LightningOptimizer, object()),
+    )
+    monkeypatch.setattr(
+        module, "configure_optimizers", lambda: torch.optim.SGD(module.parameters())
+    )
+    batch = SimpleNamespace(
+        data={
+            "neuro": torch.randn(2, 4),
+            "target": torch.ones(2, 2),
+            "subject_id": torch.zeros(2, 1),
+        }
+    )
+    loader = DataLoader(tp.cast(tp.Any, [batch]), batch_size=None)
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        max_epochs=1,
+        logger=False,
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+    )
+    trainer.validate(module, loader, verbose=False)
+    trainer.fit(module, loader, loader)
+    assert "val/exact_match" in trainer.callback_metrics
 
 
 @pytest.mark.parametrize("global_rank", [0, 1])

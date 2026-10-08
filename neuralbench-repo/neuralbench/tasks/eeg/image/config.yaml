@@ -35,7 +35,7 @@ data:
   duration: 1.0
   summary_columns: [category, filepath]
 brain_model_output_size: &brain_model_output_size 1536
-trainer_config.monitor: val/batch_top5_acc
+trainer_config.monitor: val/batch_inv_norm_rank_mean
 trainer_config.mode: max
 loss:
   name: ClipLoss

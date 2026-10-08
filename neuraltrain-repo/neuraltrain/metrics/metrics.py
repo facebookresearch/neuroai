@@ -236,6 +236,10 @@ class Rank(torchmetrics.Metric):
 
     @classmethod
     def _compute_sim(cls, x, y, norm_kind="y", eps=1e-15):
+        # Ranks turn on near-ties, so score in float32 even under autocast,
+        # which would otherwise mix half activations with float norms.
+        x = x.float()
+        y = y.float()
         if norm_kind is None:
             eq, inv_norms = "b", torch.ones(x.shape[0])
         elif norm_kind == "x":
@@ -449,6 +453,77 @@ class TopkAccFromScores(TopkAcc):
         """Update internal list of ranks."""
         ranks = self._compute_ranks(scores)
         self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+
+
+class InverseNormalizedRank(Rank):
+    """Inverse normalized retrieval rank: ``1 - rank / (retrieval_set_size - 1)``.
+
+    A score in ``[0, 1]`` where higher is better, invariant to retrieval-set
+    size ``N``: the true item ranked first maps to ``1.0``, ranked last to
+    ``0.0``, and random retrieval to ``~0.5``. With ``reduction="mean"`` it
+    equals per-query ROC AUC macro-averaged over queries, i.e.
+    :class:`torchmetrics.retrieval.RetrievalAUROC` for the single-relevant-item
+    setting used here.
+
+    Parameters
+    ----------
+    reduction : {"mean", "median"}
+        How to reduce the example-wise per-query AUROC values.
+    torchmetrics_kwargs : dict or None
+        Extra keyword arguments forwarded to the ``torchmetrics.Metric``
+        constructor.
+    """
+
+    is_differentiable: bool = False
+    higher_is_better: bool = True
+    full_state_update: bool = True
+
+    def __init__(
+        self,
+        reduction: tp.Literal["mean", "median"] = "mean",
+        torchmetrics_kwargs: dict[str, tp.Any] | None = None,
+    ):
+        if reduction not in ("mean", "median"):
+            raise ValueError(
+                f"InverseNormalizedRank supports 'mean' or 'median' reduction, "
+                f"got {reduction!r}."
+            )
+        super().__init__(
+            reduction=reduction,
+            relative=False,  # raw 0-based ranks; normalised per-query in compute
+            torchmetrics_kwargs=torchmetrics_kwargs,
+        )
+        # nanmedian, not median: robust to a degenerate per-query slice
+        self.reduce_fn: tp.Callable = (
+            torch.mean if reduction == "mean" else torch.nanmedian
+        )
+        self.add_state(
+            "retrieval_sizes",
+            default=torch.Tensor([]),
+            dist_reduce_fx="cat",
+        )
+        self.retrieval_sizes: torch.Tensor  # For mypy
+
+    @torch.inference_mode()
+    def update(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        x_labels: None | list[str] = None,
+        y_labels: None | list[str] = None,
+    ) -> None:
+        """Record per-query ranks and retrieval-set sizes for a batch."""
+        ranks = self._compute_ranks(x, y, x_labels, y_labels)
+        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        sizes = torch.full_like(ranks, float(y.shape[0]))
+        self.retrieval_sizes = torch.cat([self.retrieval_sizes, sizes])
+
+    def compute(self) -> torch.Tensor:
+        sizes = self.retrieval_sizes
+        ranks = self.ranks
+        valid = sizes > 1  # per-query AUROC undefined for a single candidate
+        auc_per_query = 1.0 - ranks[valid] / (sizes[valid] - 1)
+        return self.reduce_fn(auc_per_query)
 
 
 class ImageSimilarity(torchmetrics.Metric):

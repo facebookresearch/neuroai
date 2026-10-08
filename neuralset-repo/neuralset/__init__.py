@@ -29,7 +29,7 @@ from .base import Step as Step
 
 # convenience
 from .base import CACHE_FOLDER as CACHE_FOLDER
-from .base import BaseModel as BaseModel  # improved pydantic BaseModel
+from .base import BaseModel as BaseModel  # improved pydantic.BaseModel
 
 # useful base classes
 from .events import Event as Event

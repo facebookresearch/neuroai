@@ -101,6 +101,8 @@ def test_assembles_external_model_configs(
         assert flat["brain_model_name"] == "my-fm"
         assert flat["brain_model_config.name"] == "ExternalModel"
         assert flat["brain_model_config.pickle_path"].endswith(".pt")
+        # The dataset variant, not motor_imagery's base Stieger2021Continuous.
+        assert flat["data.study.source.name"] == "Schalk2004Bci2000"
         # Overrides beat the task config they are layered onto.
         assert flat["data.neuro.frequency"] == 200.0
         assert flat["lightning_optimizer_config.optimizer.lr"] == 1e-4

@@ -10,7 +10,25 @@ from __future__ import annotations
 
 import pytest
 
-from neuralbench.plots._constants import AdaptationMode
+from neuralbench.aggregator import BenchmarkAggregator
+from neuralbench.plots._constants import (
+    FM_DISPLAY,
+    METRIC_HIGHER_IS_BETTER,
+    METRIC_PERFECT_SCORE,
+    AdaptationMode,
+    model_group,
+    strip_eval_mode_suffix,
+)
+from neuralbench.plots.tables import eval_mode_suffix
+
+
+@pytest.mark.parametrize(
+    "metric",
+    BenchmarkAggregator.model_fields["loss_to_metric_mapping"].default.values(),
+)
+def test_headline_metrics_have_a_direction_and_perfect_score(metric: str) -> None:
+    assert metric in METRIC_HIGHER_IS_BETTER, "normalization would assume higher=better"
+    assert metric in METRIC_PERFECT_SCORE, "the perfect ceiling would default to 100"
 
 
 @pytest.mark.parametrize(
@@ -27,3 +45,14 @@ from neuralbench.plots._constants import AdaptationMode
 )
 def test_adaptation_mode_round_trips(tag: str) -> None:
     assert AdaptationMode.parse(tag).tag == tag
+
+
+@pytest.mark.parametrize(
+    "tag",
+    ["finetune", "finetune_mean", "linear_probe_flatten", "attentive_probe", "lora_r32"],
+)
+def test_strategy_suffix_strips_back_to_the_base_name(tag: str) -> None:
+    name = FM_DISPLAY[0] + eval_mode_suffix(tag)
+    assert name != FM_DISPLAY[0]
+    assert strip_eval_mode_suffix(name) == FM_DISPLAY[0]
+    assert model_group(name) == "foundation"

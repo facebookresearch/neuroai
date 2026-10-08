@@ -21,6 +21,7 @@ counts in :data:`MODEL_PARAMS` are loaded from
 
 from __future__ import annotations
 
+import re
 import typing as tp
 
 from neuralbench.plots._models import MODELS, load_param_counts
@@ -64,8 +65,13 @@ METRIC_DISPLAY_NAMES: dict[str, str] = {
     "test/f1_score_macro": "F1 score (macro)",
     "test/pearsonr": "Pearson R",
     "test/rmse": "RMSE",
+    "test/mae": "MAE",
     "test/bmae": "Binned MAE (s)",
     "test/CER": "Character error rate (%)",
+    "test/full_retrieval/inv_norm_rank_median": "Inv. norm. rank",
+    "test/full_retrieval/inv_norm_rank_mean": "Retrieval AUC",
+    "test/full_retrieval/inv_norm_rank_median_subject-agg": "Inv. norm. rank (per-subject)",
+    "test/full_retrieval/inv_norm_rank_mean_subject-agg": "Inv. norm. rank (mean, per-subject)",
     "test/full_retrieval/top5_acc_subject-agg": "Top-5 accuracy (per-subject)",
 }
 
@@ -74,8 +80,13 @@ METRIC_HIGHER_IS_BETTER: dict[str, bool] = {
     "test/f1_score_macro": True,
     "test/pearsonr": True,
     "test/rmse": False,
+    "test/mae": False,
     "test/bmae": False,
     "test/CER": False,
+    "test/full_retrieval/inv_norm_rank_median": True,
+    "test/full_retrieval/inv_norm_rank_mean": True,
+    "test/full_retrieval/inv_norm_rank_median_subject-agg": True,
+    "test/full_retrieval/inv_norm_rank_mean_subject-agg": True,
     "test/full_retrieval/top5_acc_subject-agg": True,
 }
 
@@ -84,8 +95,14 @@ METRIC_PERFECT_SCORE: dict[str, float] = {
     "test/f1_score_macro": 1.0,
     "test/pearsonr": 1.0,
     "test/rmse": 0.0,
+    "test/mae": 0.0,
     "test/bmae": 0.0,
     "test/CER": 0.0,
+    # inv_norm_rank: [0, 1], 1.0 = true item always first
+    "test/full_retrieval/inv_norm_rank_median": 1.0,
+    "test/full_retrieval/inv_norm_rank_mean": 1.0,
+    "test/full_retrieval/inv_norm_rank_median_subject-agg": 1.0,
+    "test/full_retrieval/inv_norm_rank_mean_subject-agg": 1.0,
     "test/full_retrieval/top5_acc_subject-agg": 100.0,
 }
 
@@ -102,7 +119,12 @@ TASK_DISPLAY_NAMES: dict[str, str] = {
     "n2pc": "N2pc",
     "n400": "N400",
     "mismatch_negativity": "MMN",
+    "acoustic_change": "Acoustic change",
+    "stimulus_congruency": "Congruency",
+    "auditory_stimulus": "Auditory",
     "audiovisual_stimulus": "Audiovisual",
+    "action_recognition": "Action recog.",
+    "asd_diagnosis": "ASD",
     "dementia_diagnosis": "Dementia",
     "depression_diagnosis": "Depression",
     "parkinsons_diagnosis": "Parkinson's",
@@ -179,13 +201,42 @@ DUMMY_DISPLAY = [
 
 # Light sage green for the Handcrafted baseline.  Picked to be distinct
 # from the Greys used for the constant-predictor baselines (Chance /
-# Dummy).  fMRI classic models previously used a cm.Greens palette; they
-# have been moved to a custom purple colormap (see ``_FMRI_PURPLES`` in
-# :mod:`neuralbench.plots.non_eeg`) so this sage green can unambiguously
-# signal the Handcrafted baseline across all figures.
+# Dummy).
 FEATURE_BASED_COLOR = "#4ea64e"
 
 MODEL_YEAR: dict[str, int] = {m.name: m.year for m in MODELS if m.year is not None}
+
+# Coarse model group per display name, used to pick which models define the
+# ``task_max`` ceiling.  "baseline" covers the constant predictors
+# (Chance/Dummy) and the collapsed Handcrafted bar.
+MODEL_GROUP: dict[str, str] = {
+    **{name: "foundation" for name in FM_DISPLAY},
+    **{name: "classic" for name in CLASSIC_DISPLAY},
+    **{name: "baseline" for name in DUMMY_DISPLAY},
+}
+
+
+# The adaptation-strategy suffix ``tables.eval_mode_suffix`` appends to
+# foundation-model names (``"REVE (LoRA r32 flatten)"``, ``"LaBraM (FT mean)"``).
+_EVAL_MODE_SUFFIX_RE = re.compile(r" \((?:LP|FT|AP|LoRA r\d+)(?: \w+)?\)$")
+
+
+def strip_eval_mode_suffix(name: str) -> str:
+    """Display name without its adaptation-strategy suffix, if it has one."""
+    return _EVAL_MODE_SUFFIX_RE.sub("", name)
+
+
+def model_group(name: str) -> str:
+    """Coarse group ("foundation" / "classic" / "baseline" / "other") for a
+    model display name.  Unknown names (e.g. disambiguated variants like
+    ``"LUNA (base) [cfg=...]"`` or strategy-suffixed ones like
+    ``"REVE (LP flatten)"``) fall back to their base name, then to
+    ``"other"``."""
+    if name in MODEL_GROUP:
+        return MODEL_GROUP[name]
+    base = strip_eval_mode_suffix(name.split(" [", 1)[0])
+    return MODEL_GROUP.get(base, "other")
+
 
 # ---------------------------------------------------------------------------
 # Adaptation ``eval_mode`` tags
@@ -206,6 +257,10 @@ _STRATEGY_ORDER: dict[str, int] = {
 }
 _UNKNOWN_ORDER = 4
 _PLAIN_STRATEGIES = tuple(s for s in _STRATEGY_ORDER if s != _LORA_STRATEGY)
+
+
+# no -w preset: each foundation model runs with its own default wrapper
+DEFAULT_EVAL_MODE = "default"
 
 
 class AdaptationMode(tp.NamedTuple):
@@ -258,6 +313,7 @@ class AdaptationMode(tp.NamedTuple):
 
 TASK_CATEGORIES: dict[str, list[str]] = {
     "Cognitive": [
+        "action_recognition",
         "image",
         "sentence",
         "speech",
@@ -276,6 +332,8 @@ TASK_CATEGORIES: dict[str, list[str]] = {
         "ssvep",
     ],
     "Evoked Responses": [
+        "acoustic_change",
+        "auditory_stimulus",
         "audiovisual_stimulus",
         "ern",
         "mismatch_negativity",
@@ -283,8 +341,10 @@ TASK_CATEGORIES: dict[str, list[str]] = {
         "n2pc",
         "n400",
         "lrp",
+        "stimulus_congruency",
     ],
     "Clinical": [
+        "asd_diagnosis",
         "clinical_event",
         "dementia_diagnosis",
         "depression_diagnosis",
@@ -350,26 +410,6 @@ CATEGORY_COLORS: dict[str, str] = {
     "Sleep": "#F0E442",
     "Phenotyping": "#56B4E9",
     "Misc": "#999999",
-}
-
-# ---------------------------------------------------------------------------
-# Recording-device metadata (used by the non-EEG bar chart)
-# ---------------------------------------------------------------------------
-
-DEVICE_DISPLAY_NAMES: dict[str, str] = {
-    "eeg": "EEG",
-    "meg": "MEG",
-    "fmri": "fMRI",
-    "emg": "EMG",
-    "fnirs": "fNIRS",
-}
-
-DEVICE_COLORS: dict[str, str] = {
-    "eeg": "#0072B2",
-    "meg": "#009E73",
-    "fmri": "#D55E00",
-    "emg": "#CC79A7",
-    "fnirs": "#E69F00",
 }
 
 # ---------------------------------------------------------------------------
