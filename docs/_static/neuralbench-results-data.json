@@ -1,4 +1,5 @@
 {
+  "_generated_by": "This file is generated from NeuralBench results; do not edit by hand.",
   "tasks": [
     {
       "id": "eeg_age",
@@ -8,7 +9,8 @@
       "objective": "regression",
       "metric": "test/pearsonr",
       "metric_display": "Pearson R",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Phenotyping"
     },
     {
       "id": "eeg_artifact",
@@ -18,7 +20,8 @@
       "objective": "multilabel",
       "metric": "test/f1_score_macro",
       "metric_display": "F1 score (macro)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Misc"
     },
     {
       "id": "eeg_audiovisual_stimulus",
@@ -28,7 +31,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_clinical_event",
@@ -38,7 +42,8 @@
       "objective": "multilabel",
       "metric": "test/f1_score_macro",
       "metric_display": "F1 score (macro)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_cvep",
@@ -48,7 +53,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_dementia_diagnosis",
@@ -58,7 +64,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_depression_diagnosis",
@@ -68,7 +75,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_emotion",
@@ -78,7 +86,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Internal State"
     },
     {
       "id": "eeg_ern",
@@ -88,7 +97,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_image",
@@ -98,7 +108,8 @@
       "objective": "retrieval",
       "metric": "test/full_retrieval/top5_acc_subject-agg",
       "metric_display": "Top-5 accuracy (per-subject)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     },
     {
       "id": "eeg_lrp",
@@ -108,7 +119,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_mental_arithmetic",
@@ -118,7 +130,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Internal State"
     },
     {
       "id": "eeg_mental_imagery",
@@ -128,7 +141,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_mental_workload",
@@ -138,7 +152,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Internal State"
     },
     {
       "id": "eeg_mismatch_negativity",
@@ -148,7 +163,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_motor_execution",
@@ -158,7 +174,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_motor_imagery",
@@ -168,7 +185,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_n170",
@@ -178,7 +196,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_n2pc",
@@ -188,7 +207,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_n400",
@@ -198,7 +218,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Evoked Responses"
     },
     {
       "id": "eeg_p3",
@@ -208,7 +229,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_parkinsons_diagnosis",
@@ -218,7 +240,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_pathology",
@@ -228,7 +251,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_psychopathology",
@@ -238,7 +262,8 @@
       "objective": "regression",
       "metric": "test/pearsonr",
       "metric_display": "Pearson R",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Phenotyping"
     },
     {
       "id": "eeg_reaction_time",
@@ -248,7 +273,8 @@
       "objective": "regression",
       "metric": "test/pearsonr",
       "metric_display": "Pearson R",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Misc"
     },
     {
       "id": "eeg_schizophrenia_diagnosis",
@@ -258,7 +284,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_seizure",
@@ -268,7 +295,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Clinical"
     },
     {
       "id": "eeg_sentence",
@@ -278,7 +306,8 @@
       "objective": "retrieval",
       "metric": "test/full_retrieval/top5_acc_subject-agg",
       "metric_display": "Top-5 accuracy (per-subject)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     },
     {
       "id": "eeg_sex",
@@ -288,7 +317,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Phenotyping"
     },
     {
       "id": "eeg_sleep_arousal",
@@ -298,7 +328,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Sleep"
     },
     {
       "id": "eeg_sleep_stage",
@@ -308,7 +339,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Sleep"
     },
     {
       "id": "eeg_speech",
@@ -318,7 +350,8 @@
       "objective": "retrieval",
       "metric": "test/full_retrieval/top5_acc_subject-agg",
       "metric_display": "Top-5 accuracy (per-subject)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     },
     {
       "id": "eeg_ssvep",
@@ -328,7 +361,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "BCI"
     },
     {
       "id": "eeg_typing",
@@ -338,7 +372,8 @@
       "objective": "classification",
       "metric": "test/bal_acc",
       "metric_display": "Balanced accuracy",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     },
     {
       "id": "eeg_video",
@@ -348,7 +383,8 @@
       "objective": "retrieval",
       "metric": "test/full_retrieval/top5_acc_subject-agg",
       "metric_display": "Top-5 accuracy (per-subject)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     },
     {
       "id": "eeg_word",
@@ -358,7 +394,8 @@
       "objective": "retrieval",
       "metric": "test/full_retrieval/top5_acc_subject-agg",
       "metric_display": "Top-5 accuracy (per-subject)",
-      "lower_is_better": false
+      "lower_is_better": false,
+      "category": "Cognitive"
     }
   ],
   "models": [
@@ -3556,5 +3593,55 @@
         "rank": 7
       }
     }
-  }
+  },
+  "categories": [
+    "Cognitive",
+    "BCI",
+    "Evoked Responses",
+    "Clinical",
+    "Internal State",
+    "Sleep",
+    "Phenotyping",
+    "Misc"
+  ],
+  "radar_groups": [
+    {
+      "title": "Cognitive",
+      "categories": [
+        "Cognitive"
+      ]
+    },
+    {
+      "title": "BCI",
+      "categories": [
+        "BCI"
+      ]
+    },
+    {
+      "title": "Evoked Responses",
+      "categories": [
+        "Evoked Responses"
+      ]
+    },
+    {
+      "title": "Clinical",
+      "categories": [
+        "Clinical"
+      ]
+    },
+    {
+      "title": "Internal State & Sleep",
+      "categories": [
+        "Internal State",
+        "Sleep"
+      ]
+    },
+    {
+      "title": "Phenotyping & Misc",
+      "categories": [
+        "Phenotyping",
+        "Misc"
+      ]
+    }
+  ]
 }

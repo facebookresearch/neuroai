@@ -22,16 +22,18 @@ summary tables.
 #    single DataFrame.
 # 3. Maps each loss type to a primary metric and produces:
 #
-#    - A **bar chart** (``outputs/core/core_bar_chart.png``)
-#    - A **results table** (``outputs/core/core_results_table.csv``)
-#    - A **rank table** (``outputs/core/core_rank_table.csv``)
+#    - A **bar chart** (``outputs/eeg/core/default/core_bar_chart.png``)
+#    - A **results table** (``outputs/eeg/core/default/core_results_table.csv``)
+#    - A **rank table** (``outputs/eeg/core/default/core_rank_table.csv``)
 #
-# Outputs are organised into three subfolders of ``outputs/``:
-# ``core/`` (Core suite: one dataset per task -- e.g.
-# ``NeuralBench-EEG-Core v1.0`` for an EEG run), ``full/`` (Full suite:
+# Outputs are organised by device (``outputs/eeg/``, ``outputs/meg/``, ...),
+# then into three subfolders: ``core/`` (Core suite: one dataset per task --
+# e.g. ``NeuralBench-EEG-Core v1.0`` for an EEG run), ``full/`` (Full suite:
 # per-dataset breakdowns + dataset-level variability -- e.g.
 # ``NeuralBench-EEG-Full v1.0``), and ``other/`` (data scaling,
-# computational stats, ...).
+# computational stats, ...).  ``core/`` and ``full/`` hold one folder per
+# foundation-model adaptation strategy (``default/`` unless ``-w`` is
+# passed).
 
 # %%
 # Triggering it from the CLI

@@ -111,6 +111,8 @@ html_css_files = [
     "custom.css",
     "conf.css",
     "neuralbench-results-table.css",
+    "neuralbench-category-radars.css",
+    "neuralbench-model-scatter.css",
     f"{font_awesome}all.min.css",
     f"{font_awesome}fontawesome.min.css",
     f"{font_awesome}solid.min.css",
@@ -131,6 +133,8 @@ html_js_files = [
     "quickstart-axes.js",
     "sidebar-nav.js",
     "neuralbench-results-table.js",
+    "neuralbench-category-radars.js",
+    "neuralbench-model-scatter.js",
 ]
 
 html_theme_options = {

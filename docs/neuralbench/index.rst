@@ -34,6 +34,38 @@ See :doc:`install` for more options.
 
 ----
 
+Performance by category
+-----------------------
+
+One radar per task category -- each spoke is a task and the radius encodes a
+model's performance on it. Toggle between normalized score and rank, switch
+individual models on or off, and overlay the **Task-specific** and
+**Foundation** model averages (off by default).
+
+.. raw:: html
+
+   <div id="neuralbench-category-radars"></div>
+
+----
+
+Compare models
+--------------
+
+A fully customizable scatter plot -- one marker per model. Use the dropdowns
+to map any dimension to the **x-axis**, **y-axis**, **colour** and **marker
+size**: year of publication, mean rank over the benchmark, performance on a
+selected downstream task, number of parameters, pretraining corpus size
+(#subjects / #hours), pretraining objective, architecture, fMRI space, or
+model family. Toggle log scales, export the figure to PNG, and click the
+legend below the plot to hide or isolate groups. Pretraining dimensions apply
+to foundation models only.
+
+.. raw:: html
+
+   <div id="neuralbench-model-scatter"></div>
+
+----
+
 🚀 Quickstart
 ---------------
 

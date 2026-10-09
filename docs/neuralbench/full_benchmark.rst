@@ -211,19 +211,20 @@ Results can be visualized on Weights & Biases, or aggregated locally using
    neuralbench eeg all -m all_classic all_fm --plot-cached
 
 ``--plot-cached`` does not re-train any model. It collects the stored test
-metrics from the cache and produces the following outputs in the
-``outputs/`` directory, split into three subfolders (``core/`` for the
-``NeuralBench-EEG-Core v1.0`` plots/tables (one dataset per task), ``full/``
-for the ``NeuralBench-EEG-Full v1.0`` per-dataset breakdowns and variability
-analyses, and ``other/`` for everything else):
+metrics from the cache and writes its outputs to ``outputs/<device>/``, split
+into ``core/`` for the ``NeuralBench-EEG-Core v1.0`` plots/tables (one dataset
+per task), ``full/`` for the ``NeuralBench-EEG-Full v1.0`` per-dataset
+breakdowns and variability analyses, and ``other/`` for everything else.
+``core/`` and ``full/`` hold one folder per foundation-model adaptation
+strategy (``default/`` when ``-w`` is not passed). For example:
 
-- **Bar chart** (``outputs/core/core_bar_chart.png``): faceted bar chart with
-  one panel per task, one bar per model, including error bars and individual
-  data points.
-- **Results table** (``outputs/core/core_results_table.csv``): wide-format
-  table with ``mean +/- std`` per task and model.
-- **Rank table** (``outputs/core/core_rank_table.csv``): models ranked within
-  each task (1 = best), with an average rank row at the bottom.
+- **Bar chart** (``outputs/eeg/core/default/core_bar_chart.png``): faceted
+  bar chart with one panel per task, one bar per model, including error bars
+  and individual data points.
+- **Results table** (``outputs/eeg/core/default/core_results_table.csv``):
+  wide-format table with ``mean +/- std`` per task and model.
+- **Rank table** (``outputs/eeg/core/default/core_rank_table.csv``): models
+  ranked within each task (1 = best), with an average rank row at the bottom.
 
 See the
 :doc:`Visualizing Results <auto_examples/results/plot_visualize_results>`

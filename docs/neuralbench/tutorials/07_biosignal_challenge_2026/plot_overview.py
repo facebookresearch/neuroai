@@ -320,12 +320,12 @@ re-run the top three submissions of each track.
 #    neuralbench emg pose -m vemg2pose --plot-cached
 #
 # ``--plot-cached`` aggregates within a single device, so the EMG
-# track is collected by its own invocation. It produces, under
-# ``<SAVE_DIR>/outputs/``:
+# track is collected by its own invocation. Each one produces, under
+# ``<SAVE_DIR>/outputs/<device>/core/default/`` (e.g. ``eeg`` or ``emg``):
 #
-# - ``core/core_bar_chart.png`` -- bar chart per task and model.
-# - ``core/core_results_table.csv`` -- raw per-task metrics.
-# - ``core/core_rank_table.csv`` -- ranks per task.
+# - ``core_bar_chart.png`` -- bar chart per task and model.
+# - ``core_results_table.csv`` -- raw per-task metrics.
+# - ``core_rank_table.csv`` -- ranks per task.
 #
 # For programmatic access to the same data, instantiate
 # :class:`~neuralbench.main.BenchmarkAggregator` directly. The
