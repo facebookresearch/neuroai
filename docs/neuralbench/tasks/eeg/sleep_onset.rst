@@ -84,8 +84,8 @@ the license is CC-BY-NC-SA-4.0.
 
 It is also the default dataset of ``_sleep_onset_stream``. This variant keeps
 whole recordings and uses the supplied session split (500 train / 40
-seen-participant test recordings, with 20% of the training subjects held out
-for validation). It retains the task's preprocessing and unweighted bMAE
+seen-participant test recordings, with 20% of the subjects without a test
+recording held out for validation). It retains the task's preprocessing and unweighted bMAE
 objective; whole-recording preprocessing is not causal. This recipe is not the
 sealed Muse evaluation or its seen/unseen weighted score. The streamed version
 instead feeds the raw signal in microvolts and scores the per-recording W-bMAE.

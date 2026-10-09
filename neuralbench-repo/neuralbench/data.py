@@ -172,7 +172,7 @@ class Data(ns.BaseModel):
     persistent_workers: bool = True
     prefetch_factor: int | None = None
     seed: int | None = None
-    # Stream key fields, e.g. [subject, session]: see ResetPerStream, GroupedMetric
+    # Stream key fields, e.g. [subject, session]; GroupedMetric then groups by stream
     stream_by: list[str] | None = None
     # Others
     summary_columns: list[str] = []
@@ -223,6 +223,12 @@ class Data(ns.BaseModel):
             "subject_id": self._subject_id,
         }
         if self.stream_by is not None:
+            missing = set(self.stream_by) - set(events.columns)
+            if missing:
+                raise ValueError(
+                    f"`data.stream_by` fields {sorted(missing)} are not event columns; "
+                    f"available: {sorted(events.columns)}"
+                )
             stream = events[self.stream_by].astype(str).agg("/".join, axis=1)
             events = events.assign(stream=stream)
             extractors["stream_id"] = self._stream_id

@@ -10,6 +10,7 @@ import pytest
 import torch
 from exca import ConfDict
 
+from neuralbench.data import Data
 from neuralbench.defaults.metrics import (
     get_classification_metric_configs,
     get_sleep_onset_metric_configs,
@@ -208,8 +209,11 @@ _STREAM_TO_CORE_DATASET: dict[str, dict[str | None, str | None]] = {
 )
 def test_stream_task_diff(task: str, dataset: str | None):
     core_dataset = _STREAM_TO_CORE_DATASET[task].get(dataset, dataset)
-    core = merge_task_config("eeg", task, core_dataset).flat()
-    stream = merge_task_config("eeg", f"_{task}_stream", dataset).flat()
+    core_config = merge_task_config("eeg", task, core_dataset)
+    stream_config = merge_task_config("eeg", f"_{task}_stream", dataset)
+    for config in (core_config, stream_config):
+        Data(**config["data"])
+    core, stream = core_config.flat(), stream_config.flat()
     diff = {k: stream.get(k) for k in core | stream if core.get(k) != stream.get(k)}
     metrics = _STREAM_METRICS[task](stream["brain_model_output_size"])
     assert diff == {

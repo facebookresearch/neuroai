@@ -20,10 +20,12 @@ data:
       name: Interaxon2026Muse
     split:
       name: PredefinedSplit
+      test_split_query: null
       col_name: split
       valid_split_by: subject
       valid_split_ratio: 0.2
       valid_random_state: 33
+      valid_excludes_test_groups: true
     annotate_sleep_onset:  # no crop or random start: Muse is curated to <= 30 min pre-N2
       name: AddSleepOnsetTargets
   # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,

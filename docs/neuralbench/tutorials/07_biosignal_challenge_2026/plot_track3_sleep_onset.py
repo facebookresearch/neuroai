@@ -148,9 +148,10 @@ reconstruction because a sparse wearable montage supports it poorly.
 #
 # **Split.** The supplied session split, read by ``PredefinedSplit`` from the
 # release's ``split`` column: 500 training and 40 test recordings, all test
-# sleepers seen in training. Twenty percent of the training subjects (seed
-# 33) are held out for validation, giving **162 train / 41 validation
-# subjects** (406 / 94 recordings). The PSG variants instead split
+# sleepers seen in training. Twenty percent of the subjects without a test
+# recording (seed 33) are held out for validation, so every test sleeper
+# keeps its training recordings: **170 train / 33 validation subjects**
+# (412 / 88 recordings). The PSG variants instead split
 # participant-level 60 / 20 / 20 by ``SklearnSplit`` -- on Sleep-EDF's 78
 # participants that is **46 train / 16 validation / 16 test**.
 #
@@ -262,7 +263,7 @@ reconstruction because a sparse wearable montage supports it poorly.
 #
 # The competition's own shift is cross-user on a single device. The default
 # Muse data come from that device, home protocol and target, so on them only
-# the split (every sleeper held out, see `Split and model selection`_) and
+# the split (no unseen sleeper in the test, see `Split and model selection`_) and
 # the seen/unseen macro-average differ from what you will be scored on. Prior
 # filters, exact hardware generation and N2 scoring methodology are
 # undocumented. An existing copy can be placed directly at

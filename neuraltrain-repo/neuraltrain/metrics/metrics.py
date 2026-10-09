@@ -690,11 +690,15 @@ class GroupedMetric(torchmetrics.Metric):
             self.base_metric_cls = TORCHMETRICS_NAMES[metric_name]
         else:
             # also finds metrics defined by other packages, e.g. neuralbench's BinnedMAE
-            custom = {c.__name__: c for c in all_subclasses(torchmetrics.Metric)}
-            metric_cls = custom.get(metric_name)
-            if metric_cls is None:
-                raise ValueError(f"Metric {metric_name} not found")
-            self.base_metric_cls = metric_cls
+            matches = [
+                c for c in all_subclasses(torchmetrics.Metric) if c.__name__ == metric_name
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Expected one torchmetrics.Metric subclass named {metric_name!r} "
+                    f"(is its module imported?), found {matches}"
+                )
+            self.base_metric_cls = matches[0]
         self.metric_kwargs = kwargs
         self.reduction = reduction
         self.metrics = torch.nn.ModuleDict()  # store metrics per group
