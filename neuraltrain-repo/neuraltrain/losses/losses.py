@@ -131,33 +131,32 @@ class ClipLoss(nn.Module):
 
 
 class _GatherWithGrad(torch.autograd.Function):
-    """All-gather tensors using the collective's autograd adjoint."""
+    """All-gather tensors of per-rank length ``sizes`` along dim 0, with autograd."""
 
     @staticmethod
-    def forward(ctx, tensor):  # type: ignore[override]
-        if not dist.is_available() or not dist.is_initialized():
-            return (tensor,)
-        world_size = dist.get_world_size()
-        if world_size == 1:
-            return (tensor,)
-        gathered = [torch.empty_like(tensor) for _ in range(world_size)]
-        dist.all_gather(gathered, tensor)
-        return tuple(gathered)
+    def forward(ctx, tensor, sizes):  # type: ignore[override]
+        ctx.sizes = sizes
+        # all_gather needs one shape on every rank
+        padded = tensor.new_zeros((max(sizes), *tensor.shape[1:]))
+        padded[: tensor.shape[0]] = tensor
+        gathered = [torch.empty_like(padded) for _ in sizes]
+        dist.all_gather(gathered, padded)
+        return tuple(chunk[:size] for chunk, size in zip(gathered, sizes))
 
     @staticmethod
     def backward(ctx, *gradients):  # type: ignore[override]
-        if not dist.is_available() or not dist.is_initialized():
-            return gradients[0]
-        world_size = dist.get_world_size()
-        if world_size == 1:
-            return gradients[0]
-
+        sizes = ctx.sizes
         # Every rank evaluates the same global objective. Summing the gradient
         # for each source slice here offsets DDP's later parameter-gradient
         # averaging and reproduces a single-process global-batch update.
-        all_gradients = torch.stack(gradients)
-        dist.all_reduce(all_gradients, op=dist.ReduceOp.SUM)
-        return all_gradients[dist.get_rank()]
+        stacked = gradients[0].new_zeros(
+            (len(sizes), max(sizes), *gradients[0].shape[1:])
+        )
+        for row, (gradient, size) in enumerate(zip(gradients, sizes)):
+            stacked[row, :size] = gradient
+        dist.all_reduce(stacked, op=dist.ReduceOp.SUM)
+        rank = dist.get_rank()
+        return stacked[rank, : sizes[rank]], None
 
 
 class DistributedClipLoss(ClipLoss):
@@ -167,8 +166,8 @@ class DistributedClipLoss(ClipLoss):
     autograd support before :class:`ClipLoss` computes the objective. Evaluation
     and non-distributed execution use :class:`ClipLoss` directly.
 
-    Multi-rank training requires equal local batch sizes on every rank and the
-    same number of estimates and candidates per rank.
+    Ranks may hold different batch sizes, but each must hold as many
+    candidates as estimates.
     """
 
     @staticmethod
@@ -177,38 +176,32 @@ class DistributedClipLoss(ClipLoss):
             return 1
         return dist.get_world_size()
 
-    def _validate_equal_batches(
-        self, estimate: torch.Tensor, candidate: torch.Tensor
-    ) -> None:
-        world_size = self._world_size()
-        if world_size == 1:
-            return
+    def _rank_sizes(self, estimate: torch.Tensor, candidate: torch.Tensor) -> list[int]:
+        """Return every rank's batch size, raising on all ranks if one is misaligned."""
         sizes = torch.tensor(
             [estimate.shape[0], candidate.shape[0]],
             dtype=torch.int64,
             device=estimate.device,
         )
-        gathered_sizes = [torch.empty_like(sizes) for _ in range(world_size)]
+        gathered_sizes = [torch.empty_like(sizes) for _ in range(self._world_size())]
         dist.all_gather(gathered_sizes, sizes)
         rank_sizes = [tuple(values.tolist()) for values in gathered_sizes]
-        if len(set(rank_sizes)) != 1 or any(
-            n_estimate != n_candidate for n_estimate, n_candidate in rank_sizes
-        ):
-            raise ValueError(
-                "DistributedClipLoss requires equal aligned estimate/candidate "
-                f"batch sizes on every rank, got {rank_sizes}; use drop_last=True"
+        if any(n_estimate != n_candidate for n_estimate, n_candidate in rank_sizes):
+            got = ", ".join(
+                f"rank {rank}: {n_estimate} estimates / {n_candidate} candidates"
+                for rank, (n_estimate, n_candidate) in enumerate(rank_sizes)
             )
-
-    @staticmethod
-    def _gather(tensor: torch.Tensor) -> torch.Tensor:
-        gathered = _GatherWithGrad.apply(tensor.contiguous())
-        return torch.cat(gathered, dim=0)
+            raise ValueError(
+                "DistributedClipLoss needs as many candidates as estimates on every "
+                f"rank, got {got}"
+            )
+        return [n_estimate for n_estimate, _ in rank_sizes]
 
     def forward(self, estimate: torch.Tensor, candidate: torch.Tensor) -> torch.Tensor:
         if self.training and self._world_size() > 1:
-            self._validate_equal_batches(estimate, candidate)
-            estimate = self._gather(estimate)
-            candidate = self._gather(candidate)
+            sizes = self._rank_sizes(estimate, candidate)
+            estimate = torch.cat(_GatherWithGrad.apply(estimate.contiguous(), sizes))
+            candidate = torch.cat(_GatherWithGrad.apply(candidate.contiguous(), sizes))
         return super().forward(estimate, candidate)
 
 

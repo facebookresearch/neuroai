@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- `neuralbench`: `--space` selects a task's data-representation variant (`tasks/<device>/<task>/spaces/<name>.yaml`, merged over the base config; `all` runs every space). fMRI `image` ships MNI and fsaverage spaces; models on such tasks declare `compatible_spaces` and may set `default_space`, and datasets declare `available_spaces`.
+- `neuraltrain`: `DistributedClipLoss` accepts different batch sizes across ranks, so grouped batches train under DDP without `drop_last`, and the rank-based retrieval metrics sync when ranks scored different numbers of queries (#307).
+- `neuralbench`: `--space` selects a task's data-representation variant (`tasks/<device>/<task>/spaces/<name>.yaml`, merged over the base config; `all` runs every space). fMRI `image` ships MNI and fsaverage spaces; models on such tasks declare `compatible_spaces` and may set `default_space`, and datasets declare `available_spaces` (#306).
 - `neuralbench`: `--max-neuro-hours-per-epoch HOURS` trains each epoch on a fresh random draw of `HOURS` of training windows, cached separately from uncapped runs; `OnTheFlyPreprocessor.min_temporal_samples` zero-pads short windows for fixed-patch models such as REVE, whose channel mapping now also matches Neuromag/KIT names whatever the separator and CTF names without their serial suffix (#304).
 - `neuralbench`: new LP-FT adaptation presets (`lpft_mean`, `lpft_flatten`, `lpft_attentive`) that train the head on a frozen backbone and unfreeze it at `DownstreamWrapper.unfreeze_at_epoch`, plus `finetune_attentive` and `lora_r4_attentive`; attentive-pooling runs are tagged `<strategy>_attentive`, and the bar-chart legend names each foundation model's strategy (#305).
 - `neuralbench`: `-m eegnex` runs braindecode's EEGNeX (#303).

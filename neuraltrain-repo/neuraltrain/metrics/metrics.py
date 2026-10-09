@@ -229,9 +229,10 @@ class Rank(torchmetrics.Metric):
         self.relative = relative
         self.add_state(
             "ranks",
-            default=torch.Tensor([]),
+            default=[],
             dist_reduce_fx="cat",
         )
+        self.ranks: list[torch.Tensor]  # For mypy
         self.rank_count: torch.Tensor  # For mypy
 
     @classmethod
@@ -331,7 +332,7 @@ class Rank(torchmetrics.Metric):
             number of examples. Should have length of N and M, respectively
         """
         ranks = self._compute_ranks(x, y, x_labels, y_labels)
-        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        self.ranks.append(ranks)
 
     def compute(self) -> torch.Tensor:
         agg_func: tp.Callable
@@ -345,7 +346,7 @@ class Rank(torchmetrics.Metric):
             raise ValueError(
                 f'Unknown aggregation {self.reduction} for computing metric. Available aggregations are: "mean", "median" or "std".'
             )
-        return agg_func(self.ranks)
+        return agg_func(dim_zero_cat(self.ranks))
 
     def _compute_macro_average(
         self, ranks: torch.Tensor, labels: list[str]
@@ -416,7 +417,7 @@ class TopkAcc(Rank):
         }  # type: ignore
 
     def compute(self) -> torch.Tensor:
-        ranks = self.ranks
+        ranks = dim_zero_cat(self.ranks)
         return (ranks < self.topk).float().mean()
 
 
@@ -452,7 +453,7 @@ class TopkAccFromScores(TopkAcc):
     def update(self, scores: torch.Tensor) -> None:  # type: ignore[override]
         """Update internal list of ranks."""
         ranks = self._compute_ranks(scores)
-        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        self.ranks.append(ranks)
 
 
 class InverseNormalizedRank(Rank):
@@ -499,10 +500,10 @@ class InverseNormalizedRank(Rank):
         )
         self.add_state(
             "retrieval_sizes",
-            default=torch.Tensor([]),
+            default=[],
             dist_reduce_fx="cat",
         )
-        self.retrieval_sizes: torch.Tensor  # For mypy
+        self.retrieval_sizes: list[torch.Tensor]  # For mypy
 
     @torch.inference_mode()
     def update(
@@ -514,13 +515,13 @@ class InverseNormalizedRank(Rank):
     ) -> None:
         """Record per-query ranks and retrieval-set sizes for a batch."""
         ranks = self._compute_ranks(x, y, x_labels, y_labels)
-        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        self.ranks.append(ranks)
         sizes = torch.full_like(ranks, float(y.shape[0]))
-        self.retrieval_sizes = torch.cat([self.retrieval_sizes, sizes])
+        self.retrieval_sizes.append(sizes)
 
     def compute(self) -> torch.Tensor:
-        sizes = self.retrieval_sizes
-        ranks = self.ranks
+        sizes = dim_zero_cat(self.retrieval_sizes)
+        ranks = dim_zero_cat(self.ranks)
         valid = sizes > 1  # per-query AUROC undefined for a single candidate
         auc_per_query = 1.0 - ranks[valid] / (sizes[valid] - 1)
         return self.reduce_fn(auc_per_query)

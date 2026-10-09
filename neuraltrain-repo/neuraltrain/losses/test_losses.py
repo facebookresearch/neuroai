@@ -177,9 +177,10 @@ def _global_inputs() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
 def _distributed_clip_worker(
     rank: int,
-    world_size: int,
+    rank_sizes: tuple[int, ...],
     rendezvous: str,
 ) -> None:
+    world_size = len(rank_sizes)
     dist.init_process_group(
         "gloo",
         init_method=f"file://{rendezvous}",
@@ -188,8 +189,8 @@ def _distributed_clip_worker(
     )
     try:
         inputs, candidates, weight = _global_inputs()
-        batch_size = inputs.shape[0] // world_size
-        rank_slice = slice(rank * batch_size, (rank + 1) * batch_size)
+        start = sum(rank_sizes[:rank])
+        rank_slice = slice(start, start + rank_sizes[rank])
         local_inputs = inputs[rank_slice].clone().requires_grad_(True)
         local_candidates = candidates[rank_slice].clone().requires_grad_(True)
 
@@ -199,15 +200,12 @@ def _distributed_clip_worker(
         actual = ddp_module(local_inputs, local_candidates)
         actual.backward()
 
-        uneven_values = torch.randn(2 + rank, 4)
-        uneven_loss = losses.DistributedClipLoss(
+        misaligned = losses.DistributedClipLoss(
             norm_kind="y", temperature=False, symmetric=False
         )
-        uneven_loss.eval()
-        assert uneven_loss(uneven_values, uneven_values).ndim == 0
-        uneven_loss.train()
-        with pytest.raises(ValueError, match="drop_last=True"):
-            uneven_loss(uneven_values, uneven_values)
+        extra_candidate = int(rank == 0)
+        with pytest.raises(ValueError, match="as many candidates as estimates"):
+            misaligned(torch.randn(2, 4), torch.randn(2 + extra_candidate, 4))
 
         reference_inputs = inputs.clone().requires_grad_(True)
         reference_candidates = candidates.clone().requires_grad_(True)
@@ -238,7 +236,8 @@ def _distributed_clip_worker(
         dist.destroy_process_group()
 
 
-def test_distributed_clip_loss(tmp_path) -> None:
+@pytest.mark.parametrize("rank_sizes", [(3, 3), (2, 4)])
+def test_distributed_clip_loss(tmp_path, rank_sizes: tuple[int, ...]) -> None:
     config = {
         "name": "DistributedClipLoss",
         "norm_kind": "xy",
@@ -269,10 +268,10 @@ def test_distributed_clip_loss(tmp_path) -> None:
     for actual_gradient, expected_gradient in zip(actual_gradients, expected_gradients):
         torch.testing.assert_close(actual_gradient, expected_gradient, rtol=0, atol=0)
 
-    world_size = 2
+    assert sum(rank_sizes) == _global_inputs()[0].shape[0]
     mp.spawn(
         _distributed_clip_worker,
-        args=(world_size, str(tmp_path / "rendezvous")),
-        nprocs=world_size,
+        args=(rank_sizes, str(tmp_path / "rendezvous")),
+        nprocs=len(rank_sizes),
         join=True,
     )
