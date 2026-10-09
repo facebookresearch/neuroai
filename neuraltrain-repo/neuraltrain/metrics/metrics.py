@@ -690,9 +690,8 @@ class GroupedMetric(torchmetrics.Metric):
             self.base_metric_cls = TORCHMETRICS_NAMES[metric_name]
         else:
             # also finds metrics defined by other packages, e.g. neuralbench's BinnedMAE
-            matches = [
-                c for c in all_subclasses(torchmetrics.Metric) if c.__name__ == metric_name
-            ]
+            subclasses = all_subclasses(torchmetrics.Metric)
+            matches = [c for c in subclasses if c.__name__ == metric_name]
             if len(matches) != 1:
                 raise ValueError(
                     f"Expected one torchmetrics.Metric subclass named {metric_name!r} "
