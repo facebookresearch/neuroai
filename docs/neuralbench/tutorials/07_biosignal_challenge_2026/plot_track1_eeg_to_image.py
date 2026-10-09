@@ -54,11 +54,18 @@ concepts.
 # - **Target**: frozen ``facebook/dinov2-giant`` image embeddings
 #   (1536-d), aligned with a CLIP contrastive loss -- the same
 #   embedding space the competition scorer uses.
-# - **Headline metric key**: ``test/full_retrieval/top5_acc_subject-agg``
-#   -- Top-5 accuracy against every candidate in the test set, averaged
-#   over subjects. ``val/batch_top5_acc``, which early stopping
-#   monitors, ranks within a batch instead, so it reads far higher and
-#   is not comparable.
+# - **Headline metric key**: ``test/full_retrieval/inv_norm_rank_mean``
+#   -- retrieval AUC against every candidate in the test set: 1.0 when the
+#   viewed image always ranks first, ~0.5 at chance. In October 2026 it
+#   replaced Top-5 accuracy as the headline of every NeuralBench retrieval
+#   task, as it does not depend on the number of candidates.
+# - **Top-5 accuracy is still computed and reported** for every run:
+#   ``test/full_retrieval/top5_acc_subject-agg`` (averaged over subjects,
+#   the closest to the competition metric), ``top5_acc`` and
+#   ``top5_acc_instance-agg``, alongside the Top-1 the competition reports
+#   (``top1_acc_subject-agg``). The ``--plot-cached`` figures and tables
+#   show the headline only; the Top-k values are among the test metrics
+#   each run logs and returns.
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
 # nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
@@ -86,16 +93,20 @@ concepts.
 # 40 split into 32 train and 8 validation.
 #
 # **Model selection.** The checkpoint with the highest
-# **``val/batch_top5_acc``** is kept, over at most 40 epochs with early
-# stopping after 5 epochs without improvement.
+# **``val/batch_inv_norm_rank_mean``** is kept, over at most 40 epochs with
+# early stopping after 5 epochs without improvement.
 #
-# Note the mismatch, which is specific to this track: ``batch_top5_acc``
-# ranks each EEG epoch against the other 63 items *in its batch*, whereas
-# the headline ``test/full_retrieval/top5_acc_subject-agg`` ranks against
-# every candidate in the test set. The batch-level number reads far higher
-# and is not comparable. Full-set retrieval is computed by a callback that
-# runs on test only, so the batch-level proxy is what is available at
-# checkpoint time.
+# Both validation metrics rank each EEG epoch against the other 63 items
+# *in its batch*, whereas the test metrics rank against every candidate in
+# the test set. ``val/batch_top5_acc``, also logged, therefore reads far
+# higher than any test Top-5 and is not comparable; the batch retrieval AUC
+# is normalised by the candidate count, so it sits on the same scale as the
+# headline. Full-set retrieval is computed by a callback that runs on test
+# only, so a batch-level proxy is what is available at checkpoint time.
+#
+# The competition ranks by Top-5 accuracy, not retrieval AUC. To select
+# checkpoints on Top-5 instead, set ``trainer_config.monitor`` to
+# ``val/batch_top5_acc``, through either route described below.
 #
 # **How to change it**, in increasing order of effort:
 #

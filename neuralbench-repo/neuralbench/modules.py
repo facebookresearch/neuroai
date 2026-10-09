@@ -92,6 +92,18 @@ def _unmerge_qkv_lora(attn: nn.Module, args: tp.Any, output: tp.Any) -> None:
         )
 
 
+_MHA_FASTPATH_STATES: list[bool] = []
+
+
+def _disable_mha_fastpath(module: nn.Module, args: tp.Any) -> None:
+    _MHA_FASTPATH_STATES.append(torch.backends.mha.get_fastpath_enabled())
+    torch.backends.mha.set_fastpath_enabled(False)
+
+
+def _restore_mha_fastpath(module: nn.Module, args: tp.Any, output: tp.Any) -> None:
+    torch.backends.mha.set_fastpath_enabled(_MHA_FASTPATH_STATES.pop())
+
+
 def route_bypassed_qkv_lora(model: nn.Module) -> int:
     """Make LoRA on ``qkv`` reach BEiT-style attention; return the modules patched.
 
@@ -677,8 +689,11 @@ class DownstreamWrapper(pydantic.BaseModel):
                 wrapper_model.wrapped_model,  # type: ignore[arg-type]
                 peft_cfg,
             )
-            # eval fast path skips the adapters; process-wide switch
-            torch.backends.mha.set_fastpath_enabled(False)
+            # eval fast path skips the adapters
+            wrapper_model.wrapped_model.register_forward_pre_hook(_disable_mha_fastpath)
+            wrapper_model.wrapped_model.register_forward_hook(
+                _restore_mha_fastpath, always_call=True
+            )
             if route_bypassed_qkv_lora(wrapper_model.wrapped_model) and (
                 self.lora_config.lora_dropout
             ):

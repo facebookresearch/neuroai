@@ -71,7 +71,7 @@ METRIC_DISPLAY_NAMES: dict[str, str] = {
     "test/full_retrieval/inv_norm_rank_median": "Inv. norm. rank",
     "test/full_retrieval/inv_norm_rank_mean": "Retrieval AUC",
     "test/full_retrieval/inv_norm_rank_median_subject-agg": "Inv. norm. rank (per-subject)",
-    "test/full_retrieval/inv_norm_rank_mean_subject-agg": "Inv. norm. rank (mean, per-subject)",
+    "test/full_retrieval/inv_norm_rank_mean_subject-agg": "Retrieval AUC (per-subject)",
     "test/full_retrieval/top5_acc_subject-agg": "Top-5 accuracy (per-subject)",
 }
 

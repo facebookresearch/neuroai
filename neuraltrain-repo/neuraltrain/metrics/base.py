@@ -66,10 +66,22 @@ class BaseTorchMetric(BaseMetric):
         return self._METRIC_CLASS(**self.kwargs)
 
 
-class PearsonCorrCoef(BaseTorchMetric):
-    """:class:`torchmetrics.PearsonCorrCoef` accumulated in float64."""
+class _Float64PearsonCorrCoef(torchmetrics.PearsonCorrCoef):
+    def _apply(
+        self, fn: tp.Callable, exclude_state: tp.Sequence[str] = ""
+    ) -> torch.nn.Module:
+        try:
+            fn(torch.zeros((), dtype=torch.float64))
+        except TypeError:  # target device has no float64 (MPS)
+            self.set_dtype(torch.float32)
+        return super()._apply(fn, exclude_state)
 
-    _METRIC_CLASS: tp.ClassVar[type[Metric]] = torchmetrics.PearsonCorrCoef
+
+class PearsonCorrCoef(BaseTorchMetric):
+    """:class:`torchmetrics.PearsonCorrCoef` accumulated in float64, or float32
+    on devices without float64 support (MPS)."""
+
+    _METRIC_CLASS: tp.ClassVar[type[Metric]] = _Float64PearsonCorrCoef
 
     def build(self) -> Metric:
         # float32 returns NaN once var / max_abs_dev**2 < sqrt(eps)

@@ -150,6 +150,13 @@ def test_replaced_study_drops_default_study_query(
     assert {"path", "infra"} <= set(source)
 
 
+def test_eeg_image_reports_competition_topk() -> None:
+    metrics = merge_task_config("eeg", "image", None)["test_full_retrieval_metrics"]
+    names = {m["log_name"] for m in metrics}
+    expected = {"top5_acc_subject-agg", "top1_acc_subject-agg"}
+    assert expected <= names, "Track 1 docs point to these Top-k metrics"
+
+
 @pytest.mark.parametrize("preset", list(ALL_DOWNSTREAM_WRAPPERS))
 @pytest.mark.parametrize("model_name", FM_MODELS)
 def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: str):

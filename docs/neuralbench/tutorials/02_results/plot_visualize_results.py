@@ -98,4 +98,4 @@ summary tables.
 #    * - ``MSELoss``
 #      - ``test/pearsonr``
 #    * - ``ClipLoss``
-#      - ``test/full_retrieval/top5_acc_subject-agg``
+#      - ``test/full_retrieval/inv_norm_rank_mean``

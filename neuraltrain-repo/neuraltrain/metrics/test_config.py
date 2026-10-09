@@ -87,3 +87,14 @@ def test_pearsonr_survives_one_outlying_prediction() -> None:
             metric.update(prediction[i : i + 64], target[i : i + 64])
         assert metric.compute().item() == pytest.approx(expected, abs=1e-6)
         metric.reset()
+
+
+def test_pearsonr_falls_back_to_float32_without_float64() -> None:
+    def no_float64(t: torch.Tensor) -> torch.Tensor:
+        if t.dtype == torch.float64:
+            raise TypeError("Cannot convert a MPS Tensor to float64 dtype")
+        return t
+
+    metric = PearsonCorrCoef(log_name="pearsonr").build()
+    metric._apply(no_float64)
+    assert metric.mean_x.dtype == torch.float32, "MPS cannot hold float64 states"

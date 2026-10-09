@@ -724,3 +724,4 @@ def test_downstream_wrapper_lora_yaml_targets_reach_eval_output(
             out = wrapped(**batch)
             assert not torch.allclose(out, ref), f"LoRA on {target} is inert"
             ref = out
+    assert torch.backends.mha.get_fastpath_enabled(), "fast path must stay on globally"

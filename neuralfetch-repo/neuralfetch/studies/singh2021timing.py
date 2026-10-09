@@ -94,6 +94,10 @@ class Singh2021Timing(study.Study):
         frequency=500,
     )
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
+
     def _download(self, overwrite: bool = False) -> None:
         # https://predict.cs.unm.edu/downloads.php d014
         # Unable to use original dataset on PRED+ct.

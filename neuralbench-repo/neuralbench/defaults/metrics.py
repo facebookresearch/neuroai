@@ -210,4 +210,9 @@ test_full_retrieval_metrics = [
         "name": "TopkAcc",
         "topk": 5,
     },
+    {
+        "log_name": "top1_acc_subject-agg",
+        "name": "TopkAcc",
+        "topk": 1,
+    },
 ]

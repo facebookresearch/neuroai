@@ -339,7 +339,8 @@ class SegmentDataset(torch.utils.data.Dataset[Batch], SegmentsMixin):
             except Exception as e:
                 string = f"Failed to collate data with shapes {[d.shape for d in data]}\n"
                 logger.warning(string)
-                e.add_note("Set `pad_duration` to `auto` if segment durations vary.")
+                if len({tuple(d.shape[1:]) for d in data}) > 1:
+                    e.add_note("Set `pad_duration` to `auto` if segment durations vary.")
                 raise
         segments = [s for b in batches for s in b.segments]
         return Batch(data=extractors, segments=segments)
