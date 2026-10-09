@@ -12,11 +12,24 @@ data:
       name: Interaxon2026Muse
     annotate_sleep_onset:
       name: AddSleepOnsetTargets
-    split:
-      name: PredefinedSplit
-      test_split_query: null
-      col_name: split
-      valid_split_by: subject
-      valid_split_ratio: 0.2
-      valid_random_state: 33
-      valid_excludes_test_groups: true
+    split:  # supplied session split; validation subjects have no test session
+      name: Chain
+      steps:
+        valid_group:
+          name: CreateColumn
+          column: valid_group
+          query_row: "~subject.isin(subject.where(split == 'test'))"
+          query_column_name: subject
+        split:
+          name: PredefinedSplit
+          test_split_query: null
+          col_name: split
+          valid_split_by: valid_group
+          valid_split_ratio: 0.2
+          valid_random_state: 33
+        keep_test_sleepers_in_train:
+          name: CreateColumn
+          column: split
+          query_row: split.isna()
+          query_value: train
+          on_column_exists: ignore

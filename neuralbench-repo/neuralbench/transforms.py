@@ -215,10 +215,6 @@ class PredefinedSplit(_transf.EventsTransform):
     valid_split_ratio : float
         Ratio of the **training set** to use for validation. CAUTION: This is unlike the other
         splitter (e.g. SklearnSplit) where the validation split is a ratio of the entire dataset.
-    valid_excludes_test_groups : bool
-        If True, draw validation groups only among ``valid_split_by`` groups with no test
-        event, so every test group keeps its training data; ``valid_split_ratio`` then
-        applies to those groups.
     test_random_state : int | None
         Unused - for compatibility with SklearnSplit.
     """
@@ -230,7 +226,6 @@ class PredefinedSplit(_transf.EventsTransform):
     valid_split_by: str | None = "timeline"
     valid_split_ratio: float = 0.2
     valid_random_state: int = 33
-    valid_excludes_test_groups: bool = False
     test_random_state: int | None = None  # Unused - for compatibility with SklearnSplit
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
@@ -256,13 +251,8 @@ class PredefinedSplit(_transf.EventsTransform):
                     train_events["_index"] = range(len(train_events))
                     events.loc[train_events.index, "_index"] = train_events["_index"]
             train_groups = np.asarray(train_events[self.valid_split_by].dropna().unique())
-            valid_candidates = train_groups
-            if self.valid_excludes_test_groups:
-                test_events = events[events[self.col_name] == "test"]
-                test_groups = test_events[self.valid_split_by].to_numpy()
-                valid_candidates = train_groups[~np.isin(train_groups, test_groups)]
-            _, valid = train_test_split(
-                valid_candidates,
+            train, valid = train_test_split(
+                train_groups,
                 test_size=self.valid_split_ratio,
                 random_state=self.valid_random_state,
             )
@@ -271,7 +261,7 @@ class PredefinedSplit(_transf.EventsTransform):
                     "Empty validation set, try increasing `valid_split_ratio`."
                 )
             split_mapping = {
-                **{k: "train" for k in train_groups},
+                **{k: "train" for k in train},
                 **{k: "val" for k in valid},
             }
             train_events.loc[:, self.col_name] = train_events[

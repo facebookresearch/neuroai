@@ -376,29 +376,6 @@ def test_predefined_split_event_type(events):
     assert len(new_events) == len(events)
 
 
-def test_predefined_split_valid_excludes_test_groups():
-    events = pd.DataFrame(
-        dict(
-            type="Eeg",
-            start=0.0,
-            duration=1.0,
-            timeline=[str(i) for i in range(8)],
-            subject=list("aabbccdd"),
-            split=["train", "test"] + ["train"] * 6,
-        )
-    )
-    transform = PredefinedSplit(
-        test_split_query=None,
-        valid_split_by="subject",
-        valid_split_ratio=0.5,
-        valid_random_state=4,  # draws subject a without the exclusion
-        valid_excludes_test_groups=True,
-    )
-    new_events = transform(events)
-    assert new_events.split.tolist()[:2] == ["train", "test"]
-    assert set(new_events.split) == {"train", "val", "test"}
-
-
 def test_crop_sleep_recordings(sleep_events):
     max_wake_duration_min = 30.0
     transform = CropSleepRecordings(max_wake_duration_min=max_wake_duration_min)
