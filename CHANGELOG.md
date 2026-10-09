@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `-m fmri_mlp` keeps each fMRI task's temporal length and output head instead of imposing the image task's settings; `fmri image` configs are unchanged (#309).
 - `neuralbench`: each device's defaults live in `defaults/<device>/config.yaml`, merged over `defaults/config.yaml`, and task configs no longer repeat them. `neuralbench.defaults.metrics` moves to `neuralbench.metric_configs`: task YAMLs that call `neuralbench.defaults.metrics.<fn>` must use the new path. fMRI tasks no longer build an unused channel-positions extractor (`Data.channel_positions` is optional), so their cache UIDs change (#308).
 - `neuraltrain`: `DistributedClipLoss` accepts different batch sizes across ranks, so grouped batches train under DDP without `drop_last`, and the rank-based retrieval metrics sync when ranks scored different numbers of queries (#307).
 - `neuralbench`: `--space` selects a task's data-representation variant (`tasks/<device>/<task>/spaces/<name>.yaml`, merged over the base config; `all` runs every space). fMRI `image` ships MNI and fsaverage spaces; models on such tasks declare `compatible_spaces` and may set `default_space`, and datasets declare `available_spaces` (#306).
