@@ -26,6 +26,7 @@ Includes the following adaptations over the raw braindecode REVE model:
 """
 
 import logging
+import re
 import typing as tp
 
 import torch
@@ -138,13 +139,29 @@ class NtReve(BaseBrainDecodeModel):
         self,
         chs_info: list[dict[str, tp.Any]],
     ) -> list[dict[str, tp.Any]]:
-        """Apply ``channel_mapping`` to *chs_info*, returning a new list."""
+        """Apply ``channel_mapping`` to *chs_info*, returning a new list.
+
+        MEG sensor names are also tried in either spelling of the mapping:
+        Neuromag / KIT whatever the separator (``MEG0113``, ``MEG-0113`` ->
+        ``MEG 0113`` or ``MEG0113``) and CTF without the serial suffix
+        (``MLC11-4504`` -> ``MLC11``). Other names must match exactly.
+        """
         if not self.channel_mapping:
             return chs_info
-        return [
-            {**ch, "ch_name": self.channel_mapping.get(ch["ch_name"], ch["ch_name"])}
-            for ch in chs_info
-        ]
+        mapping = self.channel_mapping
+
+        def remap(name: str) -> str:
+            candidates = [name]
+            if neuromag := re.fullmatch(r"MEG[ -]?(\d+)", name):
+                candidates += [f"MEG {neuromag.group(1)}", f"MEG{neuromag.group(1)}"]
+            elif ctf := re.fullmatch(r"(M[LRZ][FCTPO]\d{2})-\d+", name):
+                candidates.append(ctf.group(1))
+            for candidate in candidates:
+                if candidate in mapping:
+                    return mapping[candidate]
+            return name
+
+        return [{**ch, "ch_name": remap(ch["ch_name"])} for ch in chs_info]
 
     @staticmethod
     def _bank_lookup(bank: tp.Any) -> tp.Callable[[str], torch.Tensor | None]:

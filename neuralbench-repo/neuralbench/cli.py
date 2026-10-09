@@ -43,6 +43,7 @@ def run_benchmark(
     downstream_wrapper: str | list[str] | None = None,
     grid: bool = False,
     debug: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
     force: bool = False,
     retry: bool = False,
     prepare: bool = False,
@@ -78,6 +79,9 @@ def run_benchmark(
         Expand the task-specific hyperparameter grid.
     debug : bool
         Run locally with a reduced config (2 epochs, 5 batches).
+    max_neuro_hours_per_epoch : float or None
+        Cap each training epoch to a fresh random draw of this many hours of
+        training windows, so large datasets train in comparable time.
     force : bool
         Force re-running experiments.
     retry : bool
@@ -124,6 +128,7 @@ def run_benchmark(
         downstream_wrapper=downstream_wrapper,
         grid=grid,
         debug=debug,
+        max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
         force=force,
         retry=retry,
         prepare=prepare,
@@ -194,6 +199,13 @@ def run_benchmark_cli() -> None:
         "--debug",
         action="store_true",
         help="Run in debug mode (locally and smaller config, with infra.mode='force').",
+    )
+    parser.add_argument(
+        "--max-neuro-hours-per-epoch",
+        type=float,
+        default=None,
+        metavar="HOURS",
+        help="Cap each training epoch to a fresh random draw of HOURS of training windows.",
     )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
@@ -285,6 +297,7 @@ def run_benchmark_cli() -> None:
             downstream_wrapper=args.downstream_wrapper,
             grid=args.grid,
             debug=args.debug,
+            max_neuro_hours_per_epoch=args.max_neuro_hours_per_epoch,
             force=args.force,
             retry=args.retry,
             prepare=args.prepare,

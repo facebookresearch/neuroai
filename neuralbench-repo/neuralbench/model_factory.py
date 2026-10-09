@@ -93,6 +93,22 @@ def build_dummy_batch(
         if "subject_ids" not in dummy_batch:
             dummy_batch["subject_ids"] = batch.data["subject_id"][:1].to("cpu")
 
+    # The preprocessor runs first in ``DownstreamWrapperModel.forward`` and may
+    # resize the input (``min_temporal_samples``), so both the lazy-layer init
+    # and the wrapper's output-shape probe have to see its output.
+    if (
+        downstream_model_wrapper is not None
+        and downstream_model_wrapper.on_the_fly_preprocessor is not None
+    ):
+        preprocessor = downstream_model_wrapper.on_the_fly_preprocessor.build()
+        with torch.no_grad():
+            x, ch_pos = preprocessor(
+                dummy_batch[input_name], dummy_batch.get("channel_positions")
+            )
+        dummy_batch[input_name] = x
+        if ch_pos is not None and "channel_positions" in dummy_batch:
+            dummy_batch["channel_positions"] = ch_pos
+
     return dummy_batch, input_name
 
 

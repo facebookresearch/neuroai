@@ -226,12 +226,15 @@ def _prepare_single_task_config(
     dataset_name: str | None = None,
     quiet: bool = False,
     retry: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
 ) -> list[ConfDict]:
     """Assemble experiment configs for a single task, applying mode overlays and grid expansion."""
     config["task_name"] = task_name
     if config.get("wandb_config") is not None:
         config["wandb_config.group"] = f"{device}/{task_name}"
 
+    if max_neuro_hours_per_epoch is not None and "data" in config:
+        config["max_neuro_hours_per_epoch"] = max_neuro_hours_per_epoch
     if debug:
         _apply_debug_overlay(config)
     if force:
@@ -267,6 +270,7 @@ def prepare_task_configs(
     datasets: list[str | None] | None = None,
     quiet: bool = False,
     retry: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
 ) -> list[ConfDict]:
     """Run a specific neuralbench task with given configuration."""
     if not quiet:
@@ -313,6 +317,7 @@ def prepare_task_configs(
                 dataset_name,
                 quiet=quiet,
                 retry=retry,
+                max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
             )
             configs.extend(exp_configs)
 
@@ -337,6 +342,7 @@ def build_experiment_configs(
     downstream_wrapper: str | list[str] | None = None,
     grid: bool = False,
     debug: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
     force: bool = False,
     retry: bool = False,
     prepare: bool = False,
@@ -457,6 +463,7 @@ def build_experiment_configs(
                     datasets,
                     quiet=quiet,
                     retry=retry,
+                    max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
                 )
             )
     return configs

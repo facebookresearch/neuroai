@@ -47,6 +47,8 @@ Steps 2 and 3 dispatch to SLURM when it is auto-detected on your machine; step 3
 neuralbench eeg audiovisual_stimulus --debug      # Local validation run
 ```
 
+`--max-neuro-hours-per-epoch HOURS` caps each training epoch to a fresh random draw of `HOURS` of training windows, so large datasets train in comparable time; results are cached separately from uncapped runs.
+
 By default, experiments use the EEGNet architecture[^1]; use `-m <model>` to swap models.
 
 [^1]: Lawhern, Vernon J., et al. "EEGNet: a compact convolutional neural network for EEG-based brain–computer interfaces." Journal of neural engineering 15.5 (2018): 056013.

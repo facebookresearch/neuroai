@@ -271,7 +271,7 @@ def test_run_seeds_before_preparing_dataloaders(monkeypatch) -> None:
         del self
         events.append("setup_run")
 
-    def fake_setup_trainer(self):
+    def fake_setup_trainer(self, **kwargs):
         events.append("setup_trainer")
         return SimpleNamespace(global_rank=1)
 

@@ -6,6 +6,7 @@
 
 
 import logging
+import math
 import platform
 import resource
 import time
@@ -84,6 +85,9 @@ class Experiment(BaseExperiment):
 
     # Optim
     trainer_config: TrainerConfig
+    # Caps each epoch to a fresh random draw of this many hours of training
+    # windows, whatever the batch size or window duration.
+    max_neuro_hours_per_epoch: float | None = None
     loss: BaseLoss
     lightning_optimizer_config: LightningOptimizer
     augmentation: BandRotationConfig | None = None
@@ -268,8 +272,10 @@ class Experiment(BaseExperiment):
         if self.csv_config is not None:
             self._csv_logger = self.csv_config.build(save_dir=savedir)
 
-    def setup_trainer(self, is_test: bool = False) -> pl.Trainer:
-        """Create callbacks and setup Trainer."""
+    def setup_trainer(
+        self, is_test: bool = False, limit_train_batches: int | None = None
+    ) -> pl.Trainer:
+        """Create callbacks and setup Trainer, overriding ``limit_train_batches`` if given."""
         callbacks: list[Callback] = []
         if self.data.stream_by is not None:
             callbacks.append(ResetPerStream())
@@ -327,7 +333,7 @@ class Experiment(BaseExperiment):
                     if hasattr(self.loss, "name")
                     else self.loss.__class__.__name__
                 )
-                if loss_name in ["MSELoss", "ClipLoss"]:
+                if loss_name in ["MSELoss", "ClipLoss", "DistributedClipLoss"]:
                     callbacks.append(PlotRegressionVectors(num_samples=10))
             # Add scatter plot for 1D regression outputs
             if (
@@ -373,13 +379,53 @@ class Experiment(BaseExperiment):
         if not loggers:
             loggers.append(DummyLogger())
 
-        return self.trainer_config.build(
+        trainer_config = self.trainer_config
+        if limit_train_batches is not None:
+            trainer_config = trainer_config.model_copy(
+                update={"limit_train_batches": limit_train_batches}
+            )
+        return trainer_config.build(
             logger=loggers,
             callbacks=callbacks,
             accelerator="cpu" if self.infra.gpus_per_node == 0 else "auto",
             devices=1 if is_test else self.infra.gpus_per_node,
             num_nodes=1,
         )
+
+    def _train_batch_limit(self, train_loader: DataLoader) -> int | None:
+        """Per-rank ``limit_train_batches`` holding ``max_neuro_hours_per_epoch``.
+
+        ``trainer_config.limit_train_batches`` is returned unchanged when the
+        training set is within the budget, and kept whenever it is stricter
+        (e.g. debug mode).
+        """
+        assert self.max_neuro_hours_per_epoch is not None
+        configured = self.trainer_config.limit_train_batches
+        dataset = train_loader.dataset
+        segments = getattr(dataset, "segments", None)
+        if segments is not None:
+            total_seconds = sum(segment.duration for segment in segments)
+        elif self.data.duration is not None:
+            total_seconds = len(dataset) * self.data.duration  # type: ignore[arg-type]
+        else:
+            raise ValueError(
+                "max_neuro_hours_per_epoch needs a fixed data.duration or segments"
+            )
+        total_hours = total_seconds / 3600
+        if total_hours <= self.max_neuro_hours_per_epoch:
+            return configured
+        # the loader is not sharded yet: under DDP each rank gets 1 / n_ranks
+        n_ranks = max(self.infra.gpus_per_node or 1, 1)
+        limit = math.ceil(
+            len(train_loader) * self.max_neuro_hours_per_epoch / total_hours / n_ranks
+        )
+        LOGGER.info(
+            "Capping training epochs to %d batches per rank (%.1f of %.1f window-hours)",
+            limit,
+            self.max_neuro_hours_per_epoch,
+            total_hours,
+        )
+        return limit if configured is None else min(limit, configured)
 
     def _test(
         self,
@@ -456,7 +502,10 @@ class Experiment(BaseExperiment):
         pl.seed_everything(self.seed, workers=True)
         self.setup_run()
         loaders = self.data.prepare()
-        trainer = self.setup_trainer()
+        limit_train_batches = None
+        if self.max_neuro_hours_per_epoch is not None:
+            limit_train_batches = self._train_batch_limit(loaders["train"])
+        trainer = self.setup_trainer(limit_train_batches=limit_train_batches)
         self.prepare_pl_module(loaders["train"], loaders.get("val"))
 
         test_results: dict[str, tp.Any] = {}

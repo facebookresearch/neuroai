@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `--max-neuro-hours-per-epoch HOURS` trains each epoch on a fresh random draw of `HOURS` of training windows, cached separately from uncapped runs; `OnTheFlyPreprocessor.min_temporal_samples` zero-pads short windows for fixed-patch models such as REVE, whose channel mapping now also matches Neuromag/KIT names whatever the separator and CTF names without their serial suffix (#304).
 - `neuralbench`: new LP-FT adaptation presets (`lpft_mean`, `lpft_flatten`, `lpft_attentive`) that train the head on a frozen backbone and unfreeze it at `DownstreamWrapper.unfreeze_at_epoch`, plus `finetune_attentive` and `lora_r4_attentive`; attentive-pooling runs are tagged `<strategy>_attentive`, and the bar-chart legend names each foundation model's strategy (#305).
 - `neuralbench`: `-m eegnex` runs braindecode's EEGNeX (#303).
 - `neuralbench`: `--plot-cached` writes under `outputs/<device>/`, and `core/` and `full/` hold one folder per foundation-model adaptation strategy (`default/` without `-w`), so the core bar chart moves from `outputs/core/core_bar_chart.png` to `outputs/eeg/core/default/core_bar_chart.png`. The figures add category leaderboards and a labelled bar chart, and replace the separate non-EEG plotting module (#302).

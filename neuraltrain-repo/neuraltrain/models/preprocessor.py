@@ -42,6 +42,14 @@ class OnTheFlyPreprocessor(BaseModelConfig):
         If provided, clamp input to the range [-clamp, clamp].
     update_ch_pos :
         If True, update channel positions of bad channels above `ptp_threshold`.
+    min_temporal_samples :
+        If provided, right-pad the time axis with zeros up to this length. Models
+        whose patch size is fixed by a pretrained checkpoint (e.g. REVE's
+        ``Linear(200, 512)``) cannot tokenise a shorter window at all; padding on
+        the right leaves the trigger aligned with the patch start. Applied after
+        scaling, so the padding stays at zero rather than being recentred, and
+        the real samples keep the statistics they were scaled by. No-op when the
+        input is already at least this long.
     """
 
     ptp_threshold: float | None = None
@@ -56,6 +64,7 @@ class OnTheFlyPreprocessor(BaseModelConfig):
     scaler_quantile: float = Field(default=0.95, ge=0.0, le=1.0)
     clamp: float | None = None
     update_ch_pos: bool = True
+    min_temporal_samples: int | None = None
 
     def model_post_init(self, __context):
         super().model_post_init(__context)
@@ -80,6 +89,7 @@ class OnTheFlyPreprocessorModel(nn.Module):
         self.scaler_quantile = config.scaler_quantile
         self.clamp = config.clamp
         self.update_ch_pos = config.update_ch_pos
+        self.min_temporal_samples = config.min_temporal_samples
 
     def forward(
         self,
@@ -149,5 +159,10 @@ class OnTheFlyPreprocessorModel(nn.Module):
 
         if self.clamp is not None:
             x_out = x_out.clamp(-self.clamp, self.clamp)
+
+        if self.min_temporal_samples is not None:
+            pad = self.min_temporal_samples - x_out.shape[-1]
+            if pad > 0:
+                x_out = nn.functional.pad(x_out, (0, pad))
 
         return x_out, ch_pos_out
