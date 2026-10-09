@@ -28,8 +28,9 @@ from neuralbench.registry import (
     DEFAULTS_DIR,
     _resolve_dataset_stem,
     _resolve_model_config_path,
+    _resolve_spaces,
     _resolve_task_dir,
-    _task_dataset_paths,
+    _task_variant_paths,
     load_default_config,
     load_yaml_config,
 )
@@ -154,10 +155,65 @@ def _merge_dataset_config(
     if stem is None:
         return
     source_defaults = {k: config["data.study.source"][k] for k in ("path", "infra")}
-    config.update(load_yaml_config(_task_dataset_paths(device, task_name)[stem]))
+    config.update(
+        load_yaml_config(_task_variant_paths(device, task_name, "datasets")[stem])
+    )
     # =replace= may wipe source; restore default path/infra
     for k, v in source_defaults.items():
         config["data.study.source"].setdefault(k, v)
+
+
+def _space_variants(
+    config: ConfDict, device: str, task_name: str, spaces: list[str | None] | None
+) -> dict[str | None, ConfDict]:
+    """Split *config* into one config per ``space_name`` it runs in.
+
+    Pops the model's ``default_space`` (used when *spaces* is ``None``) and
+    ``compatible_spaces``, and the dataset's ``available_spaces``.  ``None`` and
+    *config*'s own ``space_name`` both select *config* unchanged; other spaces
+    layer their ``spaces/`` file over it.
+    """
+    default_space = config.pop("default_space", None)
+    compatible = config.pop("compatible_spaces", None)
+    if compatible == "all":
+        compatible = None
+    available = config.pop("available_spaces", None)
+    if spaces is None:
+        spaces = [None]
+        if default_space is not None:
+            spaces = _resolve_spaces(device, task_name, default_space)
+    base = config.get("space_name")
+    named = [s for s in spaces if s is not None and s != base]
+    if named and available is None:
+        raise ValueError(
+            f"Space(s) {named} requested, but the dataset config of "
+            f"{device}/{task_name} does not declare available_spaces"
+        )
+    unavailable = sorted(s for s in named if s not in available)
+    if unavailable:
+        study = config["data.study.source.name"]
+        warn(f"Skipping space(s) {unavailable}, not available for {study}")
+        spaces = [s for s in spaces if s not in unavailable]
+    variants: dict[str | None, ConfDict] = {}
+    for space in spaces:
+        if space is None or space == base:
+            variants.setdefault(base, config)
+            continue
+        variant = config.copy()
+        variant.update(
+            load_yaml_config(_task_variant_paths(device, task_name, "spaces")[space])
+        )
+        variant["space_name"] = space
+        variants[space] = variant
+    # an unlabelled base config is not gated
+    skipped = sorted(
+        s
+        for s in variants
+        if s is not None and compatible is not None and s not in compatible
+    )
+    if skipped:
+        warn(f"Skipping space(s) {skipped}, outside compatible_spaces {compatible}")
+    return {s: c for s, c in variants.items() if s not in skipped}
 
 
 # ---------------------------------------------------------------------------
@@ -268,6 +324,7 @@ def prepare_task_configs(
     download: bool,
     models: tp.Sequence[ModelSpec],
     datasets: list[str | None] | None = None,
+    spaces: list[str | None] | None = None,
     quiet: bool = False,
     retry: bool = False,
     max_neuro_hours_per_epoch: float | None = None,
@@ -293,6 +350,13 @@ def prepare_task_configs(
             else:
                 model_config = load_yaml_config(_resolve_model_config_path(model)) or {}
                 label = model
+            if "compatible_spaces" not in model_config and _task_variant_paths(
+                device, task_name, "spaces"
+            ):
+                raise ValueError(
+                    f"Model {label!r} must declare compatible_spaces (a list, or "
+                    f"'all') to run on {device}/{task_name}, which defines spaces"
+                )
             if not quiet:
                 LOGGER.info("--- USING MODEL %s ---", label)
             exp_config.update(model_config)
@@ -304,22 +368,27 @@ def prepare_task_configs(
                     LOGGER.info("~~~ USING DATASET: %s ~~~", dataset_name)
                 _merge_dataset_config(dataset_exp_config, device, task_name, dataset_name)
 
-            exp_configs = _prepare_single_task_config(
-                dataset_exp_config,
-                grid,
-                device,
-                task_name,
-                use_task_grid,
-                debug,
-                force,
-                prepare,
-                download,
-                dataset_name,
-                quiet=quiet,
-                retry=retry,
-                max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
-            )
-            configs.extend(exp_configs)
+            variants = _space_variants(dataset_exp_config, device, task_name, spaces)
+            for space_name, space_exp_config in variants.items():
+                if space_name is not None and not quiet:
+                    LOGGER.info("~~~ USING SPACE: %s ~~~", space_name)
+                configs.extend(
+                    _prepare_single_task_config(
+                        space_exp_config,
+                        grid,
+                        device,
+                        task_name,
+                        use_task_grid,
+                        debug,
+                        force,
+                        prepare,
+                        download,
+                        dataset_name,
+                        quiet=quiet,
+                        retry=retry,
+                        max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
+                    )
+                )
 
     return configs
 
@@ -338,6 +407,7 @@ def build_experiment_configs(
     *,
     model: str | list[str] | dict[str, tp.Any] | None = None,
     dataset: str | list[str] | None = None,
+    space: str | list[str] | None = None,
     checkpoint: str | None = None,
     downstream_wrapper: str | list[str] | None = None,
     grid: bool = False,
@@ -349,7 +419,7 @@ def build_experiment_configs(
     download: bool = False,
     quiet: bool = False,
 ) -> list[ConfDict]:
-    """Assemble one experiment config per (task, dataset, model, grid point).
+    """Assemble one experiment config per (task, dataset, space, model, grid point).
 
     The single home for turning benchmark selections into configs, shared by
     :func:`neuralbench.cli.run_benchmark` and
@@ -419,6 +489,7 @@ def build_experiment_configs(
             else list(_expand_models(model, device=device, task_name=task_name))  # type: ignore[arg-type]
         )
         datasets = _resolve_datasets(device, task_name, dataset)
+        spaces = None if space is None else _resolve_spaces(device, task_name, space)
         # adaptation needs a pretrained backbone: the rest get an overlay-free grid
         model_groups: list[tuple[ConfDict, list[ModelSpec]]]
         if overlays is not None:
@@ -461,11 +532,14 @@ def build_experiment_configs(
                     download,
                     group_models,
                     datasets,
+                    spaces,
                     quiet=quiet,
                     retry=retry,
                     max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
                 )
             )
+    if tasks and not configs:
+        raise ValueError("No experiment left for this selection; see the warnings above.")
     return configs
 
 

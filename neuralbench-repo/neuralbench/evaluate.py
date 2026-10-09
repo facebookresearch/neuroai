@@ -92,6 +92,7 @@ def evaluate_model(
     task: str | list[str],
     *,
     dataset: str | list[str] | None = None,
+    space: str | list[str] | None = None,
     name: str = "external",
     overrides: tp.Mapping[str, tp.Any] | None = None,
     downstream_wrapper: str | list[str] = "linear_probe_mean",
@@ -125,6 +126,9 @@ def evaluate_model(
         Dataset variant(s), or ``"all"`` for every variant a task registers;
         ``None`` is the task's base config.  So ``task="all"`` with the default
         is the device's Core suite, and with ``dataset="all"`` its Full suite.
+    space
+        Data representation(s), as ``--space`` on the CLI; ``None`` is the
+        task's base config.
     name
         Label for this model in the results frame.
     overrides
@@ -159,11 +163,13 @@ def evaluate_model(
         # =replace= so the external config supplants the default model rather
         # than merging field-by-field with it.
         "brain_model_config": {"=replace=": True, **config.model_dump()},
+        "compatible_spaces": "all",  # the caller picks spaces via space=
     }
     phase = dict(
         device=device,
         task=task,
         dataset=dataset,
+        space=space,
         overrides=overrides,
         downstream_wrapper=downstream_wrapper,
         cluster=cluster,

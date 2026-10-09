@@ -39,6 +39,7 @@ def run_benchmark(
     *,
     model: str | list[str] | None = None,
     dataset: str | list[str] | None = None,
+    space: str | list[str] | None = None,
     checkpoint: str | None = None,
     downstream_wrapper: str | list[str] | None = None,
     grid: bool = False,
@@ -69,6 +70,12 @@ def run_benchmark(
         or ``None`` (uses default model from ``config.yaml``).
     dataset : str or list of str or None
         Dataset variant(s) or ``"all"``. ``None`` uses the base config.
+    space : str or list of str or None
+        Data-representation variant(s) from the task's ``spaces/`` folder, or
+        ``"all"`` for the base config plus every variant. ``None`` uses each
+        model's ``default_space``, else the base config. Spaces outside a
+        dataset's ``available_spaces`` or a model's ``compatible_spaces`` are
+        skipped.
     checkpoint : str or None
         Path to a model checkpoint to reload.
     downstream_wrapper : str or list of str or None
@@ -124,6 +131,7 @@ def run_benchmark(
         task,
         model=model,
         dataset=dataset,
+        space=space,
         checkpoint=checkpoint,
         downstream_wrapper=downstream_wrapper,
         grid=grid,
@@ -285,6 +293,19 @@ def run_benchmark_cli() -> None:
             "Example: --dataset Schalk2004Bci2000 or --dataset all"
         ),
     )
+    parser.add_argument(
+        "--space",
+        type=str,
+        nargs="+",
+        default=None,
+        help=(
+            "Data representation(s) to run on, by the stem of their file in the "
+            "task's spaces/ folder (merged over the base config.yaml). "
+            "Use 'all' for the base config plus every space. Spaces a dataset "
+            "or model does not support are skipped with a warning. "
+            "Example: --space mni fsaverage5 or --space all"
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -293,6 +314,7 @@ def run_benchmark_cli() -> None:
             task=args.task,
             model=args.model,
             dataset=args.dataset,
+            space=args.space,
             checkpoint=args.checkpoint,
             downstream_wrapper=args.downstream_wrapper,
             grid=args.grid,

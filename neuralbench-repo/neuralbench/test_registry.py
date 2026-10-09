@@ -39,6 +39,11 @@ from neuralbench.registry import (
 )
 
 
+def test_space_is_rejected_on_a_task_without_spaces() -> None:
+    with pytest.raises(ValueError, match=r"Unknown space\(s\) \['mni'\]"):
+        registry._resolve_spaces("eeg", "motor_imagery", "mni")
+
+
 def test_every_listed_dataset_name_resolves() -> None:
     for device, tasks in ALL_DATASETS.items():
         for task, names in tasks.items():

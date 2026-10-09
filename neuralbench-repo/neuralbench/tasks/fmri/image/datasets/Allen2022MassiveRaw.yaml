@@ -24,3 +24,6 @@ data:
       valid_random_state: 33
   neuro:
     from_space: auto
+space_name: fsaverage5
+available_spaces:
+  [fsaverage4, fsaverage5, fsaverage6, mni, mni2fsaverage4, mni2fsaverage5, mni2fsaverage6]

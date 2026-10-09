@@ -1,0 +1,18 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Native surface derivatives: needs a study exposing Fmri events with space="fsaverage"
+data:
+  study:
+    filter_fmri_space:
+      name: QueryEvents
+      query: 'type != "Fmri" or space == "fsaverage"'
+  neuro:
+    from_space: null
+    query: 'space == "fsaverage"'
+    projection:
+      name: SurfaceProjector
+      mesh: fsaverage5

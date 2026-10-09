@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import functools
+import typing as tp
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from neuralbench.experiment_config import (
     _adapts_a_backbone,
     _expand_grid,
     _warn_unsupported_gpu,
+    build_experiment_configs,
     merge_task_config,
 )
 from neuralbench.registry import (
@@ -164,6 +166,63 @@ def test_adaptation_overlay_leaves_a_valid_optimizer(model_name: str, preset: st
     config.update(ALL_DOWNSTREAM_WRAPPERS[preset])
     # a model YAML with scheduler=null would come back nameless: overlays set only max_lr
     LightningOptimizer(**dict(config["lightning_optimizer_config"]))
+
+
+_MNI_SPACES = ["mni", "mni2fsaverage4", "mni2fsaverage5", "mni2fsaverage6"]
+
+
+@pytest.mark.parametrize(
+    ("dataset", "expected"),
+    [
+        (None, _MNI_SPACES),
+        ("Allen2022MassiveRaw", ["fsaverage4", "fsaverage5", "fsaverage6", *_MNI_SPACES]),
+    ],
+)
+def test_every_fmri_image_space_gets_its_own_config(
+    dataset: str | None, expected: list[str]
+) -> None:
+    def uids(**kwargs: tp.Any) -> dict[str, str]:
+        configs = build_experiment_configs(
+            "fmri", "image", model="fmri_mlp", dataset=dataset, quiet=True, **kwargs
+        )
+        seed = configs[0]["seed"]
+        # not Experiment(**c).infra.uid(): exca then breaks later model_construct runs
+        return {c.pop("space_name"): c.to_uid() for c in configs if c["seed"] == seed}
+
+    ((base, base_uid),) = uids().items()
+    by_space = uids(space="all")
+    assert sorted(by_space) == expected
+    assert len(set(by_space.values())) == len(by_space)
+    assert by_space[base] == base_uid
+
+
+def test_spaced_task_requires_model_compatible_spaces() -> None:
+    model = {"brain_model_config": {"=replace=": True, "name": "FmriLinear"}}
+    with pytest.raises(ValueError, match="must declare compatible_spaces"):
+        build_experiment_configs("fmri", "image", model=model, quiet=True)
+
+
+def test_model_default_and_compatible_spaces() -> None:
+    model = {
+        "brain_model_config": {"=replace=": True, "name": "FmriLinear"},
+        "default_space": "mni",
+        "compatible_spaces": ["mni"],
+    }
+    configs = build_experiment_configs("fmri", "image", model=model, quiet=True)
+    assert {c["space_name"] for c in configs} == {"mni"}
+    assert not {"default_space", "compatible_spaces"} & set(configs[0])
+    requested = ["mni", "mni2fsaverage4", "mni2fsaverage5"]
+    skipped = r"Skipping space\(s\) \['mni2fsaverage4', 'mni2fsaverage5'\]"
+    with pytest.warns(UserWarning, match=skipped):
+        configs = build_experiment_configs(
+            "fmri", "image", model=model, space=requested, quiet=True
+        )
+    assert {c["space_name"] for c in configs} == {"mni"}
+    with pytest.raises(ValueError, match="No experiment left"):
+        with pytest.warns(UserWarning):
+            build_experiment_configs(
+                "fmri", "image", model=model, space="fsaverage5", quiet=True
+            )
 
 
 _UNSCALED = {

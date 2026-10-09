@@ -194,6 +194,7 @@ class BenchmarkAggregator(ns.BaseModel):
             out["dataset_name"] = type(study[0]).__name__
         else:
             out["dataset_name"] = type(study).__name__
+        out["space_name"] = experiment.space_name
         out["brain_model_name"] = experiment.brain_model_name
         out["model_variant"] = _experiment_variant(experiment)
         out["loss"] = {"name": type(experiment.loss).__name__}

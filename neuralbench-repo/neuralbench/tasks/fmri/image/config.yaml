@@ -51,6 +51,8 @@ data:
   trigger_event_type: Image
   start: 2.0
   duration: 7.0
+space_name: mni2fsaverage5
+available_spaces: [mni, mni2fsaverage4, mni2fsaverage5, mni2fsaverage6]
 brain_model_output_size: &brain_model_output_size 1536
 brain_model_config:
   =replace=: true

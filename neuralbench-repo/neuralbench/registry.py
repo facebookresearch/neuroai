@@ -172,15 +172,17 @@ def _resolve_task_dir(device: str, task_name: str) -> Path:
     raise FileNotFoundError(f"No task directory found for '{device}/{task_name}'")
 
 
-def _task_dataset_paths(device: str, task_name: str) -> dict[str, Path]:
-    """Map each dataset stem of *task_name* to its ``datasets/<stem>.yaml``.
+def _task_variant_paths(
+    device: str, task_name: str, kind: tp.Literal["datasets", "spaces"]
+) -> dict[str, Path]:
+    """Map each variant stem of *task_name* to its ``<kind>/<stem>.yaml``.
 
-    Scans every task root, so a plugin can add datasets to a task shipped by
+    Scans every task root, so a plugin can add variants to a task shipped by
     another root; earlier roots win on collision.
     """
     paths: dict[str, Path] = {}
     for root in _all_task_roots():
-        for f in sorted((root / device / task_name / "datasets").glob("*.yaml")):
+        for f in sorted((root / device / task_name / kind).glob("*.yaml")):
             paths.setdefault(f.stem, f)
     return paths
 
@@ -290,7 +292,7 @@ def _task_datasets(device: str, task_name: str) -> tuple[tuple[str, str | None],
     assert config is not None
     default_study = config["data"]["study"]["source"]["name"]
     pairs: list[tuple[str, str | None]] = [(default_study, None)]
-    for stem, f in sorted(_task_dataset_paths(device, task_name).items()):
+    for stem, f in sorted(_task_variant_paths(device, task_name, "datasets").items()):
         ds_config = load_yaml_config(f, safe=True) or {}
         name = ds_config.get("data", {}).get("study", {}).get("source", {}).get("name")
         pairs.append((name or default_study, stem))
@@ -626,6 +628,25 @@ def _resolve_datasets(
             return [None]
         return [None] + available  # type: ignore[return-value]
     return dataset_arg  # type: ignore[return-value]
+
+
+def _resolve_spaces(
+    device: str, task_name: str, space_arg: str | list[str]
+) -> list[str | None]:
+    """Validate ``spaces/`` stems; ``"all"`` is the base config (``None``) plus each."""
+    spaces = [space_arg] if isinstance(space_arg, str) else space_arg
+    available = sorted(_task_variant_paths(device, task_name, "spaces"))
+    if spaces == ["all"]:
+        if not available:
+            warn(f"No spaces found for {task_name}, running with base config")
+        return [None, *available]
+    unknown = [s for s in spaces if s not in available]
+    if unknown:
+        raise ValueError(
+            f"Unknown space(s) {unknown} for {device}/{task_name}. "
+            f"Choose from: {available} (or 'all')"
+        )
+    return list(spaces)
 
 
 # ---------------------------------------------------------------------------

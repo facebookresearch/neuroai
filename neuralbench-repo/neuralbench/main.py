@@ -120,6 +120,7 @@ class Experiment(BaseExperiment):
     infra: TaskInfra = TaskInfra(version="1")
     dummy: dict[str, tp.Any] = {}  # Useful to avoid overwriting experiments between grids
     brain_model_name: str = ""
+    space_name: str | None = None  # data representation, e.g. a spaces/ variant
 
     @model_validator(mode="after")
     def _populate_brain_model_name(self) -> "Experiment":
@@ -467,11 +468,12 @@ class Experiment(BaseExperiment):
     def _exclude_from_cache_uid(self) -> list[str]:
         """Config paths that must not affect the cache key.
 
-        The LoRA fields are inert while ``lora_config`` is unset, so dropping
-        them then keeps finetune / probe runs on the cache keys they had before
-        LoRA support landed.
+        ``space_name`` only labels a run: the ``spaces/`` overlay it names
+        already changes the config. The LoRA fields are inert while
+        ``lora_config`` is unset, so dropping them then keeps finetune / probe
+        runs on the cache keys they had before LoRA support landed.
         """
-        excluded = ["wandb_config", "csv_config", "brain_model_name"]
+        excluded = ["wandb_config", "csv_config", "brain_model_name", "space_name"]
         wrapper = self.downstream_model_wrapper
         if wrapper is not None and wrapper.lora_config is None:
             excluded += [

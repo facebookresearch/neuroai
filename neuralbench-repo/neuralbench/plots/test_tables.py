@@ -67,6 +67,28 @@ def test_build_results_df_raises_for_unmapped_loss():
         build_results_df(results, _DEFAULT_MAPPING)
 
 
+def test_build_results_df_tags_spaces_only_where_a_dataset_has_several():
+    spaces = {
+        "Bold5000": ["mni", "mni2fsaverage5"],
+        "Allen2022MassiveRaw": ["fsaverage5"],
+    }
+    results = [
+        {
+            **_row(loss_name="MultiLoss", **{"test/bmae": 1.0}),
+            "dataset_name": d,
+            "space_name": s,
+        }
+        for d, names in spaces.items()
+        for s in names
+    ]
+    df = build_results_df(results, _DEFAULT_MAPPING)
+    assert dict(zip(df["space_name"], df["model_name"])) == {
+        "mni": "EEGNet [space=mni]",
+        "mni2fsaverage5": "EEGNet [space=mni2fsaverage5]",
+        "fsaverage5": "EEGNet",
+    }
+
+
 def test_build_results_df_single_eval_mode_keeps_bare_model_name():
     results = [
         _row(loss_name="MultiLoss", eval_mode="finetune", seed=0, **{"test/bmae": 1.0}),
