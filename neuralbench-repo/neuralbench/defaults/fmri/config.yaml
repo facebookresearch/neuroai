@@ -1,0 +1,24 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    name: FmriExtractor
+    projection:
+      name: SurfaceProjector
+      mesh: fsaverage5
+    from_space: auto
+    offset: 0
+    frequency: native
+    infra:
+      mode: cached
+      cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
+      min_samples_per_job: 64
+brain_model_config:
+  name: FmriMlp
+  hidden: 128
+  n_blocks: 2
+  n_repetition_times: 4

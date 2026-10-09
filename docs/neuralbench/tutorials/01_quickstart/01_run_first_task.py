@@ -130,11 +130,13 @@ results programmatically.
 #
 # 1. ``defaults/config.yaml`` — global defaults (optimizer, trainer,
 #    data loading)
-# 2. ``tasks/{device}/{task}/config.yaml`` — task-specific overrides
+# 2. ``defaults/{device}/config.yaml`` — device defaults (extractor,
+#    preprocessing, channel positions, default model)
+# 3. ``tasks/{device}/{task}/config.yaml`` — task-specific overrides
 #    (dataset, target, loss, metrics)
-# 3. ``models/{model}.yaml`` — model-specific overrides
+# 4. ``models/{model}.yaml`` — model-specific overrides
 #    (architecture, preprocessing, probing strategy)
-# 4. ``tasks/{device}/{task}/grid.yaml`` — hyperparameter grid
+# 5. ``tasks/{device}/{task}/grid.yaml`` — hyperparameter grid
 #
 # Here is the config for the ``audiovisual_stimulus`` task
 # (``tasks/eeg/audiovisual_stimulus/config.yaml``):
@@ -170,7 +172,7 @@ results programmatically.
 #      name: CrossEntropyLoss
 #      kwargs:
 #        label_smoothing: 0.1
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
 #      - *brain_model_output_size
 #
 # The ``Experiment.run()`` method returns a dictionary of test

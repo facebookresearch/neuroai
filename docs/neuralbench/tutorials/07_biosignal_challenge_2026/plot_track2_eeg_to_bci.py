@@ -102,7 +102,7 @@ recalibration allowed.
 # the corpus Codabench scores Track 2 against during the warm-up phase.
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
-# nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
+# nothing else: a YAML overlay on the ``neuralbench/defaults/`` configs naming
 # the study to load, how to split it, what the target is, the loss, and the
 # metrics. Reading it is the fastest way to know exactly what the baseline
 # does.

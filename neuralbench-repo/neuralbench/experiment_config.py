@@ -38,7 +38,7 @@ from neuralbench.registry import (
 LOGGER = logging.getLogger(__name__)
 
 #: A registered model name, an inline config dict (:mod:`neuralbench.evaluate`),
-#: or ``None`` for the default model of ``defaults/config.yaml``.
+#: or ``None`` for the default model of ``defaults/<device>/config.yaml``.
 ModelSpec = str | dict[str, tp.Any] | None
 
 # ---------------------------------------------------------------------------

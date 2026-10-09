@@ -68,7 +68,7 @@ concepts.
 #   each run logs and returns.
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
-# nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
+# nothing else: a YAML overlay on the ``neuralbench/defaults/`` configs naming
 # the study to load, how to split it, what the target is, the loss, and the
 # metrics. Reading it is the fastest way to know exactly what the baseline
 # does.

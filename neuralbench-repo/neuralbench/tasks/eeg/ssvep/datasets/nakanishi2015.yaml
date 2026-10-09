@@ -17,5 +17,5 @@ data:
       test_random_state: 33
 
 brain_model_output_size: &brain_model_output_size 12
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

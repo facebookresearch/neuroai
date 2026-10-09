@@ -17,5 +17,5 @@ data:
       test_random_state: 33
   duration: 1.0  # rounded down from 1.05s so n_times=200 is a multiple of CBraMod's patch_size=200 (1s @ 200Hz)
 brain_model_output_size: &brain_model_output_size 36
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

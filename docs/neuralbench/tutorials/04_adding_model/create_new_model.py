@@ -287,7 +287,9 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 # .. code-block:: text
 #
-#    defaults/config.yaml      (base: optimizer, trainer, data, EEGNet)
+#    defaults/config.yaml      (base: optimizer, trainer, data)
+#        ↓ merge
+#    defaults/eeg/config.yaml    (device: extractor, preprocessing, EEGNet)
 #        ↓ merge
 #    tasks/eeg/task/config.yaml  (task: dataset, target, loss, metrics)
 #        ↓ merge

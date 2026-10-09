@@ -55,18 +55,7 @@ data:
         backend: Cached
         folder: !!python/name:neuralbench.config_manager.CACHE_DIR
   neuro:
-    name: EegExtractor
-    picks: [eeg]
-    frequency: 120.0
-    filter:
-      - 0.1
-      - 75.0
-    notch_filter:
-      - 50.0
-      - 60.0
-    baseline: null
-    scaler: RobustScaler
-    clamp: 20.0
+    # extractor and signal params: defaults/<device>/config.yaml
     infra:
       cluster: !!python/name:neuralbench.config_manager.CLUSTER
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
@@ -76,9 +65,6 @@ data:
       gpus_per_node: 1
       cpus_per_task: 10
       min_samples_per_job: 8
-  channel_positions:
-    n_spatial_dims: 3
-    include_ref_eeg: false
   target:
     infra:
       cluster: !!python/name:neuralbench.config_manager.CLUSTER
@@ -88,8 +74,6 @@ data:
   batch_size: 64
   num_workers: !!python/name:neuralbench.config_manager.N_CPUS
   seed: 33
-brain_model_config:
-  name: EEGNet
 loss:
   name: CrossEntropyLoss
 metrics: []

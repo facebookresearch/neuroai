@@ -48,7 +48,7 @@ loss:
   kwargs:
     label_smoothing: 0.1
 metrics: !!python/object/apply:operator.add
-  - !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+  - !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
     - *brain_model_output_size
   - - log_name: bal_acc_stream_mean  # balanced accuracy per stream, averaged over streams
       name: GroupedMetric

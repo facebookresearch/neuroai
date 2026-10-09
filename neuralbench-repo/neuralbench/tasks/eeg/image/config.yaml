@@ -42,5 +42,5 @@ loss:
   norm_kind: y
   temperature: false
   symmetric: false
-metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
-test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics
+metrics: !!python/name:neuralbench.metric_configs.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.metric_configs.test_full_retrieval_metrics

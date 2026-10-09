@@ -12,7 +12,7 @@
 # Channel count need not match, as channels are identified by their position.
 #
 # `data.neuro` is deliberately absent: `ssl_example` pretrains with the
-# preprocessing from `defaults/config.yaml`, so inheriting it keeps the two
+# preprocessing from `defaults/eeg/config.yaml`, so inheriting it keeps the two
 # sides in step without restating any of it here.
 data:
   channel_positions:

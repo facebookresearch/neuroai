@@ -24,13 +24,7 @@ data:
       threshold: 0.7
       use_sklearn_split: true
   neuro:
-    name: MegExtractor
     picks: [meg]
-    baseline: [0.0, 0.2]
-    allow_maxshield: true
-  channel_positions:
-    include_ref_eeg: false
-    layout_or_montage_name: null
   target:
     =replace=: true
     name: LabelEncoder
@@ -90,5 +84,5 @@ loss:
   name: CrossEntropyLoss
   kwargs:
     label_smoothing: 0.1
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

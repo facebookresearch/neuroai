@@ -67,7 +67,7 @@ def run_benchmark(
     model : str or list of str or None
         Predefined model name(s), ``"all"``, ``"all_classic"``, ``"all_fm"``,
         ``"all_baseline"`` (chance / dummy / classical sklearn pipelines),
-        or ``None`` (uses default model from ``config.yaml``).
+        or ``None`` (uses default model from ``defaults/<device>/config.yaml``).
     dataset : str or list of str or None
         Dataset variant(s) or ``"all"``. ``None`` uses the base config.
     space : str or list of str or None

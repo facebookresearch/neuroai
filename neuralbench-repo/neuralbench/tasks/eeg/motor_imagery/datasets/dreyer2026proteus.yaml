@@ -12,5 +12,5 @@ data:
       name: Dreyer2026Proteus
   start: 1.0  # cue at 0 s, feedback from 3 s, trial end at 8 s
 brain_model_output_size: &brain_model_output_size 3
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

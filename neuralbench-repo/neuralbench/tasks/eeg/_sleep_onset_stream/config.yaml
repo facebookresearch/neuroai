@@ -78,7 +78,7 @@ loss:
   weights:
     mse: 0.0001  # targets are in [0, 600] s; weight=0.0001 (0.01^2) keeps MSE <= ~36 so gradient clipping does not saturate.
 metrics: !!python/object/apply:operator.add
-  - !!python/object/apply:neuralbench.defaults.metrics.get_sleep_onset_metric_configs []
+  - !!python/object/apply:neuralbench.metric_configs.get_sleep_onset_metric_configs []
   - - log_name: wbmae_stream_mean  # W-bMAE per recording, averaged over recordings
       name: GroupedMetric
       metric_name: BinnedMAE

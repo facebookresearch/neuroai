@@ -133,7 +133,7 @@ reconstruction because a sparse wearable montage supports it poorly.
 #   per recording, averaged over recordings).
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
-# nothing else: a YAML overlay on ``neuralbench/defaults/config.yaml`` naming
+# nothing else: a YAML overlay on the ``neuralbench/defaults/`` configs naming
 # the study to load, how to split it, what the target is, the loss, and the
 # metrics. Reading it is the fastest way to know exactly what the baseline
 # does.

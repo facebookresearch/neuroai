@@ -15,25 +15,6 @@ data:
       valid_split_by: timeline
       valid_split_ratio: 0.2
       valid_random_state: 33
-  neuro:
-    =replace=: true
-    name: FmriExtractor
-    projection:
-      name: SurfaceProjector
-      mesh: fsaverage5
-    from_space: auto
-    offset: 0
-    frequency: native
-    infra:
-      mode: cached
-      cluster: !!python/name:neuralbench.config_manager.CLUSTER
-      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
-      keep_in_ram: true
-      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
-      gpus_per_node: 1
-      cpus_per_task: !!python/name:neuralbench.config_manager.N_CPUS
-      timeout_min: 180
-      min_samples_per_job: 64
   target:
     name: HuggingFaceImage
     model_name: facebook/dinov2-giant
@@ -55,11 +36,6 @@ space_name: mni2fsaverage5
 available_spaces: [mni, mni2fsaverage4, mni2fsaverage5, mni2fsaverage6]
 brain_model_output_size: &brain_model_output_size 1536
 brain_model_config:
-  =replace=: true
-  name: FmriMlp
-  hidden: 128
-  n_blocks: 2
-  n_repetition_times: 4
   output_head_config:
     hidden_sizes:
       - *brain_model_output_size
@@ -70,5 +46,5 @@ loss:
   norm_kind: y
   temperature: false
   symmetric: false
-metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
-test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics
+metrics: !!python/name:neuralbench.metric_configs.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.metric_configs.test_full_retrieval_metrics

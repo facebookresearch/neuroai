@@ -15,15 +15,6 @@ data:
       valid_split_by: timeline
       valid_split_ratio: 0.2
       valid_random_state: 33
-  neuro:
-    name: MegExtractor
-    picks: [mag, grad]  # [meg] adds the CTF reference channels
-    baseline: [0.0, 0.2]
-    allow_maxshield: true
-  channel_positions:
-    include_ref_eeg: false
-    layout_or_montage_name: null
-    n_spatial_dims: 3
   target:
     name: HuggingFaceImage
     model_name: facebook/dinov2-giant
@@ -49,5 +40,5 @@ loss:
   norm_kind: y
   temperature: false
   symmetric: false
-metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
-test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics
+metrics: !!python/name:neuralbench.metric_configs.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.metric_configs.test_full_retrieval_metrics

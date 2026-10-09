@@ -147,7 +147,7 @@ class Data(ns.BaseModel):
     study: ns.Step
     neuro: ns.extractors.BaseExtractor
     target: ns.extractors.BaseExtractor
-    channel_positions: ns.extractors.ChannelPositions
+    channel_positions: ns.extractors.ChannelPositions | None = None
     # Segments
     trigger_event_type: str | list[str]
     start: float = -0.5
@@ -242,11 +242,11 @@ class Data(ns.BaseModel):
             self.neuro.prepare(events)
             channels = self.neuro._channels
             assert channels is not None
-            channel_positions = self.channel_positions.build(self.neuro)
             LOGGER.info(
                 f"Found {len(channels)} different channels: {list(channels.keys())}"
             )
-            extractors["channel_positions"] = channel_positions
+            if self.channel_positions is not None:
+                extractors["channel_positions"] = self.channel_positions.build(self.neuro)
 
         trigger_event_type = (
             [self.trigger_event_type]

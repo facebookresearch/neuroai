@@ -27,6 +27,8 @@ import pandas as pd
 import pytest
 
 from neuralbench import registry
+from neuralbench.data import Data
+from neuralbench.experiment_config import merge_task_config
 from neuralbench.plots.tables import _collapse_feature_based_baselines
 from neuralbench.registry import (
     ALL_DATASETS,
@@ -120,9 +122,9 @@ def test_prepare_task_configs_meg_image_cov_ts_ridge_resolves() -> None:
     from neuralbench.baselines import CovTsRidge
     from neuralbench.experiment_config import prepare_task_configs
     from neuralbench.main import Data
-    from neuralbench.registry import DEFAULTS_DIR, load_yaml_config
+    from neuralbench.registry import DEFAULTS_DIR, load_default_config, load_yaml_config
 
-    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+    config = ConfDict(load_default_config("meg"))
     grid = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))
     configs = prepare_task_configs(
         config,
@@ -174,20 +176,36 @@ def test_collapse_relabels_meg_sklearn_row_as_handcrafted() -> None:
 def test_load_default_config_overlays_plugin_device_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    device_dir = tmp_path / "meg"
+    device_dir = tmp_path / "fnirs"
     device_dir.mkdir()
-    (device_dir / "config.yaml").write_text("data:\n  neuro:\n    name: MegExtractor\n")
+    (device_dir / "config.yaml").write_text("data:\n  neuro:\n    name: FnirsExtractor\n")
     monkeypatch.setattr(
         registry, "_all_defaults_roots", lambda: [registry.DEFAULTS_DIR, tmp_path]
     )
-    overlaid = registry.load_default_config("meg")
+    overlaid = registry.load_default_config("fnirs")
     base = registry.load_default_config()
-    assert overlaid["data"]["neuro"]["name"] == "MegExtractor"
-    assert base["data"]["neuro"]["name"] == "EegExtractor"
+    assert overlaid["data"]["neuro"]["name"] == "FnirsExtractor"
+    assert "name" not in base["data"]["neuro"]
     # A device with no overlay falls back to the base.
-    assert registry.load_default_config("eeg") == base
+    assert registry.load_default_config("unknown") == base
     # The overlay is partial: base keys it does not mention survive.
-    assert overlaid["data"]["neuro"]["frequency"] == base["data"]["neuro"]["frequency"]
+    assert overlaid["data"]["neuro"]["infra"] == base["data"]["neuro"]["infra"]
+
+
+@pytest.mark.parametrize(
+    "device", sorted(p.parent.name for p in registry.DEFAULTS_DIR.glob("*/config.yaml"))
+)
+def test_device_defaults_set_a_default_model(device: str) -> None:
+    assert "brain_model_config" in registry.load_default_config(device), (
+        f"defaults/{device}/config.yaml needs a brain_model_config: exca keeps "
+        "'=replace=' literally when models/*.yaml replace a missing key"
+    )
+
+
+def test_fmri_image_data_builds_without_channel_positions() -> None:
+    data = Data(**merge_task_config("fmri", "image")["data"])
+    assert data.neuro.name == "FmriExtractor"
+    assert data.channel_positions is None
 
 
 def test_debug_study_queries_merge_plugin_roots(

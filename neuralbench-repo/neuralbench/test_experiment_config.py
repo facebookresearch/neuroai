@@ -14,16 +14,16 @@ from exca import ConfDict
 
 from neuralbench import registry
 from neuralbench.data import Data
-from neuralbench.defaults.metrics import (
-    get_classification_metric_configs,
-    get_sleep_onset_metric_configs,
-)
 from neuralbench.experiment_config import (
     _adapts_a_backbone,
     _expand_grid,
     _warn_unsupported_gpu,
     build_experiment_configs,
     merge_task_config,
+)
+from neuralbench.metric_configs import (
+    get_classification_metric_configs,
+    get_sleep_onset_metric_configs,
 )
 from neuralbench.registry import (
     ALL_DOWNSTREAM_WRAPPERS,

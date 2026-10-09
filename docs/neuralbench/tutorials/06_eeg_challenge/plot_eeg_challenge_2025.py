@@ -83,7 +83,7 @@ setup.
 #    trainer_config.monitor: val/pearsonr
 #    loss:
 #      name: MSELoss
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_regression_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_regression_metric_configs
 #      - *brain_model_output_size
 #
 # Running it from the CLI:
@@ -169,7 +169,7 @@ setup.
 #      n_epochs: 40
 #    loss:
 #      name: MSELoss
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_regression_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_regression_metric_configs
 #      - *brain_model_output_size
 #
 # Running it from the CLI:

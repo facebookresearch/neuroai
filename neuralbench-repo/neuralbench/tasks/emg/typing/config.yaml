@@ -29,8 +29,8 @@ lightning_optimizer_config:
 # Default backbone for this task is the paper's CTC sequence model.  Models
 # that don't override ``brain_model_config`` (notably ``chance``) inherit it,
 # so ``chance`` becomes an *untrained* EMG2QwertyNet — a sequence-shaped
-# (B, T_out, 99) emitter compatible with the CTC head/metric — rather than the
-# global EEGNet default, whose single-vector output is incompatible with CTC.
+# (B, T_out, 99) emitter compatible with the CTC head/metric — rather than
+# EEGNet, whose single-vector output is incompatible with CTC.
 # ``dummy`` and ``emg2qwerty`` replace this via their own ``=replace=``.
 brain_model_config:
   =replace=: true
@@ -51,31 +51,6 @@ data:
       test_split_ratio: 0.2
       valid_random_state: 33
       test_random_state: 33
-  # No filter / notch / baseline / scaler / clamp — matches the paper
-  # pipeline (Sivakumar et al. 2024): raw 2 kHz EMG is fed straight to
-  # the model, which handles SpecAugment and per-window normalization
-  # internally (``EMG2QwertyNet``).
-  # TODO: when a second EMG task lands, lift this preprocessing block
-  # to a shared device-level default and reference it from here.
-  neuro:
-    =replace=: true
-    name: EmgExtractor
-    picks: [emg]
-    frequency: 2000.0
-    filter: null
-    notch_filter: null
-    baseline: null
-    scaler: null
-    clamp: null
-    infra:
-      cluster: !!python/name:neuralbench.config_manager.CLUSTER
-      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
-      keep_in_ram: true
-      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
-      timeout_min: 180
-      gpus_per_node: 1
-      cpus_per_task: 10
-      min_samples_per_job: 200
   target:
     =replace=: true
     # CroppedExtractor restricts label collection to the un-padded 4 s

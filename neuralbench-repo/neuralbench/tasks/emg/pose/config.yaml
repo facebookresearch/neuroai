@@ -28,32 +28,14 @@ data:
       test_split_query: null
       col_name: split
       valid_split_by: null
-  # No filter / notch / baseline / scaler / clamp: the paper feeds raw 2 kHz
-  # EMG in microvolts straight to the model, same convention as ``emg/typing``.
   neuro:
-    =replace=: true
-    name: EmgExtractor
-    picks: [emg]
-    frequency: 2000.0
-    filter: null
-    notch_filter: null
-    baseline: null
     # mne returns SI volts (BDF stores uV); emg2pose trains on the raw HDF5 values in uV.
     # At volt scale VEMG2Pose's first LayerNorm (eps=1e-5) erases the signal.
     scale_factor: 1.0e+6
-    scaler: null
-    clamp: null
     infra:
-      cluster: !!python/name:neuralbench.config_manager.CLUSTER
-      folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       # exca's RAM cache never evicts, so retaining any of these 25232
       # recordings grows past 250 GB and the host OOM-kills the run.
       keep_in_ram: false
-      slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
-      timeout_min: 180
-      gpus_per_node: 1
-      cpus_per_task: 10
-      min_samples_per_job: 200
   target:
     =replace=: true
     # The 20 joint angles are MISC channels in the same BDF as the EMG.

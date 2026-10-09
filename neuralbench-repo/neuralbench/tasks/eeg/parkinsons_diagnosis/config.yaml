@@ -39,7 +39,7 @@ loss:
   name: CrossEntropyLoss
   kwargs:
     label_smoothing: 0.1
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size
 test_full_metrics:
   - log_name: acc
