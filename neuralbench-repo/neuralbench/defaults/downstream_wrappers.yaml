@@ -49,6 +49,13 @@ lora_r4_flatten:
     probe_config: linear
     lora_config: {r: 4, lora_alpha: 8, lora_dropout: 0.1, bias: none}
   lightning_optimizer_config: *head_only_optimizer
+lora_r4_attentive:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: null
+    probe_config: attention
+    lora_config: {r: 4, lora_alpha: 8, lora_dropout: 0.1, bias: none}
+  lightning_optimizer_config: *head_only_optimizer
 lora_r32_flatten:
   downstream_model_wrapper:
     layers_to_unfreeze: [""]
@@ -70,3 +77,31 @@ finetune_flatten:
     layers_to_freeze: null
     aggregation: flatten
     probe_config: linear
+finetune_attentive:
+  downstream_model_wrapper:
+    layers_to_unfreeze: null
+    layers_to_freeze: null
+    aggregation: null
+    probe_config: attention
+
+# --- LP-FT: fit the head on the frozen backbone, then fine-tune everything ----
+# Starting the fine-tune from a fitted head keeps early gradients from a random
+# head out of the pretrained weights (Kumar et al. 2022).
+lpft_attentive:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: null
+    probe_config: attention
+    unfreeze_at_epoch: 3
+lpft_mean:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: mean
+    probe_config: linear
+    unfreeze_at_epoch: 3
+lpft_flatten:
+  downstream_model_wrapper:
+    layers_to_unfreeze: [""]
+    aggregation: flatten
+    probe_config: linear
+    unfreeze_at_epoch: 3

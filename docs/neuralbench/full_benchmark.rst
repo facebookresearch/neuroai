@@ -172,17 +172,21 @@ over other adaptation strategies instead:
 
    neuralbench eeg all -m all_fm -w linear_probe_flatten   # Frozen backbone, linear probe
    neuralbench eeg all -m all_fm -w lora_r4_flatten        # Frozen backbone, LoRA adapters
-   neuralbench eeg all -m all_fm -w all                    # All 7 presets
+   neuralbench eeg all -m all_fm -w all                    # All 12 presets
 
 **Frozen backbone** (3): ``linear_probe_flatten``, ``linear_probe_mean``,
 ``attentive_probe`` -- only the head trains. The suffix is how encoder outputs
 are pooled before the head.
 
-**LoRA** (2): ``lora_r4_flatten``, ``lora_r32_flatten`` -- frozen backbone plus
-low-rank adapters at the attention projections, at rank 4 and 32.
+**LoRA** (3): ``lora_r4_flatten``, ``lora_r4_attentive``, ``lora_r32_flatten``
+-- frozen backbone plus low-rank adapters at the attention projections, at rank
+4 and 32.
 
-**Full fine-tune** (2): ``finetune_mean``, ``finetune_flatten`` -- all weights
-train.
+**Full fine-tune** (3): ``finetune_mean``, ``finetune_flatten``,
+``finetune_attentive`` -- all weights train.
+
+**LP-FT** (3): ``lpft_mean``, ``lpft_flatten``, ``lpft_attentive`` -- the head
+is fitted on the frozen backbone for 3 epochs, then every weight trains.
 
 Presets apply to foundation models only; task-specific models ignore ``-w``.
 Each preset is reported as a separate entry, suffixed in plots and tables (for

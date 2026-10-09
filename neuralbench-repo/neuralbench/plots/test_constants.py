@@ -16,6 +16,7 @@ from neuralbench.plots._constants import (
     METRIC_HIGHER_IS_BETTER,
     METRIC_PERFECT_SCORE,
     AdaptationMode,
+    eval_mode_label,
     model_group,
     strip_eval_mode_suffix,
 )
@@ -40,6 +41,7 @@ def test_headline_metrics_have_a_direction_and_perfect_score(metric: str) -> Non
         "attentive_probe",
         "lora_r4",
         "lora_r32_mean",
+        "lpft_attentive",
         "some_future_strategy",
     ],
 )
@@ -48,8 +50,30 @@ def test_adaptation_mode_round_trips(tag: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "tag, label",
+    [
+        ("finetune_mean", "Full FT (mean)"),
+        ("linear_probe_flatten", "Linear Probe (flatten)"),
+        ("lora_r8", "LoRA r8"),
+        ("lpft_attentive", "LP-FT (attentive)"),
+        ("some_future_strategy", "some_future_strategy"),
+    ],
+)
+def test_eval_mode_label(tag: str, label: str) -> None:
+    assert eval_mode_label(tag) == label
+
+
+@pytest.mark.parametrize(
     "tag",
-    ["finetune", "finetune_mean", "linear_probe_flatten", "attentive_probe", "lora_r32"],
+    [
+        "finetune",
+        "finetune_mean",
+        "linear_probe_flatten",
+        "attentive_probe",
+        "lora_r32",
+        "lpft",
+        "lpft_attentive",
+    ],
 )
 def test_strategy_suffix_strips_back_to_the_base_name(tag: str) -> None:
     name = FM_DISPLAY[0] + eval_mode_suffix(tag)

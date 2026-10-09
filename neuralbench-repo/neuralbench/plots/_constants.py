@@ -218,7 +218,7 @@ MODEL_GROUP: dict[str, str] = {
 
 # The adaptation-strategy suffix ``tables.eval_mode_suffix`` appends to
 # foundation-model names (``"REVE (LoRA r32 flatten)"``, ``"LaBraM (FT mean)"``).
-_EVAL_MODE_SUFFIX_RE = re.compile(r" \((?:LP|FT|AP|LoRA r\d+)(?: \w+)?\)$")
+_EVAL_MODE_SUFFIX_RE = re.compile(r" \((?:LP-FT|LP|FT|AP|LoRA r\d+)(?: \w+)?\)$")
 
 
 def strip_eval_mode_suffix(name: str) -> str:
@@ -254,8 +254,9 @@ _STRATEGY_ORDER: dict[str, int] = {
     "attentive_probe": 1,
     _LORA_STRATEGY: 2,
     "finetune": 3,
+    "lpft": 4,
 }
-_UNKNOWN_ORDER = 4
+_UNKNOWN_ORDER = 5
 _PLAIN_STRATEGIES = tuple(s for s in _STRATEGY_ORDER if s != _LORA_STRATEGY)
 
 
@@ -302,9 +303,29 @@ class AdaptationMode(tp.NamedTuple):
 
     @property
     def sort_key(self) -> tuple[int, int, str]:
-        """Canonical order, by trainable-parameter budget: probes -> LoRA -> finetune."""
+        """Canonical order, by trainable budget: probes -> LoRA -> finetune -> LP-FT."""
         order = _STRATEGY_ORDER.get(self.strategy, _UNKNOWN_ORDER)
         return (order, self.lora_rank or 0, self.aggregation)
+
+
+_STRATEGY_LABEL: dict[str, str] = {
+    "linear_probe": "Linear Probe",
+    "attentive_probe": "Attentive Probe",
+    "finetune": "Full FT",
+    "lpft": "LP-FT",
+}
+
+
+def eval_mode_label(tag: str) -> str:
+    """Human-readable label for an ``eval_mode`` tag (``"lora_r8"`` -> ``"LoRA r8"``)."""
+    mode = AdaptationMode.parse(tag)
+    if mode.is_lora:
+        label = f"LoRA r{mode.lora_rank}"
+    elif mode.strategy in _STRATEGY_LABEL:
+        label = _STRATEGY_LABEL[mode.strategy]
+    else:
+        return tag
+    return f"{label} ({mode.aggregation})" if mode.aggregation else label
 
 
 # ---------------------------------------------------------------------------

@@ -29,6 +29,8 @@ from tqdm import tqdm
 
 from neuraltrain.metrics.utils import agg_per_group, agg_retrieval_preds
 
+from .modules import DownstreamWrapperModel
+
 if tp.TYPE_CHECKING:
     from neuraltrain.utils import StandardScaler
 
@@ -106,6 +108,48 @@ class ResetPerStream(Callback):
 def _set_plot_theme() -> None:
     """Apply the plotting theme used by neuralbench callbacks."""
     sns.set_theme(context="paper", style="white")
+
+
+class UnfreezeAtEpoch(Callback):
+    """Keep the pattern-frozen parameters of *model* frozen until its ``unfreeze_at_epoch``.
+
+    The parameters are trainable while the strategy sets up the model, so that
+    DDP registers them for gradient synchronisation, and frozen from the start
+    of fitting.  The optimizer holds them throughout, so they start updating as
+    soon as they receive gradients.
+    """
+
+    def __init__(self, model: DownstreamWrapperModel) -> None:
+        assert model.unfreeze_at_epoch is not None
+        self.model = model
+        self.epoch = model.unfreeze_at_epoch
+
+    def setup(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str
+    ) -> None:
+        if stage == "fit":
+            self.model.set_pattern_frozen(False)
+
+    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        if trainer.max_epochs is not None and self.epoch >= trainer.max_epochs:
+            LOGGER.warning(
+                "unfreeze_at_epoch=%d is past max_epochs=%d: the backbone stays "
+                "frozen for the whole run.",
+                self.epoch,
+                trainer.max_epochs,
+            )
+        self.model.set_pattern_frozen(True)
+
+    def on_train_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if trainer.current_epoch != self.epoch:
+            return
+        self.model.set_pattern_frozen(False)
+        n_trainable = sum(p.numel() for p in pl_module.parameters() if p.requires_grad)
+        LOGGER.info(
+            "Epoch %d: unfroze backbone (%d trainable params)", self.epoch, n_trainable
+        )
 
 
 class TestFullRetrievalMetrics(Callback):

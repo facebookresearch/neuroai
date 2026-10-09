@@ -34,6 +34,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from neuralbench.plots._constants import (
     CATEGORY_COLORS,
     CATEGORY_ROW_GROUPS,
+    DEFAULT_EVAL_MODE,
+    FM_DISPLAY,
     TASK_CATEGORIES,
     TASK_DISPLAY_NAMES,
     TASK_TO_CATEGORY,
@@ -44,6 +46,7 @@ from neuralbench.plots._style import (
     MarginalRankSpec,
     SubplotSpec,
     add_watermark,
+    base_name,
     bold_legend_titles,
     build_color_dict,
     build_grouped_legend,
@@ -135,6 +138,16 @@ def plot_bar_chart(
     # column), so the (many) same-hue models can be told apart and a missing
     # model reads as a labelled empty slot.
     model_labels = within_category_labels(model_order)
+    fm_modes: list[str] = (
+        df.loc[df[color_column].map(base_name).isin(FM_DISPLAY), "eval_mode"]
+        .unique()
+        .tolist()
+        if "eval_mode" in df.columns
+        else []
+    )
+    # DEFAULT_EVAL_MODE may hide a different wrapper per model
+    shared = len(fm_modes) == 1 and fm_modes[0] != DEFAULT_EVAL_MODE
+    fm_eval_mode = fm_modes[0] if shared else None
 
     split_map = build_task_split_map()
     n_examples_map = build_task_n_examples_map()
@@ -386,7 +399,11 @@ def plot_bar_chart(
         legend_ncol=2,
         legend_fontsize=16,
         legend_builder=lambda c, m: build_grouped_legend_two_col(
-            c, m, include_overlap=True, model_labels=model_labels
+            c,
+            m,
+            include_overlap=True,
+            model_labels=model_labels,
+            fm_eval_mode=fm_eval_mode,
         ),
         legend_handler_map=NUMBERED_LEGEND_HANDLER_MAP,
     )

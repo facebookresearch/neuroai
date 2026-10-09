@@ -548,6 +548,13 @@ class DownstreamWrapper(pydantic.BaseModel):
         ``["to_q", "to_k", "to_v", "to_out"]``), usually set per foundation
         model in its YAML.  Overridden by :attr:`lora_config.target_modules`,
         ignored when :attr:`lora_config` is None.  Default is None.
+    unfreeze_at_epoch : int | None, optional
+        If set, the parameters frozen by ``layers_to_freeze`` /
+        ``layers_to_unfreeze`` become trainable at the start of this epoch, i.e.
+        the head is first fitted on frozen features, then the whole model is
+        fine-tuned from it (LP-FT, Kumar et al. 2022).  Multi-GPU runs need
+        ``trainer_config.strategy="ddp_find_unused_parameters_true"``.
+        Default is None.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -563,6 +570,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     probe_batch_dim: int | tp.Literal["auto"] = "auto"
     lora_config: LoraConfig | None = None
     lora_target_modules: list[str] | None = None
+    unfreeze_at_epoch: pydantic.PositiveInt | None = None
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -592,6 +600,19 @@ class DownstreamWrapper(pydantic.BaseModel):
             raise ValueError(
                 "probe_batch_dim only applies when probe_layer is set; "
                 f"got probe_batch_dim={self.probe_batch_dim} with probe_layer=None."
+            )
+
+        if self.unfreeze_at_epoch is not None and (
+            self.layers_to_freeze is None and self.layers_to_unfreeze is None
+        ):
+            raise ValueError(
+                "unfreeze_at_epoch requires layers_to_freeze or layers_to_unfreeze, "
+                "otherwise nothing is frozen to begin with."
+            )
+        if self.unfreeze_at_epoch is not None and self.lora_config is not None:
+            raise ValueError(
+                "unfreeze_at_epoch and lora_config cannot be combined: unfreezing "
+                "would fully fine-tune the backbone under the adapters."
             )
 
         if self.probe_config == "attention" and self.aggregation is not None:
@@ -669,6 +690,7 @@ class DownstreamWrapper(pydantic.BaseModel):
             probe_config=self.probe_config,
             probe_layer=self.probe_layer,
             probe_batch_dim=probe_batch_dim,
+            unfreeze_at_epoch=self.unfreeze_at_epoch,
         )
 
         # must follow the freeze pattern and load_checkpoint (build_brain_model step 3)
@@ -769,9 +791,11 @@ class DownstreamWrapperModel(nn.Module):
         probe_config: Mlp | tp.Literal["linear", "attention"] | None = None,
         probe_layer: str | None = None,
         probe_batch_dim: int = 0,
+        unfreeze_at_epoch: int | None = None,
     ):
         super().__init__()
 
+        self.unfreeze_at_epoch = unfreeze_at_epoch
         self.preprocessor = preprocessor
         self.channel_adapter = channel_adapter
         self._adapter_needs_positions = adapter_needs_positions
@@ -824,6 +848,7 @@ class DownstreamWrapperModel(nn.Module):
         strict_matching: bool,
     ) -> None:
         """Freeze or unfreeze model parameters based on layer name patterns."""
+        trainable_before = [p for p in self.wrapped_model.parameters() if p.requires_grad]
         if layers_to_freeze is not None:
             for name, param in self.wrapped_model.named_parameters():
                 if strict_matching:
@@ -853,6 +878,13 @@ class DownstreamWrapperModel(nn.Module):
                 else:
                     requires_grad = any(pattern in name for pattern in layers_to_unfreeze)
                 param.requires_grad = requires_grad
+
+        self._pattern_frozen = [p for p in trainable_before if not p.requires_grad]
+
+    def set_pattern_frozen(self, frozen: bool) -> None:
+        """Freeze or unfreeze the parameters the freeze pattern froze, and only those."""
+        for param in self._pattern_frozen:
+            param.requires_grad = not frozen
 
     def _build_aggregation(
         self,

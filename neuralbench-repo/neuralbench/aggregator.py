@@ -38,14 +38,17 @@ def _infer_eval_mode(experiment: "Experiment") -> str:
     if wrapper is None:
         return AdaptationMode("finetune").tag
     aggregation = "" if wrapper.aggregation is None else str(wrapper.aggregation)
+    pooling = "attentive" if wrapper.probe_config == "attention" else aggregation
+    if wrapper.unfreeze_at_epoch is not None:
+        return AdaptationMode("lpft", pooling).tag
     if wrapper.lora_config is not None:
-        return AdaptationMode("lora", aggregation, wrapper.lora_config.r).tag
+        return AdaptationMode("lora", pooling, wrapper.lora_config.r).tag
     if wrapper.layers_to_unfreeze == [""]:
         strategy = (
             "attentive_probe" if wrapper.probe_config == "attention" else "linear_probe"
         )
         return AdaptationMode(strategy, aggregation).tag
-    return AdaptationMode("finetune", aggregation).tag
+    return AdaptationMode("finetune", pooling).tag
 
 
 def _default_output_dir() -> str:

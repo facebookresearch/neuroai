@@ -19,6 +19,7 @@ from neuraltrain.metrics.metrics import GroupedMetric
 from neuraltrain.optimizers import LightningOptimizer
 from neuraltrain.utils import StandardScaler
 
+from .callbacks import UnfreezeAtEpoch
 from .modules import DownstreamWrapperModel
 
 LOGGER = logging.getLogger(__name__)
@@ -294,6 +295,14 @@ class BrainModule(pl.LightningModule):
 
     # Schedulers that need the total training step count at build time.
     _SCHEDULER_STEP_KWARG: tp.ClassVar[dict[type, str]] = {}
+
+    def configure_callbacks(self) -> list[pl.Callback]:
+        if (
+            isinstance(self.model, DownstreamWrapperModel)
+            and self.model.unfreeze_at_epoch is not None
+        ):
+            return [UnfreezeAtEpoch(self.model)]
+        return []
 
     def configure_optimizers(self):  # type: ignore[override]
         # Get scheduler-specific kwargs

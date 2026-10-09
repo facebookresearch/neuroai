@@ -18,11 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.cm as cm
+import matplotlib.offsetbox as offsetbox
+import matplotlib.path as mpath
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.artist import Artist
+from matplotlib.collections import LineCollection
 from matplotlib.legend_handler import HandlerBase
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.patches import Circle, Patch, PathPatch, Polygon, Rectangle
 from matplotlib.text import Text
+from matplotlib.transforms import Affine2D, Transform, blended_transform_factory
 
 if tp.TYPE_CHECKING:
     import pandas as pd
@@ -38,6 +43,8 @@ from neuralbench.plots._constants import (
     MODEL_PARAMS,
     MODEL_YEAR,
     PRETRAINING_OVERLAP,
+    AdaptationMode,
+    eval_mode_label,
 )
 from neuralbench.plots._models import lookup_by_name
 
@@ -169,8 +176,174 @@ class _LabeledPatchHandler(HandlerBase):
         return artists
 
 
+class _AdaptationIcon:
+    """Legend handle: pictogram of an adaptation strategy.
+
+    Rendered by :class:`_AdaptationIconHandler`; *strategy* must be a key of
+    :data:`_ICON_DRAWERS`.
+    """
+
+    def __init__(self, strategy: str) -> None:
+        self.strategy = strategy
+
+
+_ICON_INK = "#444444"
+_FLAME_PATH = mpath.Path(
+    [
+        (0.50, 0.03),
+        (0.18, 0.03),
+        (0.10, 0.30),
+        (0.22, 0.52),
+        (0.30, 0.68),
+        (0.44, 0.74),
+        (0.46, 0.98),
+        (0.64, 0.82),
+        (0.84, 0.66),
+        (0.82, 0.38),
+        (0.80, 0.14),
+        (0.68, 0.03),
+        (0.50, 0.03),
+    ],
+    [mpath.Path.MOVETO] + [mpath.Path.CURVE4] * 12,
+)
+_FLAME_CORE_PATH = mpath.Path(
+    [
+        (0.50, 0.08),
+        (0.36, 0.08),
+        (0.31, 0.24),
+        (0.38, 0.36),
+        (0.43, 0.45),
+        (0.50, 0.48),
+        (0.52, 0.62),
+        (0.61, 0.52),
+        (0.69, 0.42),
+        (0.66, 0.27),
+        (0.64, 0.14),
+        (0.58, 0.08),
+        (0.50, 0.08),
+    ],
+    [mpath.Path.MOVETO] + [mpath.Path.CURVE4] * 12,
+)
+
+
+def _snowflake(lw: float, transform: Transform) -> list[Artist]:
+    center = np.array([0.5, 0.5])
+    segments: list[np.ndarray] = []
+    for k in range(6):
+        arm = np.pi / 2 + k * np.pi / 3
+        direction = np.array([np.cos(arm), np.sin(arm)])
+        segments.append(np.array([center, center + 0.46 * direction]))
+        fork = center + 0.28 * direction
+        for side in (-1, 1):
+            branch = arm + side * np.pi / 4
+            twig = 0.17 * np.array([np.cos(branch), np.sin(branch)])
+            segments.append(np.array([fork, fork + twig]))
+    return [
+        LineCollection(
+            segments,
+            colors="#5b7183",
+            linewidths=lw * 1.5,
+            capstyle="round",
+            transform=transform,
+        )
+    ]
+
+
+def _magnifier(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        LineCollection(
+            [[(0.64, 0.36), (0.92, 0.08)]],
+            colors=_ICON_INK,
+            linewidths=lw * 2.2,
+            capstyle="round",
+            transform=transform,
+        ),
+        Circle(
+            (0.42, 0.58),
+            0.30,
+            facecolor="#e3f0fa",
+            edgecolor=_ICON_INK,
+            linewidth=lw * 1.3,
+            transform=transform,
+        ),
+        *[
+            Circle((x, 0.58), 0.045, color=_ICON_INK, transform=transform)
+            for x in (0.29, 0.42, 0.55)
+        ],
+    ]
+
+
+def _hourglass(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        *[
+            Polygon(
+                bulb,
+                facecolor=fill,
+                edgecolor=_ICON_INK,
+                linewidth=lw,
+                transform=transform,
+            )
+            for bulb, fill in [
+                ([(0.2, 0.9), (0.8, 0.9), (0.5, 0.5)], "#fdfaf3"),
+                ([(0.5, 0.5), (0.2, 0.1), (0.8, 0.1)], "#c8861a"),
+            ]
+        ],
+        LineCollection(
+            [[(0.12, 0.93), (0.88, 0.93)], [(0.12, 0.07), (0.88, 0.07)]],
+            colors=_ICON_INK,
+            linewidths=lw * 2.2,
+            capstyle="round",
+            transform=transform,
+        ),
+    ]
+
+
+def _flame(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        PathPatch(
+            _FLAME_PATH, facecolor="#e8590c", edgecolor="none", transform=transform
+        ),
+        PathPatch(
+            _FLAME_CORE_PATH, facecolor="#ffc94d", edgecolor="none", transform=transform
+        ),
+    ]
+
+
+# Frozen backbone, token search, low-rank bottleneck, everything trains.
+_ICON_DRAWERS: dict[str, tp.Callable[[float, Transform], list[Artist]]] = {
+    "linear_probe": _snowflake,
+    "attentive_probe": _magnifier,
+    "lora": _hourglass,
+    "finetune": _flame,
+}
+_ICON_SIZE_SCALE = 2.8  # x handle height: spans a two-line title
+_ICON_LW_SCALE = 0.09  # x font size
+
+
+class _AdaptationIconHandler(HandlerBase):
+    """Draw the :class:`_AdaptationIcon` pictogram, sized to span a two-line label."""
+
+    def create_artists(  # noqa: D102  (matplotlib handler protocol)
+        self,
+        legend,
+        orig_handle,
+        xdescent,
+        ydescent,
+        width,
+        height,
+        fontsize,
+        trans,
+    ):
+        size = height * _ICON_SIZE_SCALE
+        x0 = -xdescent + width - size
+        y0 = -ydescent + (height - size) / 2
+        unit = Affine2D().scale(size).translate(x0, y0) + trans
+        return _ICON_DRAWERS[orig_handle.strategy](fontsize * _ICON_LW_SCALE, unit)
+
+
 NUMBERED_LEGEND_HANDLER_MAP: dict[type, HandlerBase] = {
-    _LabeledPatch: _LabeledPatchHandler()
+    _LabeledPatch: _LabeledPatchHandler(),
+    _AdaptationIcon: _AdaptationIconHandler(),
 }
 
 SLOT_LABEL_COLOR = "#ffffff"
@@ -328,36 +501,44 @@ def apply_two_tone_labels(
     meta_color: str = "#bbbbbb",
     fontsize: int = 9,
 ) -> None:
-    """Re-render y-tick labels with model name in group colour and metadata greyed out."""
-    for label in ax.get_yticklabels():
-        base = base_name(label.get_text())
-        if base == label.get_text():
-            label.set_color(group_color(base))
-        else:
-            label.set_color(meta_color)
-        label.set_fontsize(fontsize)
+    """Re-render y-tick labels with model name in group colour and metadata greyed out.
 
-    fig.canvas.draw()
+    Two-part labels are drawn as one packed box anchored at the tick, so the
+    parts stay adjacent at any output resolution.
+    """
     fig.set_layout_engine("none")
-    renderer = fig.canvas.get_renderer()  # type: ignore[attr-defined]
-
+    to_tick = blended_transform_factory(ax.transAxes, ax.transData)
+    tick = ax.yaxis.majorTicks[0]
+    # the stubs type Tick.get_pad as returning None; it returns the pad in points
+    pad: float = tick.get_pad()  # type: ignore[func-returns-value,assignment]
+    label_offset = -(tick.get_tick_padding() + pad)
     for label in ax.get_yticklabels():
         full = label.get_text()
         base = base_name(full)
+        label.set_fontsize(fontsize)
         if base == full:
+            label.set_color(group_color(base))
             continue
-
-        bb = label.get_window_extent(renderer)
-        x_fig, y_fig = fig.transFigure.inverted().transform((bb.x0, (bb.y0 + bb.y1) / 2))
-        fig.text(
-            x_fig,
-            y_fig,
-            base,
-            fontsize=fontsize,
-            color=group_color(base),
-            ha="left",
-            va="center",
-            bbox=dict(facecolor="white", edgecolor="none", pad=0),
+        label.set_visible(False)
+        parts: list[Artist] = [
+            offsetbox.TextArea(
+                base, textprops=dict(color=group_color(base), fontsize=fontsize)
+            ),
+            offsetbox.TextArea(
+                full[len(base) :], textprops=dict(color=meta_color, fontsize=fontsize)
+            ),
+        ]
+        ax.add_artist(
+            offsetbox.AnnotationBbox(
+                offsetbox.HPacker(children=parts, pad=0, sep=0),
+                (0, label.get_position()[1]),
+                xycoords=to_tick,
+                xybox=(label_offset, 0),
+                boxcoords="offset points",
+                box_alignment=(1.0, 0.5),
+                frameon=False,
+                annotation_clip=False,
+            )
         )
 
 
@@ -508,6 +689,7 @@ def build_grouped_legend_two_col(
     *,
     include_overlap: bool = False,
     model_labels: dict[str, str] | None = None,
+    fm_eval_mode: str | None = None,
 ) -> tuple[list, list[str]]:
     """Two-column legend: Baselines + Task-specific share one column, Foundation the other.
 
@@ -523,6 +705,10 @@ def build_grouped_legend_two_col(
     render their within-category letter (see :func:`within_category_labels`)
     inside the colour patch.  This requires the caller to register
     :data:`NUMBERED_LEGEND_HANDLER_MAP` as the legend ``handler_map``.
+
+    *fm_eval_mode* is the ``eval_mode`` tag shared by all foundation models:
+    its label becomes a second line of their title, next to the strategy's
+    icon (same ``handler_map`` requirement).
     """
     base_to_full = {base_name(m): m for m in display_models}
     baselines = [base_to_full[m] for m in DUMMY_DISPLAY if m in base_to_full]
@@ -556,8 +742,14 @@ def build_grouped_legend_two_col(
         col1_labels.append(base_name(name))
 
     # Column 2: Foundation block.
-    col2_handles: list[Patch] = [blank]
-    col2_labels: list[str] = [_LEGEND_TITLE_MARK + "Foundation models"]
+    col2_handles: list[tp.Any] = [blank]
+    fm_title = "Foundation models"
+    if fm_eval_mode is not None:
+        fm_title += f"\n{eval_mode_label(fm_eval_mode)}"
+        strategy = AdaptationMode.parse(fm_eval_mode).strategy
+        if strategy in _ICON_DRAWERS:
+            col2_handles[0] = _AdaptationIcon(strategy)
+    col2_labels: list[str] = [_LEGEND_TITLE_MARK + fm_title]
     for name in fm:
         col2_handles.append(_patch(name))
         col2_labels.append(base_name(name))

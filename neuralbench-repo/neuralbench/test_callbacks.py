@@ -23,12 +23,37 @@ from .callbacks import (
     PlotRegressionScatter,
     RecordingLevelEval,
     ResetPerStream,
+    UnfreezeAtEpoch,
     WindowPredictionCollector,
 )
-from .modules import DownstreamWrapperModel
+from .modules import DownstreamWrapper, DownstreamWrapperModel
 from .pl_module import BrainModule
 
 matplotlib.use("Agg")
+
+
+class _Backbone(nn.Linear):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x)
+
+
+def test_unfreeze_at_epoch() -> None:
+    backbone = _Backbone(4, 8)
+    backbone.bias.requires_grad = False  # frozen by the model itself
+    wrapper = DownstreamWrapper(layers_to_unfreeze=[""], unfreeze_at_epoch=1).build(
+        backbone, {"x": torch.randn(2, 4)}, n_outputs=1
+    )
+    callback = UnfreezeAtEpoch(wrapper)
+    trainer = SimpleNamespace(max_epochs=2, current_epoch=0)
+    callback.setup(trainer, wrapper, stage="fit")  # type: ignore[arg-type]
+    assert backbone.weight.requires_grad, "DDP must see the backbone as trainable"
+    callback.on_fit_start(trainer, wrapper)  # type: ignore[arg-type]
+    callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
+    assert not backbone.weight.requires_grad
+    trainer.current_epoch = 1
+    callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
+    assert backbone.weight.requires_grad
+    assert not backbone.bias.requires_grad
 
 
 def test_reset_per_stream_in_lightning():

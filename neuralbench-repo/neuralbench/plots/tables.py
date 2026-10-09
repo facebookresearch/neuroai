@@ -149,6 +149,7 @@ _STRATEGY_ABBREV: dict[str, str] = {
     "finetune": "FT",
     "linear_probe": "LP",
     "attentive_probe": "AP",
+    "lpft": "LP-FT",
 }
 
 
