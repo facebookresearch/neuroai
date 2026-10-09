@@ -224,7 +224,9 @@ reconstruction because a sparse wearable montage supports it poorly.
 #    #    ~69M parameters against EEGNet's ~1.5k, all of them trainable here,
 #    #    so this one wants a datacentre GPU rather than a laptop; it also
 #    #    applies its own preprocessing (200 Hz, filtered, scaled) instead of
-#    #    the task's raw signal, warming a second cache.
+#    #    the task's raw signal, warming a second cache. Its scaler is fit on
+#    #    each whole recording, which a streamed submission cannot do, so its
+#    #    test score is optimistic.
 #    neuralbench eeg _sleep_onset_stream -m reve
 #
 # :ref:`pretrained-weights` covers the hub cache, and no run has a CPU

@@ -273,6 +273,18 @@ class Experiment(BaseExperiment):
         callbacks: list[Callback] = []
         if self.data.stream_by is not None:
             callbacks.append(ResetPerStream())
+            neuro = self.data.neuro
+            if (
+                is_test
+                and isinstance(neuro, ns.extractors.MneRaw)
+                and neuro.scaler is not None
+            ):
+                LOGGER.warning(
+                    "Streamed test with data.neuro.scaler=%s, fit on each whole "
+                    "recording: windows see future signal, so scores are optimistic "
+                    "for a streamed submission.",
+                    neuro.scaler,
+                )
         if "confusion_matrix" in [metric.log_name for metric in self.metrics]:
             labels: list[str] | None = None
             if isinstance(self.data.target, ns.extractors.LabelEncoder):
