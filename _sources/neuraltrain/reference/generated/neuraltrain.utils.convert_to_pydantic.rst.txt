@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.utils.convert\_to\_pydantic
+=======================================
+
+.. currentmodule:: neuraltrain.utils
+
+.. autofunction:: convert_to_pydantic
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

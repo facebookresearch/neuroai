@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.dataloader.Segmenter
+==============================
+
+.. currentmodule:: neuralset.dataloader
+
+.. autopydantic_model:: Segmenter
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

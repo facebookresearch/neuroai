@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.transforms.AddDefaultEvents
+=======================================
+
+.. currentmodule:: neuralbench.transforms
+
+.. autopydantic_model:: AddDefaultEvents
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

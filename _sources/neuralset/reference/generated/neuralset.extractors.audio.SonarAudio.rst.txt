@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.audio.SonarAudio
+=====================================
+
+.. currentmodule:: neuralset.extractors.audio
+
+.. autopydantic_model:: SonarAudio
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

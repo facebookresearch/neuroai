@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.splitting.AssignWordSplitAndContext
+===============================================================
+
+.. currentmodule:: neuralset.events.transforms.splitting
+
+.. autopydantic_model:: AssignWordSplitAndContext
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

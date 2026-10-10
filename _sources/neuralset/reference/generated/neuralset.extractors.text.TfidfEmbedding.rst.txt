@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.TfidfEmbedding
+========================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: TfidfEmbedding
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

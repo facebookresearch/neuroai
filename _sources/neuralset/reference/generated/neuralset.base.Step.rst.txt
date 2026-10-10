@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.base.Step
+===================
+
+.. currentmodule:: neuralset.base
+
+.. autopydantic_model:: Step
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

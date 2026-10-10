@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.evaluate\_model
+===========================
+
+.. currentmodule:: neuralbench
+
+.. autofunction:: evaluate_model
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

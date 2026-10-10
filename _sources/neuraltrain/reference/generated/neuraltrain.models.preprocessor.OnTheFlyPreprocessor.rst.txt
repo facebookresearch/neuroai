@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.preprocessor.OnTheFlyPreprocessor
+====================================================
+
+.. currentmodule:: neuraltrain.models.preprocessor
+
+.. autopydantic_model:: OnTheFlyPreprocessor
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
