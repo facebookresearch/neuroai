@@ -97,9 +97,10 @@ recalibration allowed.
 # - **Headline metric key**: ``test/bal_acc_stream_mean`` (balanced accuracy
 #   per subject and session, averaged over sessions).
 #
-# ``--dataset dreyer2023`` selects ``Dreyer2023Large`` (87 subjects,
-# 27-channel EEG, 2-class motor imagery -- left hand / right hand, ~19 GB),
-# the corpus Codabench scores Track 2 against during the warm-up phase.
+# ``Dreyer2026Proteus`` is also the corpus Codabench scores Track 2 against
+# during the warm-up phase. ``--dataset dreyer2023`` selects
+# ``Dreyer2023Large`` (87 subjects, 27-channel EEG, 2-class motor imagery --
+# left hand / right hand, ~19 GB).
 #
 # **What the config is.** A NeuralBench task is one ``config.yaml``, and
 # nothing else: a YAML overlay on the ``neuralbench/defaults/`` configs naming
@@ -143,6 +144,10 @@ recalibration allowed.
 # 2 validation / 2 test** (1,521 / 379 / 755 windows). Every session of a
 # participant lands in the same fold.
 #
+# That test partition is the current Codabench warm-up evaluation set, so a
+# ``test/bal_acc_stream_mean`` from this configuration and a warm-up
+# leaderboard score are computed on the same windows.
+#
 # **Split (``--dataset dreyer2023``).** Subject-level and predefined, not
 # random. ``Dreyer2023Large`` pools the study's parts A (subjects 1-60),
 # B (61-81) and C (82-87); ``PredefinedSplit`` assigns **all 21 subjects of
@@ -152,10 +157,6 @@ recalibration allowed.
 # part-A subjects under different IDs, so carving test out of A or C could
 # leak a person across folds. Every subject therefore appears in exactly one
 # fold, and the partition is identical on every machine.
-#
-# That part-B test partition is the current Codabench warm-up evaluation
-# set, so a ``test/bal_acc_stream_mean`` from this configuration and a
-# warm-up leaderboard score are computed on the same windows.
 #
 # Either way the starter-kit shift is *cross-subject*, while the sealed
 # phase's is *cross-session within subject*. See `Adapting to the
@@ -211,8 +212,8 @@ recalibration allowed.
 #    #    is optimistic.
 #    neuralbench eeg _motor_imagery_stream -m reve
 #
-# Add ``--dataset dreyer2023`` to any of these commands to run on the
-# warm-up corpus (~19 GB), or ``--dataset tangermann2012`` for BCI
+# Add ``--dataset dreyer2023`` to any of these commands to run on
+# ``Dreyer2023Large`` (~19 GB), or ``--dataset tangermann2012`` for BCI
 # Competition IV-2a: 9 subjects of 22-channel four-class MI in under 1 GB,
 # with the whole download-prepare-train loop in well under an hour (~15 min
 # to prepare, ~2 min per training seed) against a well-known published
@@ -277,11 +278,11 @@ recalibration allowed.
 #      - ``Dreyer2026Proteus`` (task default, NEMAR nm000290)
 #      - The training release of the official corpus: the three commands
 #        with the Graz and BrainHero interfaces, 41 EEG channels, split on
-#        held-out subjects.
+#        held-out subjects, and the corpus Codabench scores against during
+#        warm-up.
 #    * - ``neuralbench eeg _motor_imagery_stream --dataset dreyer2023``
-#      - ``Dreyer2023Large`` (warm-up corpus)
-#      - 87 subjects of 2-class MI, split on held-out subjects, and the
-#        corpus Codabench scores against during warm-up.
+#      - ``Dreyer2023Large``
+#      - 87 subjects of 2-class MI, split on held-out subjects.
 #    * - ``neuralbench eeg motor_imagery``
 #      - ``Stieger2021Continuous`` (benchmark default)
 #      - The most data by far (62 subjects, 615 h) for the motor-imagery

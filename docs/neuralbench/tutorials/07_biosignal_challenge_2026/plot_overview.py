@@ -369,9 +369,10 @@ re-run the top three submissions of each track.
 #    ``nm000290`` (112 runs from 14 sessions of 10 participants, 41 EEG
 #    channels at 500 Hz), and is the default dataset of
 #    ``_motor_imagery_stream``, as a local subject-disjoint baseline, not
-#    the official cross-session split or the sealed evaluation. Add
+#    the official cross-session split or the sealed evaluation. It is also
+#    the corpus Codabench currently scores the warm-up against. Add
 #    ``--dataset dreyer2023`` for ``Dreyer2023Large``, 2 classes on held-out
-#    subjects, the corpus Codabench currently scores the warm-up against.
+#    subjects.
 #    ``Scherer2015Individually`` covers the cross-session, multi-command
 #    side of the task.
 # 2. **Sealed Muse sleep-onset score.** The training set is on NEMAR as
