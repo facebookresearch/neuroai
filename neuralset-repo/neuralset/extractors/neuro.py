@@ -218,12 +218,12 @@ class MneRaw(BaseExtractor):
     filter : tuple of (float or None, float or None), optional
         Band-pass filter limits as ``(l_freq, h_freq)``. If None, no band-pass
         filtering is applied.
-    on_filter_too_long : {"drop", "raise"}, default="drop"
+    on_filter_too_long : {"raise", "drop"}, default="raise"
         What to do when the highpass and/or lowpass of ``filter`` needs an FIR
         design longer than the recording (its longest segment between ``EDGE`` /
         ``BAD_ACQ_SKIP`` annotations), so the output would be dominated by edge
-        artifacts: ``"drop"`` warns and skips only the offending cutoff(s),
-        applying the other one; ``"raise"`` raises a ``ValueError``.
+        artifacts: ``"raise"`` raises a ``ValueError``; ``"drop"`` warns and
+        skips only the offending cutoff(s), applying the other one.
     apply_hilbert : bool, default=False
         If True, applies the Hilbert transform to extract the signal envelope.
     notch_filter : float or list of float, optional
@@ -279,7 +279,7 @@ class MneRaw(BaseExtractor):
     picks: str | tuple[str, ...] = pydantic.Field(("data",), min_length=1)
     apply_proj: bool = False
     filter: tuple[float | None, float | None] | None = None
-    on_filter_too_long: tp.Literal["drop", "raise"] = "drop"
+    on_filter_too_long: tp.Literal["raise", "drop"] = "raise"
     apply_hilbert: bool = False
     notch_filter: float | list[float] | None = None
     drop_bads: bool = False

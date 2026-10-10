@@ -501,11 +501,11 @@ def test_eeg_filter_longer_than_recording(
         )
     )
 
-    extractor = ns.extractors.EegExtractor(filter=filtr, on_filter_too_long="raise")
+    extractor = ns.extractors.EegExtractor(filter=filtr)
     with pytest.raises(ValueError, match=f"{culprits} .*longer than the 5.0 s"):
         next(iter(extractor._get_data([event])))
 
-    extractor = ns.extractors.EegExtractor(filter=filtr)
+    extractor = ns.extractors.EegExtractor(filter=filtr, on_filter_too_long="drop")
     ta = next(iter(extractor._get_data([event])))
     assert (ta.header["highpass"], ta.header["lowpass"]) == expected
 
