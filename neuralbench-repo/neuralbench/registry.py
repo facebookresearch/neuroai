@@ -485,10 +485,12 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
     "acoustic_change": "xdawn_ts_lr",
     "stimulus_congruency": "xdawn_ts_lr",
     "audiovisual_stimulus": "xdawn_ts_lr",
-    "auditory_stimulus": "xdawn_ts_lr",
+    "sustain_proc_negativity": "xdawn_ts_lr",
+    "action_recognition": "xdawn_ts_lr",
     # Oscillatory / BCI classification (moabb TSLR convention).
     "motor_imagery": "cov_ts_lr",
     "motor_execution": "cov_ts_lr",
+    "motor_preparation": "cov_ts_lr",
     "cvep": "cov_ts_lr",
     "ssvep": "cospectra_log_lr",
     "mental_imagery": "cov_ts_lr",
@@ -525,6 +527,11 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
 }
 
 
+def feature_based_baseline(task_name: str) -> str | None:
+    """Canonical sklearn pipeline of *task_name*, which may be unvalidated (``_``-prefixed)."""
+    return FEATURE_BASED_BY_TASK.get(task_name.removeprefix("_"))
+
+
 # ---------------------------------------------------------------------------
 # Resolution helpers
 # ---------------------------------------------------------------------------
@@ -544,7 +551,7 @@ def _task_aware_baseline(device: str, task_name: str | None) -> list[str]:
     if task_name is None:
         return list(DEVICE_BASELINE_MODELS.get(device, BASELINE_MODELS))
     device_baselines = DEVICE_BASELINE_MODELS.get(device, BASELINE_MODELS)
-    preferred = FEATURE_BASED_BY_TASK.get(task_name)
+    preferred = feature_based_baseline(task_name)
     if preferred is None or preferred not in device_baselines:
         return [m for m in device_baselines if m not in SKLEARN_BASELINE_MODELS]
     return [m for m in device_baselines if m not in SKLEARN_BASELINE_MODELS] + [preferred]

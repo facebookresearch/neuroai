@@ -19,6 +19,7 @@ data:
       name: AddOnsetEvents
       event_types: [EpileptiformActivity, Artifact]
   neuro:
+    on_filter_too_long: drop  # 0.1 Hz highpass too long for 2 recordings
     # Excluded: FT9, FT10 (not in all recordings)
     picks:
       - Fp1

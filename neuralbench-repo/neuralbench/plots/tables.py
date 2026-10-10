@@ -21,7 +21,7 @@ from neuralbench.plots._constants import (
 )
 from neuralbench.plots._filters import multi_dataset_tasks
 from neuralbench.plots.ranking import compute_task_ranks
-from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
+from neuralbench.registry import SKLEARN_BASELINE_MODELS, feature_based_baseline
 
 # Synthetic ``brain_model_name`` assigned to the task-appropriate sklearn row
 # after collapsing; resolves to ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``.
@@ -45,7 +45,7 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse per-pipeline sklearn baselines into a single "Handcrafted" row.
 
     For each task, keeps only the sklearn-baseline rows whose
-    ``brain_model_name`` matches :data:`FEATURE_BASED_BY_TASK[task_name]` and
+    ``brain_model_name`` matches :func:`~neuralbench.registry.feature_based_baseline` and
     relabels the kept rows to :data:`_FEATURE_BASED_LABEL` (so they resolve to
     ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``).  Non-matching sklearn
     rows are dropped; deep-learning and constant-predictor rows pass through
@@ -61,7 +61,7 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     is_sklearn = df["brain_model_name"].isin(SKLEARN_BASELINE_MODELS)
     if not is_sklearn.any():
         return df
-    preferred = df["task_name"].map(FEATURE_BASED_BY_TASK)
+    preferred = df["task_name"].map(feature_based_baseline, na_action="ignore")
     # Keep rows that are either non-sklearn OR the task-preferred sklearn pipeline.
     keep = (~is_sklearn) | (df["brain_model_name"] == preferred)
     out = df.loc[keep].copy()

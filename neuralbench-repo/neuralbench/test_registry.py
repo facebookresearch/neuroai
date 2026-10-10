@@ -89,6 +89,17 @@ def test_task_aware_baseline_unknown_task_drops_sklearn_pipelines() -> None:
     assert _task_aware_baseline("meg", "__nonexistent_task__") == ["chance", "dummy"]
 
 
+def test_unvalidated_task_keeps_its_handcrafted_pipeline() -> None:
+    baselines = _task_aware_baseline("meg", "_emotion")
+    assert baselines == ["chance", "dummy", "cov_ts_lr"]
+    df = pd.DataFrame(
+        {"brain_model_name": ["cov_ts_lr", "cov_ts_ridge"], "task_name": "_emotion"}
+    )
+    assert _collapse_feature_based_baselines(df)["brain_model_name"].tolist() == [
+        "feature_based"
+    ]
+
+
 def test_expand_all_baseline_meg_includes_handcrafted_pipeline() -> None:
     models = [
         m
