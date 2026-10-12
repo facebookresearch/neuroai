@@ -258,7 +258,7 @@ print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 # to provide surrounding context for each word.
 #
 # Layer and token aggregation are configurable via
-# :class:`~neuralset.extractors.base.HuggingFaceMixin`:
+# :class:`~neuralset.extractors.hf.HuggingFaceMixin`:
 #
 # .. code-block:: python
 #
