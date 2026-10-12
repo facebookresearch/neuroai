@@ -26,6 +26,7 @@ See the [full documentation](https://facebookresearch.github.io/neuroai/) for in
 ### [NeuralSet](https://facebookresearch.github.io/neuroai/neuralset/index.html)
 
 Build your efficient Neuro AI data loader.
+Miaou
 
 ```bash
 pip install neuralset
