@@ -37,7 +37,7 @@ def _get_punct_model() -> tp.Any:
 
 
 class EnsureTexts(EventsTransform):
-    """Create Text events from Words if not already present.
+    """Create Text events from Words.
 
     Parameters
     ----------
@@ -49,14 +49,21 @@ class EnsureTexts(EventsTransform):
         DL punctuation restoration (requires
         ``deepmultilingualpunctuation``).  May need a GPU.
         ``None`` — plain space-join (no punctuation added).
+    override_texts : bool, default=False
+        Whether to replace existing Text rows if they are already present.
     """
 
     punctuation: tp.Literal["spacy", "fullstop"] | None = "spacy"
+    override_texts: bool = False
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
         text_names = ev.EventTypesHelper("Text").names
         if events.type.isin(text_names).any():
-            return events
+            if not self.override_texts:
+                msg = "Text already present in events dataframe"
+                logger.debug(msg)
+                return events
+            events = events[events.type != "Text"]
         word_names = ev.EventTypesHelper("Word").names
         words = events.loc[events.type.isin(word_names)].sort_values(
             ["timeline", "start"]
