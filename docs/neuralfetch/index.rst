@@ -4,7 +4,7 @@ NeuralFetch
 Goal
 ----
 
-NeuralFetch connects to **12 public repositories** through a pluggable backend
+NeuralFetch connects to **16 public repositories** through a pluggable backend
 system and returns the same tidy events DataFrame regardless of the source.
 
 .. raw:: html
@@ -17,10 +17,14 @@ system and returns the same tidy events DataFrame regardless of the source.
        <span class="hub-source"><i class="fas fa-leaf"></i> Dryad</span>
        <span class="hub-source"><i class="fas fa-wave-square"></i> EEGDash</span>
        <span class="hub-source"><i class="fas fa-chart-bar"></i> Figshare</span>
+       <span class="hub-source"><i class="fas fa-code-merge"></i> GIN</span>
+       <span class="hub-source"><i class="fas fa-globe"></i> Globus</span>
        <span class="hub-source"><i class="fas fa-robot"></i> HuggingFace</span>
+       <span class="hub-source"><i class="fas fa-magnet"></i> NEMAR</span>
        <span class="hub-source"><i class="fas fa-brain"></i> OpenNeuro</span>
        <span class="hub-source"><i class="fas fa-flask"></i> OSF</span>
        <span class="hub-source"><i class="fas fa-heartbeat"></i> PhysioNet</span>
+       <span class="hub-source"><i class="fas fa-cloud"></i> S3</span>
        <span class="hub-source"><i class="fas fa-key"></i> Synapse</span>
        <span class="hub-source"><i class="fas fa-archive"></i> Zenodo</span>
      </div>

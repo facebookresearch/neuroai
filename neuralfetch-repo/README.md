@@ -2,7 +2,7 @@
 
 Download backends and data-fetching utilities for neuroimaging datasets.
 
-- **Download backends** for OpenNeuro, DANDI, S3, Physionet, OSF, Zenodo, Figshare, Hugging Face, Synapse, Dryad, and more
+- **Download backends** for 16 sources: DANDI, DataLad, Donders, Dryad, EEGDash, Figshare, GIN, Globus, Hugging Face, NEMAR, OpenNeuro, OSF, PhysioNet, S3, Synapse and Zenodo
 - **Helper utilities** for study data management, BIDS export, and file scanning
 - Built on top of [neuralset](https://github.com/facebookresearch/neuroai)
 
