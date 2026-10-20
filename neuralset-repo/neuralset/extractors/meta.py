@@ -132,7 +132,7 @@ class AggregatedExtractor(base.BaseExtractor):
                 raise ValueError("All extractors must have the same frequency.")
             self.frequency = frequencies.pop()
         all_event_types = set(c for f in fts for c in f._event_types_helper.classes)
-        self.event_types = tuple(c.__name__ for c in all_event_types)
+        self.event_types = tuple(sorted(c.__name__ for c in all_event_types))
         super().model_post_init(log__)
 
     def prepare(self, events: pd.DataFrame) -> None:
