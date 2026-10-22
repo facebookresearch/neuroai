@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.utils.WandbLoggerConfig
+===================================
+
+.. currentmodule:: neuraltrain.utils
+
+.. autopydantic_model:: WandbLoggerConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

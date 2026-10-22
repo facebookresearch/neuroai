@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.Eegdash
+============================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: Eegdash
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

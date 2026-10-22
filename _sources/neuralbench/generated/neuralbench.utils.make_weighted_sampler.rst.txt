@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.utils.make\_weighted\_sampler
+=========================================
+
+.. currentmodule:: neuralbench.utils
+
+.. autofunction:: make_weighted_sampler
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

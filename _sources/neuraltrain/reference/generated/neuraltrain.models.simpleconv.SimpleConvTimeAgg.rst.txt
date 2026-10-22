@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.simpleconv.SimpleConvTimeAgg
+===============================================
+
+.. currentmodule:: neuraltrain.models.simpleconv
+
+.. autopydantic_model:: SimpleConvTimeAgg
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

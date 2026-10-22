@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.neuro.ChannelPositions
+===========================================
+
+.. currentmodule:: neuralset.extractors.neuro
+
+.. autopydantic_model:: ChannelPositions
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.data.get\_default\_dataloaders
+==========================================
+
+.. currentmodule:: neuralbench.data
+
+.. autofunction:: get_default_dataloaders
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
