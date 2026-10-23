@@ -90,6 +90,28 @@ class BrainModule(pl.LightningModule):
                 split_names=["test/full_retrieval"],
             )
 
+    def on_save_checkpoint(self, checkpoint: dict[str, tp.Any]) -> None:
+        """Store only trainable EEG weights for externally loaded frozen LLMs."""
+        if getattr(self.model, "omit_frozen_backbone_from_checkpoint", False):
+            state = checkpoint["state_dict"]
+            for key in list(state):
+                if key.startswith("model.llama."):
+                    del state[key]
+
+    def load_state_dict(
+        self, state_dict: tp.Mapping[str, tp.Any], strict: bool = True
+    ) -> tp.Any:
+        if not getattr(self.model, "omit_frozen_backbone_from_checkpoint", False):
+            return super().load_state_dict(state_dict, strict=strict)
+        result = super().load_state_dict(state_dict, strict=False)
+        missing = [k for k in result.missing_keys if not k.startswith("model.llama.")]
+        if strict and (missing or result.unexpected_keys):
+            raise RuntimeError(
+                "Invalid EEG adapter checkpoint: "
+                f"missing={missing}, unexpected={result.unexpected_keys}"
+            )
+        return result
+
     def _infer_forward_params(self, model: nn.Module) -> None:
         """Check which additional inputs the model's forward method requires."""
         inner_model = model
@@ -173,7 +195,24 @@ class BrainModule(pl.LightningModule):
             "sync_dist": self.trainer.world_size > 1,
         }
 
-        y_pred = self.model_forward(batch)
+        generative_step = getattr(self.model, "generative_step", None)
+        if generative_step is not None:
+            if not isinstance(self.loss, nn.BCEWithLogitsLoss):
+                raise ValueError(
+                    "Generative event evaluation requires multilabel BCE targets"
+                )
+            y_pred, language_loss, invalid_fraction = generative_step(
+                **self._forward_inputs(batch), targets=y_true, stage=step_name
+            )
+            self.log(f"{step_name}/lm_loss", language_loss, **log_kwargs)
+            if invalid_fraction is not None:
+                self.log(
+                    f"{step_name}/invalid_generation_fraction",
+                    invalid_fraction,
+                    **log_kwargs,
+                )
+        else:
+            y_pred = self.model_forward(batch)
 
         metric_pred, metric_true = y_pred, y_true
         loss_pred, loss_true = y_pred, y_true
@@ -206,7 +245,11 @@ class BrainModule(pl.LightningModule):
             y_pred = y_pred.reshape(y_pred.shape[0], -1)
             y_true = y_true.reshape(y_true.shape[0], -1)
 
-        if isinstance(self.loss, nn.CTCLoss):
+        if generative_step is not None:
+            # Validation metrics use freely generated event lists. The
+            # teacher-forced language loss is only the training objective.
+            loss = language_loss
+        elif isinstance(self.loss, nn.CTCLoss):
             # ``nn.CTCLoss`` needs four arguments and a transposed time axis.
             # ``y_pred`` is ``(B, T_out, C)`` log-probs from a CTC head;
             # ``y_true`` is ``(B, max_length)`` integer labels padded with

@@ -1,0 +1,14 @@
+# Shared EEG model: the benchmark supplies task name and output width.
+brain_model_config:
+  =replace=: true
+  name: Llama32EEG
+  model_name: meta-llama/Llama-3.2-3B-Instruct
+  revision: 0cb88a4f764b7a12671c53f0838cd831a0843b95
+  prompt_template: "Analyze this EEG recording for the {task} task."
+  n_eeg_tokens: 16
+  torch_dtype: bfloat16
+downstream_model_wrapper: null
+data:
+  batch_size: 2
+trainer_config:
+  precision: bf16-mixed

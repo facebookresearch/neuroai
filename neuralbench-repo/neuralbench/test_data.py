@@ -26,13 +26,52 @@ import typing as tp
 from collections.abc import Callable
 
 import numpy as np
+import pandas as pd
 import pytest
 import torch
 from torch.utils.data import DataLoader
 
 import neuralset as ns
 
-from .data import Data, get_default_dataloaders
+from .data import Data, _unique_start_trigger_mask, get_default_dataloaders
+
+
+def test_unique_start_triggers_preserve_coincident_multilabel_events():
+    events = ns.events.standardize_events(
+        pd.DataFrame(
+            [
+                dict(
+                    type="Word",
+                    start=1.0,
+                    duration=0.5,
+                    timeline="x",
+                    split="train",
+                    text="A",
+                ),
+                dict(
+                    type="Word",
+                    start=1.0,
+                    duration=0.5,
+                    timeline="x",
+                    split="train",
+                    text="B",
+                ),
+                dict(
+                    type="Word",
+                    start=2.0,
+                    duration=0.5,
+                    timeline="x",
+                    split="train",
+                    text="C",
+                ),
+            ]
+        )
+    )
+    selected = _unique_start_trigger_mask(events, ["Word"])
+    assert selected.tolist() == [True, False, True]
+    segments = ns.segments.list_segments(events, triggers=selected, duration=1.0)
+    assert len(segments) == 2
+    assert set(segments[0].events.text) == {"A", "B"}
 
 
 def test_split_batch_size_and_shuffle(build_data):

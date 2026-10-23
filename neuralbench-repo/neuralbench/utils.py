@@ -530,6 +530,7 @@ class TrainerConfig(ns.BaseModel):
     gradient_clip_val: float = 0.0
     limit_train_batches: int | None = None
     limit_val_batches: int | None = None
+    limit_test_batches: int | None = None
     num_sanity_val_steps: int = 2
     accumulate_grad_batches: int = 1
 
@@ -562,6 +563,7 @@ class TrainerConfig(ns.BaseModel):
             gradient_clip_val=self.gradient_clip_val,
             limit_train_batches=self.limit_train_batches,
             limit_val_batches=self.limit_val_batches,
+            limit_test_batches=self.limit_test_batches,
             max_epochs=self.n_epochs,
             enable_progress_bar=self.enable_progress_bar,
             log_every_n_steps=self.log_every_n_steps,
