@@ -4,10 +4,15 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import contextlib
 import functools
 import hashlib
 import inspect
 import logging
+import os
+import secrets
+import socket
+import time
 import typing as tp
 import warnings
 from collections import defaultdict
@@ -1252,6 +1257,94 @@ class FmriCleaner(pydantic.BaseModel):
         return data
 
 
+# nilearn dataset-fetch serialization ----------------------------------------
+# How long to wait for the lock before giving up and fetching anyway, how old a
+# lock must be to be treated as stale (left by a crashed holder), and the retry
+# poll interval -- all in seconds.
+_DOWNLOAD_LOCK_TIMEOUT_S = 600.0
+_DOWNLOAD_LOCK_STALE_S = 600.0
+_DOWNLOAD_LOCK_POLL_S = 1.0
+
+
+def _nilearn_data_dir() -> Path:
+    """Writable directory where nilearn fetches land (usually ``~/nilearn_data``)."""
+    from nilearn.datasets.utils import get_data_dirs
+
+    return Path(get_data_dirs()[0])
+
+
+@contextlib.contextmanager
+def _nilearn_download_lock() -> tp.Iterator[None]:
+    """Serialize concurrent nilearn dataset fetches across processes.
+
+    nilearn's ``fetch_files`` downloads into a temp dir named by the md5 of the
+    requested file list and ``shutil.rmtree``s it once done. Two processes
+    fetching the *same* dataset into a shared ``~/nilearn_data`` therefore share
+    one temp dir: when the first finishes and removes it, the second's
+    ``*.part`` download vanishes mid-write and raises ``FileNotFoundError``.
+    This happens routinely when exca/submitit fans :class:`FmriExtractor` out
+    over an array of tasks against a cold cache.
+
+    We take a best-effort cross-process lock (a portable ``O_CREAT | O_EXCL``
+    lock file -- no ``flock``, so it also works on NFS/SMB) so only one process
+    fetches at a time; the others wait and then find the dataset already cached.
+    The lock degrades to a no-op on any error, after
+    :data:`_DOWNLOAD_LOCK_TIMEOUT_S`, or when an existing lock looks stale, so a
+    crashed holder can never wedge fetching permanently -- worst case we simply
+    fall back to today's unserialized behavior.
+    """
+    try:
+        data_dir = _nilearn_data_dir()
+        data_dir.mkdir(parents=True, exist_ok=True)
+        lock = data_dir / ".neuralset_fetch.lock"
+    except Exception as exc:  # cannot resolve/create the data dir: skip locking
+        logger.debug("nilearn download lock disabled: %s", exc)
+        yield
+        return
+
+    token = (
+        f"{socket.gethostname()} {os.getpid()} {time.time():.3f} {secrets.token_hex(8)}"
+    ).encode("utf-8")
+    held = False
+    deadline = time.monotonic() + _DOWNLOAD_LOCK_TIMEOUT_S
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            try:
+                os.write(fd, token)
+            finally:
+                os.close(fd)
+            held = True
+            break
+        except FileExistsError:
+            # Reclaim a lock left behind by a crashed holder.
+            try:
+                if time.time() - lock.stat().st_mtime > _DOWNLOAD_LOCK_STALE_S:
+                    lock.unlink()
+                    continue
+            except OSError:
+                pass
+        except OSError as exc:  # share refuses the file: proceed without a lock
+            logger.debug("nilearn download lock disabled: %s", exc)
+            break
+        if time.monotonic() >= deadline:
+            logger.warning(
+                "Timed out waiting for nilearn download lock %s; fetching anyway",
+                lock,
+            )
+            break
+        time.sleep(_DOWNLOAD_LOCK_POLL_S)
+    try:
+        yield
+    finally:
+        if held:
+            try:
+                if lock.read_bytes() == token:
+                    lock.unlink()
+            except OSError:
+                pass
+
+
 class BaseFmriProjector(DiscriminatedModel, discriminator_key="name"):
     """Base class for spatial projection sub-configs.
 
@@ -1327,7 +1420,8 @@ class SurfaceProjector(BaseFmriProjector):
         if self._mesh is None:
             from nilearn import datasets
 
-            fsaverage = datasets.fetch_surf_fsaverage(self.mesh)
+            with _nilearn_download_lock():
+                fsaverage = datasets.fetch_surf_fsaverage(self.mesh)
             self._mesh = fsaverage
         return self._mesh
 
@@ -1400,9 +1494,10 @@ class MaskProjector(BaseFmriProjector):
 
         if self._mask is None:
             if self.mask == "subcortical":
-                atlas = datasets.fetch_atlas_harvard_oxford(
-                    f"sub-maxprob-thr50-{self.resolution}mm"
-                )
+                with _nilearn_download_lock():
+                    atlas = datasets.fetch_atlas_harvard_oxford(
+                        f"sub-maxprob-thr50-{self.resolution}mm"
+                    )
                 excluded = ["Cortex", "White", "Stem", "Background"]
                 selected_indices = [
                     i
@@ -1414,7 +1509,8 @@ class MaskProjector(BaseFmriProjector):
                 mask = nib.Nifti1Image(mask_data, atlas.maps.affine, atlas.maps.header)
             else:
                 mask_func = getattr(datasets, f"load_{self.mask}_mask")
-                mask = mask_func(resolution=self.resolution)
+                with _nilearn_download_lock():
+                    mask = mask_func(resolution=self.resolution)
             self._mask = mask
         return self._mask
 
@@ -1478,7 +1574,8 @@ class AtlasProjector(BaseFmriProjector):
         from nilearn import datasets
 
         atlas_func = getattr(datasets, f"fetch_atlas_{self.atlas}")
-        atlas = atlas_func(**(self.atlas_kwargs or {}))
+        with _nilearn_download_lock():
+            atlas = atlas_func(**(self.atlas_kwargs or {}))
         return atlas
 
     def _get_masker(

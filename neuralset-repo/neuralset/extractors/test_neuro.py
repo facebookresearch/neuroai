@@ -6,6 +6,7 @@
 
 import json
 import pickle
+import threading
 import time
 import typing as tp
 from pathlib import Path
@@ -28,6 +29,7 @@ from neuralset import quantize
 from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
+from neuralset.extractors import neuro
 from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, _overlap
 
 
@@ -194,6 +196,62 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     assert "affine" in cached_val.header
     nifti = cached_val.to_native()
     assert nifti.shape == cached_val.data.shape
+
+
+def test_nilearn_download_lock_serializes(tmp_path: Path, monkeypatch) -> None:
+    """Concurrent fetches must not overlap: the lock serializes downloads so
+    nilearn's shared temp dir can't be removed out from under another fetch."""
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", lambda: tmp_path)
+    inside = 0
+    max_concurrent = 0
+    lock = threading.Lock()
+    barrier = threading.Barrier(5)
+
+    def worker() -> None:
+        nonlocal inside, max_concurrent
+        barrier.wait()
+        with neuro._nilearn_download_lock():
+            with lock:
+                inside += 1
+                max_concurrent = max(max_concurrent, inside)
+            time.sleep(0.05)  # emulate a download
+            with lock:
+                inside -= 1
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert max_concurrent == 1
+    # the lock file is released on exit
+    assert not (tmp_path / ".neuralset_fetch.lock").exists()
+
+
+def test_nilearn_download_lock_reclaims_stale(tmp_path: Path, monkeypatch) -> None:
+    """A stale lock from a crashed holder is reclaimed, not waited on forever."""
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(neuro, "_DOWNLOAD_LOCK_STALE_S", 0.0)
+    stale = tmp_path / ".neuralset_fetch.lock"
+    stale.write_bytes(b"dead holder")
+
+    start = time.monotonic()
+    with neuro._nilearn_download_lock():
+        pass
+    # reclaimed immediately rather than blocking for the full timeout
+    assert time.monotonic() - start < 5.0
+
+
+def test_nilearn_download_lock_degrades_without_data_dir(monkeypatch) -> None:
+    """If the data dir cannot be resolved, fetching still proceeds (no-op lock)."""
+
+    def boom() -> Path:
+        raise RuntimeError("no nilearn")
+
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", boom)
+    with neuro._nilearn_download_lock():
+        pass  # must not raise
 
 
 @pytest.mark.parametrize("kind", ["Fmri", "Meg"])
