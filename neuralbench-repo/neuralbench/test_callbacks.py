@@ -296,6 +296,25 @@ def test_prediction_collector_skips_non_zero_rank(tmp_path):
     assert not folder.exists()
 
 
+def test_prediction_collector_keeps_generated_event_text(tmp_path):
+    trainer = SimpleNamespace(is_global_zero=True)
+    model = SimpleNamespace(last_generated_texts=['["artf", "spsw"]', "[]"])
+    module = SimpleNamespace(model=model)
+    folder = tmp_path / "generated_predictions"
+    callback = WindowPredictionCollector(folder=folder)
+    callback.on_test_epoch_start(trainer, module)
+    callback.on_test_batch_end(
+        trainer,
+        module,
+        (torch.zeros(2, 6), torch.ones(2, 6)),
+        MockBatch([MockSegment("rec0"), MockSegment("rec1")]),
+        batch_idx=0,
+    )
+    callback.on_test_epoch_end(trainer, module)
+    metadata = _read_predictions(folder)["metadata"]
+    assert list(metadata.generated_text) == ['["artf", "spsw"]', "[]"]
+
+
 def test_binary_multiple_windows_per_recording(mock_trainer, mock_pl_module):
     """Test binary classification with multiple windows per recording - key test for averaging."""
     callback = RecordingLevelEval()
