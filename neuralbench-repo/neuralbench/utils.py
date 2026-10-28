@@ -18,12 +18,16 @@ import numpy as np
 import torch
 from sklearn.utils import compute_class_weight
 from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 import neuralset as ns
 from neuralset.dataloader import SegmentDataset
 from neuralset.events import etypes
 from neuralset.extractors import LabelEncoder
 from neuralset.utils import warn_once
+
+from .metrics import _assign_bins
 
 LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +58,101 @@ def model_hash(model: nn.Module) -> str:
     for p in model.parameters():
         hasher.update(p.data.cpu().numpy().tobytes())
     return hasher.hexdigest()
+
+
+def run_probe_hook(
+    model: nn.Module,
+    submodule: nn.Module,
+    model_batch: dict[str, torch.Tensor | None],
+    probe_layer: str,
+) -> torch.Tensor:
+    """Run one dummy forward and return the tensor captured at ``submodule``.
+
+    A temporary forward hook on ``submodule`` records its last output during a
+    single ``model(**model_batch)`` pass; the hook is always removed afterwards.
+    ``probe_layer`` is used only to make error messages actionable.
+
+    Raises
+    ------
+    RuntimeError
+        If the hook never fires (submodule unreachable from this input).
+    TypeError
+        If the captured output is not a tensor (e.g. an ``nn.MultiheadAttention``
+        or ``nn.RNN`` that returns a tuple/dict).
+    """
+    # Single-slot buffer: keep only the last fire so a submodule that runs
+    # many times (e.g. recurrent) costs O(1) memory rather than O(n_fires).
+    probed_activation: list[torch.Tensor] = []
+
+    def _hook(_m, _i, out):
+        probed_activation[:] = [out]
+
+    handle = submodule.register_forward_hook(_hook)
+    try:
+        model(**model_batch)
+    finally:
+        handle.remove()
+    if not probed_activation:
+        raise RuntimeError(
+            f"probe_layer={probe_layer!r} hook did not fire during "
+            f"the dummy forward; the submodule is unreachable from this input."
+        )
+    capture = probed_activation[0]
+    if not isinstance(capture, torch.Tensor):
+        raise TypeError(
+            f"probe_layer={probe_layer!r} returned "
+            f"{type(capture).__name__}; only tensor-returning "
+            f"submodules are supported (e.g. probe a parent of "
+            f"nn.MultiheadAttention, not the MHA itself)."
+        )
+    return capture
+
+
+def detect_batch_dim(
+    model: nn.Module,
+    submodule: nn.Module,
+    model_batch: dict[str, torch.Tensor | None],
+    probe_layer: str,
+) -> int:
+    """Find the batch axis of ``submodule``'s output via a doubled-batch forward.
+
+    Captures the activation at the input batch size and again at a doubled batch
+    size: the batch axis is the only one whose size scales with the input batch,
+    while sequence/feature axes stay constant. ``probe_layer`` is used only for
+    the error message.
+
+    Raises
+    ------
+    ValueError
+        When the layout is genuinely ambiguous (zero or multiple candidate
+        axes), suggesting the caller pass an explicit batch dim.
+    """
+    batch_size = next(
+        v.shape[0] for v in model_batch.values() if isinstance(v, torch.Tensor)
+    )
+    capture = run_probe_hook(model, submodule, model_batch, probe_layer)
+    doubled = {
+        k: torch.cat([v, v], dim=0)
+        if isinstance(v, torch.Tensor) and v.ndim and v.shape[0] == batch_size
+        else v
+        for k, v in model_batch.items()
+    }
+    capture2 = run_probe_hook(model, submodule, doubled, probe_layer)
+    candidates = [
+        i
+        for i in range(capture.ndim)
+        if i < capture2.ndim
+        and capture.shape[i] == batch_size
+        and capture2.shape[i] == 2 * batch_size
+    ]
+    if len(candidates) != 1:
+        raise ValueError(
+            f"probe_layer={probe_layer!r} batch axis is ambiguous: "
+            f"capture shape {tuple(capture.shape)} scaled to "
+            f"{tuple(capture2.shape)} when the batch size doubled, giving "
+            f"candidate axes {candidates}. Set probe_batch_dim explicitly."
+        )
+    return candidates[0]
 
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
@@ -137,8 +236,11 @@ def load_checkpoint(
     keys_to_remove = []
     for k, v in stripped_state_dict.items():
         if model_dict[k].size() != v.size():
-            logger.info(
-                f"Size mismatch for {k}, checkpoint has shape {v.size()} and current model has shape {model_dict[k].size()}."
+            logger.warning(
+                f"Size mismatch for {k}: checkpoint has shape {v.size()}, model has "
+                f"{model_dict[k].size()}. Keeping the randomly initialised weights; "
+                f"check that the model config matches the one the checkpoint was "
+                f"trained with."
             )
             keys_to_remove.append(k)
     for k in keys_to_remove:
@@ -149,6 +251,39 @@ def load_checkpoint(
     logger.info(f"Loaded model hash: {model_hash(brain_model)}")
 
     return brain_model
+
+
+def finite_target_fraction(
+    dataset: SegmentDataset,
+    target: ns.extractors.BaseExtractor,
+    batch_size: int,
+    num_workers: int,
+) -> np.ndarray:
+    """Fraction of each segment's target frames that carry a usable label."""
+    # Target-only dataset: extracting neuro here as well would double the read.
+    probe = SegmentDataset(
+        extractors={"target": target},
+        segments=dataset.segments,
+        pad_duration=dataset.pad_duration,
+    )
+    loader = DataLoader(
+        probe,
+        batch_size=batch_size,
+        collate_fn=probe.collate_fn,
+        num_workers=num_workers,
+        shuffle=False,
+    )
+    # Streams instead of reusing ``get_targets_from_dataset``: a dense target
+    # (emg/pose: 20 x 11790 floats a segment) will not fit a split in RAM.
+    fractions = []
+    for batch in tqdm(loader, desc="Screening targets"):
+        finite = torch.isfinite(batch.data["target"])
+        # A frame counts only where every channel resolved, as ``BrainModule``
+        # masks it; a target without a time axis is all-or-nothing.
+        if finite.ndim == 3:
+            finite = finite.all(dim=1)
+        fractions.append(finite.flatten(start_dim=1).float().mean(dim=1))
+    return torch.cat(fractions).numpy()
 
 
 def get_targets_from_dataset(dataset: SegmentDataset) -> torch.Tensor:
@@ -286,17 +421,14 @@ def _compute_regression_bin_weights(
 ) -> torch.Tensor:
     """Compute per-sample inverse-frequency weights from a regression target tensor.
 
-    Targets are bucketised into ``len(bin_edges) - 1`` bins defined by
-    ``bin_edges``.  Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
-    ``i < n_bins - 1``; the top bin is closed on the right
-    (``[bin_edges[-2], bin_edges[-1]]``) so that targets exactly at
-    ``bin_edges[-1]`` (e.g. the cap value in ``AddSleepOnsetTargets``) are
-    counted in the top bin.  This matches the bin semantics of
-    :class:`~neuralbench.metrics.BinnedMAE`.
+    Targets are binned by :func:`~neuralbench.metrics._assign_bins`, so
+    stratification matches :class:`~neuralbench.metrics.BinnedMAE`.
 
     Targets falling outside ``[bin_edges[0], bin_edges[-1]]`` receive a weight
     of ``0`` (they are effectively excluded from sampling) and do not
-    contribute to any bin's count.
+    contribute to any bin's count.  The upper edge itself is in range, which
+    closes the top bin so that targets exactly at ``bin_edges[-1]`` (e.g. the
+    cap value in ``AddSleepOnsetTargets``) are counted there.
 
     Each sample's weight is ``1 / count_in_its_bin`` so that, in expectation,
     every populated bin contributes the same total mass to a weighted sampler.
@@ -322,9 +454,8 @@ def _compute_regression_bin_weights(
             f"bin_edges must have length >= 2, got {len(bin_edges)}: {list(bin_edges)}"
         )
 
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
     n_bins = len(bin_edges) - 1
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
 
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).to(dtype=torch.float32)
@@ -367,8 +498,7 @@ def make_regression_bin_sampler(
     weights = _compute_regression_bin_weights(targets, bin_edges)
 
     n_bins = len(bin_edges) - 1
-    inner_edges = torch.as_tensor(list(bin_edges)[1:-1], dtype=targets.dtype)
-    bin_idx = torch.bucketize(targets, inner_edges, right=False).clamp_(0, n_bins - 1)
+    bin_idx = _assign_bins(targets, bin_edges)
     in_range = (targets >= bin_edges[0]) & (targets <= bin_edges[-1])
     counts = torch.bincount(bin_idx[in_range], minlength=n_bins).tolist()
     bin_labels = [

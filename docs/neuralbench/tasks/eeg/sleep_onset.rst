@@ -7,6 +7,19 @@ Sleep onset prediction
 | **Objective**: :bdg-success:`Regression`
 | **Split**: Leave-subjects-out
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This page describes the NeuralBench benchmark version of the task.
+   :doc:`Track 3 -- Sleep onset
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track3_sleep_onset>`
+   of the challenge uses its streamed version, ``_sleep_onset_stream``, which
+   scores each recording one window at a time from its start, on the
+   unprocessed Muse data by default, with the per-recording W-bMAE.
+   **Participants should use**
+   ``neuralbench eeg _sleep_onset_stream``, in both phases; the Track 3 page
+   has its commands, timings, and competition data notes.
+
 Usage
 ~~~~~
 
@@ -26,8 +39,9 @@ Description
 Given a continuous EEG recording leading up to sleep, predict at every point in
 time how many seconds remain before the participant falls asleep. Models output
 a single regression value per analysis window, capped at 600 s (10 minutes
-pre-onset). Inference is strictly causal: predictions for window ``[t - 5, t]``
-may only depend on EEG up to time ``t``. The benchmark uses non-overlapping
+pre-onset). The competition requires causal inference: predictions for window
+``[t - 5, t]`` may only depend on EEG up to time ``t``. This local proxy does not
+enforce end-to-end causality in preprocessing. The benchmark uses non-overlapping
 5-s analysis windows -- one model input per 5-s slice of EEG -- so every
 recording yields one prediction every 5 s of pre-onset signal.
 
@@ -57,6 +71,24 @@ also logged alongside the headline ``bmae``.
 
 Additional Datasets
 ~~~~~~~~~~~~~~~~~~~
+
+Muse wearable EEG is available as `NEMAR nm000287, version 1.0.0
+<https://doi.org/10.82901/nemar.nm000287>`__: 540 recordings from 203 participants,
+four channels at 128 Hz, with first-N2 point annotations. Credit Muse Team;
+the license is CC-BY-NC-SA-4.0.
+
+.. code-block:: bash
+
+   neuralfetch download Interaxon2026Muse --path /path/to/DATA_DIR
+   neuralbench eeg sleep_onset --dataset interaxon2026muse
+
+It is also the default dataset of ``_sleep_onset_stream``. This variant keeps
+whole recordings and uses the supplied session split (500 train / 40
+seen-participant test recordings, with 20% of the subjects without a test
+recording held out for validation). It retains the task's preprocessing and unweighted bMAE
+objective; whole-recording preprocessing is not causal. This recipe is not the
+sealed Muse evaluation or its seen/unseen weighted score. The streamed version
+instead feeds the raw signal in microvolts and scores the per-recording W-bMAE.
 
 The following additional polysomnography datasets can also be used with this
 task. Both expose annotated sleep stages, so ``AddSleepOnsetTargets`` derives

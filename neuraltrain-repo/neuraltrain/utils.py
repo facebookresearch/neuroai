@@ -304,12 +304,17 @@ class WandbLoggerConfig(BaseModel):
         run_id: str | None = None,
     ) -> tp.Any:
         import wandb
+        from lightning.fabric.utilities.rank_zero import rank_zero_only
 
-        if self.offline:
-            login_kwargs = {"key": "X" * 40}
-        else:
-            login_kwargs = {"host": self.host}  # type: ignore
-        wandb.login(**login_kwargs)  # type: ignore
+        # Under Slurm/srun every distributed rank executes this method. W&B
+        # authentication starts a local service, and concurrent login attempts
+        # can race and fail before Lightning's rank-zero logger guard applies.
+        if getattr(rank_zero_only, "rank", 0) == 0:
+            if self.offline:
+                login_kwargs = {"key": "X" * 40}
+            else:
+                login_kwargs = {"host": self.host}  # type: ignore
+            wandb.login(**login_kwargs)  # type: ignore
         from lightning.pytorch.loggers import WandbLogger
 
         if isinstance(xp_config, pydantic.BaseModel):

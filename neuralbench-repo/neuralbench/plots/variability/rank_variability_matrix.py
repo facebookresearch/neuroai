@@ -19,6 +19,8 @@ model achieves the same rank on every dataset of the task.
 
 from __future__ import annotations
 
+import typing as tp
+
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,7 +44,7 @@ from neuralbench.plots._models import lookup_by_name
 from neuralbench.plots._style import group_color
 from neuralbench.plots.ranking import compute_task_dataset_ranks
 
-_FONT_OVERRIDES = {
+_FONT_OVERRIDES: tp.Any = {
     "font.family": ["sans-serif"],
     "font.sans-serif": ["DejaVu Sans"]
     + [f for f in plt.rcParams["font.sans-serif"] if f != "DejaVu Sans"],

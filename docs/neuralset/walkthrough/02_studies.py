@@ -125,7 +125,7 @@ print(f"With query: {events_q.timeline.nunique()} timelines, {len(events_q)} eve
 # -------
 #
 # Study loading can be cached via the ``infra`` parameter. ``infra.folder``
-# automatically propagates to ``infra_timelines.folder``, so a single
+# automatically propagates to ``timelines.infra.folder``, so a single
 # ``infra`` caches both the merged events DataFrame and each timeline:
 #
 # .. code-block:: python
@@ -156,7 +156,7 @@ print(f"With query: {events_q.timeline.nunique()} timelines, {len(events_q)} eve
 #
 # See :doc:`/neuralset/caching_and_cluster` for all backend options and
 # cluster configuration (including how to disable parallel timeline
-# loading via ``infra_timelines={"cluster": None}`` when debugging).
+# loading via ``timelines={"infra": None}`` when debugging).
 
 # %%
 # Create Your Own (optional)
@@ -185,11 +185,6 @@ class FaceStimulus(etypes.Event):
 class FaceStudy(ns.Study):
     """A minimal study generating synthetic face events."""
 
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        # deactivate multiprocessing (inline classes can't be pickled by workers)
-        self.infra_timelines.cluster = None
-
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         for subject in ["alice", "bob"]:
             yield dict(subject=subject)
@@ -214,7 +209,9 @@ class FaceStudy(ns.Study):
 import tempfile
 from pathlib import Path
 
-custom_study = FaceStudy(path=Path(tempfile.mkdtemp()))
+# ``timelines={"infra": None}`` loads timelines inline and uncached, so the
+# locally-defined FaceStudy class never needs to be pickled to worker processes.
+custom_study = FaceStudy(path=Path(tempfile.mkdtemp()), timelines={"infra": None})
 custom_events = custom_study.run()
 
 print(custom_events[["type", "start", "identity", "expression", "timeline"]].to_string())

@@ -34,15 +34,19 @@ from matplotlib.backends.backend_pdf import PdfPages
 from neuralbench.plots._constants import (
     CATEGORY_COLORS,
     CATEGORY_ROW_GROUPS,
+    DEFAULT_EVAL_MODE,
+    FM_DISPLAY,
     TASK_CATEGORIES,
     TASK_DISPLAY_NAMES,
     TASK_TO_CATEGORY,
 )
 from neuralbench.plots._filters import multi_dataset_tasks
 from neuralbench.plots._style import (
+    NUMBERED_LEGEND_HANDLER_MAP,
     MarginalRankSpec,
     SubplotSpec,
     add_watermark,
+    base_name,
     bold_legend_titles,
     build_color_dict,
     build_grouped_legend,
@@ -51,6 +55,7 @@ from neuralbench.plots._style import (
     finalize_bar_grid,
     order_models_with_baselines_first,
     render_bars_grid,
+    within_category_labels,
 )
 from neuralbench.plots._task_metadata import (
     build_task_n_examples_map,
@@ -114,12 +119,13 @@ def plot_bar_chart(
     color_column: str = "model_name",
     y_column: str = "metric_value",
     watermark: str | None = None,
-) -> Path:
+) -> Path | None:
     """Faceted bar chart comparing models across tasks.
 
     Tasks are arranged in a category-aware grid: each row corresponds to
     one or more task categories (as defined by ``CATEGORY_ROW_GROUPS``),
-    with at most 7 columns per row.
+    with at most 7 columns per row.  Returns ``None`` without plotting when
+    no task in *df* belongs to one of those categories.
     """
     task_to_metric = df.groupby(facet_column)["metric_name"].first().to_dict()
     available = set(df[facet_column].unique())
@@ -127,6 +133,21 @@ def plot_bar_chart(
     display_models = df[color_column].unique().tolist()
     color_dict = build_color_dict(display_models)
     model_order = order_models_with_baselines_first(display_models)
+    # Within-category letter shown inside each legend swatch and just above
+    # every task-specific / foundation bar slot (incl. the marginal-rank
+    # column), so the (many) same-hue models can be told apart and a missing
+    # model reads as a labelled empty slot.
+    model_labels = within_category_labels(model_order)
+    fm_modes: list[str] = (
+        df.loc[df[color_column].map(base_name).isin(FM_DISPLAY), "eval_mode"]
+        .unique()
+        .tolist()
+        if "eval_mode" in df.columns
+        else []
+    )
+    # DEFAULT_EVAL_MODE may hide a different wrapper per model
+    shared = len(fm_modes) == 1 and fm_modes[0] != DEFAULT_EVAL_MODE
+    fm_eval_mode = fm_modes[0] if shared else None
 
     split_map = build_task_split_map()
     n_examples_map = build_task_n_examples_map()
@@ -155,14 +176,28 @@ def plot_bar_chart(
             row_layouts.append(tasks_in_row)
             row_cat_spans.append(spans)
 
+    # Panels are built per category, so an uncategorised task would otherwise
+    # vanish here while still appearing in the tables built off the same frame.
+    uncategorised = sorted(set(available) - {t for row in row_layouts for t in row})
+    if uncategorised:
+        warnings.warn(
+            f"Omitting {uncategorised} from the core bar chart: not listed in "
+            "neuralbench.plots._constants.TASK_CATEGORIES"
+        )
+
     # Standalone landscape sizing: 3" x 3" per cell -- the same
     # generous proportions as the original ``core_bar_chart`` from
-    # commit 5a8aa7d8a -- so the per-task panels read at the same
-    # visual density as the standalone reference (e.g.
-    # ``core_non_eeg_bar_chart.png``).  ``hspace=0.55`` was tuned in
-    # that PR to keep the per-row info badge from colliding with the
-    # next row's title.
+    # commit 5a8aa7d8a.  ``hspace=0.55`` was tuned in that PR to keep
+    # the per-row info badge from colliding with the next row's title.
     n_rows = len(row_layouts)
+    # Unguarded, plt.subplots(0, ...) aborts --plot-cached before any table is
+    # written, making finished runs look like they have no results.
+    if n_rows == 0:
+        warnings.warn(
+            "Skipping core bar chart: none of "
+            f"{sorted(available)} belongs to a plotted category"
+        )
+        return None
     _subplot_w, _subplot_h = 3.0, 3.0
     figsize = (
         (_marginal_width_ratio + _max_tasks) * _subplot_w,
@@ -175,6 +210,11 @@ def plot_bar_chart(
             _max_cols,
             figsize=figsize,
             squeeze=False,
+            # Every subplot lays its bars out on the same fixed model slots
+            # (0..n_models-1); sharing x locks that alignment across the grid
+            # so a model missing for a task shows as an aligned empty slot
+            # (identifiable via the per-slot within-category numbers).
+            sharex=True,
             gridspec_kw={
                 "wspace": 0.3,
                 "hspace": 0.55,
@@ -238,6 +278,7 @@ def plot_bar_chart(
         color_dict,
         error_capsize=2.5,
         error_linewidth=1.0,
+        model_labels=model_labels,
     )
 
     # Category labels -- placed after tight_layout so figure coords are
@@ -358,8 +399,13 @@ def plot_bar_chart(
         legend_ncol=2,
         legend_fontsize=16,
         legend_builder=lambda c, m: build_grouped_legend_two_col(
-            c, m, include_overlap=True
+            c,
+            m,
+            include_overlap=True,
+            model_labels=model_labels,
+            fm_eval_mode=fm_eval_mode,
         ),
+        legend_handler_map=NUMBERED_LEGEND_HANDLER_MAP,
     )
 
 

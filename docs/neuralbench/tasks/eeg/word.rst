@@ -25,7 +25,9 @@ Description
 
 The word decoding task involves decoding word stimuli from EEG recordings [dAscoli2025]_. In this task, we use the Nieuwland2018 dataset [Nieuwland2018]_, which contains EEG data recorded across 8 UK laboratories while subjects read 80 sentences on a screen in a rapid serial visual presentation paradigm. Word embeddings are extracted using contextualized GPT-2 representations.
 
+.. codespell:ignore-begin
 We exclude the GLAS (Glasgow, 128-channel BioSemi) and LOND (London, 34-channel) sites because their EEG montages are incompatible with the standard ~64-channel 10-20 systems used by the other 6 sites. Including them inflates the channel dimension to 194 (the union of all unique channel names) with heavy zero-padding, significantly slowing training without improving evaluation quality.
+.. codespell:ignore-end
 
 As in [dAscoli2025]_, the retrieval set is built from the 250 most frequent words in the test split.
 

@@ -1,0 +1,88 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# sleep_onset on interaxon2026muse, tested as streams; diff guarded by test_stream_task_diff
+# Warm-up benchmark on the supplied session split, not the sealed protocol.
+
+data:
+  neuro:
+    frequency: native
+    filter: null
+    notch_filter: null
+    scaler: null
+    clamp: null
+    scale_factor: 1.0e+6  # V -> uV
+  study:
+    source:
+      name: Interaxon2026Muse
+    split:  # supplied session split; validation subjects have no test session
+      name: Chain
+      steps:
+        valid_group:
+          name: CreateColumn
+          column: valid_group
+          query_row: "~subject.isin(subject.where(split == 'test'))"
+          query_column_name: subject
+        split:
+          name: PredefinedSplit
+          test_split_query: null
+          col_name: split
+          valid_split_by: valid_group
+          valid_split_ratio: 0.2
+          valid_random_state: 33
+        keep_test_sleepers_in_train:
+          name: CreateColumn
+          column: split
+          query_row: split.isna()
+          query_value: train
+          on_column_exists: ignore
+    annotate_sleep_onset:  # no crop or random start: Muse is curated to <= 30 min pre-N2
+      name: AddSleepOnsetTargets
+  # Sleep-EDF (Kemp2000) recordings only expose bipolar derivations (Fpz-Cz,
+  # Pz-Oz) whose MNE ch_locs are NaN, so the default ``ch_locs``-derived
+  # position mapping in ``ChannelPositions`` produces all-``INVALID_VALUE``
+  # positions.  Explicitly use the standard_1020 montage so the split-on-``-``
+  # fallback resolves Fpz-Cz -> Fpz and Pz-Oz -> Pz to real 3D coordinates.
+  channel_positions:
+    layout_or_montage_name: standard_1020
+  target:
+    =replace=: true
+    name: SleepOnsetTargetExtractor
+    event_types: SleepOnsetMarker
+    aggregation: trigger
+    cap_s: 600.0
+  trigger_event_type: SleepOnsetMarker
+  start: 0.0
+  duration: 5.0
+  stride: 5.0
+  sampler:
+    name: RegressionBinSampler
+    bin_edges: [0.0, 40.0, 90.0, 300.0, 600.0]
+  summary_columns: [n2_onset]
+  test_batch_size: 1
+  stream_by: [timeline]
+brain_model_output_size: &brain_model_output_size 1
+trainer_config:
+  monitor: val/wbmae_stream_mean
+  mode: min
+  patience: 7
+  n_epochs: 40
+loss:
+  name: MultiLoss
+  losses:
+    mse:
+      name: MSELoss
+  weights:
+    mse: 0.0001  # targets are in [0, 600] s; weight=0.0001 (0.01^2) keeps MSE <= ~36 so gradient clipping does not saturate.
+metrics: !!python/object/apply:operator.add
+  - !!python/object/apply:neuralbench.metric_configs.get_sleep_onset_metric_configs []
+  - - log_name: wbmae_stream_mean  # W-bMAE per recording, averaged over recordings
+      name: GroupedMetric
+      metric_name: BinnedMAE
+      kwargs:
+        bin_boundaries: [0.0, 40.0, 90.0, 300.0, 600.0]
+        bin_weights: [10.0, 5.0, 3.0, 1.0]
+      reduction: mean

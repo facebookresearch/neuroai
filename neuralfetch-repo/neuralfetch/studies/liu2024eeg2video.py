@@ -168,7 +168,7 @@ class Liu2024Eeg2video(study.Study):
         frequency=200.0,
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         raise NotImplementedError(
             "SEED-DV requires manual download. Steps:\n"
             "1. Download and sign the license agreement:\n"

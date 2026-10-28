@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 import neuralset as ns
@@ -33,7 +34,11 @@ def test_batch_and_collate() -> None:
         batches.append(b)
     assert batches[0].data["feat"].shape == (1, 4)
     assert len(batches[0].segments) == 1
-    collate_fn = dl.SegmentDataset({}, []).collate_fn
+    pulse = ns.extractors.Pulse(frequency=100.0, event_types="Word")
+    empty = dl.SegmentDataset({"feat": pulse}, [])
+    with pytest.raises(ValueError, match="empty dataset"):
+        empty.load_all()
+    collate_fn = empty.collate_fn
     batch = collate_fn(batches)
     assert len(batch.segments) == 3
     np.testing.assert_array_equal(batch.data["feat"][:, 0], [0, 10, 20])
@@ -45,15 +50,25 @@ def test_batch_and_collate() -> None:
     assert len(batch.segments) == 3
 
 
+class _CenteredPulse(ns.extractors.Pulse):
+    def collate(self, values: list[torch.Tensor]) -> torch.Tensor:
+        batch = torch.stack(values)
+        return batch - batch.mean(dim=0)
+
+
 def test_dataset() -> None:
     # A study is just a dataframe of events
     segments = _make_segments()
     pulse = ns.extractors.Pulse(frequency=100.0, event_types="Word")
-    extractors: tp.Any = {"single": pulse}
+    centered = _CenteredPulse(frequency=100.0, event_types="Word")
+    extractors: tp.Any = {"single": pulse, "centered": centered}
     ds = dl.SegmentDataset(extractors, segments)
     dataloader = DataLoader(ds, collate_fn=ds.collate_fn, batch_size=2)
     batch = next(iter(dataloader))
     assert batch.data["single"].shape == (2, 1, 100)
+    single = batch.data["single"]
+    torch.testing.assert_close(batch.data["centered"], single - single.mean(dim=0))
+    assert not ds.load_all(batch_size=1).data["centered"].any(), "centered per batch"
     # as one batch
     full_batch = ds.load_all()
     assert full_batch.data["single"].shape == (2, 1, 100)
@@ -79,16 +94,23 @@ def test_load_all_order() -> None:
     np.testing.assert_array_equal(ds.data["stim1"][:, 0], np.arange(len(df)))
 
 
+class _PaddingPulse(ns.extractors.Pulse):
+    def collate(self, values: list[torch.Tensor]) -> torch.Tensor:
+        n = max(value.shape[-1] for value in values)
+        return torch.stack([F.pad(value, (0, n - value.shape[-1])) for value in values])
+
+
 def test_padded_collate_dataset() -> None:
     # A study is just a dataframe of events
     segments = _make_segments()
     segments[1].duration = 2.0
     extractors = {"Pulse": ns.extractors.Pulse(frequency=100.0, event_types="Word")}
     ds = dl.SegmentDataset(extractors, segments, pad_duration=None)
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError, match="pad_duration"):
         ds.load_all()
-    with pytest.raises(ValueError):
-        ds.build_dataloader()
+    padding = _PaddingPulse(frequency=100.0, event_types="Word")
+    batch = dl.SegmentDataset({"Pulse": padding}, segments).load_all()
+    assert batch.data["Pulse"].shape == (2, 1, 200)
 
     for pad_duration in ["auto", 4.0]:
         ds = dl.SegmentDataset(extractors, segments, pad_duration=pad_duration)  # type: ignore

@@ -94,6 +94,52 @@ works and how to customize it by subclassing ``BrainModule``.
 #        return loss
 
 # %%
+# Sequential evaluation
+# ---------------------
+#
+# To feed each timeline (recording) to a model one window at a time, in time
+# order, set ``data.val_batch_size=1`` and/or ``data.test_batch_size=1``.
+# Validation and test windows are ordered by timeline then time unless
+# ``data.val_shuffle``/``data.test_shuffle`` is set. Keeping validation batched
+# (only ``test_batch_size=1``) keeps epochs fast and multi-GPU training
+# available. ``eeg _sleep_onset_stream`` and ``eeg _motor_imagery_stream``
+# stream their test split this way.
+#
+# ``data.stream_by`` lists the event fields that identify a stream, e.g.
+# ``[timeline]`` for one stream per recording or ``[subject, session]`` for
+# one per session, whose timelines must then be listed contiguously. It adds a
+# PyTorch Lightning
+# `callback <https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html>`_
+# that acts whenever a new stream starts during evaluation. It runs the
+# stream on a fresh copy of the model as it was when evaluation began, and
+# calls the copy's optional ``reset_state()``, so stateful models know where
+# streams begin and nothing the model changes while predicting (weights,
+# buffers, attributes) carries over to the next stream. The original model is
+# restored when evaluation ends. ``reset_state()`` also runs at each new
+# stream during training, which with shuffled batches is almost every batch.
+# The wrapper forwards the hook to its backbone. ``GroupedMetric`` metrics
+# then score each stream separately.
+#
+# As an illustration only (not a NeuralBench model), a recurrent backbone could
+# carry its hidden state across windows and clear it in ``reset_state()``:
+#
+# .. code-block:: python
+#
+#    class RecurrentBackbone(nn.Module):
+#        def __init__(self, n_chans: int, n_hidden: int = 64):
+#            super().__init__()
+#            self.gru = nn.GRU(n_chans, n_hidden, batch_first=True)
+#            self.hidden: torch.Tensor | None = None
+#
+#        def reset_state(self) -> None:
+#            self.hidden = None
+#
+#        def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (B, C, T)
+#            out, hidden = self.gru(x.transpose(1, 2), self.hidden)
+#            self.hidden = hidden.detach()  # next backward() would hit a freed graph
+#            return out[:, -1]
+#
+# %%
 # Subclassing BrainModule
 # -----------------------
 #

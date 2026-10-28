@@ -30,6 +30,7 @@ from neuralbench.plots._constants import (
     METRIC_HIGHER_IS_BETTER,
     METRIC_PERFECT_SCORE,
     TASK_DISPLAY_NAMES,
+    model_group,
 )
 from neuralbench.plots._style import add_watermark
 
@@ -38,6 +39,85 @@ Ceiling = tp.Literal["perfect", "task_max"]
 # ---------------------------------------------------------------------------
 # Dummy-to-ceiling normalisation
 # ---------------------------------------------------------------------------
+
+# Per-task normalisation parameters: ``(dummy_floor, ceiling)``.
+TaskBounds = tp.Dict[str, tp.Tuple[float, float]]
+
+
+def compute_task_bounds(
+    values: pd.DataFrame,
+    metrics: pd.Series,
+    *,
+    ceiling: Ceiling = "perfect",
+) -> TaskBounds:
+    """Per-task ``(dummy_floor, ceiling)`` for normalisation.
+
+    The floor is the Dummy model's seed-averaged score (falls back to Chance if
+    Dummy is unavailable).  The ceiling is either the metric's theoretical
+    perfect score (``ceiling="perfect"``) or the best modeled score observed on
+    the task (``ceiling="task_max"``; max/min over the foundation and classic
+    models, strategy-suffixed names included, excluding baselines so they
+    cannot be both floor and ceiling).  Tasks lacking a usable floor/ceiling
+    (or with a degenerate span) are omitted, mirroring the NaN handling in
+    :func:`_compute_dummy_normalized_scores`.
+
+    Parameters
+    ----------
+    values
+        Seed-averaged wide-form scores (tasks x models).
+    metrics
+        Task -> headline ``metric_name`` mapping.
+    ceiling
+        Which ceiling to normalise against.
+    """
+    modeled_cols = [
+        m for m in values.columns if model_group(str(m)) in ("foundation", "classic")
+    ]
+    bounds: TaskBounds = {}
+    for task in values.index:
+        metric = metrics.get(task, "test/bal_acc")
+        higher = METRIC_HIGHER_IS_BETTER.get(metric, True)
+
+        if ceiling == "task_max":
+            if not modeled_cols:
+                continue
+            row = values.loc[task, modeled_cols]
+            ceiling_val = float(row.max()) if higher else float(row.min())
+            if np.isnan(ceiling_val):
+                continue
+        else:
+            ceiling_val = METRIC_PERFECT_SCORE.get(metric, 100.0 if higher else 0.0)
+
+        dummy_val = np.nan
+        for baseline in ("Dummy", "Chance"):
+            if baseline in values.columns:
+                v = values.loc[task, baseline]
+                if pd.notna(v):
+                    dummy_val = float(v)
+                    break
+        if np.isnan(dummy_val):
+            continue
+
+        if abs(ceiling_val - dummy_val) < 1e-12:
+            continue
+
+        bounds[task] = (dummy_val, ceiling_val)
+    return bounds
+
+
+def apply_task_norm(
+    value: "float | np.ndarray | pd.Series",
+    dummy_val: "float | np.ndarray",
+    ceiling_val: "float | np.ndarray",
+) -> "float | np.ndarray | pd.Series":
+    """Map a raw score to ``[0, 1]`` given a task's dummy/ceiling bounds.
+
+    ``0`` = dummy level, ``1`` = ceiling.  This single ratio also handles
+    lower-is-better metrics: :func:`compute_task_bounds` puts the ceiling on the
+    correct side (e.g. ``dummy > ceiling`` for RMSE), so the result is always
+    oriented higher = better.  Not clipped; callers decide whether to clip.
+    """
+    return (value - dummy_val) / (ceiling_val - dummy_val)
 
 
 def _compute_dummy_normalized_scores(
@@ -82,50 +162,15 @@ def _compute_dummy_normalized_scores(
 
     values = values.dropna(how="all")
 
-    modeled_cols = [m for m in (FM_DISPLAY + CLASSIC_DISPLAY) if m in values.columns]
+    bounds = compute_task_bounds(values, metrics, ceiling=ceiling)
 
     norm = pd.DataFrame(index=values.index, columns=values.columns, dtype=float)
     for task in values.index:
-        metric = metrics.get(task, "test/bal_acc")
-        higher = METRIC_HIGHER_IS_BETTER.get(metric, True)
-
-        if ceiling == "task_max":
-            if not modeled_cols:
-                norm.loc[task] = np.nan
-                continue
-            row = values.loc[task, modeled_cols]
-            ceiling_val = float(row.max()) if higher else float(row.min())
-            if np.isnan(ceiling_val):
-                norm.loc[task] = np.nan
-                continue
-        else:
-            ceiling_val = METRIC_PERFECT_SCORE.get(metric, 100.0 if higher else 0.0)
-
-        dummy_val = np.nan
-        for baseline in ("Dummy", "Chance"):
-            if baseline in values.columns:
-                v = values.loc[task, baseline]
-                if pd.notna(v):
-                    dummy_val = float(v)
-                    break
-
-        if np.isnan(dummy_val):
+        if task not in bounds:
             norm.loc[task] = np.nan
             continue
-
-        if higher:
-            denom = ceiling_val - dummy_val
-        else:
-            denom = dummy_val - ceiling_val
-
-        if abs(denom) < 1e-12:
-            norm.loc[task] = np.nan
-            continue
-
-        if higher:
-            norm.loc[task] = (values.loc[task] - dummy_val) / denom
-        else:
-            norm.loc[task] = (dummy_val - values.loc[task]) / denom
+        dummy_val, ceiling_val = bounds[task]
+        norm.loc[task] = apply_task_norm(values.loc[task], dummy_val, ceiling_val)
 
     return norm.dropna(how="all")
 

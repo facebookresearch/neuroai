@@ -15,10 +15,6 @@ import pytest
 from . import config_manager
 from .data import Data
 
-# Bypass multiprocessing in the test sandbox; ``Test2024Eeg`` is tiny enough
-# that in-process execution is fast.
-_NO_CLUSTER: tp.Any = {"cluster": None}
-
 
 @pytest.fixture
 def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
@@ -33,9 +29,9 @@ def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
         base = config_manager._default_config()
         base.update(overrides)
         monkeypatch.setattr(config_manager, "_config", base)
-        monkeypatch.setattr(config_manager, "_initialized", False)
         for key in config_manager._LAZY_CONFIG_KEYS:
             monkeypatch.delattr(config_manager, key, raising=False)
+        monkeypatch.setattr(config_manager, "_initialized", False)
 
     return _apply
 
@@ -59,8 +55,8 @@ def build_data(
 ) -> Callable[..., Data]:
     """Factory fixture that builds a tiny ``Data`` over the ``Test2024Eeg`` study.
 
-    Returns a callable so each test can vary ``seed`` (and optionally
-    ``sampler``) without re-threading the study path or the
+    Returns a callable so each test can vary ``seed``, ``sampler``, ``target``
+    or any other ``Data`` field without re-threading the study path or the
     rest of the config.  ``event_field="subject"`` keeps all 3 subjects in
     the train split so ``compute_class_weights_from_dataset`` sees no
     class-index gaps -- a quiet workaround for a separate latent bug.
@@ -70,15 +66,17 @@ def build_data(
         *,
         seed: int | None,
         sampler: tp.Any | None = None,
+        target: dict[str, tp.Any] | None = None,
+        **overrides: tp.Any,
     ) -> Data:
         config: tp.Any = dict(
             study={
                 "name": "Test2024Eeg",
                 "path": test2024eeg_path,
-                "infra_timelines": _NO_CLUSTER,
             },
             neuro={"name": "MneRaw", "event_types": "Eeg"},
-            target={
+            target=target
+            or {
                 "name": "LabelEncoder",
                 "event_field": "subject",
                 "event_types": "Word",
@@ -94,6 +92,7 @@ def build_data(
             seed=seed,
             sampler=sampler,
         )
+        config.update(overrides)
         return Data(**config)
 
     return _factory

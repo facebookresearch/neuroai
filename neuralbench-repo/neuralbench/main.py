@@ -6,6 +6,7 @@
 
 
 import logging
+import math
 import platform
 import resource
 import time
@@ -13,9 +14,11 @@ import typing as tp
 from pathlib import Path
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import yaml
 from exca import TaskInfra
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import (
     Callback,
     EarlyStopping,
@@ -29,6 +32,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
+from neuraltrain.augmentations import BandRotationConfig
 from neuraltrain.losses import BaseLoss
 from neuraltrain.metrics import BaseMetric
 from neuraltrain.models.base import BaseModelConfig
@@ -48,7 +52,9 @@ from .callbacks import (
     PlotRegressionScatter,
     PlotRegressionVectors,
     RecordingLevelEval,
+    ResetPerStream,
     TestFullRetrievalMetrics,
+    WindowPredictionCollector,
 )
 from .data import Data as Data  # noqa: F401
 from .model_factory import build_brain_model
@@ -79,8 +85,12 @@ class Experiment(BaseExperiment):
 
     # Optim
     trainer_config: TrainerConfig
+    # Caps each epoch to a fresh random draw of this many hours of training
+    # windows, whatever the batch size or window duration.
+    max_neuro_hours_per_epoch: float | None = None
     loss: BaseLoss
     lightning_optimizer_config: LightningOptimizer
+    augmentation: BandRotationConfig | None = None
 
     # Evaluation
     eval_only: bool = False
@@ -88,6 +98,9 @@ class Experiment(BaseExperiment):
     validate_before_training: bool = True
     test_full_metrics: list[BaseMetric] = []
     test_full_retrieval_metrics: list[BaseMetric] = []
+    # When True, raw per-window test predictions/targets are folded into the
+    # cached ``run`` result (see ``WindowPredictionCollector``).
+    save_test_predictions: bool = False
 
     # Weights & Biases
     csv_config: CsvLoggerConfig | None = None
@@ -107,6 +120,7 @@ class Experiment(BaseExperiment):
     infra: TaskInfra = TaskInfra(version="1")
     dummy: dict[str, tp.Any] = {}  # Useful to avoid overwriting experiments between grids
     brain_model_name: str = ""
+    space_name: str | None = None  # data representation, e.g. a spaces/ variant
 
     @model_validator(mode="after")
     def _populate_brain_model_name(self) -> "Experiment":
@@ -149,7 +163,12 @@ class Experiment(BaseExperiment):
         # Seed before any model construction so wrapper/adapters/lazy init do
         # not depend on RNG already consumed by data preparation or setup.
         pl.seed_everything(self.seed, workers=True)
-        brain_model, self._n_total_params, self._n_trainable_params = build_brain_model(
+        (
+            brain_model,
+            self._n_total_params,
+            self._n_trainable_params,
+            ch_names,
+        ) = build_brain_model(
             brain_model_config=self.brain_model_config,
             downstream_model_wrapper=self.downstream_model_wrapper,
             pretrained_weights_fname=self.pretrained_weights_fname,
@@ -182,7 +201,9 @@ class Experiment(BaseExperiment):
 
         self._brain_module = BrainModule(
             model=brain_model,
+            ch_names=ch_names,
             target_scaler=self.target_scaler,
+            augmentation=None if self.augmentation is None else self.augmentation.build(),
             loss=self.loss.build(**loss_kwargs),
             lightning_optimizer_config=self.lightning_optimizer_config,
             metrics={metric.log_name: metric.build() for metric in self.metrics},
@@ -252,9 +273,25 @@ class Experiment(BaseExperiment):
         if self.csv_config is not None:
             self._csv_logger = self.csv_config.build(save_dir=savedir)
 
-    def setup_trainer(self, is_test: bool = False) -> pl.Trainer:
-        """Create callbacks and setup Trainer."""
+    def setup_trainer(
+        self, is_test: bool = False, limit_train_batches: int | None = None
+    ) -> pl.Trainer:
+        """Create callbacks and setup Trainer, overriding ``limit_train_batches`` if given."""
         callbacks: list[Callback] = []
+        if self.data.stream_by is not None:
+            callbacks.append(ResetPerStream())
+            neuro = self.data.neuro
+            if (
+                is_test
+                and isinstance(neuro, ns.extractors.MneRaw)
+                and neuro.scaler is not None
+            ):
+                LOGGER.warning(
+                    "Streamed test with data.neuro.scaler=%s, fit on each whole "
+                    "recording: windows see future signal, so scores are optimistic "
+                    "for a streamed submission.",
+                    neuro.scaler,
+                )
         if "confusion_matrix" in [metric.log_name for metric in self.metrics]:
             labels: list[str] | None = None
             if isinstance(self.data.target, ns.extractors.LabelEncoder):
@@ -264,6 +301,18 @@ class Experiment(BaseExperiment):
                 labels = [ind_to_label[i] for i in sorted(ind_to_label)]
             callbacks.append(PlotConfusionMatrix(labels=labels))
         if is_test:
+            if self.save_test_predictions:
+                uid_folder = self.infra.uid_folder()
+                if uid_folder is None:
+                    raise RuntimeError(
+                        "save_test_predictions=True requires an infra cache "
+                        "folder; configure ``infra.folder``."
+                    )
+                callbacks.append(
+                    WindowPredictionCollector(
+                        folder=uid_folder / self._TEST_PREDICTIONS_DIR
+                    )
+                )
             if self.test_full_metrics:
                 callbacks.append(RecordingLevelEval())
             if self.test_full_retrieval_metrics:
@@ -285,7 +334,7 @@ class Experiment(BaseExperiment):
                     if hasattr(self.loss, "name")
                     else self.loss.__class__.__name__
                 )
-                if loss_name in ["MSELoss", "ClipLoss"]:
+                if loss_name in ["MSELoss", "ClipLoss", "DistributedClipLoss"]:
                     callbacks.append(PlotRegressionVectors(num_samples=10))
             # Add scatter plot for 1D regression outputs
             if (
@@ -331,13 +380,53 @@ class Experiment(BaseExperiment):
         if not loggers:
             loggers.append(DummyLogger())
 
-        return self.trainer_config.build(
+        trainer_config = self.trainer_config
+        if limit_train_batches is not None:
+            trainer_config = trainer_config.model_copy(
+                update={"limit_train_batches": limit_train_batches}
+            )
+        return trainer_config.build(
             logger=loggers,
             callbacks=callbacks,
             accelerator="cpu" if self.infra.gpus_per_node == 0 else "auto",
             devices=1 if is_test else self.infra.gpus_per_node,
             num_nodes=1,
         )
+
+    def _train_batch_limit(self, train_loader: DataLoader) -> int | None:
+        """Per-rank ``limit_train_batches`` holding ``max_neuro_hours_per_epoch``.
+
+        ``trainer_config.limit_train_batches`` is returned unchanged when the
+        training set is within the budget, and kept whenever it is stricter
+        (e.g. debug mode).
+        """
+        assert self.max_neuro_hours_per_epoch is not None
+        configured = self.trainer_config.limit_train_batches
+        dataset = train_loader.dataset
+        segments = getattr(dataset, "segments", None)
+        if segments is not None:
+            total_seconds = sum(segment.duration for segment in segments)
+        elif self.data.duration is not None:
+            total_seconds = len(dataset) * self.data.duration  # type: ignore[arg-type]
+        else:
+            raise ValueError(
+                "max_neuro_hours_per_epoch needs a fixed data.duration or segments"
+            )
+        total_hours = total_seconds / 3600
+        if total_hours <= self.max_neuro_hours_per_epoch:
+            return configured
+        # the loader is not sharded yet: under DDP each rank gets 1 / n_ranks
+        n_ranks = max(self.infra.gpus_per_node or 1, 1)
+        limit = math.ceil(
+            len(train_loader) * self.max_neuro_hours_per_epoch / total_hours / n_ranks
+        )
+        LOGGER.info(
+            "Capping training epochs to %d batches per rank (%.1f of %.1f window-hours)",
+            limit,
+            self.max_neuro_hours_per_epoch,
+            total_hours,
+        )
+        return limit if configured is None else min(limit, configured)
 
     def _test(
         self,
@@ -357,7 +446,10 @@ class Experiment(BaseExperiment):
     def _cleanup(self, trainer: pl.Trainer) -> None:
         """Delete checkpoint and finalize W&B."""
         if (
-            self.delete_checkpoints_on_exit
+            # Deleting from another rank can strip the checkpoint before rank
+            # zero has tested with it.
+            trainer.global_rank == 0
+            and self.delete_checkpoints_on_exit
             and not self.eval_only
             and hasattr(trainer.checkpoint_callback, "best_model_path")
         ):
@@ -373,13 +465,24 @@ class Experiment(BaseExperiment):
 
             wandb.finish()
 
-    @infra.apply(
-        exclude_from_cache_uid=(
-            "wandb_config",
-            "csv_config",
-            "brain_model_name",
-        )
-    )
+    def _exclude_from_cache_uid(self) -> list[str]:
+        """Config paths that must not affect the cache key.
+
+        ``space_name`` only labels a run: the ``spaces/`` overlay it names
+        already changes the config. The LoRA fields are inert while
+        ``lora_config`` is unset, so dropping them then keeps finetune / probe
+        runs on the cache keys they had before LoRA support landed.
+        """
+        excluded = ["wandb_config", "csv_config", "brain_model_name", "space_name"]
+        wrapper = self.downstream_model_wrapper
+        if wrapper is not None and wrapper.lora_config is None:
+            excluded += [
+                "downstream_model_wrapper.lora_config",
+                "downstream_model_wrapper.lora_target_modules",
+            ]
+        return excluded
+
+    @infra.apply(exclude_from_cache_uid="method:_exclude_from_cache_uid")
     def run(self) -> dict[str, tp.Any]:
         """Execute the full experiment lifecycle: setup, train, test, cleanup.
 
@@ -401,11 +504,15 @@ class Experiment(BaseExperiment):
         pl.seed_everything(self.seed, workers=True)
         self.setup_run()
         loaders = self.data.prepare()
-        trainer = self.setup_trainer()
+        limit_train_batches = None
+        if self.max_neuro_hours_per_epoch is not None:
+            limit_train_batches = self._train_batch_limit(loaders["train"])
+        trainer = self.setup_trainer(limit_train_batches=limit_train_batches)
         self.prepare_pl_module(loaders["train"], loaders.get("val"))
 
         test_results: dict[str, tp.Any] = {}
 
+        best_model_path: str | None = None
         training_time_s: float | None = None
         peak_gpu_memory_mb: float | None = None
         peak_cpu_memory_mb: float | None = None
@@ -426,7 +533,11 @@ class Experiment(BaseExperiment):
             divisor = 1024 if platform.system() != "Darwin" else 1024**2
             peak_cpu_memory_mb = rusage.ru_maxrss / divisor
 
-            if isinstance(trainer.checkpoint_callback, ModelCheckpoint):
+            # Only rank zero writes the checkpoint, and it deletes it in
+            # ``_cleanup``, so reading it elsewhere races that deletion.
+            if trainer.global_rank == 0 and isinstance(
+                trainer.checkpoint_callback, ModelCheckpoint
+            ):
                 best_model_path = trainer.checkpoint_callback.best_model_path
                 assert best_model_path is not None
                 best_ckpt = torch.load(
@@ -439,8 +550,6 @@ class Experiment(BaseExperiment):
                 for logger in [self._wandb_logger, self._csv_logger]:
                     if logger is not None:
                         logger.log_metrics({"best_epoch": best_epoch})
-        else:
-            best_model_path = None
 
         if (
             getattr(self.infra, "gpus_per_node", 0) > 1
@@ -449,6 +558,12 @@ class Experiment(BaseExperiment):
             torch.distributed.destroy_process_group()
 
         if trainer.global_rank == 0:
+            # ``WindowPredictionCollector`` (added in ``setup_trainer`` when
+            # ``save_test_predictions`` is set) streams the raw per-window
+            # predictions to ``infra.uid_folder()/<_TEST_PREDICTIONS_DIR>`` as a
+            # byproduct of the test loop. They live next to ``job.pkl`` so they
+            # survive cache hits and stay out of the cached result dict; read
+            # them back via ``test_predictions()``.
             test_results.update(self._test(loaders, best_model_path))
 
         self._cleanup(trainer)
@@ -463,6 +578,55 @@ class Experiment(BaseExperiment):
             }
         )
         return test_results
+
+    # Subfolder (under ``infra.uid_folder()``) where ``WindowPredictionCollector``
+    # streams the per-window test prediction artifacts via exca's ``CacheDict``.
+    _TEST_PREDICTIONS_DIR: tp.ClassVar[str] = "test_predictions"
+
+    def test_predictions(self) -> dict[str, tp.Any]:
+        """Raw per-window test predictions.
+
+        Requires ``save_test_predictions=True``. Returns a dict with:
+
+        - ``"metadata"``: a :class:`pandas.DataFrame` with one row per test
+          window (``timeline``, ``batch_idx``, ``dataloader_idx``, plus
+          ``subject_id`` and a retrieval ``group`` label when available);
+        - ``"y_true"`` / ``"y_pred"``: arrays of shape ``(n_windows, ...)``
+          aligned with ``metadata``, concatenated across batches.
+
+        ``WindowPredictionCollector`` streams the predictions to the uid folder
+        during the test loop (metadata as CSV, arrays appended to a shared
+        memmap file), so they survive cache hits and are read straight from
+        disk. This is a read-only accessor: call :meth:`run` first (a cache hit
+        is fine); if the artifacts are missing it raises rather than launching a
+        run. The per-batch array chunks are concatenated on read, so loading
+        materializes the full arrays in RAM.
+        """
+        uid_folder = self.infra.uid_folder()
+        if uid_folder is None:
+            raise RuntimeError(
+                "Cannot read test predictions without an infra cache folder; "
+                "configure ``infra.folder``."
+            )
+        cache: CacheDict = CacheDict(folder=uid_folder / self._TEST_PREDICTIONS_DIR)
+        keys = set(cache.keys())
+        if not keys:
+            raise ValueError(
+                "Test predictions are unavailable. Set "
+                "save_test_predictions=True and (re)run the experiment "
+                "(toggling the flag yields a fresh cache entry)."
+            )
+
+        def _concat(prefix: str) -> np.ndarray:
+            chunks = sorted(key for key in keys if key.startswith(prefix))
+            return np.concatenate([np.asarray(cache[key]) for key in chunks], axis=0)
+
+        collector = WindowPredictionCollector
+        return {
+            "metadata": cache[collector._METADATA_KEY],
+            "y_true": _concat(collector._Y_TRUE_PREFIX),
+            "y_pred": _concat(collector._Y_PRED_PREFIX),
+        }
 
 
 # BenchmarkAggregator lives in aggregator.py and forward-references Experiment

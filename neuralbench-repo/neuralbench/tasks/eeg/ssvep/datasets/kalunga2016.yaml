@@ -19,5 +19,5 @@ data:
 # Kalunga2016Online is 4-class (rest + 3 SSVEP frequencies); set explicitly
 # so it doesn't follow the task-level default, which is now 40 (Wang2017).
 brain_model_output_size: &brain_model_output_size 4
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

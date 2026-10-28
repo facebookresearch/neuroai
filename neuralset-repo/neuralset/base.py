@@ -7,6 +7,7 @@
 import ast
 import collections
 import importlib.util
+import inspect
 import logging
 import pprint
 import typing as tp
@@ -149,6 +150,7 @@ class _Module(BaseModel):
             "opencv-python": "cv2",
             "datalad-installer": "datalad_installer",
             "openneuro-py": "openneuro",
+            "nemar-py": "nemar",
             "sonar-space": "sonar",
         }
         missing = []
@@ -289,6 +291,8 @@ class TimedArray:
        fast access without loading full arrays into memory.
     """
 
+    _INIT_PARAMS: tp.ClassVar[dict[type[tp.Any], tuple[str, ...]]] = {}
+
     def __init__(
         self,
         *,  # forbid positional
@@ -362,7 +366,7 @@ class TimedArray:
         self._overlapping_data_count: None | np.ndarray = None
         if aggregation in ("mean", "single"):
             num = self.data.shape[-1] if self.frequency else 1
-            self._overlapping_data_count = np.zeros(num, dtype=int)
+            self._overlapping_data_count = bool(self.data.size) * np.ones(num, dtype=int)
         elif aggregation != "sum":
             raise ValueError(f"Unknown {aggregation=}")
 
@@ -440,7 +444,7 @@ class TimedArray:
         if self.start == _UNSET_START or start == _UNSET_START:
             raise RuntimeError(
                 "Cannot compute overlap on a TimedArray with unset start time. "
-                "Call with_start() first."
+                "Call copy(start=...) first."
             )
         if duration < 0:
             raise ValueError(f"duration should be >=0, got {duration=}")
@@ -471,15 +475,22 @@ class TimedArray:
         out = start, duration, slice(start_ind, start_ind + duration_ind)
         return out
 
-    def with_start(self: _TA, start: float) -> _TA:
-        """Return a lightweight copy sharing the data array with a new start time."""
+    def copy(self: _TA, **changes: tp.Any) -> _TA:
+        """Shallow copy, overriding the given fields and carrying the rest over."""
+        counts = self._overlapping_data_count
+        if counts is not None:
+            safe_empty = not self.data.size and not counts.any()
+            safe_single = bool(self.data.size) and np.all(counts == 1)
+            if not (safe_empty or safe_single):
+                raise RuntimeError(
+                    "Cannot copy a TimedArray with aggregated contribution counts"
+                )
         cls = type(self)
-        return cls(
-            data=self.data,
-            frequency=self.frequency,
-            start=start,
-            header=self.header,
-        )
+        if cls not in self._INIT_PARAMS:  # signature() is ~10us, copy is used intensely
+            self._INIT_PARAMS[cls] = tuple(inspect.signature(cls).parameters)
+        kw = {name: getattr(self, name) for name in self._INIT_PARAMS[cls]}
+        kw.update(changes)
+        return cls(**kw)
 
     def overlap(self: _TA, start: float, duration: float) -> _TA:
         """Returns the sub TimedArray overlapping with the provided start

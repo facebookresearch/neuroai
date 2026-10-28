@@ -18,5 +18,5 @@ data:
   start: 0.0
   duration: 3.0
 brain_model_output_size: &brain_model_output_size 7
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size

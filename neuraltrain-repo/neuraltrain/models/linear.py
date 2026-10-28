@@ -8,11 +8,11 @@ import typing as tp
 
 from torch import nn
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 from .common import SubjectLayers
 
 
-class Linear(BaseModelConfig):
+class Linear(BaseBrainModelConfig):
     """Simple linear projection, with optional per-subject weights.
 
     Parameters
@@ -28,9 +28,10 @@ class Linear(BaseModelConfig):
     reduction: tp.Literal["mean", "concat"] = "mean"
     subject_layers_config: SubjectLayers | None = None
 
-    def build(self, n_in_channels: int, n_outputs: int) -> nn.Module:
+    def build(self, n_spatial_locations: int, n_outputs: int | None) -> nn.Module:
+        assert n_outputs is not None, "Linear requires n_outputs"
         return LinearModel(
-            n_in_channels,
+            n_spatial_locations,
             n_outputs,
             reduction=self.reduction,
             subject_layers_config=self.subject_layers_config,

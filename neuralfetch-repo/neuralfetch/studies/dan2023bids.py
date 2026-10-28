@@ -8,7 +8,7 @@ import typing as tp
 
 import mne
 import pandas as pd
-from mne_bids import BIDSPath, read_raw_bids
+from mne_bids import BIDSPath
 
 from neuralfetch import download
 from neuralset.events import study
@@ -108,11 +108,11 @@ class Dan2023Bids(study.Study):
         "24": [list(range(0, 22))],
     }
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         zenodo = download.Zenodo(
             study="CHB-MIT-EEG-Corpus", dset_dir=self.path, record_id="10259996"
         )
-        zenodo.download()
+        zenodo.download(overwrite=overwrite)
 
     def _get_bids_path(self, timeline: dict[str, tp.Any]) -> BIDSPath:
         """Returns the BIDS path for a study"""
@@ -160,8 +160,9 @@ class Dan2023Bids(study.Study):
         return events
 
     def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
+        # not read_raw_bids: its sidecar .lock files fail EACCES on a shared copy
+        raw = mne.io.read_raw_edf(self._get_bids_path(timeline).fpath, verbose=False)
         # EEG uses a double banana bipolar montage
-        raw = read_raw_bids(self._get_bids_path(timeline), verbose=False)
         mne.rename_channels(
             raw.info, mapping=lambda x: x.replace("FP", "Fp").replace("Z", "z")
         )

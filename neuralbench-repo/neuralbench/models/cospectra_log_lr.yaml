@@ -8,16 +8,11 @@
 # (SSVEP): CoSpectra (real cross-spectra via Welch) + upper-triangular
 # flattening with log1p on the diagonal (per-channel PSD) + StandardScaler
 # + LogisticRegressionCV.
-#
-# ``sfreq`` **must** match the rate the ``EegExtractor`` resamples the raw
-# data to (default 120 Hz in ``neuralbench/defaults/config.yaml``).
-#
 brain_model_name: cospectra_log_lr
 eval_only: true
 brain_model_config:
   =replace=: true
   name: CoSpectraLogLR
-  sfreq: 120.0
   window: 128
   overlap: 0.75
   fmin: 2.0

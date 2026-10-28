@@ -8,6 +8,7 @@ import logging
 import typing as tp
 import warnings
 
+import exca as xk
 import numpy as np
 import pandas as pd
 import pydantic
@@ -24,7 +25,7 @@ from neuralset.segments import Segment
 logger = logging.getLogger(__name__)
 
 
-class BaseExtractor(base._Module, base.NamedModel):
+class BaseExtractor(base.NamedModel, base._Module):
     """Base class for extracting features from :term:`events <event>` within a
     :class:`~neuralset.segments.Segment`.
 
@@ -66,8 +67,8 @@ class BaseExtractor(base._Module, base.NamedModel):
         :meth:`prepare` has been called first so the output shape is known.
     frequency : float or ``"native"``
         Output sampling rate in Hz.  Use ``"native"`` to keep the original
-        sampling rate of the input data.  ``0`` is reserved for static
-        extractors (:class:`BaseStatic`).
+        sampling rate of the input data.  ``0`` requires a static extractor,
+        i.e. one whose data has no time axis (e.g. :class:`BaseStatic`).
     """
 
     event_types: str | tuple[str, ...] = ""
@@ -122,10 +123,13 @@ class BaseExtractor(base._Module, base.NamedModel):
                 msg = f'In {name!r}, found function {func!r} which should be renamed to "_get_data"'
                 raise RuntimeError(msg)
         infrafield = cls.model_fields.get("infra", None)
-        if infrafield is not None:
-            funcname = infrafield.default._infra_method.method.__name__
+        if infrafield is not None and isinstance(infrafield.default, xk.MapInfra):
+            method = infrafield.default._infra_method
+            if method is None:
+                raise RuntimeError(f"In {name!r}, infra must decorate _get_data")
+            funcname = method.method.__name__
             if funcname != "_get_data":
-                msg = f'In {name!r}, found infra decorating {funcname!r} it should be "_get_data" by convention'
+                msg = f'In {name!r}, found infra decorating {funcname!r}, convention is "_get_data"'
                 raise RuntimeError(msg)
         # security checks for new event_types
         if not isinstance(event_types, str):
@@ -138,6 +142,10 @@ class BaseExtractor(base._Module, base.NamedModel):
         for etype in type_helper.classes:
             cls.requirements = cls.requirements + etype.requirements
 
+    def _is_static(self) -> bool:
+        # no time axis in the data; may depend on the config (override)
+        return False
+
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         self._event_types_helper = EventTypesHelper(self.event_types)
@@ -145,8 +153,9 @@ class BaseExtractor(base._Module, base.NamedModel):
         if self.frequency != "native" and self.frequency < 0.0:
             msg = f"{name}.frequency is neither 'native' nor >= 0 (got {self.frequency})."
             raise ValueError(msg)
-        if not (self.frequency or isinstance(self, BaseStatic)):
-            msg = f"{name}.frequency=0 is only allowed for static extractors (did you mean 'native'?)"
+        if not (self.frequency or self._is_static()):
+            msg = f"{name}.frequency=0 requires a static extractor, whose data has "
+            msg += "no time axis (did you mean 'native'?)"
             raise ValueError(msg)
 
     def _exclude_from_cache_uid(self) -> list[str]:
@@ -295,6 +304,10 @@ class BaseExtractor(base._Module, base.NamedModel):
 
         return tensor
 
+    def collate(self, values: list[torch.Tensor]) -> torch.Tensor:
+        """Batches the outputs of several segments along a new first dimension."""
+        return torch.stack(values)
+
     def _get_relevant_events(
         self,
         events: tp.Any,
@@ -391,6 +404,9 @@ class BaseStatic(BaseExtractor):
     """
 
     frequency: float = 0.0  # FIXME should be pydantic.PositiveFloat
+
+    def _is_static(self) -> bool:
+        return True
 
     def get_static(self, event: etypes.Event) -> torch.Tensor:
         """Return a single feature vector for the given event.

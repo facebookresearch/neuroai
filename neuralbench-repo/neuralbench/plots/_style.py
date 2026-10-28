@@ -18,9 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.cm as cm
+import matplotlib.offsetbox as offsetbox
+import matplotlib.path as mpath
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Patch
+from matplotlib.artist import Artist
+from matplotlib.collections import LineCollection
+from matplotlib.legend_handler import HandlerBase
+from matplotlib.patches import Circle, Patch, PathPatch, Polygon, Rectangle
+from matplotlib.text import Text
+from matplotlib.transforms import Affine2D, Transform, blended_transform_factory
 
 if tp.TYPE_CHECKING:
     import pandas as pd
@@ -36,6 +43,8 @@ from neuralbench.plots._constants import (
     MODEL_PARAMS,
     MODEL_YEAR,
     PRETRAINING_OVERLAP,
+    AdaptationMode,
+    eval_mode_label,
 )
 from neuralbench.plots._models import lookup_by_name
 
@@ -88,6 +97,257 @@ def base_name(name: str) -> str:
         base, _, _ = name.rpartition(" (")
         return base
     return name
+
+
+def within_category_labels(display_models: list[str]) -> dict[str, str]:
+    """Map each task-specific / foundation model to a within-category letter.
+
+    Labels restart at ``A`` for each of the two "labelled" categories
+    (task-specific models, then foundation models), following the canonical
+    display order in :data:`CLASSIC_DISPLAY` / :data:`FM_DISPLAY` (so e.g.
+    ``BENDR=A``, ``BIOT=B`` among the foundation models).  Single capital
+    letters keep the marker one character wide regardless of how many models
+    are present (unlike two-digit numbers).  Baselines are intentionally
+    excluded -- there are only a few and they are already visually distinct.
+
+    The returned dict is keyed by the *base* display name, so callers can look
+    up a bar / legend entry via ``base_name(model)``.  Only models actually
+    present in *display_models* are labelled, keeping the letters contiguous.
+    """
+    base_to_full = {base_name(m): m for m in display_models}
+    labels: dict[str, str] = {}
+    for group in (CLASSIC_DISPLAY, FM_DISPLAY):
+        present = [m for m in group if m in base_to_full]
+        for idx, name in enumerate(present):
+            # Single capital letter (A, B, ...); the two categories never
+            # exceed 26 models, so a single character always suffices.
+            labels[name] = chr(ord("A") + idx)
+    return labels
+
+
+class _LabeledPatch:
+    """Legend handle: a filled swatch carrying an optional within-category label.
+
+    Rendered by :class:`_LabeledPatchHandler`; register the pair via
+    ``fig.legend(..., handler_map={_LabeledPatch: _LabeledPatchHandler()})``.
+    """
+
+    def __init__(self, color: str, label: str | None = None) -> None:
+        self.color = color
+        self.label = label
+
+
+class _LabeledPatchHandler(HandlerBase):
+    """Draw a filled rectangle with a small centred label for :class:`_LabeledPatch`."""
+
+    def create_artists(  # noqa: D102  (matplotlib handler protocol)
+        self,
+        legend,
+        orig_handle,
+        xdescent,
+        ydescent,
+        width,
+        height,
+        fontsize,
+        trans,
+    ):
+        rect = Rectangle(
+            (-xdescent, -ydescent),
+            width,
+            height,
+            facecolor=orig_handle.color,
+            edgecolor="none",
+            transform=trans,
+        )
+        artists: list[tp.Any] = [rect]
+        if orig_handle.label is not None:
+            txt = Text(
+                -xdescent + width / 2.0,
+                -ydescent + height / 2.0,
+                orig_handle.label,
+                ha="center",
+                va="center",
+                fontsize=max(fontsize * 0.66, 5.0),
+                color=SLOT_LABEL_COLOR,
+                fontweight="bold",
+                transform=trans,
+            )
+            artists.append(txt)
+        return artists
+
+
+class _AdaptationIcon:
+    """Legend handle: pictogram of an adaptation strategy.
+
+    Rendered by :class:`_AdaptationIconHandler`; *strategy* must be a key of
+    :data:`_ICON_DRAWERS`.
+    """
+
+    def __init__(self, strategy: str) -> None:
+        self.strategy = strategy
+
+
+_ICON_INK = "#444444"
+_FLAME_PATH = mpath.Path(
+    [
+        (0.50, 0.03),
+        (0.18, 0.03),
+        (0.10, 0.30),
+        (0.22, 0.52),
+        (0.30, 0.68),
+        (0.44, 0.74),
+        (0.46, 0.98),
+        (0.64, 0.82),
+        (0.84, 0.66),
+        (0.82, 0.38),
+        (0.80, 0.14),
+        (0.68, 0.03),
+        (0.50, 0.03),
+    ],
+    [mpath.Path.MOVETO] + [mpath.Path.CURVE4] * 12,
+)
+_FLAME_CORE_PATH = mpath.Path(
+    [
+        (0.50, 0.08),
+        (0.36, 0.08),
+        (0.31, 0.24),
+        (0.38, 0.36),
+        (0.43, 0.45),
+        (0.50, 0.48),
+        (0.52, 0.62),
+        (0.61, 0.52),
+        (0.69, 0.42),
+        (0.66, 0.27),
+        (0.64, 0.14),
+        (0.58, 0.08),
+        (0.50, 0.08),
+    ],
+    [mpath.Path.MOVETO] + [mpath.Path.CURVE4] * 12,
+)
+
+
+def _snowflake(lw: float, transform: Transform) -> list[Artist]:
+    center = np.array([0.5, 0.5])
+    segments: list[np.ndarray] = []
+    for k in range(6):
+        arm = np.pi / 2 + k * np.pi / 3
+        direction = np.array([np.cos(arm), np.sin(arm)])
+        segments.append(np.array([center, center + 0.46 * direction]))
+        fork = center + 0.28 * direction
+        for side in (-1, 1):
+            branch = arm + side * np.pi / 4
+            twig = 0.17 * np.array([np.cos(branch), np.sin(branch)])
+            segments.append(np.array([fork, fork + twig]))
+    return [
+        LineCollection(
+            segments,
+            colors="#5b7183",
+            linewidths=lw * 1.5,
+            capstyle="round",
+            transform=transform,
+        )
+    ]
+
+
+def _magnifier(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        LineCollection(
+            [[(0.64, 0.36), (0.92, 0.08)]],
+            colors=_ICON_INK,
+            linewidths=lw * 2.2,
+            capstyle="round",
+            transform=transform,
+        ),
+        Circle(
+            (0.42, 0.58),
+            0.30,
+            facecolor="#e3f0fa",
+            edgecolor=_ICON_INK,
+            linewidth=lw * 1.3,
+            transform=transform,
+        ),
+        *[
+            Circle((x, 0.58), 0.045, color=_ICON_INK, transform=transform)
+            for x in (0.29, 0.42, 0.55)
+        ],
+    ]
+
+
+def _hourglass(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        *[
+            Polygon(
+                bulb,
+                facecolor=fill,
+                edgecolor=_ICON_INK,
+                linewidth=lw,
+                transform=transform,
+            )
+            for bulb, fill in [
+                ([(0.2, 0.9), (0.8, 0.9), (0.5, 0.5)], "#fdfaf3"),
+                ([(0.5, 0.5), (0.2, 0.1), (0.8, 0.1)], "#c8861a"),
+            ]
+        ],
+        LineCollection(
+            [[(0.12, 0.93), (0.88, 0.93)], [(0.12, 0.07), (0.88, 0.07)]],
+            colors=_ICON_INK,
+            linewidths=lw * 2.2,
+            capstyle="round",
+            transform=transform,
+        ),
+    ]
+
+
+def _flame(lw: float, transform: Transform) -> list[Artist]:
+    return [
+        PathPatch(
+            _FLAME_PATH, facecolor="#e8590c", edgecolor="none", transform=transform
+        ),
+        PathPatch(
+            _FLAME_CORE_PATH, facecolor="#ffc94d", edgecolor="none", transform=transform
+        ),
+    ]
+
+
+# Frozen backbone, token search, low-rank bottleneck, everything trains.
+_ICON_DRAWERS: dict[str, tp.Callable[[float, Transform], list[Artist]]] = {
+    "linear_probe": _snowflake,
+    "attentive_probe": _magnifier,
+    "lora": _hourglass,
+    "finetune": _flame,
+}
+_ICON_SIZE_SCALE = 2.8  # x handle height: spans a two-line title
+_ICON_LW_SCALE = 0.09  # x font size
+
+
+class _AdaptationIconHandler(HandlerBase):
+    """Draw the :class:`_AdaptationIcon` pictogram, sized to span a two-line label."""
+
+    def create_artists(  # noqa: D102  (matplotlib handler protocol)
+        self,
+        legend,
+        orig_handle,
+        xdescent,
+        ydescent,
+        width,
+        height,
+        fontsize,
+        trans,
+    ):
+        size = height * _ICON_SIZE_SCALE
+        x0 = -xdescent + width - size
+        y0 = -ydescent + (height - size) / 2
+        unit = Affine2D().scale(size).translate(x0, y0) + trans
+        return _ICON_DRAWERS[orig_handle.strategy](fontsize * _ICON_LW_SCALE, unit)
+
+
+NUMBERED_LEGEND_HANDLER_MAP: dict[type, HandlerBase] = {
+    _LabeledPatch: _LabeledPatchHandler(),
+    _AdaptationIcon: _AdaptationIconHandler(),
+}
+
+SLOT_LABEL_COLOR = "#ffffff"
+EMPTY_SLOT_LABEL_COLOR = "#777777"  # no bar: drawn on the white axes background
 
 
 # ---------------------------------------------------------------------------
@@ -241,36 +501,44 @@ def apply_two_tone_labels(
     meta_color: str = "#bbbbbb",
     fontsize: int = 9,
 ) -> None:
-    """Re-render y-tick labels with model name in group colour and metadata greyed out."""
-    for label in ax.get_yticklabels():
-        base = base_name(label.get_text())
-        if base == label.get_text():
-            label.set_color(group_color(base))
-        else:
-            label.set_color(meta_color)
-        label.set_fontsize(fontsize)
+    """Re-render y-tick labels with model name in group colour and metadata greyed out.
 
-    fig.canvas.draw()
+    Two-part labels are drawn as one packed box anchored at the tick, so the
+    parts stay adjacent at any output resolution.
+    """
     fig.set_layout_engine("none")
-    renderer = fig.canvas.get_renderer()  # type: ignore[attr-defined]
-
+    to_tick = blended_transform_factory(ax.transAxes, ax.transData)
+    tick = ax.yaxis.majorTicks[0]
+    # the stubs type Tick.get_pad as returning None; it returns the pad in points
+    pad: float = tick.get_pad()  # type: ignore[func-returns-value,assignment]
+    label_offset = -(tick.get_tick_padding() + pad)
     for label in ax.get_yticklabels():
         full = label.get_text()
         base = base_name(full)
+        label.set_fontsize(fontsize)
         if base == full:
+            label.set_color(group_color(base))
             continue
-
-        bb = label.get_window_extent(renderer)
-        x_fig, y_fig = fig.transFigure.inverted().transform((bb.x0, (bb.y0 + bb.y1) / 2))
-        fig.text(
-            x_fig,
-            y_fig,
-            base,
-            fontsize=fontsize,
-            color=group_color(base),
-            ha="left",
-            va="center",
-            bbox=dict(facecolor="white", edgecolor="none", pad=0),
+        label.set_visible(False)
+        parts: list[Artist] = [
+            offsetbox.TextArea(
+                base, textprops=dict(color=group_color(base), fontsize=fontsize)
+            ),
+            offsetbox.TextArea(
+                full[len(base) :], textprops=dict(color=meta_color, fontsize=fontsize)
+            ),
+        ]
+        ax.add_artist(
+            offsetbox.AnnotationBbox(
+                offsetbox.HPacker(children=parts, pad=0, sep=0),
+                (0, label.get_position()[1]),
+                xycoords=to_tick,
+                xybox=(label_offset, 0),
+                boxcoords="offset points",
+                box_alignment=(1.0, 0.5),
+                frameon=False,
+                annotation_clip=False,
+            )
         )
 
 
@@ -420,6 +688,8 @@ def build_grouped_legend_two_col(
     display_models: list[str],
     *,
     include_overlap: bool = False,
+    model_labels: dict[str, str] | None = None,
+    fm_eval_mode: str | None = None,
 ) -> tuple[list, list[str]]:
     """Two-column legend: Baselines + Task-specific share one column, Foundation the other.
 
@@ -430,6 +700,15 @@ def build_grouped_legend_two_col(
     the pretrained Foundation models.  Both columns are padded to the
     same height so matplotlib ``ncol=2`` distributes them cleanly, one
     column per group bundle.
+
+    When *model_labels* is supplied, task-specific and foundation swatches
+    render their within-category letter (see :func:`within_category_labels`)
+    inside the colour patch.  This requires the caller to register
+    :data:`NUMBERED_LEGEND_HANDLER_MAP` as the legend ``handler_map``.
+
+    *fm_eval_mode* is the ``eval_mode`` tag shared by all foundation models:
+    its label becomes a second line of their title, next to the strategy's
+    icon (same ``handler_map`` requirement).
     """
     base_to_full = {base_name(m): m for m in display_models}
     baselines = [base_to_full[m] for m in DUMMY_DISPLAY if m in base_to_full]
@@ -439,8 +718,11 @@ def build_grouped_legend_two_col(
     blank = Patch(facecolor="none", edgecolor="none")
     overlap_patch = Patch(facecolor="#dddddd", edgecolor="#666666", hatch="///")
 
-    def _patch(name: str) -> Patch:
-        return Patch(facecolor=color_dict[name], edgecolor="none")
+    def _patch(name: str) -> tp.Any:
+        color = color_dict[name]
+        if model_labels is not None:
+            return _LabeledPatch(color, model_labels.get(base_name(name)))
+        return Patch(facecolor=color, edgecolor="none")
 
     # Column 1: Baselines block + blank separator + Task-specific block.
     col1_handles: list[Patch] = [blank]
@@ -460,8 +742,14 @@ def build_grouped_legend_two_col(
         col1_labels.append(base_name(name))
 
     # Column 2: Foundation block.
-    col2_handles: list[Patch] = [blank]
-    col2_labels: list[str] = [_LEGEND_TITLE_MARK + "Foundation models"]
+    col2_handles: list[tp.Any] = [blank]
+    fm_title = "Foundation models"
+    if fm_eval_mode is not None:
+        fm_title += f"\n{eval_mode_label(fm_eval_mode)}"
+        strategy = AdaptationMode.parse(fm_eval_mode).strategy
+        if strategy in _ICON_DRAWERS:
+            col2_handles[0] = _AdaptationIcon(strategy)
+    col2_labels: list[str] = [_LEGEND_TITLE_MARK + fm_title]
     for name in fm:
         col2_handles.append(_patch(name))
         col2_labels.append(base_name(name))
@@ -677,6 +965,45 @@ def _draw_bars(
                 col.set_clip_on(clip_on)
 
 
+def _draw_slot_labels(
+    ax: plt.Axes,  # type: ignore[name-defined]
+    model_order: list[str],
+    model_labels: dict[str, str],
+    heights: "pd.Series",
+    *,
+    fontsize: float = 5.0,
+    y_axesfrac: float = 0.015,
+) -> None:
+    """Annotate each labelled model's slot with its within-category letter.
+
+    The letter is drawn just above the x-axis spine at the model's fixed x
+    position, for *every* task-specific / foundation slot -- whether or not a
+    bar was drawn there.  A missing model therefore reads as a labelled but
+    empty slot, making it obvious which models a task lacks.  Baselines (absent
+    from *model_labels*) are skipped.  Letters are :data:`SLOT_LABEL_COLOR` on
+    a bar, or :data:`EMPTY_SLOT_LABEL_COLOR` where *heights* has no value.
+    """
+    trans = ax.get_xaxis_transform()  # x in data coords, y in axes fraction
+    for i, model in enumerate(model_order):
+        label = model_labels.get(base_name(model))
+        if label is None:
+            continue
+        has_bar = model in heights.index and not np.isnan(heights[model])
+        color = SLOT_LABEL_COLOR if has_bar else EMPTY_SLOT_LABEL_COLOR
+        ax.text(
+            i,
+            y_axesfrac,
+            label,
+            transform=trans,
+            ha="center",
+            va="bottom",
+            fontsize=fontsize,
+            color=color,
+            zorder=6,
+            clip_on=False,
+        )
+
+
 def should_break_axis(
     agg: "pd.DataFrame",
     *,
@@ -768,6 +1095,7 @@ def render_bars_on_axis(
     error_capsize: float = 1.5,
     error_linewidth: float = 0.8,
     stack_badge: bool = False,
+    model_labels: dict[str, str] | None = None,
 ) -> None:
     """Draw bars + error bars for a single subplot and style the axis.
 
@@ -824,7 +1152,10 @@ def render_bars_on_axis(
     ax.set_xlim(-0.5, n_models - 0.5)
     ax.set_xticks([])
     if metric_key == "test/pearsonr":
-        ax.set_ylim(bottom=0)
+        # Zero anchors a correlation axis, but pinning the floor there draws an
+        # all-negative panel's bars outside the frame, over whatever sits below.
+        lowest = float(agg["mean"].min())
+        ax.set_ylim(bottom=0.0 if np.isnan(lowest) else min(0.0, lowest * 1.15))
     ax.set_ylabel("")
     # Cap the y-axis at the metric's perfect-score ceiling (e.g. 100 for
     # balanced accuracy, 1.0 for Pearson R) so neither the spine nor the
@@ -875,6 +1206,8 @@ def render_bars_on_axis(
     # horizontal stroke at every y-tick (``axes.grid`` is flipped to True
     # transitively by ``moabb``).
     ax.grid(False)
+    if model_labels is not None:
+        _draw_slot_labels(ax, model_order, model_labels, agg["mean"])
     # Split-type + example count as a small, unobtrusive line below the
     # x-axis.  Using ``set_xlabel`` (instead of a free ``ax.text``) plays
     # well with ``tight_layout`` so the badge never collides with the
@@ -930,6 +1263,7 @@ def render_bars_on_broken_axis(
     error_capsize: float = 1.5,
     error_linewidth: float = 0.8,
     stack_badge: bool = False,
+    model_labels: dict[str, str] | None = None,
     # Bottom panel and inter-panel gap are intentionally compact: the
     # bottom panel only exists to anchor the bars at zero, so it gets
     # ~10% of the parent slot's height (down ~30% from the original
@@ -1030,6 +1364,11 @@ def render_bars_on_broken_axis(
     # spines + diagonal slashes to convey the axis structure.
     ax_top.grid(False)
     ax_bot.grid(False)
+
+    if model_labels is not None:
+        # Letters sit on the zero-anchored bottom panel, just above the
+        # x-axis spine (the panels share the same fixed x positions).
+        _draw_slot_labels(ax_bot, model_order, model_labels, agg["mean"], y_axesfrac=0.08)
 
     ax_top.set_ylabel("")
     ax_bot.set_ylabel("")
@@ -1162,6 +1501,7 @@ def render_marginal_rank_bars(
     tick_labelsize: float = 12,
     show_ytick_labels: bool = True,
     show_error_bars: bool = True,
+    model_labels: dict[str, str] | None = None,
 ) -> None:
     """Draw a marginal "mean rank" bar chart for one row of the grid.
 
@@ -1233,6 +1573,11 @@ def render_marginal_rank_bars(
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+
+    if model_labels is not None:
+        # Same within-category letters as the task subplots, so the marginal
+        # column's bars can be matched to the legend too.
+        _draw_slot_labels(ax, model_order, model_labels, rank_stats["mean"])
 
     # Top-align the marginal title with the per-task titles on the
     # same row.  ``ax.set_title(title, pad=title_pad)`` would place
@@ -1354,6 +1699,7 @@ def render_bars_grid(
     stack_badge: bool = False,
     enable_axis_break: bool = True,
     break_threshold: float = 0.5,
+    model_labels: dict[str, str] | None = None,
 ) -> None:
     """Render a 2D grid of bar-chart subplots.
 
@@ -1391,6 +1737,7 @@ def render_bars_grid(
                     tick_labelsize=tick_labelsize,
                     show_ytick_labels=show_ytick_labels,
                     show_error_bars=show_error_bars,
+                    model_labels=model_labels,
                 )
                 continue
             if enable_axis_break and should_break_axis(
@@ -1418,6 +1765,7 @@ def render_bars_grid(
                     error_capsize=error_capsize,
                     error_linewidth=error_linewidth,
                     stack_badge=stack_badge,
+                    model_labels=model_labels,
                 )
                 continue
             render_bars_on_axis(
@@ -1441,6 +1789,7 @@ def render_bars_grid(
                 error_capsize=error_capsize,
                 error_linewidth=error_linewidth,
                 stack_badge=stack_badge,
+                model_labels=model_labels,
             )
 
 
@@ -1463,7 +1812,8 @@ def finalize_bar_grid(
     | None = None,
     legend_anchor_offset: float = 0.02,
     legend_box: tuple[int, int, int, int] | None = None,
-    legend_box_loc: str = "center",
+    legend_box_loc: tp.Any = "center",
+    legend_handler_map: dict[type, HandlerBase] | None = None,
 ) -> Path:
     """Apply ``tight_layout``, draw the grouped legend, watermark, and save.
 
@@ -1525,6 +1875,7 @@ def finalize_bar_grid(
             columnspacing=1.2,
             handlelength=1.4,
             handletextpad=0.4,
+            handler_map=legend_handler_map,
         )
     else:
         n_rows = axes.shape[0]
@@ -1541,6 +1892,7 @@ def finalize_bar_grid(
             fontsize=legend_fontsize,
             frameon=True,
             edgecolor="#cccccc",
+            handler_map=legend_handler_map,
         )
     bold_legend_titles(legend)
 

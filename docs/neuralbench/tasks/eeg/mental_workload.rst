@@ -39,7 +39,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg mental_workload --datasets hinss2021
+   neuralbench eeg mental_workload --dataset hinss2021
 
 References
 ~~~~~~~~~~

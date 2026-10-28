@@ -1,0 +1,35 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Warm-up benchmark on the supplied session split, not the sealed protocol.
+data:
+  study:
+    =replace=: true
+    source:
+      name: Interaxon2026Muse
+    annotate_sleep_onset:
+      name: AddSleepOnsetTargets
+    split:  # supplied session split; validation subjects have no test session
+      name: Chain
+      steps:
+        valid_group:
+          name: CreateColumn
+          column: valid_group
+          query_row: "~subject.isin(subject.where(split == 'test'))"
+          query_column_name: subject
+        split:
+          name: PredefinedSplit
+          test_split_query: null
+          col_name: split
+          valid_split_by: valid_group
+          valid_split_ratio: 0.2
+          valid_random_state: 33
+        keep_test_sleepers_in_train:
+          name: CreateColumn
+          column: split
+          query_row: split.isna()
+          query_value: train
+          on_column_exists: ignore

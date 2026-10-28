@@ -39,8 +39,8 @@ def data_path_calls(monkeypatch: pytest.MonkeyPatch) -> list:
 def test_download_and_read_share_single_root(
     tmp_path: Path, data_path_calls: list
 ) -> None:
-    infra: tp.Any = {"cluster": None}
-    study = Mne2013Sample(path=tmp_path, infra_timelines=infra)
+    timelines: tp.Any = {"infra": None}
+    study = Mne2013Sample(path=tmp_path, timelines=timelines)
     root = study._download_root()
 
     study._download()  # writer
@@ -59,8 +59,8 @@ def test_download_and_read_share_single_root(
 def test_fake2025meg_iter_timelines_uses_same_root(
     tmp_path: Path, data_path_calls: list
 ) -> None:
-    infra: tp.Any = {"cluster": None}
-    study = Fake2025Meg(path=tmp_path, infra_timelines=infra)
+    timelines: tp.Any = {"infra": None}
+    study = Fake2025Meg(path=tmp_path, timelines=timelines)
     list(study.iter_timelines())  # pre-download hook before concurrent loading
     assert {called_root for called_root, _ in data_path_calls} == {study._download_root()}
     assert all(verbose is True for _, verbose in data_path_calls)

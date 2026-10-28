@@ -196,7 +196,7 @@ class MelSpectrum(BaseAudio):
         self, events: list[etypes.Event], start: float, duration: float
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
-            yield ta.with_start(event.start)
+            yield ta.copy(start=event.start)
 
 
 class SpeechEnvelope(BaseAudio):
@@ -252,7 +252,7 @@ class SpeechEnvelope(BaseAudio):
         self, events: list[etypes.Event], start: float, duration: float
     ) -> tp.Iterable[nsbase.TimedArray]:
         for event, ta in zip(events, self._get_data(events)):
-            yield ta.with_start(event.start)
+            yield ta.copy(start=event.start)
 
 
 class SonarAudio(BaseAudio):
@@ -403,7 +403,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         if not events:
             raise RuntimeError("_get_timed_arrays should not be called with no event")
         for ta, event in zip(self._get_data(events), events):
-            sub = ta.with_start(event.start).overlap(start=start, duration=duration)
+            sub = ta.copy(start=event.start).overlap(start=start, duration=duration)
             if self.cache_n_layers is not None:
                 sub.data = self._aggregate_layers(sub.data)
             yield sub

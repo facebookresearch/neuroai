@@ -10,6 +10,7 @@
 # as namespace packages and shadows the installed ones — front-load real repos.
 import builtins
 import importlib
+import importlib.metadata
 import importlib.util
 import os
 import sys
@@ -35,7 +36,7 @@ for _repo in [
 project = "neuroai"
 copyright = "Meta Platforms, Inc. and affiliates"
 author = "FAIR"
-release = "0.1"
+release = importlib.metadata.version("neuralset")
 
 # -- General configuration ---------------------------------------------------
 
@@ -110,6 +111,8 @@ html_css_files = [
     "custom.css",
     "conf.css",
     "neuralbench-results-table.css",
+    "neuralbench-category-radars.css",
+    "neuralbench-model-scatter.css",
     f"{font_awesome}all.min.css",
     f"{font_awesome}fontawesome.min.css",
     f"{font_awesome}solid.min.css",
@@ -130,6 +133,8 @@ html_js_files = [
     "quickstart-axes.js",
     "sidebar-nav.js",
     "neuralbench-results-table.js",
+    "neuralbench-category-radars.js",
+    "neuralbench-model-scatter.js",
 ]
 
 html_theme_options = {

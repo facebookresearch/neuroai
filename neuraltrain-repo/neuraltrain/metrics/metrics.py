@@ -22,6 +22,8 @@ import torchvision.transforms as T
 from scipy.stats import binom
 from torchmetrics.utilities.data import dim_zero_cat
 
+from neuraltrain.utils import all_subclasses
+
 
 class OnlinePearsonCorr(torchmetrics.regression.PearsonCorrCoef):
     """
@@ -227,13 +229,18 @@ class Rank(torchmetrics.Metric):
         self.relative = relative
         self.add_state(
             "ranks",
-            default=torch.Tensor([]),
+            default=[],
             dist_reduce_fx="cat",
         )
+        self.ranks: list[torch.Tensor]  # For mypy
         self.rank_count: torch.Tensor  # For mypy
 
     @classmethod
     def _compute_sim(cls, x, y, norm_kind="y", eps=1e-15):
+        # Ranks turn on near-ties, so score in float32 even under autocast,
+        # which would otherwise mix half activations with float norms.
+        x = x.float()
+        y = y.float()
         if norm_kind is None:
             eq, inv_norms = "b", torch.ones(x.shape[0])
         elif norm_kind == "x":
@@ -325,7 +332,7 @@ class Rank(torchmetrics.Metric):
             number of examples. Should have length of N and M, respectively
         """
         ranks = self._compute_ranks(x, y, x_labels, y_labels)
-        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        self.ranks.append(ranks)
 
     def compute(self) -> torch.Tensor:
         agg_func: tp.Callable
@@ -339,7 +346,7 @@ class Rank(torchmetrics.Metric):
             raise ValueError(
                 f'Unknown aggregation {self.reduction} for computing metric. Available aggregations are: "mean", "median" or "std".'
             )
-        return agg_func(self.ranks)
+        return agg_func(dim_zero_cat(self.ranks))
 
     def _compute_macro_average(
         self, ranks: torch.Tensor, labels: list[str]
@@ -410,7 +417,7 @@ class TopkAcc(Rank):
         }  # type: ignore
 
     def compute(self) -> torch.Tensor:
-        ranks = self.ranks
+        ranks = dim_zero_cat(self.ranks)
         return (ranks < self.topk).float().mean()
 
 
@@ -446,7 +453,78 @@ class TopkAccFromScores(TopkAcc):
     def update(self, scores: torch.Tensor) -> None:  # type: ignore[override]
         """Update internal list of ranks."""
         ranks = self._compute_ranks(scores)
-        self.ranks = torch.cat([self.ranks, ranks])  # type: ignore
+        self.ranks.append(ranks)
+
+
+class InverseNormalizedRank(Rank):
+    """Inverse normalized retrieval rank: ``1 - rank / (retrieval_set_size - 1)``.
+
+    A score in ``[0, 1]`` where higher is better, invariant to retrieval-set
+    size ``N``: the true item ranked first maps to ``1.0``, ranked last to
+    ``0.0``, and random retrieval to ``~0.5``. With ``reduction="mean"`` it
+    equals per-query ROC AUC macro-averaged over queries, i.e.
+    :class:`torchmetrics.retrieval.RetrievalAUROC` for the single-relevant-item
+    setting used here.
+
+    Parameters
+    ----------
+    reduction : {"mean", "median"}
+        How to reduce the example-wise per-query AUROC values.
+    torchmetrics_kwargs : dict or None
+        Extra keyword arguments forwarded to the ``torchmetrics.Metric``
+        constructor.
+    """
+
+    is_differentiable: bool = False
+    higher_is_better: bool = True
+    full_state_update: bool = True
+
+    def __init__(
+        self,
+        reduction: tp.Literal["mean", "median"] = "mean",
+        torchmetrics_kwargs: dict[str, tp.Any] | None = None,
+    ):
+        if reduction not in ("mean", "median"):
+            raise ValueError(
+                f"InverseNormalizedRank supports 'mean' or 'median' reduction, "
+                f"got {reduction!r}."
+            )
+        super().__init__(
+            reduction=reduction,
+            relative=False,  # raw 0-based ranks; normalised per-query in compute
+            torchmetrics_kwargs=torchmetrics_kwargs,
+        )
+        # nanmedian, not median: robust to a degenerate per-query slice
+        self.reduce_fn: tp.Callable = (
+            torch.mean if reduction == "mean" else torch.nanmedian
+        )
+        self.add_state(
+            "retrieval_sizes",
+            default=[],
+            dist_reduce_fx="cat",
+        )
+        self.retrieval_sizes: list[torch.Tensor]  # For mypy
+
+    @torch.inference_mode()
+    def update(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        x_labels: None | list[str] = None,
+        y_labels: None | list[str] = None,
+    ) -> None:
+        """Record per-query ranks and retrieval-set sizes for a batch."""
+        ranks = self._compute_ranks(x, y, x_labels, y_labels)
+        self.ranks.append(ranks)
+        sizes = torch.full_like(ranks, float(y.shape[0]))
+        self.retrieval_sizes.append(sizes)
+
+    def compute(self) -> torch.Tensor:
+        sizes = dim_zero_cat(self.retrieval_sizes)
+        ranks = dim_zero_cat(self.ranks)
+        valid = sizes > 1  # per-query AUROC undefined for a single candidate
+        auc_per_query = 1.0 - ranks[valid] / (sizes[valid] - 1)
+        return self.reduce_fn(auc_per_query)
 
 
 class ImageSimilarity(torchmetrics.Metric):
@@ -494,7 +572,11 @@ class ImageSimilarity(torchmetrics.Metric):
         elif model_name == "efficientnet":
             net = tvmodels.efficientnet_b1(weights=True)
         elif model_name == "swav":
-            net = torch.hub.load("facebookresearch/swav:main", "resnet50")
+            # skips torch.hub's fork check, an unauthenticated GitHub API call
+            # rate-limited per IP; the repo and ref here are fixed, not input
+            net = torch.hub.load(
+                "facebookresearch/swav:main", "resnet50", skip_validation=True
+            )
 
         self.net = net.float().eval()
 
@@ -610,7 +692,7 @@ class ImageSimilarity(torchmetrics.Metric):
         self,
         ground_truth: np.ndarray | torch.Tensor,
         predictions: np.ndarray | torch.Tensor,
-    ) -> tp.Tuple[np.ndarray, np.ndarray]:
+    ) -> tp.Tuple[float, float]:
         if isinstance(ground_truth, torch.Tensor):
             ground_truth = ground_truth.cpu()
         if isinstance(predictions, torch.Tensor):
@@ -659,16 +741,22 @@ class ImageSimilarity(torchmetrics.Metric):
 class GroupedMetric(torchmetrics.Metric):
     """
     A wrapper around a torchmetrics.Metric that allows for computing metrics per group.
-    IMPORTANT: this metric does not work well with LightningModule, because the
-    self.log() method does not support dictionaries of metrics.
 
-    To use this metric, you need to add this in the on_val_epoch_end and on_test_epoch_end methods:
+    With ``reduction`` set, ``compute`` reduces the per-group values to a scalar
+    (``"std"`` is the sample standard deviation), which LightningModule.log accepts.
+    Without it, ``compute`` returns a dict of group id to value, which self.log()
+    does not support; log it from the on_val_epoch_end and on_test_epoch_end methods:
         metric_dict = {metric_name + "/" + k: v for k, v in grouped_metric.compute().items()}
         self.log_dict(metric_dict)
         grouped_metric.reset()
     """
 
-    def __init__(self, metric_name: str, kwargs: dict[str, tp.Any] | None = None) -> None:
+    def __init__(
+        self,
+        metric_name: str,
+        kwargs: dict[str, tp.Any] | None = None,
+        reduction: tp.Literal["mean", "std"] | None = None,
+    ) -> None:
         super().__init__()
         if kwargs is None:
             kwargs = {}
@@ -677,11 +765,17 @@ class GroupedMetric(torchmetrics.Metric):
         if metric_name in TORCHMETRICS_NAMES:
             self.base_metric_cls = TORCHMETRICS_NAMES[metric_name]
         else:
-            metric_cls = globals().get(metric_name)
-            if metric_cls is None:
-                raise ValueError(f"Metric {metric_name} not found")
-            self.base_metric_cls = metric_cls
+            # also finds metrics defined by other packages, e.g. neuralbench's BinnedMAE
+            subclasses = all_subclasses(torchmetrics.Metric)
+            matches = [c for c in subclasses if c.__name__ == metric_name]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Expected one torchmetrics.Metric subclass named {metric_name!r} "
+                    f"(is its module imported?), found {matches}"
+                )
+            self.base_metric_cls = matches[0]
         self.metric_kwargs = kwargs
+        self.reduction = reduction
         self.metrics = torch.nn.ModuleDict()  # store metrics per group
 
     def update(
@@ -718,12 +812,16 @@ class GroupedMetric(torchmetrics.Metric):
 
             self.metrics[group_key].update(group_preds, group_target)  # type: ignore
 
-    def compute(self) -> dict[str, float]:
+    def compute(self) -> dict[str, float] | torch.Tensor:
         # Return a dictionary of group_id: computed_metric
-        return {
+        per_group = {
             gid: metric.compute().item()  # type: ignore[operator]
             for gid, metric in self.metrics.items()  # type: ignore
         }
+        if self.reduction is None:
+            return per_group
+        values = torch.tensor(list(per_group.values()), device=self.device)
+        return values.mean() if self.reduction == "mean" else values.std()
 
     def reset(self) -> None:
         for metric in self.metrics.values():

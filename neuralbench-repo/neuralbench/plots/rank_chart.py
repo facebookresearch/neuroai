@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -17,6 +18,7 @@ import seaborn as sns
 from neuralbench.plots._style import (
     add_watermark,
     apply_two_tone_labels,
+    base_name,
     bold_legend_titles,
     build_color_dict,
     build_grouped_legend_stacked,
@@ -120,12 +122,14 @@ def plot_core_rank_boxplot(
     output_dir: Path,
     *,
     watermark: str | None = None,
-) -> Path:
+    stem: str = "core_rank_boxplot",
+) -> Path | None:
     """Box chart of per-task normalized ranks, sorted by mean, colored by group.
 
     Ranks are min-max normalized to ``[0, 1]`` (best model = 0, worst
     model = 1) so the x-axis scale is independent of the number of
-    models being compared.
+    models being compared.  Returns ``None`` (without writing any file)
+    when fewer than 2 models leave nothing to rank.
     """
     long_df = _prepare_rank_data(df)
 
@@ -133,22 +137,31 @@ def plot_core_rank_boxplot(
     model_order = mean_ranks.index.tolist()
     n_models = len(model_order)
 
+    # Unguarded, a single-model cache aborts --plot-cached before the remaining
+    # tables are written, making finished runs look like they have no results.
     if n_models < 2:
-        raise ValueError(
-            f"Normalized-rank boxplot requires at least 2 models; got {n_models}."
+        warnings.warn(
+            f"Skipping normalized-rank boxplot: needs at least 2 models, "
+            f"got {model_order}"
         )
+        return None
     long_df["norm_rank"] = (long_df["rank"] - 1.0) / (n_models - 1)
 
     display_models = long_df["model_name"].unique().tolist()
     color_dict = build_color_dict(display_models)
-    palette = {m: color_dict.get(m, "#888888") for m in model_order}
+    # fallback so suffixed variants ("REVE (LoRA r32)") keep their group colour
+    base_color = build_color_dict(sorted({base_name(m) for m in display_models}))
+    palette = {
+        m: color_dict.get(m) or base_color.get(base_name(m), "#888888")
+        for m in model_order
+    }
 
-    # Sized for a portrait US-letter document with ~1" side margins:
-    # full usable width (~6.5") and at most ~33% of the 11" page height.
+    # Sized for a portrait US-letter document with ~1" side margins: full usable
+    # width (~6.5") and ~33% of the 11" page height at the usual 10-15 models.
     # The legend sits to the right of the axes and stacks the three
     # model groups in a single column.
     fig_width = 6.5
-    fig_height = 3.5
+    fig_height = max(3.5, 0.22 * n_models)
     with sns.axes_style("white"):
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
@@ -180,4 +193,4 @@ def plot_core_rank_boxplot(
     if watermark:
         add_watermark(fig, watermark)
 
-    return save_figure(fig, output_dir, "core_rank_boxplot")
+    return save_figure(fig, output_dir, stem)

@@ -19,25 +19,15 @@ import sys
 import traceback
 import typing as tp
 
-from exca import ConfDict
-
-from neuralbench.experiment_config import (
-    _warn_slurm_partition,
-    prepare_task_configs,
-)
+from neuralbench.experiment_config import build_experiment_configs
+from neuralbench.plots._constants import DEFAULT_EVAL_MODE
 from neuralbench.registry import (
     ALL_DEVICES,
     ALL_DOWNSTREAM_WRAPPERS,
     ALL_MODELS,
     ALL_TASKS,
     ALL_UNVALIDATED_TASKS,
-    DEFAULTS_DIR,
-    _expand_models,
     _format_datasets_epilog,
-    _resolve_datasets,
-    _resolve_tasks,
-    _validate_inputs,
-    load_yaml_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,10 +39,12 @@ def run_benchmark(
     *,
     model: str | list[str] | None = None,
     dataset: str | list[str] | None = None,
+    space: str | list[str] | None = None,
     checkpoint: str | None = None,
     downstream_wrapper: str | list[str] | None = None,
     grid: bool = False,
     debug: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
     force: bool = False,
     retry: bool = False,
     prepare: bool = False,
@@ -61,9 +53,10 @@ def run_benchmark(
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
-    This is the programmatic equivalent of the ``neuralbench`` CLI.
-    It assembles experiment configs from the same YAML files and returns
-    test-metric dictionaries when running in debug mode.
+    This is the programmatic equivalent of the ``neuralbench`` CLI: it
+    assembles experiment configs from the same YAML files and launches them.
+    For a model built outside this repo, and for the results of the runs in
+    hand, see :func:`neuralbench.evaluate_model`.
 
     Parameters
     ----------
@@ -74,17 +67,28 @@ def run_benchmark(
     model : str or list of str or None
         Predefined model name(s), ``"all"``, ``"all_classic"``, ``"all_fm"``,
         ``"all_baseline"`` (chance / dummy / classical sklearn pipelines),
-        or ``None`` (uses default model from ``config.yaml``).
+        or ``None`` (uses default model from ``defaults/<device>/config.yaml``).
     dataset : str or list of str or None
         Dataset variant(s) or ``"all"``. ``None`` uses the base config.
+    space : str or list of str or None
+        Data-representation variant(s) from the task's ``spaces/`` folder, or
+        ``"all"`` for the base config plus every variant. ``None`` uses each
+        model's ``default_space``, else the base config. Spaces outside a
+        dataset's ``available_spaces`` or a model's ``compatible_spaces`` are
+        skipped.
     checkpoint : str or None
         Path to a model checkpoint to reload.
     downstream_wrapper : str or list of str or None
-        Downstream wrapper name(s) or ``"all"``.
+        Adaptation-strategy preset name(s) from
+        ``defaults/downstream_wrappers.yaml``, or ``"all"``.  Swept over
+        foundation models only.
     grid : bool
         Expand the task-specific hyperparameter grid.
     debug : bool
         Run locally with a reduced config (2 epochs, 5 batches).
+    max_neuro_hours_per_epoch : float or None
+        Cap each training epoch to a fresh random draw of this many hours of
+        training windows, so large datasets train in comparable time.
     force : bool
         Force re-running experiments.
     retry : bool
@@ -100,8 +104,9 @@ def run_benchmark(
     Returns
     -------
     list of dict
-        One result dict per experiment (empty when experiments are
-        submitted asynchronously via Slurm).
+        One result dict per experiment, with ``plot_cached=True`` only.  Every
+        other mode launches experiments and returns an empty list, the results
+        being written to the results folder.
     """
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("numexpr").setLevel(logging.WARNING)
@@ -121,77 +126,23 @@ def run_benchmark(
             "Cannot use force, retry, or prepare flags when plotting cached results."
         )
 
-    from neuralbench.config_manager import _ensure_initialized
-
-    _ensure_initialized()
-    _validate_inputs(device, task, model, downstream_wrapper)
-    _warn_slurm_partition(debug, prepare=prepare, download=download)
-
-    # --- base config & grid ---
-    default_config = load_yaml_config(DEFAULTS_DIR / "config.yaml")
-    config = ConfDict(default_config)
-
-    # Disable W&B entirely when no host is configured (blank WANDB_HOST), so the
-    # whole pipeline treats logging as off (mirrors the debug-mode overlay).
-    wandb_cfg = config.get("wandb_config")
-    host = wandb_cfg.get("host") if isinstance(wandb_cfg, dict) else None
-    if not host:
-        config["wandb_config"] = None
-
-    default_grid = load_yaml_config(DEFAULTS_DIR / "grid.yaml")
-    grid_conf = ConfDict(default_grid)
-
-    if prepare or debug:
-        grid_conf["seed"] = [grid_conf["seed"][0]]
-
-    if checkpoint is not None:
-        config["pretrained_weights_fname"] = checkpoint
-
-    # --- downstream wrappers ---
-    if downstream_wrapper is not None:
-        wrappers = (
-            [downstream_wrapper]
-            if isinstance(downstream_wrapper, str)
-            else list(downstream_wrapper)
-        )
-        if wrappers == ["all"]:
-            wrappers = list(ALL_DOWNSTREAM_WRAPPERS.keys())
-        wrapper_configs = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
-        grid_conf["downstream_model_wrapper"] = wrapper_configs
-
-    # --- tasks ---
-    tasks = _resolve_tasks(device, task)
-
-    # --- assemble experiment configs ---
-    configs: list[tp.Any] = []
-    task_iter: tp.Iterable[str] = tasks
-    if prepare and len(tasks) > 1:
-        from tqdm import tqdm
-
-        task_iter = tqdm(tasks, desc="Preparing tasks")
-
-    for task_name in task_iter:
-        # Resolve models per-task so the `all` / `all_baseline` aliases pick
-        # only the task-appropriate sklearn baseline (via FEATURE_BASED_BY_TASK)
-        # instead of launching every pipeline on every task.
-        models = _expand_models(model, device=device, task_name=task_name)
-        datasets = _resolve_datasets(device, task_name, dataset)
-        task_configs = prepare_task_configs(
-            config.copy(),
-            grid_conf,
-            device,
-            task_name,
-            grid,
-            debug,
-            force,
-            prepare,
-            download,
-            models,
-            datasets,
-            quiet=plot_cached,
-            retry=retry,
-        )
-        configs.extend(task_configs)
+    configs = build_experiment_configs(
+        device,
+        task,
+        model=model,
+        dataset=dataset,
+        space=space,
+        checkpoint=checkpoint,
+        downstream_wrapper=downstream_wrapper,
+        grid=grid,
+        debug=debug,
+        max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
+        force=force,
+        retry=retry,
+        prepare=prepare,
+        download=download,
+        quiet=plot_cached,
+    )
 
     if download:
         return []
@@ -202,8 +153,11 @@ def run_benchmark(
     from neuralbench.main import BenchmarkAggregator
 
     agg = BenchmarkAggregator(
-        experiments=configs,
+        # ConfDicts, which the pydantic model coerces into Experiment instances.
+        experiments=configs,  # type: ignore[arg-type]
         debug=debug,
+        device=device,
+        eval_mode=DEFAULT_EVAL_MODE if downstream_wrapper is None else None,
     )
 
     if not plot_cached:
@@ -238,10 +192,11 @@ def run_benchmark_cli() -> None:
         type=str,
         nargs="+",
         choices=["all", "all_multi_dataset"] + ALL_TASKS + ALL_UNVALIDATED_TASKS,
+        metavar="TASK",
         help=(
             "Task(s) to run. Use 'all' to run all tasks, "
             "'all_multi_dataset' to run only tasks with multiple dataset variants, "
-            "or specify one or more task names."
+            "or specify one or more task names (listed per device below)."
         ),
     )
     parser.add_argument(
@@ -252,6 +207,13 @@ def run_benchmark_cli() -> None:
         "--debug",
         action="store_true",
         help="Run in debug mode (locally and smaller config, with infra.mode='force').",
+    )
+    parser.add_argument(
+        "--max-neuro-hours-per-epoch",
+        type=float,
+        default=None,
+        metavar="HOURS",
+        help="Cap each training epoch to a fresh random draw of HOURS of training windows.",
     )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
@@ -269,12 +231,17 @@ def run_benchmark_cli() -> None:
         action="store_true",
         help="Run single experiment to prepare cache.",
     )
+    model_choices = ["all", "all_classic", "all_fm", "all_baseline"] + ALL_MODELS
     parser.add_argument(
         "-m",
         "--model",
         nargs="*",
-        choices=["all", "all_classic", "all_fm", "all_baseline"] + ALL_MODELS,
-        help="Override config to use one or more predefined models. Multiple models will be run in the grid.",
+        choices=model_choices,
+        metavar="MODEL",
+        help=(
+            "Override config to use one or more predefined models. Multiple models "
+            f"will be run in the grid. Choose from: {', '.join(model_choices)}."
+        ),
     )
     parser.add_argument(
         "-c",
@@ -286,12 +253,17 @@ def run_benchmark_cli() -> None:
             "for a specific wandb grid."
         ),
     )
+    wrapper_choices = ["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys())
     parser.add_argument(
         "-w",
         "--downstream-wrapper",
         nargs="*",
-        choices=["all"] + list(ALL_DOWNSTREAM_WRAPPERS.keys()),
-        help="Override/add a model wrapper for the downstream tasks.",
+        choices=wrapper_choices,
+        metavar="WRAPPER",
+        help=(
+            "Adaptation strategy preset(s) to sweep over; applied to foundation "
+            f"models only. Choose from: {', '.join(wrapper_choices)}."
+        ),
     )
     parser.add_argument(
         "--download",
@@ -313,11 +285,25 @@ def run_benchmark_cli() -> None:
         type=str,
         default=None,
         help=(
-            "Specify a dataset variant for the task. "
+            "Specify a dataset for the task, by study name (as listed below) or "
+            "by the stem of its file in the task's datasets/ folder, in any case. "
             "Use 'all' to run on all available datasets. "
-            "If provided, will load dataset-specific overrides from datasets/{dataset}.yaml "
-            "and merge them with the base config.yaml. "
-            "Example: --dataset steyrl2016 or --dataset all"
+            "A dataset other than the task's default merges datasets/<stem>.yaml "
+            "over the base config.yaml. "
+            "Example: --dataset Schalk2004Bci2000 or --dataset all"
+        ),
+    )
+    parser.add_argument(
+        "--space",
+        type=str,
+        nargs="+",
+        default=None,
+        help=(
+            "Data representation(s) to run on, by the stem of their file in the "
+            "task's spaces/ folder (merged over the base config.yaml). "
+            "Use 'all' for the base config plus every space. Spaces a dataset "
+            "or model does not support are skipped with a warning. "
+            "Example: --space mni fsaverage5 or --space all"
         ),
     )
     args = parser.parse_args()
@@ -328,10 +314,12 @@ def run_benchmark_cli() -> None:
             task=args.task,
             model=args.model,
             dataset=args.dataset,
+            space=args.space,
             checkpoint=args.checkpoint,
             downstream_wrapper=args.downstream_wrapper,
             grid=args.grid,
             debug=args.debug,
+            max_neuro_hours_per_epoch=args.max_neuro_hours_per_epoch,
             force=args.force,
             retry=args.retry,
             prepare=args.prepare,

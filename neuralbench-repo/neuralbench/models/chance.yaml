@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 brain_model_name: Chance
+compatible_spaces: all
 trainer_config:
   n_epochs: 1
   limit_train_batches: 1

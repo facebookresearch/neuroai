@@ -13,38 +13,67 @@ configs ready for ``BenchmarkAggregator``.
 import logging
 import os
 import shutil
+import typing as tp
 from itertools import product
 from pathlib import Path
 from warnings import warn
 
+import torch
 import yaml
 from exca import ConfDict
 
 from neuralbench.config_manager import get_config
 from neuralbench.registry import (
     DEBUG_STUDY_QUERIES,
+    DEFAULTS_DIR,
+    _resolve_dataset_stem,
     _resolve_model_config_path,
+    _resolve_spaces,
     _resolve_task_dir,
+    _task_variant_paths,
+    load_default_config,
     load_yaml_config,
 )
 
 LOGGER = logging.getLogger(__name__)
+
+#: A registered model name, an inline config dict (:mod:`neuralbench.evaluate`),
+#: or ``None`` for the default model of ``defaults/<device>/config.yaml``.
+ModelSpec = str | dict[str, tp.Any] | None
 
 # ---------------------------------------------------------------------------
 # Mode overlays
 # ---------------------------------------------------------------------------
 
 
+def apply_cluster(config: ConfDict, cluster: str | None) -> None:
+    """Point every infra in *config* at *cluster*.
+
+    ``None`` computes in-process (exca maps it to submitit's debug executor, so
+    a job array runs inline and blocks); ``"auto"`` fans out to SLURM when one
+    is available and falls back to local otherwise.
+
+    The run and the extractor/target caches are set together: leaving a cache
+    on SLURM while the run is local, or the reverse, is never what a caller
+    means and fails confusingly on machines without a cluster.
+    """
+    config["infra.cluster"] = cluster
+    if "data" in config:
+        config["data.neuro.infra.cluster"] = cluster
+    target_cfg = config.get("data", {}).get("target", {})
+    if isinstance(target_cfg, dict) and "infra" in target_cfg:
+        config["data.target.infra.cluster"] = cluster
+
+
 def _apply_debug_overlay(config: ConfDict) -> None:
     """Apply debug-mode overrides: disable SLURM/W&B, reduce epochs and batches."""
     LOGGER.info("--- RUNNING IN DEBUG MODE ---")
     config["wandb_config"] = None
-    config["infra.cluster"] = None
+    apply_cluster(config, None)
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
     if "data" in config:
-        config["data.neuro.infra.cluster"] = None
         config["data.batch_size"] = 8
         config["trainer_config"] = {
             "strategy": "auto",
@@ -62,20 +91,13 @@ def _apply_debug_overlay(config: ConfDict) -> None:
 def _apply_prepare_overlay(config: ConfDict) -> None:
     """Apply prepare-mode overrides: single run to warm the preprocessing cache."""
     LOGGER.info("--- RUNNING SINGLE EXPERIMENT TO PREPARE CACHE ---")
-    # Use the configured CLUSTER for both the run and the extractor/target
-    # caches. "auto" already fans out to SLURM when available (submitit's auto
-    # executor) and falls back to local otherwise, so we avoid hard-coding
-    # "slurm", which would fail on machines without a SLURM cluster.
-    cluster = get_config().get("CLUSTER", "auto")
-    config["infra.cluster"] = cluster
+    apply_cluster(config, get_config().get("CLUSTER", "auto"))
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
-    config["data.neuro.infra.cluster"] = cluster
     config["data.neuro.infra.min_samples_per_job"] = 8
     target_cfg = config.get("data", {}).get("target", {})
     if isinstance(target_cfg, dict) and "infra" in target_cfg:
-        config["data.target.infra.cluster"] = cluster
         config["data.target.infra.min_samples_per_job"] = 8
     if "trainer_config" in config:
         config["trainer_config"] = {
@@ -95,6 +117,103 @@ def _download_dataset(config: ConfDict) -> None:
     study_dict = dict(config["data"]["study"]["source"])
     study_dict["path"] = Path(study_dict["path"]) / study_dict["name"]
     ns.Study(**study_dict).download()
+
+
+# ---------------------------------------------------------------------------
+# Config merging
+# ---------------------------------------------------------------------------
+
+
+def merge_task_config(
+    device: str,
+    task_name: str,
+    dataset: str | None = None,
+    base: ConfDict | None = None,
+) -> ConfDict:
+    """Layer a task config, and an optional dataset variant, over the base defaults.
+
+    *base* defaults to ``defaults/config.yaml`` overlaid with *device*'s
+    defaults; callers pass their own copy of it when it already carries
+    run-level overrides (checkpoint, W&B).
+    """
+    config = ConfDict(load_default_config(device)) if base is None else base.copy()
+    task_config_fname = _resolve_task_dir(device, task_name) / "config.yaml"
+    config.update(load_yaml_config(task_config_fname))
+    if dataset is not None:
+        _merge_dataset_config(config, device, task_name, dataset)
+    return config
+
+
+def _merge_dataset_config(
+    config: ConfDict, device: str, task_name: str, dataset: str
+) -> None:
+    """Layer the ``datasets/`` variant that *dataset* selects over *config*, in place.
+
+    The task's default study selects no variant and leaves *config* unchanged.
+    """
+    stem = _resolve_dataset_stem(device, task_name, dataset)
+    if stem is None:
+        return
+    source_defaults = {k: config["data.study.source"][k] for k in ("path", "infra")}
+    config.update(
+        load_yaml_config(_task_variant_paths(device, task_name, "datasets")[stem])
+    )
+    # =replace= may wipe source; restore default path/infra
+    for k, v in source_defaults.items():
+        config["data.study.source"].setdefault(k, v)
+
+
+def _space_variants(
+    config: ConfDict, device: str, task_name: str, spaces: list[str | None] | None
+) -> dict[str | None, ConfDict]:
+    """Split *config* into one config per ``space_name`` it runs in.
+
+    Pops the model's ``default_space`` (used when *spaces* is ``None``) and
+    ``compatible_spaces``, and the dataset's ``available_spaces``.  ``None`` and
+    *config*'s own ``space_name`` both select *config* unchanged; other spaces
+    layer their ``spaces/`` file over it.
+    """
+    default_space = config.pop("default_space", None)
+    compatible = config.pop("compatible_spaces", None)
+    if compatible == "all":
+        compatible = None
+    available = config.pop("available_spaces", None)
+    if spaces is None:
+        spaces = [None]
+        if default_space is not None:
+            spaces = _resolve_spaces(device, task_name, default_space)
+    base = config.get("space_name")
+    named = [s for s in spaces if s is not None and s != base]
+    if named and available is None:
+        raise ValueError(
+            f"Space(s) {named} requested, but the dataset config of "
+            f"{device}/{task_name} does not declare available_spaces"
+        )
+    unavailable = sorted(s for s in named if s not in available)
+    if unavailable:
+        study = config["data.study.source.name"]
+        warn(f"Skipping space(s) {unavailable}, not available for {study}")
+        spaces = [s for s in spaces if s not in unavailable]
+    variants: dict[str | None, ConfDict] = {}
+    for space in spaces:
+        if space is None or space == base:
+            variants.setdefault(base, config)
+            continue
+        variant = config.copy()
+        variant.update(
+            load_yaml_config(_task_variant_paths(device, task_name, "spaces")[space])
+        )
+        variant["space_name"] = space
+        variants[space] = variant
+    # an unlabelled base config is not gated
+    skipped = sorted(
+        s
+        for s in variants
+        if s is not None and compatible is not None and s not in compatible
+    )
+    if skipped:
+        warn(f"Skipping space(s) {skipped}, outside compatible_spaces {compatible}")
+    return {s: c for s, c in variants.items() if s not in skipped}
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +251,14 @@ def _expand_grid(
     configs = []
     for params in grid_product:
         updated_config = config.copy()
+        # a multi-key preset, not a config key: merge whole, not per-axis
+        overlay = params.pop("_adaptation_overlay", None)
         updated_config.update(params)
+        if overlay is not None:
+            updated_config.update(overlay)
+            # re-null: debug's short run is under OneCycleLR warmup (pct_start div-by-zero)
+            if debug:
+                updated_config["lightning_optimizer_config.scheduler"] = None
         configs.append(updated_config)
 
     return configs
@@ -156,12 +282,15 @@ def _prepare_single_task_config(
     dataset_name: str | None = None,
     quiet: bool = False,
     retry: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
 ) -> list[ConfDict]:
     """Assemble experiment configs for a single task, applying mode overlays and grid expansion."""
     config["task_name"] = task_name
     if config.get("wandb_config") is not None:
         config["wandb_config.group"] = f"{device}/{task_name}"
 
+    if max_neuro_hours_per_epoch is not None and "data" in config:
+        config["max_neuro_hours_per_epoch"] = max_neuro_hours_per_epoch
     if debug:
         _apply_debug_overlay(config)
     if force:
@@ -193,10 +322,12 @@ def prepare_task_configs(
     force: bool,
     prepare: bool,
     download: bool,
-    models: list[str | None],
+    models: tp.Sequence[ModelSpec],
     datasets: list[str | None] | None = None,
+    spaces: list[str | None] | None = None,
     quiet: bool = False,
     retry: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
 ) -> list[ConfDict]:
     """Run a specific neuralbench task with given configuration."""
     if not quiet:
@@ -205,19 +336,29 @@ def prepare_task_configs(
     if datasets is None:
         datasets = [None]
 
-    task_dir = _resolve_task_dir(device, task_name)
-    task_config_fname = task_dir / "config.yaml"
-    task_config = load_yaml_config(task_config_fname)
-    config.update(task_config)
+    config = merge_task_config(device, task_name, base=config)
 
     configs = []
-    for model_name in models:
+    for model in models:
         exp_config = config.copy()
-        if model_name is not None:
+        if model is not None:
+            # A dict is an inline config: out-of-tree models reach the
+            # benchmark through neuralbench.evaluate and have no models/*.yaml.
+            if isinstance(model, dict):
+                model_config = model
+                label = model.get("brain_model_name", "inline config")
+            else:
+                model_config = load_yaml_config(_resolve_model_config_path(model)) or {}
+                label = model
+            if "compatible_spaces" not in model_config and _task_variant_paths(
+                device, task_name, "spaces"
+            ):
+                raise ValueError(
+                    f"Model {label!r} must declare compatible_spaces (a list, or "
+                    f"'all') to run on {device}/{task_name}, which defines spaces"
+                )
             if not quiet:
-                LOGGER.info("--- USING MODEL %s ---", model_name)
-            model_config_fname = _resolve_model_config_path(model_name)
-            model_config = load_yaml_config(model_config_fname)
+                LOGGER.info("--- USING MODEL %s ---", label)
             exp_config.update(model_config)
 
         for dataset_name in datasets:
@@ -225,29 +366,180 @@ def prepare_task_configs(
             if dataset_name is not None:
                 if not quiet:
                     LOGGER.info("~~~ USING DATASET: %s ~~~", dataset_name)
-                dataset_config_fname = task_dir / "datasets" / f"{dataset_name}.yaml"
-                dataset_config = load_yaml_config(dataset_config_fname)
-                dataset_exp_config.update(dataset_config)
-                # =replace= may wipe source; restore default path/infra
-                for k, v in config["data.study.source"].items():
-                    dataset_exp_config["data.study.source"].setdefault(k, v)
+                _merge_dataset_config(dataset_exp_config, device, task_name, dataset_name)
 
-            exp_configs = _prepare_single_task_config(
-                dataset_exp_config,
-                grid,
-                device,
-                task_name,
-                use_task_grid,
-                debug,
-                force,
-                prepare,
-                download,
-                dataset_name,
-                quiet=quiet,
-                retry=retry,
+            variants = _space_variants(dataset_exp_config, device, task_name, spaces)
+            for space_name, space_exp_config in variants.items():
+                if space_name is not None and not quiet:
+                    LOGGER.info("~~~ USING SPACE: %s ~~~", space_name)
+                configs.extend(
+                    _prepare_single_task_config(
+                        space_exp_config,
+                        grid,
+                        device,
+                        task_name,
+                        use_task_grid,
+                        debug,
+                        force,
+                        prepare,
+                        download,
+                        dataset_name,
+                        quiet=quiet,
+                        retry=retry,
+                        max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
+                    )
+                )
+
+    return configs
+
+
+def _adapts_a_backbone(model: str) -> bool:
+    """Whether *model*'s config describes how to adapt a pretrained backbone."""
+    from neuralbench.registry import _resolve_model_config_path
+
+    config = load_yaml_config(_resolve_model_config_path(model)) or {}
+    return "downstream_model_wrapper" in config
+
+
+def build_experiment_configs(
+    device: str,
+    task: str | list[str],
+    *,
+    model: str | list[str] | dict[str, tp.Any] | None = None,
+    dataset: str | list[str] | None = None,
+    space: str | list[str] | None = None,
+    checkpoint: str | None = None,
+    downstream_wrapper: str | list[str] | None = None,
+    grid: bool = False,
+    debug: bool = False,
+    max_neuro_hours_per_epoch: float | None = None,
+    force: bool = False,
+    retry: bool = False,
+    prepare: bool = False,
+    download: bool = False,
+    quiet: bool = False,
+) -> list[ConfDict]:
+    """Assemble one experiment config per (task, dataset, space, model, grid point).
+
+    The single home for turning benchmark selections into configs, shared by
+    :func:`neuralbench.cli.run_benchmark` and
+    :mod:`neuralbench.evaluate`.  *model* is a registered name (or ``"all"``
+    and friends) as on the CLI, or an already-loaded config dict for a model
+    with no ``models/*.yaml`` -- see :mod:`neuralbench.evaluate`.
+
+    Arguments mirror :func:`neuralbench.cli.run_benchmark`; see its docstring.
+    """
+    from neuralbench.config_manager import _ensure_initialized
+    from neuralbench.registry import (
+        ALL_DOWNSTREAM_WRAPPERS,
+        _expand_models,
+        _resolve_datasets,
+        _resolve_tasks,
+        _validate_inputs,
+    )
+
+    _ensure_initialized()
+    inline_model = model if isinstance(model, dict) else None
+    _validate_inputs(device, task, None if inline_model else model, downstream_wrapper)  # type: ignore[arg-type]
+    _warn_slurm_partition(debug, prepare=prepare, download=download)
+    _warn_unsupported_gpu()
+
+    config = ConfDict(load_default_config(device))
+    # A blank W&B host means logging is off for the whole pipeline (mirrors
+    # the debug-mode overlay).
+    wandb_cfg = config.get("wandb_config")
+    host = wandb_cfg.get("host") if isinstance(wandb_cfg, dict) else None
+    if not host:
+        config["wandb_config"] = None
+
+    grid_conf = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))
+    if prepare or debug:
+        grid_conf["seed"] = [grid_conf["seed"][0]]
+
+    if checkpoint is not None:
+        config["pretrained_weights_fname"] = checkpoint
+
+    overlays: list[dict[str, tp.Any]] | None = None
+    if downstream_wrapper is not None:
+        wrappers = (
+            [downstream_wrapper]
+            if isinstance(downstream_wrapper, str)
+            else list(downstream_wrapper)
+        )
+        if wrappers == ["all"]:
+            wrappers = list(ALL_DOWNSTREAM_WRAPPERS.keys())
+        overlays = [ALL_DOWNSTREAM_WRAPPERS[name] for name in wrappers]
+
+    tasks = _resolve_tasks(device, task)
+
+    configs: list[ConfDict] = []
+    task_iter: tp.Iterable[str] = tasks
+    if prepare and len(tasks) > 1:
+        from tqdm import tqdm
+
+        task_iter = tqdm(tasks, desc="Preparing tasks")
+
+    for task_name in task_iter:
+        # Resolve models per-task so the `all` / `all_baseline` aliases pick
+        # only the task-appropriate sklearn baseline (via FEATURE_BASED_BY_TASK)
+        # instead of launching every pipeline on every task.
+        models: list[ModelSpec] = (
+            [inline_model]
+            if inline_model is not None
+            else list(_expand_models(model, device=device, task_name=task_name))  # type: ignore[arg-type]
+        )
+        datasets = _resolve_datasets(device, task_name, dataset)
+        spaces = None if space is None else _resolve_spaces(device, task_name, space)
+        # adaptation needs a pretrained backbone: the rest get an overlay-free grid
+        model_groups: list[tuple[ConfDict, list[ModelSpec]]]
+        if overlays is not None:
+            # An out-of-tree model is a backbone by assumption: it has no
+            # models/*.yaml to say so, but adaptation is exactly why it is
+            # being run.
+            backbones = {
+                m for m in models if isinstance(m, str) and _adapts_a_backbone(m)
+            }
+            inline = inline_model is not None
+            adapted = [m for m in models if inline or m in backbones]
+            other_models = [m for m in models if not inline and m not in backbones]
+            if not adapted:
+                LOGGER.warning(
+                    "Adaptation wrappers requested (-w) but no selected model "
+                    "adapts a pretrained backbone for task %r; running without "
+                    "adaptation.",
+                    task_name,
+                )
+            model_groups = []
+            if adapted:
+                adapted_grid = grid_conf.copy()
+                adapted_grid["_adaptation_overlay"] = overlays
+                model_groups.append((adapted_grid, adapted))
+            if other_models:
+                model_groups.append((grid_conf, other_models))
+        else:
+            model_groups = [(grid_conf, models)]
+        for group_grid, group_models in model_groups:
+            configs.extend(
+                prepare_task_configs(
+                    config.copy(),
+                    group_grid,
+                    device,
+                    task_name,
+                    grid,
+                    debug,
+                    force,
+                    prepare,
+                    download,
+                    group_models,
+                    datasets,
+                    spaces,
+                    quiet=quiet,
+                    retry=retry,
+                    max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
+                )
             )
-            configs.extend(exp_configs)
-
+    if tasks and not configs:
+        raise ValueError("No experiment left for this selection; see the warnings above.")
     return configs
 
 
@@ -283,4 +575,64 @@ def _warn_slurm_partition(
             f"in your neuralbench config ({config_path}). Non-debug runs will "
             f"fail when submitting jobs. Either set SLURM_PARTITION in "
             f'{config_path}, set "CLUSTER": null to run locally, or use --debug.'
+        )
+
+
+# ---------------------------------------------------------------------------
+# GPU capability warning
+# ---------------------------------------------------------------------------
+
+
+def _warn_unsupported_gpu() -> None:
+    """Warn when a visible GPU is absent from the installed torch's arch list."""
+    if not torch.cuda.is_available():
+        return
+    # Release wheels are SASS-only (no PTX JIT), so a device needs a listed
+    # arch of its own major with minor <= its own.
+    built = {
+        (int(sm[:-1]), int(sm[-1]))
+        for arch in torch.cuda.get_arch_list()
+        if (sm := arch.removeprefix("sm_")).isdigit()
+    }
+    if not built:
+        return
+    try:
+        capabilities = [
+            torch.cuda.get_device_capability(index)
+            for index in range(torch.cuda.device_count())
+        ]
+    except RuntimeError as error:
+        # a driver too old for the wheel raises here; this check must not be
+        # what surfaces it, since --download and --plot-cached never touch a GPU
+        warn(
+            f"Could not query the visible GPU(s) with torch {torch.__version__} "
+            f"({error}). GPU runs will fail; to fix, install a torch build "
+            "matching your driver, e.g. pip install --force-reinstall torch "
+            "torchvision torchaudio --index-url "
+            "https://download.pytorch.org/whl/cu126"
+        )
+        return
+    warned: set[tuple[int, int]] = set()
+    for index, capability in enumerate(capabilities):
+        major, minor = capability
+        if capability in warned or any(
+            major == bmajor and minor >= bminor for bmajor, bminor in built
+        ):
+            continue
+        warned.add(capability)
+        # sm_50-sm_60 survive only in the CUDA 12.6 wheels; PyPI's default build
+        # tracks the newest CUDA, which drops them.
+        if capability < min(built):
+            fix = (
+                "reinstall from a CUDA 12.6 build, which still ships sm_50-sm_90: "
+                "pip install --force-reinstall torch torchvision torchaudio "
+                "--index-url https://download.pytorch.org/whl/cu126"
+            )
+        else:
+            fix = "upgrade torch: pip install --upgrade torch torchvision torchaudio"
+        warn(
+            f"{torch.cuda.get_device_name(index)} has CUDA capability "
+            f"sm_{major}{minor}, which torch {torch.__version__} was not built for "
+            f"(built for {', '.join(f'sm_{a}{b}' for a, b in sorted(built))}). "
+            f"GPU runs will fail; to fix, {fix}"
         )

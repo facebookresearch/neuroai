@@ -24,7 +24,7 @@ data:
     imsize: 518
     aggregation: trigger
     infra:
-      cluster: auto
+      cluster: !!python/name:neuralbench.config_manager.CLUSTER
       keep_in_ram: false
       timeout_min: 180
       gpus_per_node: 1
@@ -35,12 +35,12 @@ data:
   duration: 1.0
   summary_columns: [category, filepath]
 brain_model_output_size: &brain_model_output_size 1536
-trainer_config.monitor: val/batch_top5_acc
+trainer_config.monitor: val/batch_inv_norm_rank_mean
 trainer_config.mode: max
 loss:
   name: ClipLoss
   norm_kind: y
   temperature: false
   symmetric: false
-metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
-test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics
+metrics: !!python/name:neuralbench.metric_configs.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.metric_configs.test_full_retrieval_metrics

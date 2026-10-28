@@ -35,7 +35,9 @@ single ``config.yaml`` that overrides the global defaults.
 # -------------------------
 #
 # A ``config.yaml`` overrides parts of the base config
-# (``defaults/config.yaml``).  The main sections are:
+# (``defaults/config.yaml``, overlaid with the device defaults of
+# ``defaults/{device}/config.yaml``: extractor, preprocessing, channel
+# positions and default model).  The main sections are:
 #
 # 1. **Data** — which dataset to load, how to split, and what to
 #    predict.
@@ -81,7 +83,7 @@ single ``config.yaml`` that overrides the global defaults.
 #      kwargs:
 #        label_smoothing: 0.1
 #
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
 #      - *model_output_size
 
 # %%
@@ -121,7 +123,7 @@ single ``config.yaml`` that overrides the global defaults.
 #
 # ``!!python/object/apply:...``
 #   Calls a Python factory function at config load time.  The
-#   metric factories in ``neuralbench.defaults.metrics`` return
+#   metric factories in ``neuralbench.metric_configs`` return
 #   standard metric configs for classification, regression, or
 #   retrieval.
 

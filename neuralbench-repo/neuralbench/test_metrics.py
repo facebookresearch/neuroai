@@ -24,8 +24,20 @@ from neuraltrain.metrics.base import BaseMetric
         ([2.0, 8.0], [5.0, 5.0], 3.0, {}),
         # Upper boundary inclusion: target equal to last upper boundary belongs to last bin.
         ([550.0], [600.0], 50.0, {}),
+        # Inner edge goes to the upper bin: 40 -> [40,90), so per-bin MAEs are 0 and 30.
+        # Were it filed in [0,40), the single bin would average to 10.
+        ([10.0, 20.0, 70.0], [10.0, 20.0, 40.0], 15.0, {}),
         # Custom bin boundaries.
         ([0.5, 1.5], [0.2, 1.0], 0.4, {"bin_boundaries": [0.0, 1.0, 2.0]}),
+        # W-bMAE: per-bin MAEs 5, 10, 100, 100 weighted 10, 5, 3, 1 -> 500 / 19.
+        (
+            [10.0, 50.0, 200.0, 500.0],
+            [5.0, 60.0, 100.0, 400.0],
+            500 / 19,
+            {"bin_weights": [10.0, 5.0, 3.0, 1.0]},
+        ),
+        # W-bMAE skips empty bins: (10 * 5 + 1 * 100) / (10 + 1).
+        ([10.0, 500.0], [5.0, 400.0], 150 / 11, {"bin_weights": [10.0, 5.0, 3.0, 1.0]}),
         # No data returns NaN.
         ([], [], float("nan"), {}),
     ],
@@ -70,6 +82,30 @@ def test_binned_mae_accumulates_across_updates():
 def test_binned_mae_invalid_boundaries(boundaries, err_match):
     with pytest.raises(ValueError, match=err_match):
         BinnedMAE(bin_boundaries=boundaries)
+
+
+@pytest.mark.parametrize("weights", [[1.0, 1.0, 1.0], [1.0, 0.0, 1.0, 1.0]])
+def test_binned_mae_invalid_weights(weights):
+    with pytest.raises(ValueError, match="positive values, one per bin"):
+        BinnedMAE(bin_weights=weights)
+
+
+def test_wbmae_per_stream_metric():
+    config = {
+        "log_name": "wbmae_stream_mean",
+        "name": "GroupedMetric",
+        "metric_name": "BinnedMAE",
+        "kwargs": {
+            "bin_boundaries": [0.0, 40.0, 90.0, 300.0, 600.0],
+            "bin_weights": [10.0, 5.0, 3.0, 1.0],
+        },
+        "reduction": "mean",
+    }
+    metric = BaseMetric.model_validate(config).build()
+    preds = torch.tensor([10.0, 500.0, 0.0])
+    targets = torch.tensor([5.0, 400.0, 30.0])
+    metric.update(preds, targets, torch.tensor([0, 0, 1]))
+    assert float(metric.compute()) == pytest.approx((150 / 11 + 30) / 2)
 
 
 def test_binned_mae_resolves_via_basemetric_discriminator():

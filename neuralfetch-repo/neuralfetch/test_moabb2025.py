@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from exca.steps import backends
+
 from neuralfetch.studies import moabb2025
 from neuralfetch.studies.moabb2025 import Tangermann2012Review
 
@@ -51,11 +53,9 @@ def test_get_cached_moabb_data_lru(tmp_path: Path) -> None:
 
 
 def test_basemoabb_disables_processpool(tmp_path: Path) -> None:
-    study = Tangermann2012Review(path=tmp_path)
-    assert study.infra_timelines.cluster != "processpool"
-
-    study_pp = Tangermann2012Review(
+    # an explicit ProcessPool is downgraded to Cached (inline) to avoid ENOLCK
+    study = Tangermann2012Review(
         path=tmp_path,
-        infra_timelines={"cluster": "processpool"},  # type: ignore[arg-type]
+        timelines={"infra": {"backend": "ProcessPool"}},  # type: ignore[arg-type]
     )
-    assert study_pp.infra_timelines.cluster is None
+    assert isinstance(study.timelines.infra, backends.Cached)

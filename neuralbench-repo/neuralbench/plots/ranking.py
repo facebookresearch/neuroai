@@ -14,6 +14,7 @@ lazily inside their function bodies.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from neuralbench.plots._constants import (
@@ -172,7 +173,7 @@ def compute_row_rank_stats(
         # Dividing the cell's ranks by its own N means each cell contributes
         # to ``mean`` on the same [1/N, 1] scale regardless of how many
         # models competed in it.
-        n_per_cell = ranks.notna().sum(axis=1).replace(0, pd.NA)
+        n_per_cell = ranks.notna().sum(axis=1).replace(0, np.nan)
         ranks = ranks.div(n_per_cell, axis=0)
     out["mean"] = ranks.mean(axis=0).reindex(out.index)
     out["sem"] = ranks.sem(axis=0).reindex(out.index)

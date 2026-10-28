@@ -21,16 +21,39 @@ these tests guard the end-to-end wiring:
 
 from __future__ import annotations
 
-import pandas as pd
+from pathlib import Path
 
+import pandas as pd
+import pytest
+
+from neuralbench import registry
+from neuralbench.data import Data
+from neuralbench.experiment_config import merge_task_config
 from neuralbench.plots.tables import _collapse_feature_based_baselines
 from neuralbench.registry import (
+    ALL_DATASETS,
     DEVICE_BASELINE_MODELS,
     FEATURE_BASED_BY_TASK,
     SKLEARN_BASELINE_MODELS,
     _expand_models,
+    _resolve_dataset_stem,
     _task_aware_baseline,
 )
+
+
+def test_space_is_rejected_on_a_task_without_spaces() -> None:
+    with pytest.raises(ValueError, match=r"Unknown space\(s\) \['mni'\]"):
+        registry._resolve_spaces("eeg", "motor_imagery", "mni")
+
+
+def test_every_listed_dataset_name_resolves() -> None:
+    for device, tasks in ALL_DATASETS.items():
+        for task, names in tasks.items():
+            stems = [_resolve_dataset_stem(device, task, name) for name in names]
+            assert stems[0] is None, f"{device}/{task}: default must use config.yaml"
+            assert None not in stems[1:], f"{device}/{task}: {names} -> {stems}"
+            lower = [_resolve_dataset_stem(device, task, n.lower()) for n in names]
+            assert lower == stems, f"{device}/{task}: lowercase names resolve differently"
 
 
 def test_device_baseline_models_meg_has_riemannian_pipelines() -> None:
@@ -38,8 +61,8 @@ def test_device_baseline_models_meg_has_riemannian_pipelines() -> None:
     assert "chance" in meg and "dummy" in meg
     assert "cov_ts_lr" in meg
     assert "cov_ts_ridge" in meg
-    # Xdawn / CoSpectra are intentionally EEG-only.
-    assert "xdawn_ts_lr" not in meg
+    # Xdawn covers the event-locked MEG tasks; CoSpectra stays EEG-only.
+    assert "xdawn_ts_lr" in meg
     assert "cospectra_log_lr" not in meg
 
 
@@ -64,6 +87,17 @@ def test_task_aware_baseline_fmri_still_excludes_sklearn_pipelines() -> None:
 def test_task_aware_baseline_unknown_task_drops_sklearn_pipelines() -> None:
     # For tasks not in FEATURE_BASED_BY_TASK, no sklearn pipeline is appended.
     assert _task_aware_baseline("meg", "__nonexistent_task__") == ["chance", "dummy"]
+
+
+def test_unvalidated_task_keeps_its_handcrafted_pipeline() -> None:
+    baselines = _task_aware_baseline("meg", "_emotion")
+    assert baselines == ["chance", "dummy", "cov_ts_lr"]
+    df = pd.DataFrame(
+        {"brain_model_name": ["cov_ts_lr", "cov_ts_ridge"], "task_name": "_emotion"}
+    )
+    assert _collapse_feature_based_baselines(df)["brain_model_name"].tolist() == [
+        "feature_based"
+    ]
 
 
 def test_expand_all_baseline_meg_includes_handcrafted_pipeline() -> None:
@@ -96,12 +130,12 @@ def test_prepare_task_configs_meg_image_cov_ts_ridge_resolves() -> None:
     """
     from exca import ConfDict
 
+    from neuralbench.baselines import CovTsRidge
     from neuralbench.experiment_config import prepare_task_configs
     from neuralbench.main import Data
-    from neuralbench.registry import DEFAULTS_DIR, load_yaml_config
-    from neuralbench.sklearn_baseline import CovTsRidge
+    from neuralbench.registry import DEFAULTS_DIR, load_default_config, load_yaml_config
 
-    config = ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml"))
+    config = ConfDict(load_default_config("meg"))
     grid = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))
     configs = prepare_task_configs(
         config,
@@ -148,3 +182,50 @@ def test_collapse_relabels_meg_sklearn_row_as_handcrafted() -> None:
     # And the alias we collapse to is never a member of SKLEARN_BASELINE_MODELS
     # (otherwise the plot-time display map would look it up as a pipeline name).
     assert "feature_based" not in SKLEARN_BASELINE_MODELS
+
+
+def test_load_default_config_overlays_plugin_device_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device_dir = tmp_path / "fnirs"
+    device_dir.mkdir()
+    (device_dir / "config.yaml").write_text("data:\n  neuro:\n    name: FnirsExtractor\n")
+    monkeypatch.setattr(
+        registry, "_all_defaults_roots", lambda: [registry.DEFAULTS_DIR, tmp_path]
+    )
+    overlaid = registry.load_default_config("fnirs")
+    base = registry.load_default_config()
+    assert overlaid["data"]["neuro"]["name"] == "FnirsExtractor"
+    assert "name" not in base["data"]["neuro"]
+    # A device with no overlay falls back to the base.
+    assert registry.load_default_config("unknown") == base
+    # The overlay is partial: base keys it does not mention survive.
+    assert overlaid["data"]["neuro"]["infra"] == base["data"]["neuro"]["infra"]
+
+
+@pytest.mark.parametrize(
+    "device", sorted(p.parent.name for p in registry.DEFAULTS_DIR.glob("*/config.yaml"))
+)
+def test_device_defaults_set_a_default_model(device: str) -> None:
+    assert "brain_model_config" in registry.load_default_config(device), (
+        f"defaults/{device}/config.yaml needs a brain_model_config: exca keeps "
+        "'=replace=' literally when models/*.yaml replace a missing key"
+    )
+
+
+def test_fmri_image_data_builds_without_channel_positions() -> None:
+    data = Data(**merge_task_config("fmri", "image")["data"])
+    assert data.neuro.name == "FmriExtractor"
+    assert data.channel_positions is None
+
+
+def test_debug_study_queries_merge_plugin_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "debug_study.yaml").write_text("Plugin2026Study: subject_index < 3\n")
+    monkeypatch.setattr(
+        registry, "_all_defaults_roots", lambda: [registry.DEFAULTS_DIR, tmp_path]
+    )
+    queries = registry._build_debug_study_queries()
+    assert queries["Plugin2026Study"] == "subject_index < 3"
+    assert "Lopez2017Tuab" in queries

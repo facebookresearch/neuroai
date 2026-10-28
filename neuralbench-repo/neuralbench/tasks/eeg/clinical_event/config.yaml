@@ -15,7 +15,11 @@ data:
       valid_split_by: subject
       valid_split_ratio: 0.2
       valid_random_state: 33
+    mark_onsets:
+      name: AddOnsetEvents
+      event_types: [EpileptiformActivity, Artifact]
   neuro:
+    on_filter_too_long: drop  # 0.1 Hz highpass too long for 2 recordings
     # Excluded: FT9, FT10 (not in all recordings)
     picks:
       - Fp1
@@ -47,7 +51,7 @@ data:
     return_one_hot: true
     aggregation: sum
     allow_missing: true
-  trigger_event_type: [EpileptiformActivity, Artifact]
+  trigger_event_type: Event
   start: -1.0
   duration: 3.0
   stride: 1.0
@@ -60,6 +64,6 @@ trainer_config.mode: max
 loss:
   =replace=: true
   name: BCEWithLogitsLoss
-metrics: !!python/object/apply:neuralbench.defaults.metrics.get_classification_metric_configs
+metrics: !!python/object/apply:neuralbench.metric_configs.get_classification_metric_configs
   - *brain_model_output_size
   - multilabel

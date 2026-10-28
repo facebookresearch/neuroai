@@ -12,13 +12,13 @@ import torch
 from torch import nn
 from torchvision.ops import MLP
 
-from .base import BaseModelConfig
+from .base import BaseBrainModelConfig
 from .common import Mean, Mlp, SubjectLayers
 
 logger = logging.getLogger(__name__)
 
 
-class FmriMlp(BaseModelConfig):
+class FmriMlp(BaseBrainModelConfig):
     """Residual MLP for fMRI decoding, adapted from MindEye [1]_.
 
     Parameters
@@ -93,13 +93,13 @@ class FmriMlp(BaseModelConfig):
     #     "mse": {"hidden_sizes": []}
     # }
 
-    def build(self, n_in_channels: int, n_outputs: int | None) -> nn.Module:
+    def build(self, n_spatial_locations: int, n_outputs: int | None) -> nn.Module:
         out_dim = self.out_dim if n_outputs is None else n_outputs
         if out_dim is None:
             raise ValueError("One of n_outputs or config.out_dim must be set.")
 
         return FmriMlpModel(
-            in_dim=n_in_channels,
+            in_dim=n_spatial_locations,
             out_dim=out_dim,
             config=self,
         )
@@ -262,7 +262,7 @@ class FmriMlpModel(nn.Module):
         return out
 
 
-class FmriLinear(BaseModelConfig):
+class FmriLinear(BaseBrainModelConfig):
     """Single linear layer for fMRI decoding with temporal aggregation.
 
     Parameters
@@ -280,13 +280,13 @@ class FmriLinear(BaseModelConfig):
     time_agg: tp.Literal["in_mean", "in_linear", "out_mean", "out_linear"] = "out_linear"
     output_head_config: Mlp | dict[str, Mlp] | None = None
 
-    def build(self, n_in_channels: int, n_outputs: int | None) -> nn.Module:
+    def build(self, n_spatial_locations: int, n_outputs: int | None) -> nn.Module:
         out_dim = self.out_dim if n_outputs is None else n_outputs
         if out_dim is None:
             raise ValueError("One of n_outputs or config.out_dim must be set.")
 
         return FmriLinearModel(
-            in_dim=n_in_channels,
+            in_dim=n_spatial_locations,
             out_dim=out_dim,
             config=self,
         )

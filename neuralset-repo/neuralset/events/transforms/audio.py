@@ -6,6 +6,7 @@
 
 from pathlib import Path
 
+import exca
 import pandas as pd
 from tqdm import tqdm
 
@@ -33,22 +34,38 @@ class ExtractAudioFromVideo(EventsTransform):
                     audio_filepath.unlink()
         if len(video_events) == 0:
             return events
-        events_to_add = []
+        frequencies: dict[str, float] = {}
+        unique_videos = video_events.drop_duplicates("filepath")
+        # write audio file per video file
         for video_event in tqdm(
-            video_events.itertuples(),
-            total=len(video_events),
-            desc="Extract audio from video events",
+            unique_videos.itertuples(),
+            total=len(unique_videos),
+            desc="Extract audio from videos",
         ):
-            audio_filepath = Path(video_event.filepath).with_suffix(".wav")  # type: ignore
-            video_ns_event = ev.Video.from_dict(video_event)
+            # timeline is unused but required by events; wavs are shared across timelines
+            filepath, timeline = str(video_event.filepath), str(video_event.timeline)
+            audio_filepath = Path(filepath).with_suffix(".wav")
             if not audio_filepath.exists():
-                audio = video_ns_event.read().audio
-                if not audio:
-                    continue
-                audio.write_audiofile(audio_filepath)
-                audio.close()
+                # whole file: Video events may only cover part of it
+                video = ev.Video(start=0, timeline=timeline, filepath=filepath)
+                with video.read() as video_clip:
+                    if video_clip.audio is None:
+                        continue
+                    with exca.utils.temporary_save_path(audio_filepath) as tmp_filepath:
+                        video_clip.audio.write_audiofile(tmp_filepath)
+            audio = ev.Audio(start=0, timeline=timeline, filepath=str(audio_filepath))
+            frequencies[filepath] = audio.frequency
+        events_to_add = []
+        # add audio events per video event (may be multiple per audio/video file)
+        for video_event in video_events.itertuples(index=False):
+            filepath = str(video_event.filepath)
+            if filepath not in frequencies:
+                continue
+            # Audio overwrites duration with length of wav file if frequency is missing
             audio_event = video_event._replace(
-                type="Audio", filepath=str(audio_filepath), frequency=pd.NA
+                type="Audio",
+                filepath=str(Path(filepath).with_suffix(".wav")),
+                frequency=frequencies[filepath],
             )  # type: ignore
             events_to_add.append(audio_event)
         events = pd.concat([events, pd.DataFrame(events_to_add)], ignore_index=True)

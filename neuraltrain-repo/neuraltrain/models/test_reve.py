@@ -10,6 +10,7 @@ import braindecode.models
 import pytest
 import torch
 
+from .common import INVALID_POS_VALUE, resolve_with_anode_fallback
 from .reve import NtReve, _ReveWrapper
 
 BANK_CH_NAMES = ["Fp1", "Fp2", "C3", "C4", "O1", "O2", "Fz", "Cz"]
@@ -73,6 +74,45 @@ def test_wrapper_forward(encoder_only):
         assert out_sub.shape == (1, _N_OUTPUTS)
 
 
+@pytest.mark.parametrize("unplaced, n_kept", [(None, 4), (1, 3)])
+def test_wrapper_takes_positions_from_the_batch(unplaced, n_kept):
+    """Without a bank, the batch places the channels; unplaced ones are dropped."""
+    wrapper = _ReveWrapper(_make_reve(["Fp1", "Fp2", "C3", "C4"]), encoder_only=True)
+    positions = torch.rand(2, 4, 3) * 0.1
+    if unplaced is not None:
+        positions[:, unplaced] = INVALID_POS_VALUE
+
+    eeg = torch.randn(2, 4, _N_TIMES)
+    with torch.no_grad():
+        out = wrapper(eeg, channel_positions=positions)
+        elsewhere = wrapper(eeg, channel_positions=positions.flip(1))
+
+    assert out.shape == (2, n_kept * _N_PATCHES, _EMBED_DIM)
+    assert not torch.allclose(out, elsewhere), "positions do not reach REVE"
+
+
+@pytest.mark.parametrize("channel_indices, n_chans", [(None, 4), ([0, 3], 2)])
+def test_wrapper_prefers_the_bank_it_was_built_with(channel_indices, n_chans):
+    """A build that named every channel pins the coordinates REVE sees."""
+    ch_names = ["Fp1", "Fp2", "C3", "C4"] if channel_indices is None else ["Fp1", "C4"]
+    model = _make_reve(ch_names)
+    bank = torch.rand(n_chans, 3) * 0.1
+    wrapper = _ReveWrapper(model, channel_indices, True, bank)
+
+    eeg = torch.randn(2, 4, _N_TIMES)
+    # The same model without a bank, handed the bank's coordinates by the batch.
+    as_batch = torch.zeros(2, 4, 3)
+    as_batch[:, channel_indices if channel_indices is not None else slice(None)] = bank
+    plain = _ReveWrapper(model, channel_indices, encoder_only=True)
+
+    with torch.no_grad():
+        out = wrapper(eeg, channel_positions=torch.rand(2, 4, 3) * 0.1)
+        expected = plain(eeg, channel_positions=as_batch)
+
+    assert out.shape == (2, n_chans * _N_PATCHES, _EMBED_DIM)
+    assert torch.equal(out, expected), "the batch's coordinates beat the bank's"
+
+
 # ---------------------------------------------------------------------------
 # NtReve._remap_chs_info
 # ---------------------------------------------------------------------------
@@ -92,7 +132,7 @@ def test_remap_chs_info():
 
 
 # ---------------------------------------------------------------------------
-# NtReve._derive_bipolar_position (anode fallback)
+# NtReve._bank_lookup (case folding) + shared anode fallback
 # ---------------------------------------------------------------------------
 
 
@@ -105,24 +145,25 @@ def _make_mock_bank(names: list[str]):
 
 
 @pytest.mark.parametrize(
-    "ch_name, bank_names, expect_result",
+    "ch_name, bank_names, expected",
     [
-        ("Fp1-F3", ["Fp1", "F3", "Cz"], True),
-        ("Fp1-F3", ["F3", "Cz"], False),
-        ("Fp1", ["Fp1", "Cz"], False),
-        ("BOGUS", ["Fp1", "Cz"], False),
+        ("Fp1", ["Fp1", "Cz"], "Fp1"),
+        ("FP1", ["Fp1", "Cz"], "Fp1"),
+        ("Fp1-F3", ["Fp1", "F3", "Cz"], "Fp1"),
+        ("FP1-F3", ["Fp1", "F3", "Cz"], "Fp1"),
+        ("Fp1-F3", ["F3", "Cz"], None),
+        ("BOGUS", ["Fp1", "Cz"], None),
     ],
 )
-def test_derive_bipolar_position(ch_name, bank_names, expect_result):
-    """Bipolar lookup returns anode position when available, None otherwise."""
+def test_bank_lookup_resolves_case_and_anode(ch_name, bank_names, expected):
     bank = _make_mock_bank(bank_names)
-    result = NtReve._derive_bipolar_position(ch_name, bank)
-    if expect_result:
-        anode = ch_name.split("-")[0]
-        assert result is not None
-        assert torch.equal(result, bank.embedding[bank.mapping[anode]])
-    else:
-        assert result is None
+    position, used_anode = resolve_with_anode_fallback(ch_name, NtReve._bank_lookup(bank))
+    if expected is None:
+        assert position is None, f"{ch_name!r} unexpectedly resolved in {bank_names}"
+        return
+    assert position is not None, f"{ch_name!r} should resolve in {bank_names}"
+    assert torch.equal(position, bank.embedding[bank.mapping[expected]])
+    assert used_anode == ("-" in ch_name), "anode flag must mark bipolar resolution"
 
 
 # ---------------------------------------------------------------------------
@@ -149,17 +190,24 @@ requires_pretrained = pytest.mark.skipif(
 @requires_pretrained
 def test_build_pretrained():
     """Build returns a wrapper in both classification and encoder-only modes."""
-    chs_info = [{"ch_name": n} for n in BANK_CH_NAMES]
     cfg = NtReve(from_pretrained_name=PRETRAINED_NAME)
 
     model_cls = cfg.build(
-        n_chans=len(BANK_CH_NAMES), n_times=400, n_outputs=2, chs_info=chs_info
+        n_spatial_locations=len(BANK_CH_NAMES),
+        n_temporal_samples=400,
+        n_outputs=2,
+        chs_info=[{"ch_name": n} for n in BANK_CH_NAMES],
     )
     assert isinstance(model_cls, _ReveWrapper)
     assert model_cls.encoder_only is False
     assert model_cls.channel_indices is None
 
-    model_enc = cfg.build(n_chans=len(BANK_CH_NAMES), n_times=400, chs_info=chs_info)
+    model_enc = cfg.build(
+        n_spatial_locations=len(BANK_CH_NAMES),
+        n_temporal_samples=400,
+        n_outputs=None,
+        chs_info=[{"ch_name": n} for n in BANK_CH_NAMES],
+    )
     assert isinstance(model_enc, _ReveWrapper)
     assert model_enc.encoder_only is True
 
@@ -175,9 +223,14 @@ def test_build_drops_unknown_channels():
     """Channels not in the position bank are dropped and channel_indices is set."""
     known = ["Fp1", "C3"]
     unknown = ["BOGUS_CH"]
-    chs_info = [{"ch_name": n} for n in known + unknown]
+    ch_names = known + unknown
     cfg = NtReve(from_pretrained_name=PRETRAINED_NAME)
-    model = cfg.build(n_chans=len(chs_info), n_times=400, chs_info=chs_info)
+    model = cfg.build(
+        n_spatial_locations=len(ch_names),
+        n_temporal_samples=400,
+        n_outputs=None,
+        chs_info=[{"ch_name": n} for n in ch_names],
+    )
 
     assert isinstance(model, _ReveWrapper)
     assert model.channel_indices is not None

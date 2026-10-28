@@ -20,6 +20,7 @@ import typing as tp
 from pathlib import Path
 from warnings import warn
 
+import exca
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,80 @@ def _resolve_task_dir(device: str, task_name: str) -> Path:
     raise FileNotFoundError(f"No task directory found for '{device}/{task_name}'")
 
 
+def _task_variant_paths(
+    device: str, task_name: str, kind: tp.Literal["datasets", "spaces"]
+) -> dict[str, Path]:
+    """Map each variant stem of *task_name* to its ``<kind>/<stem>.yaml``.
+
+    Scans every task root, so a plugin can add variants to a task shipped by
+    another root; earlier roots win on collision.
+    """
+    paths: dict[str, Path] = {}
+    for root in _all_task_roots():
+        for f in sorted((root / device / task_name / kind).glob("*.yaml")):
+            paths.setdefault(f.stem, f)
+    return paths
+
+
+# ---------------------------------------------------------------------------
+# Defaults discovery
+# ---------------------------------------------------------------------------
+
+
+def _all_defaults_roots() -> list[Path]:
+    """Return internal + external ``defaults/`` roots.
+
+    A plugin ships ``<device>/config.yaml`` and ``debug_study.yaml`` in a
+    ``defaults/`` directory beside its ``tasks/`` entry-point root.
+    """
+    roots = [DEFAULTS_DIR]
+    for ext_dir in _discover_entry_point_dirs("neuralbench.tasks"):
+        candidate = ext_dir / "defaults"
+        if candidate.is_dir():
+            roots.append(candidate)
+    return roots
+
+
+def _resolve_device_default_path(device: str) -> Path | None:
+    """Return the first ``<root>/<device>/config.yaml`` found, or ``None``.
+
+    ``None`` means no device overlay ships for *device*, and the loader
+    falls back to the base config alone.
+    """
+    for root in _all_defaults_roots():
+        candidate = root / device / "config.yaml"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_default_config(device: str | None = None) -> dict[str, tp.Any]:
+    """Load ``defaults/config.yaml``, overlaid with *device*'s defaults if any.
+
+    The same baseline ``run_benchmark`` starts from, before task / model /
+    dataset / grid overrides. ``device=None`` returns the base config alone.
+    """
+    config = exca.ConfDict(load_yaml_config(DEFAULTS_DIR / "config.yaml") or {})
+    device_path = None if device is None else _resolve_device_default_path(device)
+    if device_path is not None:
+        config.update(load_yaml_config(device_path) or {})
+    return dict(config)
+
+
+def _build_debug_study_queries() -> dict[str, str | None]:
+    """Collect the ``-d`` subsetting query per study, across all defaults roots.
+
+    A plugin keeps the queries for the studies it ships in its own
+    ``defaults/debug_study.yaml``; later roots win on collision.
+    """
+    queries: dict[str, str | None] = {}
+    for root in _all_defaults_roots():
+        path = root / "debug_study.yaml"
+        if path.exists():
+            queries.update(load_yaml_config(path) or {})
+    return queries
+
+
 # ---------------------------------------------------------------------------
 # Model scanning
 # ---------------------------------------------------------------------------
@@ -205,44 +280,35 @@ def _resolve_model_config_path(model_name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _build_all_datasets(
-    tasks: dict[str, list[str]],
-) -> tuple[dict[str, dict[str, list[str]]], dict[str, dict[str, list[str]]]]:
-    """Build study-name and file-stem mappings for every task's datasets.
+def _task_datasets(device: str, task_name: str) -> tuple[tuple[str, str | None], ...]:
+    """List a task's ``(study name, datasets/ file stem)`` pairs, default study first.
 
-    Returns ``(study_names, file_stems)`` where each is
-    ``{device: {task: [...]}}``.
+    The default study is set in ``config.yaml`` and has no file (stem ``None``);
+    a variant that does not set a study inherits the default one.
     """
-    study_names: dict[str, dict[str, list[str]]] = {}
-    file_stems: dict[str, dict[str, list[str]]] = {}
-    for device, task_names in tasks.items():
-        study_names[device] = {}
-        file_stems[device] = {}
-        for task_name in task_names:
-            task_dir = _resolve_task_dir(device, task_name)
-            config = load_yaml_config(task_dir / "config.yaml", safe=True)
-            assert config is not None
-            default_study = config["data"]["study"]["source"]["name"]
-            studies = [default_study]
-            stems: list[str] = []
-            datasets_dir = task_dir / "datasets"
-            if datasets_dir.exists():
-                for f in sorted(datasets_dir.glob("*.yaml")):
-                    stems.append(f.stem)
-                    ds_config = load_yaml_config(f, safe=True)
-                    if ds_config is None:
-                        continue
-                    name = (
-                        ds_config.get("data", {})
-                        .get("study", {})
-                        .get("source", {})
-                        .get("name")
-                    )
-                    if name and name not in studies:
-                        studies.append(name)
-            study_names[device][task_name] = studies
-            file_stems[device][task_name] = stems
-    return study_names, file_stems
+    config = load_yaml_config(
+        _resolve_task_dir(device, task_name) / "config.yaml", safe=True
+    )
+    assert config is not None
+    default_study = config["data"]["study"]["source"]["name"]
+    pairs: list[tuple[str, str | None]] = [(default_study, None)]
+    for stem, f in sorted(_task_variant_paths(device, task_name, "datasets").items()):
+        ds_config = load_yaml_config(f, safe=True) or {}
+        name = ds_config.get("data", {}).get("study", {}).get("source", {}).get("name")
+        pairs.append((name or default_study, stem))
+    return tuple(pairs)
+
+
+def _task_study_names(device: str, task_name: str) -> list[str]:
+    return list(dict.fromkeys(name for name, _ in _task_datasets(device, task_name)))
+
+
+def _build_all_datasets(tasks: dict[str, list[str]]) -> dict[str, dict[str, list[str]]]:
+    """Map ``{device: {task: [study names]}}``, default study first."""
+    return {
+        device: {task: _task_study_names(device, task) for task in task_names}
+        for device, task_names in tasks.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -262,15 +328,32 @@ ALL_MODELS = _build_all_models()
 ALL_DOWNSTREAM_WRAPPERS: dict[str, dict[str, tp.Any]] = (
     load_yaml_config(DEFAULTS_DIR / "downstream_wrappers.yaml") or {}
 )
-DEBUG_STUDY_QUERIES: dict[str, str | None] = (
-    load_yaml_config(DEFAULTS_DIR / "debug_study.yaml") or {}
-)
-ALL_DATASETS, _ALL_DATASET_STEMS = _build_all_datasets(TASKS)
+DEBUG_STUDY_QUERIES: dict[str, str | None] = _build_debug_study_queries()
+ALL_DATASETS = _build_all_datasets(TASKS)
 
 
 def get_available_datasets(device: str, task: str) -> list[str]:
     """Get list of available dataset file stems for a given task."""
-    return _ALL_DATASET_STEMS.get(device, {}).get(task, [])
+    return [stem for _, stem in _task_datasets(device, task) if stem is not None]
+
+
+def _resolve_dataset_stem(device: str, task: str, dataset: str) -> str | None:
+    """Return the ``datasets/`` file stem *dataset* selects, ``None`` for the default study.
+
+    *dataset* is a study name, as listed by ``neuralbench --help``, or a file stem,
+    matched case-insensitively.
+    """
+    pairs = _task_datasets(device, task)
+    by_name: dict[str, str | None] = {}
+    for name, stem in pairs:
+        by_name.setdefault(name.lower(), stem)
+    stems = {stem.lower(): stem for _, stem in pairs if stem is not None} | by_name
+    if dataset.lower() not in stems:
+        raise ValueError(
+            f"Unknown dataset {dataset!r} for {device}/{task}. "
+            f"Choose from: {_task_study_names(device, task)}"
+        )
+    return stems[dataset.lower()]
 
 
 # ---------------------------------------------------------------------------
@@ -321,15 +404,40 @@ BASELINE_MODELS: list[str] = [
     *sorted(SKLEARN_BASELINE_MODELS),
 ]
 
+# ECG reuses the EEG architectures -- a lead is just a time series -- minus the
+# ones a *single* channel breaks, verified by building each on ``n_chans=1``:
+#
+# - ``deep4net`` / ``shallow_fbcsp_net`` wrap braindecode's ``CombinedConv``,
+#   which cannot be built on one channel at all and dies in
+#   ``.mm(time_bias.unsqueeze(-1))`` with "self must be a matrix".
+# - the position-aware models (``simpleconv_time_agg``, ``luna``, ``reve``) need
+#   channel geometry, and no montage names an ECG lead, so its positions degrade
+#   to ``INVALID_VALUE``; ``labram`` likewise keys its patch embedding off 10-20
+#   channel names.  ``bendr`` builds but goes degenerate / NaN.
+ECG_INCOMPATIBLE_MODELS: frozenset[str] = frozenset(
+    {
+        "deep4net",
+        "shallow_fbcsp_net",
+        "simpleconv_time_agg",
+        "labram",
+        "luna",
+        "reve",
+        "bendr",
+    }
+)
+
 DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "eeg": CLASSIC_MODELS,
     "meg": CLASSIC_MODELS,
     "fmri": _cli_names(family="classic", device="fmri"),
+    "emg": _cli_names(family="classic", device="emg"),
+    "ecg": [m for m in CLASSIC_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 DEVICE_FM_MODELS: dict[str, list[str]] = {
     "eeg": FM_MODELS,
     "meg": FM_MODELS,
     "fmri": _cli_names(family="foundation", device="fmri"),
+    "ecg": [m for m in FM_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 # Per-device classical baseline lists.
 #
@@ -340,15 +448,20 @@ DEVICE_FM_MODELS: dict[str, list[str]] = {
 #   and a linear head regardless of channel count.  On ~272-306 MEG sensors
 #   the tangent-space dimension is C(C+1)/2 ≈ 37k-47k features; OAS shrinkage
 #   and the default ``max_fit_samples=20_000`` cap keep the linear head
-#   feasible.  Xdawn (per-class ERP filter, explodes on 29-way multiclass) and
-#   CoSpectra (sfreq-tuned narrowband spectral features) remain excluded.
+#   feasible.  Xdawn covers the ERP tasks, bounded off high-way targets by
+#   ``FEATURE_BASED_BY_TASK``; CoSpectra (narrowband) stays excluded.
 # - fMRI has no classical pyriemann / covariance analogue that transfers
 #   meaningfully from a channel basis to a voxel basis, so only the constant
 #   predictors are kept.
+# - ECG keeps the Riemannian TS pipelines, which on one lead reduce to a linear
+#   head on log-variance -- degenerate but well-defined, and they are what the
+#   published ECG numbers were measured against.  Xdawn is dropped because its
+#   spatial filtering has no meaning on a single channel.
 DEVICE_BASELINE_MODELS: dict[str, list[str]] = {
     "eeg": BASELINE_MODELS,
-    "meg": ["chance", "dummy", "cov_ts_lr", "cov_ts_ridge"],
+    "meg": ["chance", "dummy", "xdawn_ts_lr", "cov_ts_lr", "cov_ts_ridge"],
     "fmri": ["chance", "dummy"],
+    "ecg": ["chance", "dummy", "cov_ts_lr", "cov_ts_ridge"],
 }
 
 # ---------------------------------------------------------------------------
@@ -369,10 +482,15 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
     "n2pc": "xdawn_ts_lr",
     "n400": "xdawn_ts_lr",
     "mismatch_negativity": "xdawn_ts_lr",
+    "acoustic_change": "xdawn_ts_lr",
+    "stimulus_congruency": "xdawn_ts_lr",
     "audiovisual_stimulus": "xdawn_ts_lr",
+    "sustain_proc_negativity": "xdawn_ts_lr",
+    "action_recognition": "xdawn_ts_lr",
     # Oscillatory / BCI classification (moabb TSLR convention).
     "motor_imagery": "cov_ts_lr",
     "motor_execution": "cov_ts_lr",
+    "motor_preparation": "cov_ts_lr",
     "cvep": "cov_ts_lr",
     "ssvep": "cospectra_log_lr",
     "mental_imagery": "cov_ts_lr",
@@ -381,6 +499,7 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
     "emotion": "cov_ts_lr",
     # Clinical / state classification -- same Riemann-TS features but the
     # discriminative signal is spectral-power rather than event-locked.
+    "asd_diagnosis": "cov_ts_lr",
     "dementia_diagnosis": "cov_ts_lr",
     "depression_diagnosis": "cov_ts_lr",
     "parkinsons_diagnosis": "cov_ts_lr",
@@ -408,6 +527,11 @@ FEATURE_BASED_BY_TASK: dict[str, str] = {
 }
 
 
+def feature_based_baseline(task_name: str) -> str | None:
+    """Canonical sklearn pipeline of *task_name*, which may be unvalidated (``_``-prefixed)."""
+    return FEATURE_BASED_BY_TASK.get(task_name.removeprefix("_"))
+
+
 # ---------------------------------------------------------------------------
 # Resolution helpers
 # ---------------------------------------------------------------------------
@@ -427,7 +551,7 @@ def _task_aware_baseline(device: str, task_name: str | None) -> list[str]:
     if task_name is None:
         return list(DEVICE_BASELINE_MODELS.get(device, BASELINE_MODELS))
     device_baselines = DEVICE_BASELINE_MODELS.get(device, BASELINE_MODELS)
-    preferred = FEATURE_BASED_BY_TASK.get(task_name)
+    preferred = feature_based_baseline(task_name)
     if preferred is None or preferred not in device_baselines:
         return [m for m in device_baselines if m not in SKLEARN_BASELINE_MODELS]
     return [m for m in device_baselines if m not in SKLEARN_BASELINE_MODELS] + [preferred]
@@ -489,7 +613,7 @@ def _resolve_tasks(device: str, task: str | list[str]) -> list[str]:
             )
         resolved = TASKS[device]
         if task == ["all_multi_dataset"]:
-            resolved = [t for t in resolved if _ALL_DATASET_STEMS.get(device, {}).get(t)]
+            resolved = [t for t in resolved if get_available_datasets(device, t)]
         return resolved
     return task
 
@@ -511,6 +635,25 @@ def _resolve_datasets(
             return [None]
         return [None] + available  # type: ignore[return-value]
     return dataset_arg  # type: ignore[return-value]
+
+
+def _resolve_spaces(
+    device: str, task_name: str, space_arg: str | list[str]
+) -> list[str | None]:
+    """Validate ``spaces/`` stems; ``"all"`` is the base config (``None``) plus each."""
+    spaces = [space_arg] if isinstance(space_arg, str) else space_arg
+    available = sorted(_task_variant_paths(device, task_name, "spaces"))
+    if spaces == ["all"]:
+        if not available:
+            warn(f"No spaces found for {task_name}, running with base config")
+        return [None, *available]
+    unknown = [s for s in spaces if s not in available]
+    if unknown:
+        raise ValueError(
+            f"Unknown space(s) {unknown} for {device}/{task_name}. "
+            f"Choose from: {available} (or 'all')"
+        )
+    return list(spaces)
 
 
 # ---------------------------------------------------------------------------
@@ -537,8 +680,14 @@ def _validate_inputs(
     task: str | list[str],
     model: str | list[str] | None,
     downstream_wrapper: str | list[str] | None,
+    *,
+    allow_all: bool = True,
 ) -> None:
-    """Raise ``ValueError`` on invalid device / task / model names."""
+    """Raise ``ValueError`` on invalid device / task / model names.
+
+    *allow_all* accepts the ``"all"`` / ``"all_multi_dataset"`` task
+    aggregates, which only callers that expand them can handle.
+    """
     if device not in ALL_DEVICES:
         raise ValueError(f"Unknown device {device!r}. Choose from: {ALL_DEVICES}")
     tasks = [task] if isinstance(task, str) else task
@@ -548,7 +697,7 @@ def _validate_inputs(
             f"No tasks ship for device {device!r} yet. "
             f"Devices with tasks: {[d for d in ALL_DEVICES if TASKS.get(d) or UNVALIDATED_TASKS.get(d)]}"
         )
-    valid_tasks = {"all", "all_multi_dataset"} | device_tasks
+    valid_tasks = device_tasks | ({"all", "all_multi_dataset"} if allow_all else set())
     for t in tasks:
         if t not in valid_tasks:
             raise ValueError(

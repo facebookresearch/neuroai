@@ -34,12 +34,12 @@ data:
 brain_model_output_size: &brain_model_output_size 768
 target_scaler:
   dim: 1
-trainer_config.monitor: val/batch_top5_acc
+trainer_config.monitor: val/batch_inv_norm_rank_mean
 trainer_config.mode: max
 loss:
   name: ClipLoss
   norm_kind: y
   temperature: false
   symmetric: false
-metrics: !!python/name:neuralbench.defaults.metrics.retrieval_metrics
-test_full_retrieval_metrics: !!python/name:neuralbench.defaults.metrics.test_full_retrieval_metrics
+metrics: !!python/name:neuralbench.metric_configs.retrieval_metrics
+test_full_retrieval_metrics: !!python/name:neuralbench.metric_configs.test_full_retrieval_metrics

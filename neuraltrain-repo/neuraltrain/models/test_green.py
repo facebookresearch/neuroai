@@ -24,7 +24,7 @@ def test_green(fake_meg, use_default_config):
 
     from .green import Green
 
-    batch_size, n_in_channels, _ = fake_meg.shape
+    batch_size, n_channels, _ = fake_meg.shape
     n_outputs = 3
 
     if use_default_config:
@@ -37,9 +37,11 @@ def test_green(fake_meg, use_default_config):
             bi_out=[20],  # Use a BiMap layer outputting a 20x20 matrix
         )
 
-    sfreq = 100
+    frequency = 100
     model = Green(**config_kwargs).build(
-        n_in_channels=n_in_channels, n_outputs=n_outputs, sfreq=sfreq
+        n_spatial_locations=n_channels,
+        n_outputs=n_outputs,
+        frequency=frequency,
     )
     assert isinstance(model, GreenImpl)
 

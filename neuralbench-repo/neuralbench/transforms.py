@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import typing as tp
+import zlib
 
 import numpy as np
 import pandas as pd
@@ -161,7 +162,7 @@ class SimilaritySplit(_transf.EventsTransform):
                 max_duration=120.0,
             )(events)
 
-        elif self.stim_event_type == "Keystroke":  # Designed for Levy2025Brain
+        elif self.stim_event_type == "Keystroke":  # Designed for Levy2026Noninvasive
             # For the Typing dataset, we need to transfer the clusters from the sentences to the
             # keystroke events
             if "sentence" not in events.columns:
@@ -346,6 +347,9 @@ class AddSleepOnsetTargets(_transf.EventsTransform):
     so they produce no trigger events for the downstream sleep-onset task
     and contribute zero segments to training/evaluation.
 
+    Markers take the ``split`` of their timeline, so this transform can run
+    after the split step; it must, when ``random_start_splits`` is set.
+
     Parameters
     ----------
     max_pre_n2_s : float | None
@@ -357,12 +361,26 @@ class AddSleepOnsetTargets(_transf.EventsTransform):
         full pre-N2 portion of the recording.
     n2_stage : str
         Stage label used to identify N2 sleep in ``SleepStage.stage``.
+    random_start_splits : tuple of str
+        Splits whose marker starts at a uniformly random time in that span,
+        leaving at least ``min_pre_n2_s`` before its end. For evaluation one
+        window at a time: with a fixed start, a stateful model can read the
+        target off the time elapsed since the recording began.
+    min_pre_n2_s : float
+        Shortest marker a random start may leave, so each recording keeps a
+        segment.
+    seed : int
+        Combined with the timeline name, so random starts do not depend on
+        row order.
     """
 
     max_pre_n2_s: float | None = None
     n2_stage: str = "N2"
+    random_start_splits: tuple[str, ...] = ()
+    min_pre_n2_s: float = 5.0
+    seed: int = 0
 
-    def _emit_for_timeline(self, evs: pd.DataFrame) -> pd.DataFrame:
+    def _emit_for_timeline(self, evs: pd.DataFrame, timeline: str) -> pd.DataFrame:
         n2 = evs[(evs.type == "SleepStage") & (evs.stage == self.n2_stage)]
         if n2.empty:
             return pd.DataFrame()
@@ -378,20 +396,29 @@ class AddSleepOnsetTargets(_transf.EventsTransform):
         t_stop = min(t_onset, rec_stop)
         if t_stop <= t0:
             return pd.DataFrame()
-        return pd.DataFrame(
-            {
-                "type": ["SleepOnsetMarker"],
-                "start": [t0],
-                "duration": [t_stop - t0],
-                "stop": [t_stop],
-                "n2_onset": [t_onset],
-            }
-        )
+        marker = dict(type="SleepOnsetMarker", n2_onset=t_onset)
+        if "split" in evs.columns:
+            splits = evs.split.dropna().unique()
+            if len(splits) != 1:
+                raise ValueError(
+                    f"Timeline {timeline!r} has splits {list(splits)}; markers need "
+                    "one split per timeline (split by subject or timeline)."
+                )
+            marker["split"] = splits[0]
+            if splits[0] in self.random_start_splits and t_stop - self.min_pre_n2_s > t0:
+                rng = np.random.default_rng([self.seed, zlib.crc32(timeline.encode())])
+                t0 = rng.uniform(t0, t_stop - self.min_pre_n2_s)
+        return pd.DataFrame([dict(marker, start=t0, duration=t_stop - t0, stop=t_stop)])
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        if self.random_start_splits and "split" not in events.columns:
+            raise ValueError(
+                "random_start_splits needs a 'split' column; place "
+                f"{type(self).__name__} after the split step of the study chain."
+            )
         new_rows_per_tl: list[pd.DataFrame] = []
         for timeline, group in events.groupby("timeline", sort=False):
-            emitted = self._emit_for_timeline(group)
+            emitted = self._emit_for_timeline(group, str(timeline))
             if emitted.empty:
                 continue
             emitted["timeline"] = timeline
@@ -491,6 +518,27 @@ class AddDefaultEvents(_transf.EventsTransform):
 
         events = pd.concat(all_events, ignore_index=True, axis=0)
         return events
+
+
+class AddOnsetEvents(_transf.EventsTransform):
+    """Add one ``Event`` per distinct onset of ``event_types``, copied from its longest event.
+
+    Triggering on ``Event`` instead of on ``event_types`` yields one segment per onset
+    when several events share it, while extractors still see every event.
+
+    Parameters
+    ----------
+    event_types : list of str
+        Event types whose onsets are marked.
+    """
+
+    event_types: list[str]
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        selected = events[events.type.isin(self.event_types)]
+        longest_first = selected.sort_values("duration", ascending=False, kind="stable")
+        onsets = longest_first.drop_duplicates(["timeline", "start"]).assign(type="Event")
+        return pd.concat([events, onsets], ignore_index=True)
 
 
 class OffsetEvents(_transf.EventsTransform):

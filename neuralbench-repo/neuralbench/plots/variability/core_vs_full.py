@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import typing as tp
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -32,7 +34,7 @@ _BUMP_COLOR_STABLE = "#bbbbbb"
 # Pin matplotlib's default font so seaborn / moabb global theme tweaks
 # (which can set ``font.family`` to ``"serif"`` or ``"Arial"`` on import)
 # don't bleed into this figure.
-_FONT_OVERRIDES = {
+_FONT_OVERRIDES: tp.Any = {
     "font.family": ["sans-serif"],
     "font.sans-serif": ["DejaVu Sans"]
     + [f for f in plt.rcParams["font.sans-serif"] if f != "DejaVu Sans"],
@@ -97,7 +99,7 @@ def _draw_core_vs_full_bump_chart(
     core_df: pd.DataFrame,
     full_df: pd.DataFrame,
     *,
-    legend_loc: str = "upper left",
+    legend_loc: tp.Any = "upper left",
 ) -> bool:
     """Draw the core-vs-full bump chart onto *parent*.
 

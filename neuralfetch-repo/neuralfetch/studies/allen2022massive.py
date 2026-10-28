@@ -444,10 +444,10 @@ IIS-1822929."
 
     # ---- download ----
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self._check_nsd_data_access_agreement()
         with success_writer(self.path / "download_all") as already_done:
-            if already_done:
+            if already_done and not overwrite:
                 return
             self._download_nsd_timeseries_dataset()
             self._validate_downloaded_dataset()
@@ -676,10 +676,10 @@ class Allen2022MassiveRaw(Allen2022Massive):
         fmri_spaces={"MNI152NLin2009cAsym", "T1w", "fsaverage", "fsnative"},
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self._check_nsd_data_access_agreement()
         with success_writer(self.path / "download_all") as already_done:
-            if already_done:
+            if already_done and not overwrite:
                 return
             nsd_common_path = get_allen2022massive_common_path(self.path)
             self._download_nsd_raw_dataset()
@@ -913,7 +913,7 @@ class Allen2022MassiveSample(Allen2022Massive):
         fmri_spaces={"custom"},
     )
 
-    def _download(self) -> None:
+    def _download(self, overwrite: bool = False) -> None:
         self._check_nsd_data_access_agreement()
 
         s3_files = [_S3_ROI_PATH]
@@ -927,7 +927,7 @@ class Allen2022MassiveSample(Allen2022Massive):
 
         for filepath in s3_files:
             local_path = self.path / filepath
-            if local_path.exists():
+            if local_path.exists() and not overwrite:
                 continue
             local_path.parent.mkdir(parents=True, exist_ok=True)
             command = [

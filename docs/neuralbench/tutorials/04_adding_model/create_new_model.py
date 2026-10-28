@@ -41,21 +41,21 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 #    # neuraltrain/models/my_model.py
 #    from torch import nn
-#    from neuraltrain.models.base import BaseModelConfig
+#    from neuraltrain.models.base import BaseBrainModelConfig
 #
 #
-#    class MyModel(BaseModelConfig):
+#    class MyModel(BaseBrainModelConfig):
 #        """Config for MyModel.  Hyperparameters are Pydantic fields."""
 #
 #        hidden_size: int = 256
 #        dropout: float = 0.3
 #
-#        def build(self, n_in_channels: int, n_outputs: int) -> nn.Module:
-#            return MyModelModule(n_in_channels, n_outputs, config=self)
+#        def build(self, n_spatial_locations: int, n_outputs: int) -> nn.Module:
+#            return MyModelModule(n_spatial_locations, n_outputs, config=self)
 #
 #
 #    class MyModelModule(nn.Module):
-#        def __init__(self, n_in_channels, n_outputs, config):
+#        def __init__(self, n_spatial_locations, n_outputs, config):
 #            super().__init__()
 #            self.net = nn.Sequential(
 #                nn.Flatten(1),
@@ -81,10 +81,15 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 # .. note::
 #
-#    ``build()`` receives ``n_in_channels`` (number of EEG channels)
-#    and ``n_outputs`` (task-dependent output dimension) at runtime.
-#    The ``forward()`` input has shape ``(batch, channels, time)``.
-#    Some models optionally accept ``channel_positions`` as well.
+#    ``build()`` parameters are named like
+#    :class:`~neuraltrain.models.base.BrainModelBuildContext` fields, e.g.
+#    ``n_spatial_locations`` (channels / spatial locations),
+#    ``n_temporal_samples`` (time samples), ``n_outputs`` (task output
+#    dimension) and ``frequency`` (sampling rate in Hz); the factory injects
+#    them by name (see
+#    :class:`~neuraltrain.models.base.BaseBrainModelConfig`).  The
+#    ``forward()`` input has shape ``(batch, channels, time)``; some models
+#    optionally accept ``channel_positions`` as well.
 
 # %%
 # Model YAML layout
@@ -161,11 +166,12 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #      name: NtReve
 #      from_pretrained_name: "brain-bzh/reve-base"
 #
-#    # Downstream wrapper: freeze the backbone, flatten, linear probe
+#    # Downstream wrapper: flatten the backbone output into a linear head
 #    downstream_model_wrapper:
 #      model_output_key: null
 #      aggregation: flatten
 #      probe_config: linear
+#      lora_target_modules: [to_qkv, to_out]
 #
 # Key foundation-model fields
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -180,7 +186,8 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 # ``downstream_model_wrapper``
 #   Controls how the pretrained backbone is adapted for each task.
-#   Main options:
+#   These are the defaults; the ``-w`` adaptation presets override
+#   them per run, and are what freeze the backbone.  Main options:
 #
 #   - ``aggregation``: how to reduce the temporal/spatial dimensions
 #     of the backbone output (``flatten``, ``mean``, ``first``).
@@ -190,6 +197,11 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #     applied before the model.
 #   - ``channel_merger_config``: optional learned projection from
 #     variable input channels to the model's expected channels.
+#   - ``lora_target_modules``: the ``nn.Linear`` leaf modules LoRA
+#     adapters attach to, typically the attention projections (e.g.
+#     ``["to_q", "to_k", "to_v", "to_out"]``).  Required to run the
+#     model under the ``lora_*`` presets; see
+#     :doc:`/neuralbench/full_benchmark`.
 
 # %%
 # Advanced: custom optimizer and scheduler
@@ -275,7 +287,9 @@ NeuralTrain, and (2) creating the NeuralBench YAML config.
 #
 # .. code-block:: text
 #
-#    defaults/config.yaml      (base: optimizer, trainer, data, EEGNet)
+#    defaults/config.yaml      (base: optimizer, trainer, data)
+#        ↓ merge
+#    defaults/eeg/config.yaml    (device: extractor, preprocessing, EEGNet)
 #        ↓ merge
 #    tasks/eeg/task/config.yaml  (task: dataset, target, loss, metrics)
 #        ↓ merge

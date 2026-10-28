@@ -34,6 +34,38 @@ See :doc:`install` for more options.
 
 ----
 
+Performance by category
+-----------------------
+
+One radar per task category -- each spoke is a task and the radius encodes a
+model's performance on it. Toggle between normalized score and rank, switch
+individual models on or off, and overlay the **Task-specific** and
+**Foundation** model averages (off by default).
+
+.. raw:: html
+
+   <div id="neuralbench-category-radars"></div>
+
+----
+
+Compare models
+--------------
+
+A fully customizable scatter plot -- one marker per model. Use the dropdowns
+to map any dimension to the **x-axis**, **y-axis**, **colour** and **marker
+size**: year of publication, mean rank over the benchmark, performance on a
+selected downstream task, number of parameters, pretraining corpus size
+(#subjects / #hours), pretraining objective, architecture, fMRI space, or
+model family. Toggle log scales, export the figure to PNG, and click the
+legend below the plot to hide or isolate groups. Pretraining dimensions apply
+to foundation models only.
+
+.. raw:: html
+
+   <div id="neuralbench-model-scatter"></div>
+
+----
+
 🚀 Quickstart
 ---------------
 
@@ -73,12 +105,12 @@ comparison figures and tables from the stored results (no retraining):
    :gutter: 2
 
    .. grid-item-card:: :fas:`rocket` Quickstart
-      :link: auto_examples/quickstart/01_run_first_task
+      :link: auto_examples/quickstart/index
       :link-type: doc
       :class-card: sd-shadow-sm
 
-      Run your first benchmark task: CLI usage, debug mode, model
-      switching, and hyperparameter grids.
+      Run your first benchmark task, three ways: the CLI, the same
+      selections from Python, and a model of your own.
 
    .. grid-item-card:: :fas:`chart-bar` Visualizing Results
       :link: auto_examples/results/plot_visualize_results
@@ -122,9 +154,9 @@ comparison figures and tables from the stored results (no retraining):
       :link-type: doc
       :class-card: sd-shadow-sm
 
-      Starter kit for the proposed 2026 multi-track challenge:
-      EEG-to-Image, BCI, sleep onset, EMG-to-Text, and Foundation
-      Transfer.
+      Starter kit for the `2026 multi-track challenge
+      <https://neural-interfaces26.github.io/>`_: EEG-to-Image, BCI
+      decoding, sleep onset, and EMG-to-Pose.
 
 ----
 

@@ -81,12 +81,6 @@ depend on these datasets will be skipped with a warning during
      - Read and accept the GNU General Public License v3 terms at
        http://doc.ml.tu-berlin.de/hBCI, then export the environment
        variable ``MOABB_ACCEPT_LICENCE=1`` to allow downloading.
-   * - ``eeg/typing``, ``meg/typing``
-     - ``Levy2025BrainEeg``, ``Levy2025BrainMeg`` (formerly
-       ``Pinet2024Eeg``/``Pinet2024Meg``)
-     - Not yet available for public download. The release timeline is
-       tracked alongside the upcoming dataset paper; until then these
-       tasks remain a documented known limitation.
    * - ``eeg/speech``
      - Brennan2019 (``Brennan2019Hierarchical``) on Deep Blue Data
      - Auto-download via ``urlretrieve`` against
@@ -168,10 +162,41 @@ Use ``-m`` to specify alternative models or model groups:
 **Foundation models** (6): ``bendr``, ``biot``, ``cbramod``, ``labram``,
 ``luna``, ``reve``
 
+Running with adaptation strategies
+-----------------------------------
+
+Foundation models are fine-tuned end-to-end by default. Use ``-w`` to sweep
+over other adaptation strategies instead:
+
+.. code-block:: bash
+
+   neuralbench eeg all -m all_fm -w linear_probe_flatten   # Frozen backbone, linear probe
+   neuralbench eeg all -m all_fm -w lora_r4_flatten        # Frozen backbone, LoRA adapters
+   neuralbench eeg all -m all_fm -w all                    # All 12 presets
+
+**Frozen backbone** (3): ``linear_probe_flatten``, ``linear_probe_mean``,
+``attentive_probe`` -- only the head trains. The suffix is how encoder outputs
+are pooled before the head.
+
+**LoRA** (3): ``lora_r4_flatten``, ``lora_r4_attentive``, ``lora_r32_flatten``
+-- frozen backbone plus low-rank adapters at the attention projections, at rank
+4 and 32.
+
+**Full fine-tune** (3): ``finetune_mean``, ``finetune_flatten``,
+``finetune_attentive`` -- all weights train.
+
+**LP-FT** (3): ``lpft_mean``, ``lpft_flatten``, ``lpft_attentive`` -- the head
+is fitted on the frozen backbone for 3 epochs, then every weight trains.
+
+Presets apply to foundation models only; task-specific models ignore ``-w``.
+Each preset is reported as a separate entry, suffixed in plots and tables (for
+example ``REVE (LP flatten)``), so a single run can compare strategies
+side by side.
+
 Running with dataset variants
 ------------------------------
 
-Nine tasks support multiple datasets. Use ``--dataset all`` to evaluate across
+Thirteen tasks support multiple datasets. Use ``--dataset all`` to evaluate across
 all dataset variants for a task:
 
 .. code-block:: bash
@@ -190,19 +215,20 @@ Results can be visualized on Weights & Biases, or aggregated locally using
    neuralbench eeg all -m all_classic all_fm --plot-cached
 
 ``--plot-cached`` does not re-train any model. It collects the stored test
-metrics from the cache and produces the following outputs in the
-``outputs/`` directory, split into three subfolders (``core/`` for the
-``NeuralBench-EEG-Core v1.0`` plots/tables (one dataset per task), ``full/``
-for the ``NeuralBench-EEG-Full v1.0`` per-dataset breakdowns and variability
-analyses, and ``other/`` for everything else):
+metrics from the cache and writes its outputs to ``outputs/<device>/``, split
+into ``core/`` for the ``NeuralBench-EEG-Core v1.0`` plots/tables (one dataset
+per task), ``full/`` for the ``NeuralBench-EEG-Full v1.0`` per-dataset
+breakdowns and variability analyses, and ``other/`` for everything else.
+``core/`` and ``full/`` hold one folder per foundation-model adaptation
+strategy (``default/`` when ``-w`` is not passed). For example:
 
-- **Bar chart** (``outputs/core/core_bar_chart.png``): faceted bar chart with
-  one panel per task, one bar per model, including error bars and individual
-  data points.
-- **Results table** (``outputs/core/core_results_table.csv``): wide-format
-  table with ``mean +/- std`` per task and model.
-- **Rank table** (``outputs/core/core_rank_table.csv``): models ranked within
-  each task (1 = best), with an average rank row at the bottom.
+- **Bar chart** (``outputs/eeg/core/default/core_bar_chart.png``): faceted
+  bar chart with one panel per task, one bar per model, including error bars
+  and individual data points.
+- **Results table** (``outputs/eeg/core/default/core_results_table.csv``):
+  wide-format table with ``mean +/- std`` per task and model.
+- **Rank table** (``outputs/eeg/core/default/core_rank_table.csv``): models
+  ranked within each task (1 = best), with an average rank row at the bottom.
 
 See the
 :doc:`Visualizing Results <auto_examples/results/plot_visualize_results>`

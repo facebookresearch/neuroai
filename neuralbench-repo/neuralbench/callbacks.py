@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 
+import copy
 import logging
 import typing as tp
 import warnings
@@ -18,6 +19,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 import torchmetrics
+from exca.cachedict import CacheDict
 from lightning.pytorch.callbacks import Callback
 from matplotlib.figure import Figure
 from sklearn.metrics import ConfusionMatrixDisplay
@@ -27,15 +29,127 @@ from tqdm import tqdm
 
 from neuraltrain.metrics.utils import agg_per_group, agg_retrieval_preds
 
+from .modules import DownstreamWrapperModel
+
 if tp.TYPE_CHECKING:
     from neuraltrain.utils import StandardScaler
 
 LOGGER = logging.getLogger(__name__)
 
 
+class ResetPerStream(Callback):
+    """Reset the model's state at each new stream, on a fresh model copy in evaluation.
+
+    Streams are identified by ``batch.data["stream_id"]`` (see
+    ``Data.stream_by``). A stream starts at each batch whose set of streams
+    differs from the previous batch's, or that opens an epoch or evaluation
+    pass. With windows in timeline then time order, each stream's timelines
+    contiguous, and one window per batch (batch size 1, no shuffling), this is
+    exactly each new stream, seen forward in time. With larger or shuffled
+    batches it fires more often, never less: shuffled training batches almost
+    always start a new stream.
+
+    At each new stream, the model's optional ``reset_state()`` is called.
+    During validation and test, it is called on a fresh copy of the model as it
+    was when evaluation began, so nothing the model changes while predicting
+    (weights, buffers, attributes) carries over to the next stream. The
+    original model is restored when evaluation ends, so training and
+    checkpoints never see the copies. A model that carries state across
+    training batches must detach it from the autograd graph.
+    """
+
+    def __init__(self) -> None:
+        self.original: nn.Module | None = None
+        # stage ("train" or "eval") -> (dataloader_idx, stream ids) of its last batch
+        self.previous: dict[str, tuple[int, frozenset[int]]] = {}
+
+    @staticmethod
+    def _reset_state(model: nn.Module) -> None:
+        reset_state = getattr(model, "reset_state", None)
+        if reset_state is not None:
+            reset_state()
+
+    def _is_new_stream(
+        self, stage: str, batch, batch_idx: int, dataloader_idx: int
+    ) -> bool:
+        key = (dataloader_idx, frozenset(batch.data["stream_id"].flatten().tolist()))
+        is_new = batch_idx == 0 or key != self.previous.get(stage)
+        self.previous[stage] = key
+        return is_new
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        if self._is_new_stream("train", batch, batch_idx, 0):
+            self._reset_state(pl_module.model)
+
+    def on_test_start(self, trainer, pl_module):
+        self.original = pl_module.model
+
+    def on_validation_start(self, trainer, pl_module):
+        self.on_test_start(trainer, pl_module)
+
+    def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx=0):
+        if self._is_new_stream("eval", batch, batch_idx, dataloader_idx):
+            pl_module.model = copy.deepcopy(self.original)
+            self._reset_state(pl_module.model)
+
+    def on_validation_batch_start(
+        self, trainer, pl_module, batch, batch_idx, dataloader_idx=0
+    ):
+        self.on_test_batch_start(trainer, pl_module, batch, batch_idx, dataloader_idx)
+
+    def on_test_end(self, trainer, pl_module):
+        pl_module.model = self.original
+        self.original = None
+
+    def on_validation_end(self, trainer, pl_module):
+        self.on_test_end(trainer, pl_module)
+
+
 def _set_plot_theme() -> None:
     """Apply the plotting theme used by neuralbench callbacks."""
     sns.set_theme(context="paper", style="white")
+
+
+class UnfreezeAtEpoch(Callback):
+    """Keep the pattern-frozen parameters of *model* frozen until its ``unfreeze_at_epoch``.
+
+    The parameters are trainable while the strategy sets up the model, so that
+    DDP registers them for gradient synchronisation, and frozen from the start
+    of fitting.  The optimizer holds them throughout, so they start updating as
+    soon as they receive gradients.
+    """
+
+    def __init__(self, model: DownstreamWrapperModel) -> None:
+        assert model.unfreeze_at_epoch is not None
+        self.model = model
+        self.epoch = model.unfreeze_at_epoch
+
+    def setup(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str
+    ) -> None:
+        if stage == "fit":
+            self.model.set_pattern_frozen(False)
+
+    def on_fit_start(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+        if trainer.max_epochs is not None and self.epoch >= trainer.max_epochs:
+            LOGGER.warning(
+                "unfreeze_at_epoch=%d is past max_epochs=%d: the backbone stays "
+                "frozen for the whole run.",
+                self.epoch,
+                trainer.max_epochs,
+            )
+        self.model.set_pattern_frozen(True)
+
+    def on_train_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if trainer.current_epoch != self.epoch:
+            return
+        self.model.set_pattern_frozen(False)
+        n_trainable = sum(p.numel() for p in pl_module.parameters() if p.requires_grad)
+        LOGGER.info(
+            "Epoch %d: unfroze backbone (%d trainable params)", self.epoch, n_trainable
+        )
 
 
 class TestFullRetrievalMetrics(Callback):
@@ -362,6 +476,137 @@ class TestFullRetrievalMetrics(Callback):
         return out
 
 
+class WindowPredictionCollector(Callback):
+    """Stream raw per-window test predictions and targets to disk.
+
+    For every window in the test set, the ``(y_pred, y_true)`` returned by
+    ``test_step`` is written **incrementally** (one chunk per batch) to an
+    exca :class:`~exca.cachedict.CacheDict` under ``folder``, alongside light
+    per-window metadata (recording ``timeline``, ``batch_idx``,
+    ``dataloader_idx`` and, when available, the encoded ``subject_id`` and a
+    retrieval ``group`` label). Arrays go through exca's memmap handler (one
+    shared binary file, appended per batch) and the metadata table is stored as
+    CSV, so peak RAM stays proportional to a single batch rather than the whole
+    test set.
+
+    This is task-agnostic: ``y_pred``/``y_true`` are stored with their native
+    shape (class logits, regression vectors, retrieval embeddings, CTC
+    log-probs, ...), so no per-task aggregation happens here.
+
+    Writing only happens on global rank zero. In neuralbench the test loop is
+    single-device by construction (``Experiment._test`` runs on global rank zero
+    with ``devices=1`` after the training process group is torn down), so the
+    saved predictions cover the *full* test set even after multi-GPU training;
+    the rank-zero guard is defensive against a hypothetical distributed tester.
+
+    Parameters
+    ----------
+    folder:
+        Destination directory for the prediction artifacts. The folder is
+        cleared at the start of each test epoch.
+    group_field:
+        Trigger attribute used as the retrieval ``group`` label (the stimulus
+        identity, e.g. word ``text``). Falls back to ``category`` then
+        ``filepath`` when absent; the column is omitted if no window exposes
+        any of them.
+    """
+
+    _Y_PRED_PREFIX: tp.ClassVar[str] = "y_pred_"
+    _Y_TRUE_PREFIX: tp.ClassVar[str] = "y_true_"
+    _METADATA_KEY: tp.ClassVar[str] = "metadata"
+
+    def __init__(self, folder: Path | str, group_field: str = "text") -> None:
+        self._folder = Path(folder)
+        self._group_field = group_field
+        self._reset()
+
+    def _reset(self) -> None:
+        self._cache: CacheDict | None = None
+        self._writer: tp.Any = None
+        self._n_chunks = 0
+        self._metadata: dict[str, list[tp.Any]] = defaultdict(list)
+        self._has_subject = True
+        self._has_group = True
+
+    def _segment_group(self, segment: tp.Any) -> tp.Any:
+        """Best-effort retrieval ``group`` label for a window's segment."""
+        trigger = getattr(segment, "trigger", None)
+        if trigger is None:
+            return None
+        for attr in (self._group_field, "category", "filepath"):
+            if hasattr(trigger, attr):
+                return getattr(trigger, attr)
+        return None
+
+    def on_test_epoch_start(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        self._reset()
+        if not trainer.is_global_zero:
+            return
+        self._cache = CacheDict(folder=self._folder)
+        self._cache.clear()  # avoid CacheDict's no-overwrite error on re-runs
+        self._writer = self._cache.write()
+        self._writer.__enter__()
+
+    def on_test_batch_end(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        outputs,
+        batch,
+        batch_idx,
+        dataloader_idx=0,
+    ) -> None:
+        if self._cache is None:
+            return  # non-zero rank: nothing to persist
+
+        y_pred, y_true = outputs
+        chunk = f"{self._n_chunks:08d}"
+        self._cache[f"{self._Y_PRED_PREFIX}{chunk}"] = y_pred.detach().cpu().numpy()
+        self._cache[f"{self._Y_TRUE_PREFIX}{chunk}"] = y_true.detach().cpu().numpy()
+        self._n_chunks += 1
+
+        n_windows = len(batch.segments)
+        self._metadata["timeline"].extend(seg.timeline for seg in batch.segments)
+        self._metadata["batch_idx"].extend([batch_idx] * n_windows)
+        self._metadata["dataloader_idx"].extend([dataloader_idx] * n_windows)
+
+        subject = batch.data.get("subject_id")
+        if subject is None:
+            self._has_subject = False
+        else:
+            self._metadata["subject_id"].extend(
+                subject.detach().cpu().reshape(-1).tolist()
+            )
+
+        groups = [self._segment_group(seg) for seg in batch.segments]
+        if any(g is None for g in groups):
+            self._has_group = False
+        else:
+            self._metadata["group"].extend(groups)
+
+    def on_test_epoch_end(
+        self, trainer: pl.Trainer, pl_module: pl.LightningModule
+    ) -> None:
+        if self._cache is None:
+            return
+        try:
+            if self._n_chunks:
+                n_windows = len(self._metadata["timeline"])
+                columns = ["timeline", "batch_idx", "dataloader_idx"]
+                if self._has_subject and len(self._metadata["subject_id"]) == n_windows:
+                    columns.append("subject_id")
+                if self._has_group and len(self._metadata["group"]) == n_windows:
+                    columns.append("group")
+                self._cache[self._METADATA_KEY] = pd.DataFrame(
+                    {col: self._metadata[col] for col in columns}
+                )
+        finally:
+            self._writer.__exit__(None, None, None)
+            self._writer = None
+
+
 class RecordingLevelEval(Callback):
     """Callback to evaluate average prediction over each recording (timeline)."""
 
@@ -432,7 +677,7 @@ class RecordingLevelEval(Callback):
                 lambda counts: counts[i] / sum(counts) if sum(counts) > 0 else 0.0
             )
 
-        # Create prediction tensor with shape (n_recordings, num_classes)
+        # Per-recording probabilities, shape (n_recordings, num_classes).
         pred_columns = [f"y_pred{i}" for i in range(self.num_classes)]
         y_pred_probs = torch.from_numpy(outputs_df[pred_columns].values)
         # Convert y_true to int64 explicitly to avoid object dtype issues

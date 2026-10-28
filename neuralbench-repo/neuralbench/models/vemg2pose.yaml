@@ -1,0 +1,16 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# VEMG2Pose (Salter et al., NeurIPS 2024), emg2pose's regression baseline.
+brain_model_config:
+  =replace=: true
+  name: VEMG2Pose
+  kwargs:
+    sfreq: 2000.0
+data:
+  # 1790 samples of TDS left context on top of the 5-s evaluation window, so the
+  # model emits the 10000 frames emg2pose scores (regression_vemg2pose.yaml).
+  duration: 5.895

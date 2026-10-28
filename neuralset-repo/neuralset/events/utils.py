@@ -124,10 +124,22 @@ def expand_bids_fmri(
     from bids.layout import parse_file_entities  # type: ignore[import-untyped]
 
     fp_pattern = Path(pattern)
-    fps: defaultdict[str, dict[str, str]] = defaultdict(dict)
-    for ext in (".nii.gz", ".gii"):
+    fps: defaultdict[str, dict[str, tp.Any]] = defaultdict(dict)
+    for ext in (".nii.gz", ".gii", ".dtseries.nii"):
         for fp in fp_pattern.parent.glob(fp_pattern.name + ext):
             ents = parse_file_entities(str(fp))
+            if fp.name.endswith(".dtseries.nii") and (
+                "space" not in ents or "den" not in ents
+            ):
+                match = re.search(
+                    r"_space-([^_]+)(?:_den-([^_]+))?_bold\.dtseries\.nii$",
+                    fp.name,
+                )
+                if match is not None:
+                    if "space" not in ents:
+                        ents["space"] = match.group(1)
+                    if "den" not in ents and match.group(2) is not None:
+                        ents["den"] = match.group(2)
             space = ents.get("space")
             if space is None:
                 continue
@@ -137,9 +149,13 @@ def expand_bids_fmri(
                 part = "mask"
             elif ents.get("suffix") == "bold" and ents.get("desc") == "preproc":
                 part = "data"
+            elif fp.name.endswith("_bold.dtseries.nii"):
+                part = "data"
             else:
                 continue
             fps[space][part] = str(fp)
+            if part == "data" and "den" in ents:
+                fps[space]["spec"] = {"den": str(ents["den"])}
     typed: list[dict[str, tp.Any]] = []
     for space, parts in fps.items():
         kw: dict[str, tp.Any] = {
@@ -153,7 +169,11 @@ def expand_bids_fmri(
             # the right hemisphere by replacing hemi-L with hemi-R.
             kw.update(filepath=parts["left"])
         elif "data" in parts:
-            kw.update(filepath=parts["data"], mask_filepath=parts.get("mask"))
+            kw.update(filepath=parts["data"])
+            if "mask" in parts:
+                kw["mask_filepath"] = parts["mask"]
+            if "spec" in parts:
+                kw["spec"] = parts["spec"]
         else:
             continue
         typed.append(kw)

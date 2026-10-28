@@ -25,6 +25,7 @@ Description
 
 This task corresponds to Challenge 1 ("Cross-Task Transfer Learning") of the `EEG Challenge 2025 <https://eeg2025.github.io/>`__ [Aristimunha2025]_.
 The goal is to predict where, within a 2-s EEG window, participants responded to a visual stimulus with a mouse click.
+Following [Aristimunha2025]_, that window spans 0.5 s to 2.5 s after the contrast change, so the trigger is the contrast-change ``Stimulus`` event and not the ``Keystroke`` that ends the trial.
 
 The official challenge metric is the normalized root-mean-squared error (RMSE divided by the standard deviation of the ground-truth reaction times), reported as ``normalized_rmse`` alongside the other regression metrics.
 

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
+from torch import nn
 
 from neuralbench.utils import SequenceLabelEncoder
 from neuralset import utils as ns_utils
@@ -20,10 +21,13 @@ from neuralset.events import etypes
 from neuralset.extractors.meta import CroppedExtractor
 
 from .data import Data
+from .metrics import _assign_bins
 from .utils import (
     _compute_regression_bin_weights,
+    detect_batch_dim,
     make_regression_bin_sampler,
     make_weighted_sampler,
+    run_probe_hook,
     seed_worker,
 )
 
@@ -63,6 +67,16 @@ def test_compute_regression_bin_weights_includes_upper_boundary_in_last_bin():
     weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
     # 100 alone in bin 2, 600 alone in bin 3 -> each weight is 1.0
     assert torch.allclose(weights, torch.tensor([1.0, 1.0]))
+
+
+def test_compute_regression_bin_weights_inner_edge_goes_to_upper_bin():
+    # 10 -> [0, 40), 40 -> [40, 90), 90 -> [90, 300): one target per bin.
+    targets = torch.tensor([10.0, 40.0, 90.0])
+    weights = _compute_regression_bin_weights(targets, _BMAE_EDGES)
+    assert torch.allclose(weights, torch.ones(3)), (
+        f"edge targets binned as {_assign_bins(targets, _BMAE_EDGES).tolist()}, "
+        "expected [0, 1, 2]"
+    )
 
 
 def test_compute_regression_bin_weights_handles_empty_bins():
@@ -146,10 +160,7 @@ def test_make_regression_bin_sampler_balances_bins(mocker):
         weights_t, num_samples=100_000, replacement=True, generator=generator
     )
 
-    inner_edges = torch.tensor(_BMAE_EDGES[1:-1])
-    drawn_bins = torch.bucketize(targets[drawn_idx], inner_edges, right=False).clamp_(
-        0, 3
-    )
+    drawn_bins = _assign_bins(targets[drawn_idx], _BMAE_EDGES)
     counts = torch.bincount(drawn_bins, minlength=4).float()
     proportions = counts / counts.sum()
     assert torch.allclose(proportions, torch.full((4,), 0.25), atol=0.01)
@@ -412,3 +423,100 @@ def test_make_weighted_sampler_without_generator_follows_global_rng(
     indices_b = list(iter(sampler_b))
 
     assert indices_a == indices_b
+
+
+# ---------------------------------------------------------------------------
+# run_probe_hook / detect_batch_dim (probe mechanics, exercised in isolation)
+# ---------------------------------------------------------------------------
+
+
+class _SeqFirstEnc(nn.Module):
+    """Emits sequence-first (T, B, D), like a ``batch_first=False`` transformer."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x).transpose(0, 1)  # (B, T, F) -> (T, B, D)
+
+
+class _SeqFirstProbeNet(nn.Module):
+    """Probed submodule ``enc`` emits sequence-first (T, B, D)."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.enc = _SeqFirstEnc(n_in, emb)
+        self.head = nn.Linear(emb, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.enc(x).mean(0))
+
+
+class _Const(nn.Module):
+    """Emits a fixed-size tensor, independent of the input batch size."""
+
+    def forward(self, _x: torch.Tensor) -> torch.Tensor:
+        return torch.zeros(3, 6)
+
+
+class _BatchInvariantNet(nn.Module):
+    """Probed submodule ``const`` emits a fixed-size tensor, ignoring batch size."""
+
+    def __init__(self, n_in: int):
+        super().__init__()
+        self.const = _Const()
+        self.lin = nn.Linear(n_in, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.const(x)  # fire the hook with a batch-independent output
+        return self.lin(x)
+
+
+@pytest.mark.parametrize(
+    "model, probe_layer, batch, expected_shape, expected_dim",
+    [
+        # batch-first (B, D) capture from a Sequential -> batch axis 0
+        (
+            nn.Sequential(nn.Linear(10, 16), nn.Linear(16, 4)),
+            "0",
+            {"input": torch.randn(4, 10)},
+            (4, 16),
+            0,
+        ),
+        # sequence-first (T, B, D) capture -> batch axis 1 (auto-detected)
+        (
+            _SeqFirstProbeNet(10, 6),
+            "enc",
+            {"x": torch.randn(4, 5, 10)},
+            (5, 4, 6),
+            1,
+        ),
+    ],
+)
+def test_run_probe_hook_and_detect_batch_dim(
+    model, probe_layer, batch, expected_shape, expected_dim
+):
+    """run_probe_hook returns the submodule output; detect_batch_dim finds its batch axis."""
+    submodule = model.get_submodule(probe_layer)
+    assert run_probe_hook(model, submodule, batch, probe_layer).shape == expected_shape
+    assert detect_batch_dim(model, submodule, batch, probe_layer) == expected_dim
+
+
+def test_run_probe_hook_rejects_unreachable_and_non_tensor():
+    # A submodule never reached during forward -> RuntimeError.
+    model = nn.Sequential(nn.Linear(10, 8), nn.Linear(8, 4))
+    detached = nn.Linear(4, 4)  # not part of model's forward graph
+    with pytest.raises(RuntimeError, match="did not fire"):
+        run_probe_hook(model, detached, {"input": torch.randn(2, 10)}, "detached")
+    # A tuple-returning submodule (nn.RNN -> (output, h_n)) -> TypeError.
+    rnn = nn.RNN(input_size=10, hidden_size=8, batch_first=True)
+    with pytest.raises(TypeError, match="tensor-returning"):
+        run_probe_hook(rnn, rnn, {"input": torch.randn(2, 5, 10)}, "")
+
+
+def test_detect_batch_dim_raises_when_no_axis_scales():
+    # A capture independent of batch size yields zero candidate axes.
+    model = _BatchInvariantNet(10)
+    with pytest.raises(ValueError, match="batch axis is ambiguous"):
+        detect_batch_dim(model, model.const, {"x": torch.randn(4, 10)}, "const")

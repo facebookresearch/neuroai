@@ -6,12 +6,14 @@
 
 import json
 import pickle
+import threading
 import time
 import typing as tp
 from pathlib import Path
 from types import SimpleNamespace
 
 import mne
+import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,13 +25,12 @@ import yaml
 from exca import ConfDict
 
 import neuralset as ns
+from neuralset import quantize
 from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
-from neuralset.extractors.neuro import FmriTimedArray, _overlap
-
-# avoid processpool which requires permissions unavailable in sandboxes
-_NO_CLUSTER: tp.Any = {"cluster": None}
+from neuralset.extractors import neuro
+from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, _overlap
 
 
 @pytest.mark.parametrize("cls", (ns.extractors.MegExtractor, ns.extractors.FmriExtractor))
@@ -37,6 +38,37 @@ def test_neuro_pkl(cls: tp.Type[ns.extractors.BaseExtractor]) -> None:
     inst = cls()
     string = pickle.dumps(inst)
     _ = pickle.loads(string)
+
+
+@pytest.mark.parametrize("name", ("MegExtractor", "SpikesExtractor", "FmriExtractor"))
+def test_store_dtype_uid(name: str) -> None:
+    cls = getattr(ns.extractors, name)
+    uid32, uid16 = cls().infra.uid(), cls(store_dtype="float16").infra.uid()
+    assert "store_dtype" not in uid32, "float32 default must reuse pre-existing caches"
+    assert "store_dtype" in uid16, "float16 must fork its own cache namespace"
+
+
+@pytest.mark.parametrize(
+    "name,study", [("MegExtractor", "Test2023Meg"), ("FmriExtractor", "Test2023Fmri")]
+)
+def test_store_dtype_cached_read(
+    test_data_path: Path, tmp_path: Path, name: str, study: str
+) -> None:
+    events = ns.Study(name=study, path=test_data_path, query="timeline_index<1").run()
+    cls = getattr(ns.extractors, name)
+    event = extract_events(events, types=cls().event_types)[0]
+    out = []
+    for dtype in ("float32", "float16"):
+        infra: tp.Any = {"folder": tmp_path / dtype, "cluster": None}
+        extractor = cls(store_dtype=dtype, infra=infra)
+        out.append(extractor(event, start=event.start, duration=2.0).numpy())
+        stored = next(iter(extractor.infra.cache_dict.values())).data
+        cached16 = isinstance(stored, quantize.Float16StoredArray)
+        assert cached16 == (dtype == "float16"), f"{dtype} cached as {stored!r}"
+    assert out[1].dtype == np.float32, "float16 must be invisible downstream"
+    peak = np.abs(out[0]).max()
+    assert peak > 0, "test signal is empty"
+    np.testing.assert_allclose(out[1], out[0], atol=peak * 1e-3)
 
 
 def make_meg_event(filepath, start=0.0):
@@ -56,13 +88,12 @@ def make_meg_event(filepath, start=0.0):
 
 def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     # load study to create nii.gz files
-    infra: tp.Any = {"folder": tmp_path / "cache", **_NO_CLUSTER}
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     fmri_data = test_data_path / "Test2023Fmri"
     study = ns.Study(
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=infra,
     ).run()
 
     timeline = 'Test2023Fmri:{"subject":"0"}'
@@ -106,6 +137,7 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     val = next(iter((feature2.infra.cache_dict._ram_data.values())))
     assert isinstance(val, FmriTimedArray)
     assert val.header["space"] == "fsaverage5"
+    assert val.header["preproc"] == "custom"
     assert "affine" not in val.header
     with pytest.raises(ValueError, match="No affine"):
         val.to_native()
@@ -166,14 +198,69 @@ def test_fmri(test_data_path: Path, tmp_path: Path) -> None:
     assert nifti.shape == cached_val.data.shape
 
 
+def test_nilearn_download_lock_serializes(tmp_path: Path, monkeypatch) -> None:
+    """Concurrent fetches must not overlap: the lock serializes downloads so
+    nilearn's shared temp dir can't be removed out from under another fetch."""
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", lambda: tmp_path)
+    inside = 0
+    max_concurrent = 0
+    lock = threading.Lock()
+    barrier = threading.Barrier(5)
+
+    def worker() -> None:
+        nonlocal inside, max_concurrent
+        barrier.wait()
+        with neuro._nilearn_download_lock():
+            with lock:
+                inside += 1
+                max_concurrent = max(max_concurrent, inside)
+            time.sleep(0.05)  # emulate a download
+            with lock:
+                inside -= 1
+
+    threads = [threading.Thread(target=worker) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert max_concurrent == 1
+    # the lock file is released on exit
+    assert not (tmp_path / ".neuralset_fetch.lock").exists()
+
+
+def test_nilearn_download_lock_reclaims_stale(tmp_path: Path, monkeypatch) -> None:
+    """A stale lock from a crashed holder is reclaimed, not waited on forever."""
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(neuro, "_DOWNLOAD_LOCK_STALE_S", 0.0)
+    stale = tmp_path / ".neuralset_fetch.lock"
+    stale.write_bytes(b"dead holder")
+
+    start = time.monotonic()
+    with neuro._nilearn_download_lock():
+        pass
+    # reclaimed immediately rather than blocking for the full timeout
+    assert time.monotonic() - start < 5.0
+
+
+def test_nilearn_download_lock_degrades_without_data_dir(monkeypatch) -> None:
+    """If the data dir cannot be resolved, fetching still proceeds (no-op lock)."""
+
+    def boom() -> Path:
+        raise RuntimeError("no nilearn")
+
+    monkeypatch.setattr(neuro, "_nilearn_data_dir", boom)
+    with neuro._nilearn_download_lock():
+        pass  # must not raise
+
+
 @pytest.mark.parametrize("kind", ["Fmri", "Meg"])
 def test_extractor_cached_start(test_data_path: Path, tmp_path: Path, kind: str) -> None:
-    infra: tp.Any = {"folder": tmp_path / "cache", **_NO_CLUSTER}
+    infra: tp.Any = {"folder": tmp_path / "cache", "cluster": None}
     study = ns.Study(
         name=f"Test2023{kind}",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query(f'type=="{kind}"').iloc[:1]
     start, duration = event["start"].item(), event["duration"].item()
@@ -192,7 +279,6 @@ def test_fmri_resample(test_data_path: Path, frequency: float) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query('type=="Fmri"').iloc[:1]
     orig_frequency = event.frequency.item()
@@ -231,7 +317,6 @@ def test_meg(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     # check caching infra
@@ -301,7 +386,6 @@ def test_meg(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     extractor.prepare(study)
     images = study.query('type=="Image"')
@@ -350,7 +434,6 @@ def test_meg_filter(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -396,7 +479,6 @@ def test_meg_notch_filter(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -407,6 +489,83 @@ def test_meg_notch_filter(
 
     if expected is not None:
         assert expected in caplog.text
+
+
+def test_ecg_extractor_reads_and_filters_lead_in_eeg_recording(tmp_path: Path) -> None:
+    sfreq = 200.0
+    times = np.arange(0, 10, 1 / sfreq)
+    drift = 1e-3 * np.sin(2 * np.pi * 0.1 * times)  # 0.1 Hz, killed by a 0.5 Hz highpass
+    info = mne.create_info(
+        ["Fz", "Cz", "Erbs"], sfreq=sfreq, ch_types=["eeg", "eeg", "ecg"]
+    )
+    fif = tmp_path / "mixed-raw.fif"
+    eeg = np.full_like(drift, 1e-4)
+    mne.io.RawArray(np.vstack([eeg, eeg, drift]), info).save(fif)
+
+    event = etypes.Eeg.from_dict(
+        dict(
+            start=0.0,
+            duration=9.0,
+            timeline="foo",
+            filepath=str(fif),
+            type="Eeg",
+            subject="janedoe",
+        )
+    )
+
+    def extract(filter_: tuple[float, float] | None) -> MneTimedArray:
+        extractor = ns.extractors.EcgExtractor(filter=filter_, scaler=None)
+        return next(iter(extractor._get_data([event])))
+
+    unfiltered = extract(None)
+    filtered = extract((0.5, 40.0))
+
+    assert filtered.ch_names == ["Erbs"], (
+        "must keep the ecg lead and drop the eeg channels"
+    )
+    assert filtered.data.std() < 0.1 * unfiltered.data.std(), (
+        "ecg is outside MNE's 'data' picks, so an implicit pick leaves the drift in"
+    )
+
+
+@pytest.mark.parametrize(
+    "filtr,culprits,expected",
+    [
+        ((0.1, 40.0), "highpass", (0.0, 40.0)),
+        ((10.0, 99.8), "lowpass", (10.0, 100.0)),
+        ((0.1, 99.8), "highpass.*, lowpass", (0.0, 100.0)),
+    ],
+)
+def test_eeg_filter_longer_than_recording(
+    tmp_path: Path,
+    filtr: tuple[float, float],
+    culprits: str,
+    expected: tuple[float, float],
+) -> None:
+    sfreq = 200.0
+    info = mne.create_info(["Fz", "Cz"], sfreq=sfreq, ch_types="eeg")
+    fif = tmp_path / "short-raw.fif"
+    raws = [mne.io.RawArray(np.zeros((2, int(d * sfreq))), info) for d in (5, 1)]
+    mne.concatenate_raws(raws).save(fif)  # EDGE annotation: 5 s + 1 s segments
+
+    event = etypes.Eeg.from_dict(
+        dict(
+            start=0.0,
+            duration=6.0,
+            timeline="foo",
+            filepath=str(fif),
+            type="Eeg",
+            subject="janedoe",
+        )
+    )
+
+    extractor = ns.extractors.EegExtractor(filter=filtr)
+    with pytest.raises(ValueError, match=f"{culprits} .*longer than the 5.0 s"):
+        next(iter(extractor._get_data([event])))
+
+    extractor = ns.extractors.EegExtractor(filter=filtr, on_filter_too_long="drop")
+    ta = next(iter(extractor._get_data([event])))
+    assert (ta.header["highpass"], ta.header["lowpass"]) == expected
 
 
 @pytest.mark.parametrize(
@@ -427,7 +586,6 @@ def test_meg_baseline(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
 
@@ -477,7 +635,6 @@ def test_meg_offset(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     fif = test_data_path / "Test2023Meg" / "sub-0-raw.fif"
     event = make_meg_event(fif, start=0)
@@ -493,7 +650,6 @@ def test_fnirs(test_data_path: Path) -> None:
         name="Test2024Fnirs",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     sfreq = 10.0
@@ -530,7 +686,7 @@ def test_fnirs(test_data_path: Path) -> None:
         # compute_heamo_response=True,
         # partial_pathlength_factor=0.1,
         # enhance_negative_correlation=True,
-        filter=(0.01, 2.5),
+        filter=(0.05, 2.5),  # 0.01 Hz highpass: 330 s FIR > the 100 s recording
     )
     preproc_data = extractor(event, start=start, duration=duration)
     assert preproc_data.shape == (32, sfreq * duration)
@@ -564,9 +720,7 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
 
     for cond in (meg, fmri):
         study = str(cond["study"])
-        events = ns.Study(
-            name=study, path=test_data_path, infra_timelines=_NO_CLUSTER
-        ).run()
+        events = ns.Study(name=study, path=test_data_path).run()
         sel = events.type == cond["stim"]
         dset = ns.segments.list_segments(
             events, triggers=sel, start=0.0, duration=cond["duration"]
@@ -574,7 +728,8 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
         segment = dset[0]
 
         for cache in (None, tmp_path / "cache"):
-            for filtr in (None, (None, 20.0)):
+            # 30 Hz, not 20: at 100 Hz a 20 Hz lowpass needs 67 samples > the 50 cached
+            for filtr in (None, (None, 30.0)):
                 kwargs: tp.Any = dict(cache=cache, filter=filtr)
                 # TODO, clean up when FMRI is dealt with
                 kwargs.pop("cache")  # for now, now cache in FMRI
@@ -615,7 +770,7 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
 
         # no cache, but reader
         for cache in (None, tmp_path / "cache"):
-            for filtr in (None, (None, 20.0)):
+            for filtr in (None, (None, 30.0)):
                 kwargs = dict(cache=cache, filter=filtr)
                 kwargs.pop("cache")  # TODO add fmri cache?
                 if "Fmri" in cond["study"]:
@@ -630,9 +785,7 @@ def test_cache(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_meg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     cache = tmp_path / "cache"
     extractor = ns.extractors.MegExtractor(
         frequency=100.0,
@@ -655,9 +808,7 @@ def test_meg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_eeg_feature_cache(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     extractor = ns.extractors.EegExtractor(
         frequency=100.0,
@@ -697,20 +848,20 @@ def test_base_meg(tmp_path: Path) -> None:
         "channel_order",
         "apply_hilbert",
         "notch_filter",
+        "on_filter_too_long",
         "event_types",
         "scale_factor",
         "bipolar_ref",
         "infra",  # for version
         "fill_non_finite",
+        "store_dtype",
     }
 
 
 @pytest.mark.parametrize("apply_proj", (True, False))
 def test_epoch_correct(apply_proj: bool) -> None:
     # download the first time
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     NUM = 12
 
     # Define segments
@@ -774,7 +925,6 @@ def test_channel_positions_meg(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     meg.prepare(events)
 
@@ -806,7 +956,6 @@ def test_channel_positions_eeg(test_data_path: Path, n_spatial_dims, normalize) 
         name="Test2024Eeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     eeg.prepare(events)
 
@@ -837,7 +986,6 @@ def test_channel_positions_wrong_event_type(test_data_path: Path) -> None:
         name="Test2024Eeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     eeg.prepare(events)
 
@@ -860,6 +1008,29 @@ def test_channel_positions_build() -> None:
     assert ch_pos.model_dump() == original_ch_pos.model_dump()
 
 
+def test_channel_positions_original_order_across_channel_sets() -> None:
+    first_ch_names = ["Fp1", "Fp2", "F3", "F4", "C3", "C4"]
+    second_ch_names = ["P3", "P4", "O1", "O2", "F7", "F8", "T7", "T8"]
+    eeg = ns.extractors.EegExtractor(channel_order="original")
+    eeg._update_channels(first_ch_names)
+    eeg._update_channels(second_ch_names)
+
+    info = mne.create_info(second_ch_names, sfreq=100.0, ch_types="eeg")
+    raw = mne.io.RawArray(np.zeros((len(second_ch_names), 10)), info, verbose=False)
+    ch_pos = {name: np.array([i, i + 1, i + 2]) for i, name in enumerate(second_ch_names)}
+    raw.set_montage(mne.channels.make_dig_montage(ch_pos=ch_pos, coord_frame="head"))
+    ta = MneTimedArray.from_native(raw)
+    positions_extractor = ns.extractors.ChannelPositions(
+        neuro=eeg,
+        layout_or_montage_name=None,
+        n_spatial_dims=3,
+        normalize=False,
+    )
+
+    positions = positions_extractor._compute_positions(ta)
+    assert positions.shape == (len(second_ch_names), 3)
+
+
 @pytest.mark.parametrize("channel_order", ["unique", "original"])
 def test_unique_channels_ieeg(
     channel_order: tp.Literal["unique", "original"], test_data_path: Path
@@ -868,7 +1039,6 @@ def test_unique_channels_ieeg(
         name="Test2025Ieeg",
         path=test_data_path,
         query="subject_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     if channel_order == "unique":
@@ -890,7 +1060,6 @@ def test_batch_size_unique_channels_ieeg(
         name="Test2025Ieeg",
         path=test_data_path,
         query="subject_index<2",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     ieeg = ns.extractors.IeegExtractor(channel_order=channel_order)
@@ -921,7 +1090,6 @@ def test_channel_positions_ieeg(test_data_path: Path) -> None:
         name="Test2025Ieeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     ieeg.prepare(events)
 
@@ -1184,7 +1352,6 @@ def test_meg_borders(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     extractor = ns.extractors.MegExtractor(infra=dict(folder=cache_path))  # type: ignore
@@ -1216,7 +1383,6 @@ def test_scaled_meg(
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     event = etypes.Meg.from_dict(events.query('type=="Meg"').iloc[0])
@@ -1244,9 +1410,7 @@ def test_scaled_meg(
 
 
 def test_first_samp() -> None:
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     assert meg_event.start > 0
     # first samp is ~6k at 150Hz, so start is at about 42s
@@ -1256,9 +1420,7 @@ def test_first_samp() -> None:
 
 
 def test_fast_event() -> None:
-    events = ns.Study(
-        name="Mne2013Sample", path=ns.CACHE_FOLDER, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     assert meg_event.start > 0
     extractor = ns.extractors.MegExtractor(frequency=150)
@@ -1267,9 +1429,7 @@ def test_fast_event() -> None:
 
 
 def test_border_baseline(test_data_path: Path) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     extractor = ns.extractors.MegExtractor(frequency=150, baseline=(0, 0.6))
     _ = extractor(meg_event, meg_event.stop - 0.5, 1)  # baseline should not bug
@@ -1313,9 +1473,7 @@ all_meg_channels = {
     ],
 )
 def test_meg_picks(test_data_path: Path, picks, expected: set[str]) -> None:
-    events = ns.Study(
-        name="Test2023Meg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2023Meg", path=test_data_path).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
     extractor = ns.extractors.MegExtractor(frequency=150, picks=picks)
     ta = next(iter(extractor._get_data([meg_event])))  # type: ignore
@@ -1328,7 +1486,6 @@ def test_meg_method_on_infra(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Meg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     infra: tp.Any = {"cluster": "local", "folder": tmp_path}
     extractor = ns.extractors.MegExtractor(frequency=150, baseline=(0, 0.6), infra=infra)
@@ -1340,7 +1497,7 @@ def test_fmri_cluster_local(test_data_path: Path, tmp_path: Path) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines={"folder": tmp_path, **_NO_CLUSTER},  # type: ignore
+        timelines={"infra": {"backend": "Cached", "folder": tmp_path}},  # type: ignore
     ).run()
     fmri_event = extract_events(study, types=etypes.Fmri)[0]
     assert isinstance(fmri_event, etypes.Fmri)
@@ -1358,6 +1515,127 @@ class _PseudoNifti:  # hack used in nastase
 
     def get_fdata(self):
         return self.data
+
+
+def test_glasser_projector(monkeypatch: pytest.MonkeyPatch) -> None:
+    GP = ns.extractors.neuro.GlasserProjector
+    n = ns.extractors.neuro.FSAVERAGE_SIZES["fsaverage7"]
+    labels = [
+        SimpleNamespace(name="L_V1_ROI-lh", vertices=np.array([2, 3]), hemi="lh"),
+        SimpleNamespace(name="R_V1_ROI-rh", vertices=np.array([6, 7]), hemi="rh"),
+        SimpleNamespace(name="R_A1_ROI-rh", vertices=np.array([8, 9]), hemi="rh"),
+    ]
+    monkeypatch.setattr(GP, "_read_mne_hcp_labels", staticmethod(lambda: labels))
+    data = np.arange(2 * n * 2).reshape(2 * n, 2)
+
+    # right-hemisphere vertices are offset by n; a bare name selects both hemispheres
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1_left"}).apply_after_cache(data), data[[2, 3], :]
+    )
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1_right"}).apply_after_cache(data),
+        data[[n + 6, n + 7], :],
+    )
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1"}).apply_after_cache(data),
+        data[[2, 3, n + 6, n + 7], :],
+    )
+
+    # mode="zero" keeps the input shape and zeroes unselected rows
+    expected = np.zeros_like(data)
+    expected[[n + 8, n + 9], :] = data[[n + 8, n + 9], :]
+    np.testing.assert_array_equal(
+        GP(selected_rois={"A1"}, mode="zero").apply_after_cache(data), expected
+    )
+
+    # mode="mean"
+    v1_rows = [2, 3, n + 6, n + 7]
+    np.testing.assert_array_equal(
+        GP(selected_rois={"V1"}, mode="mean").apply_after_cache(data),
+        data[v1_rows, :].mean(axis=0)[None, :],
+    )
+    # row order
+    proj = GP(selected_rois={"V1", "A1"}, mode="mean")
+    assert proj.ordered_rois == ["A1", "V1"]
+    out = proj.apply_after_cache(data)
+    assert out.shape == (2, data.shape[1])
+    np.testing.assert_array_equal(out[0], data[[n + 8, n + 9], :].mean(axis=0))
+    np.testing.assert_array_equal(out[1], data[v1_rows, :].mean(axis=0))
+
+    # subset
+    drop = GP(selected_rois={"V1"}, subset_size=2, subset_seed=0).apply_after_cache(data)
+    assert drop.shape == (2, data.shape[1])
+    assert set(drop[:, 0] // 2) <= set(v1_rows)
+    v1_only = GP(selected_rois={"V1"}, mode="mean", subset_size=2, subset_seed=42)
+    with_a1 = GP(selected_rois={"A1", "V1"}, mode="mean", subset_size=2, subset_seed=42)
+    np.testing.assert_array_equal(
+        v1_only.apply_after_cache(data)[0],
+        with_a1.apply_after_cache(data)[1],
+    )
+    with pytest.raises(ValueError, match="subset_size=3"):
+        GP(selected_rois={"A1"}, subset_size=3).apply_after_cache(data)
+
+
+@pytest.mark.parametrize("target", ["data", "labels"])
+def test_atlas_projector_resampling_target(
+    monkeypatch: pytest.MonkeyPatch, target: tp.Literal["data", "labels"]
+) -> None:
+    # resampling_target must reach the nilearn masker: "labels" resamples each
+    # scan onto the fixed atlas grid so parcel count is stable across scans
+    # (required to stack ROI features across subjects); "data" is the default.
+    AP = ns.extractors.neuro.AtlasProjector
+    labels = np.zeros((4, 4, 4), dtype=np.int16)
+    labels[0], labels[1], labels[2] = 1, 2, 3  # 3 parcels; row 3 is background
+    atlas_img = nib.Nifti1Image(labels, np.eye(4))
+    proj = AP(atlas="schaefer_2018", resampling_target=target)
+    monkeypatch.setattr(AP, "get_atlas", lambda self: SimpleNamespace(maps=atlas_img))
+
+    assert proj._get_masker().resampling_target == target
+    bold = nib.Nifti1Image(np.random.randn(4, 4, 4, 5).astype("float32"), np.eye(4))
+    out = proj.apply(bold)
+    assert out.shape == (3, 5)  # (n_parcels, time)
+
+
+def test_cifti_roi_projector(monkeypatch: pytest.MonkeyPatch) -> None:
+    CRP = ns.extractors.neuro.CiftiRoiProjector
+    n_nodes = ns.extractors.neuro.HCP_CIFTI_91K_SIZE
+    # Synthetic merged cortical + subcortical index map (avoids needing hcp_utils).
+    monkeypatch.setattr(
+        CRP,
+        "_cifti_nodes",
+        classmethod(
+            lambda cls: {
+                "V1": np.array([0, 1, 2]),
+                "thalamus": np.array([100, 101, 102, 103]),
+                "thalamus_left": np.array([100, 101]),
+                "thalamus_right": np.array([102, 103]),
+            }
+        ),
+    )
+    data = np.arange(n_nodes * 2).reshape(n_nodes, 2)
+
+    # 1) cortical + subcortical mix (boolean mask returns rows in ascending order)
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"V1", "thalamus_left"}).apply_after_cache(data),
+        data[[0, 1, 2, 100, 101], :],
+    )
+    # 2) bare name selects both hemispheres
+    np.testing.assert_array_equal(
+        CRP(selected_rois={"thalamus"}).apply_after_cache(data),
+        data[[100, 101, 102, 103], :],
+    )
+    # 3) mode="mean"
+    proj = CRP(selected_rois={"thalamus", "thalamus_left"}, mode="mean")
+    assert proj.ordered_rois == ["thalamus", "thalamus_left"]
+    out = proj.apply_after_cache(data)
+    assert out.shape == (2, data.shape[1])
+    np.testing.assert_array_equal(out[0], data[[100, 101, 102, 103], :].mean(axis=0))
+    np.testing.assert_array_equal(out[1], data[[100, 101], :].mean(axis=0))
+    # 4) subset
+    out = CRP(selected_rois={"thalamus"}, mode="mean", subset_size=2).apply_after_cache(
+        data
+    )
+    assert out.shape == (1, data.shape[1])
 
 
 def test_fmri_mesh_from_2d() -> None:
@@ -1387,7 +1665,6 @@ def test_ieeg(test_data_path: Path) -> None:
         name="Test2025Ieeg",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
 
     sfreq = 2048.0
@@ -1495,9 +1772,7 @@ def test_overlap() -> None:
 
 
 def test_drop_bad_channels(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     # Check bad channels present
     extractor = ns.extractors.EegExtractor(
@@ -1526,9 +1801,7 @@ def test_drop_bad_channels(test_data_path: Path, tmp_path: Path) -> None:
 
 
 def test_pick_channel_names(test_data_path: Path, tmp_path: Path) -> None:
-    events = ns.Study(
-        name="Test2024Eeg", path=test_data_path, infra_timelines=_NO_CLUSTER
-    ).run()
+    events = ns.Study(name="Test2024Eeg", path=test_data_path).run()
     cache = tmp_path / "cache"
     # Check that picks allows list of channel names
     extractor = ns.extractors.EegExtractor(
@@ -1561,7 +1834,6 @@ def test_fake_meg_study() -> None:
         name="Fake2025Meg",
         path=ns.CACHE_FOLDER,
         query="subject_index < 1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     assert set(events.type) == {
@@ -1581,7 +1853,6 @@ def test_fake_fmri_study() -> None:
         name="Fake2025Fmri",
         path=ns.CACHE_FOLDER,
         query="timeline_index < 1",
-        infra_timelines=_NO_CLUSTER,
     )
     events = loader.run()
     try:
@@ -1649,79 +1920,40 @@ def test_hrf() -> None:
 
 
 def test_fmri_space_selection(tmp_path: Path) -> None:
-    """Verify space selection: None raises, 'auto' uses heuristic, explicit picks."""
+    """Verify query-based space/preproc selection (no auto selection).
+
+    Query *semantics* are covered in test_eventquery; here we only check that
+    FmriExtractor wires the query in, guards ambiguity, and reports no matches.
+    """
     _mk = test_etypes.make_fmri_event
     mni = "MNI152NLin2009cAsym"
-    events = [
+    t1w, mni_ev, fsavg = (
         _mk(tmp_path, space="T1w"),
         _mk(tmp_path, space=mni),
         _mk(tmp_path, space="fsaverage"),
-    ]
+    )
+    events = [t1w, mni_ev, fsavg]
+    window: tp.Any = dict(start=0.0, duration=1.0)  # dummy -- we test space filtering
 
-    # from_space="auto" + SurfaceProjector → prefers fsaverage
-    _surf5: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
-    feat = ns.extractors.FmriExtractor(projection=_surf5, from_space="auto")
-    window: tp.Any = dict(start=0.0, duration=1.0)  # dummy — we test space filtering
-    relevant = feat._get_relevant_events(events, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None
-    assert ta.header["space"] == "fsaverage5"
+    feat = ns.extractors.FmriExtractor(query=f'space == "{mni}"')
+    assert feat._get_relevant_events(events, trigger=None, **window) == [mni_ev]
 
-    # explicit from_space overrides
-    feat = ns.extractors.FmriExtractor(from_space=mni)
-    relevant = feat._get_relevant_events(events, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["space"] == mni
-
-    # single space + from_space=None → passes through
     feat = ns.extractors.FmriExtractor()
     single = [_mk(tmp_path, space="T1w")]
-    relevant = feat._get_relevant_events(single, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["space"] == "T1w"
+    assert feat._get_relevant_events(single, trigger=None, **window) == single
 
-    # multiple spaces + from_space=None → raises
     feat = ns.extractors.FmriExtractor()
     with pytest.raises(ValueError, match="Multiple spaces"):
         feat._get_relevant_events(events, trigger=None, **window)
 
-    # multiple spaces + from_space=None + projection → also raises (no silent auto)
+    _surf5: tp.Any = {"name": "SurfaceProjector", "mesh": "fsaverage5"}
     feat = ns.extractors.FmriExtractor(projection=_surf5)
     with pytest.raises(ValueError, match="Multiple spaces"):
         feat._get_relevant_events(events, trigger=None, **window)
 
-    # from_preproc filters
-    mixed = [
-        _mk(tmp_path, space="T1w", preproc="deepprep"),
-        _mk(tmp_path, space="T1w", preproc="fmriprep"),
-    ]
-    feat = ns.extractors.FmriExtractor(from_preproc="deepprep")
-    relevant = feat._get_relevant_events(mixed, trigger=None, **window)
-    assert len(relevant) == 1
-    ta = feat._preprocess_event(relevant[0])  # type: ignore[arg-type]
-    assert ta.header is not None and ta.header["preproc"] == "deepprep"
-
-    # validation: unknown from_preproc / from_space
-    feat = ns.extractors.FmriExtractor(from_preproc="nonexistent")
-    with pytest.raises(ValueError, match="from_preproc"):
-        feat.prepare(mixed)
-    feat = ns.extractors.FmriExtractor(from_space="nonexistent")
-    with pytest.raises(ValueError, match="from_space"):
-        feat.prepare(mixed)
-
-    # valid individually but bad combination
-    cross = [
-        _mk(tmp_path, space="T1w", preproc="deepprep"),
-        _mk(tmp_path, space="MNI152NLin2009cAsym", preproc="fmriprep"),
-    ]
-    feat = ns.extractors.FmriExtractor(
-        from_preproc="deepprep", from_space="MNI152NLin2009cAsym"
-    )
-    with pytest.raises(ValueError, match="after from_preproc"):
-        feat.prepare(cross)
+    feat = ns.extractors.FmriExtractor(query='space == "nonexistent"')
+    with pytest.raises(ValueError, match="Available spaces:.*available preprocs:"):
+        feat.prepare(events)
 
 
 def test_fmri_smoothing(test_data_path: Path) -> None:
@@ -1729,7 +1961,6 @@ def test_fmri_smoothing(test_data_path: Path) -> None:
         name="Test2023Fmri",
         path=test_data_path,
         query="timeline_index<1",
-        infra_timelines=_NO_CLUSTER,
     ).run()
     event = study.query('type=="Fmri"').iloc[:1]
 
@@ -1898,3 +2129,37 @@ def test_fmri_cleaner_ensure_finite(ensure_finite: bool) -> None:
         assert np.isfinite(cleaned).all()
     else:
         assert not np.isfinite(cleaned).all()
+
+
+def test_fmri_cleaner_no_filter_runs_without_bandpass() -> None:
+    """Default ``filter=None`` must disable bandpass, not crash nilearn.
+
+    nilearn's ``signal.clean`` accepts ``filter`` in {"butterworth", "cosine",
+    False}; ``None`` raises "Filter method None not implemented". The default
+    cleaner (detrend/standardize on, no filter) must still run -- it maps
+    ``None`` to ``False`` (no bandpass; detrend/standardize still apply).
+    """
+    data = np.random.randn(4, 60).astype(np.float32)
+    cleaner = ns.extractors.FmriCleaner()  # detrend+standardize on, filter=None
+    assert cleaner.filter is None
+    cleaned = cleaner.clean(data, t_r=2.0)
+    assert cleaned.shape == data.shape
+    assert np.isfinite(cleaned).all()
+
+
+def test_fmri_cleaner_bandpass_without_filter_raises() -> None:
+    """A high_pass/low_pass cutoff with ``filter=None`` must fail loudly.
+
+    ``filter=None`` maps to nilearn ``filter=False`` (no filtering), so a cutoff
+    without an explicit filter would be silently dropped -- reject it instead.
+    """
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError):
+        ns.extractors.FmriCleaner(high_pass=0.01)
+    with pytest.raises(pydantic.ValidationError):
+        ns.extractors.FmriCleaner(low_pass=0.1)
+    # With an explicit filter the bandpass is honoured (no error).
+    assert ns.extractors.FmriCleaner(high_pass=0.01, filter="butterworth").filter == (
+        "butterworth"
+    )

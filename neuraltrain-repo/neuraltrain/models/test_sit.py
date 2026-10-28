@@ -62,7 +62,7 @@ def test_sit_agg(
     cfg = _base_config(fake_triangle_csv).model_copy(
         update={"in_time_agg": in_time_agg},
     )
-    model = cfg.build(n_frames=n_frames)
+    model = cfg.build(n_temporal_samples=n_frames)
     assert isinstance(model, SiT)
     assert model.pos_embedding.pe_len == expected_seq
     out = model(torch.randn(2, _N_MESH_VERTICES, n_frames))
@@ -75,6 +75,6 @@ def test_sit_pool(fake_triangle_csv, pool: str) -> None:
     cfg = _base_config(fake_triangle_csv).model_copy(
         update={"pool": pool, "use_cls_token": pool == "cls"},
     )
-    model = cfg.build(n_frames=3)
+    model = cfg.build(n_temporal_samples=3)
     out = model(torch.randn(2, _N_MESH_VERTICES, 3))
     assert out.shape == (2, _DIM)

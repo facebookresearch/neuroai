@@ -1,0 +1,25 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    name: EegExtractor
+    picks: [eeg]
+    frequency: 120.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+      - 60.0
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+  channel_positions:
+    n_spatial_dims: 3
+    include_ref_eeg: false
+brain_model_config:
+  name: EEGNet

@@ -1,0 +1,32 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    name: MegExtractor
+    # not [meg]: on CTF that also picks the reference channels, which sit away
+    # from the head and measure the room; [data] would pull in EEG
+    picks: [mag, grad]
+    frequency: 120.0
+    filter:
+      - 0.1
+      - 75.0
+    notch_filter:
+      - 50.0
+      - 60.0
+    baseline: [0.0, 0.2]
+    scaler: RobustScaler
+    clamp: 20.0
+    allow_maxshield: true
+    # ``neuro.infra`` inherited from ``defaults/config.yaml``.
+  channel_positions:
+    n_spatial_dims: 3
+    include_ref_eeg: false
+    layout_or_montage_name: null
+brain_model_config:
+  # channel-count agnostic (lazy spatial conv), so one default spans CTF / KIT /
+  # Neuromag; ``-m simpleconv`` overrides it where a task wants the conv model
+  name: EEGNet

@@ -87,7 +87,7 @@ def plot_full_variability_panel(
 
     with plt.rc_context(_BUMP_FONT_OVERRIDES), sns.axes_style("white"):
         fig = plt.figure(figsize=(fig_w, fig_h))
-        sub_top, sub_bot = fig.subfigures(
+        sub_top, sub_bot = fig.subfigures(  # type: ignore[misc]
             2,
             1,
             height_ratios=[bump_h + gap_h, heat_h],

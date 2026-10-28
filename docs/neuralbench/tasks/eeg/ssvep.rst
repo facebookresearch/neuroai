@@ -41,7 +41,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg ssvep --datasets lee2019ssvep
+   neuralbench eeg ssvep --dataset lee2019ssvep
 
 References
 ~~~~~~~~~~

@@ -16,6 +16,7 @@ from neuralset.events import standardize_events
 from .main import Data
 from .transforms import (
     AddDefaultEvents,
+    AddOnsetEvents,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
@@ -456,6 +457,34 @@ def test_add_sleep_onset_targets_max_pre_n2_s_no_op_when_larger_than_recording(
     pd.testing.assert_frame_equal(base_marker, new_marker)
 
 
+def test_add_sleep_onset_targets_random_start(sleep_onset_events):
+    transform = AddSleepOnsetTargets(random_start_splits=("test",), min_pre_n2_s=5.0)
+    with pytest.raises(ValueError, match="after the split step"):
+        transform(sleep_onset_events)
+    events = pd.concat(
+        [
+            sleep_onset_events.assign(split="train"),
+            sleep_onset_events.assign(
+                split="test", timeline=sleep_onset_events.timeline + "_test"
+            ),
+        ],
+        ignore_index=True,
+    )
+    markers = transform(events).query("type == 'SleepOnsetMarker'").set_index("timeline")
+    assert markers.split.to_dict() == {"tl_n2": "train", "tl_n2_test": "test"}
+    assert markers.loc["tl_n2", "start"] == 0.0
+    assert 0.0 < markers.loc["tl_n2_test", "start"] <= 55.0
+    assert markers.loc["tl_n2_test", "stop"] == 60.0
+    reversed_markers = (
+        transform(events.iloc[::-1])
+        .query("type == 'SleepOnsetMarker'")
+        .set_index("timeline")
+    )
+    assert (
+        reversed_markers.loc["tl_n2_test", "start"] == markers.loc["tl_n2_test", "start"]
+    ), "random starts must not depend on row order"
+
+
 @pytest.mark.parametrize("max_duration_s", [None, 10.0, 110.0])
 def test_crop_timelines(eeg_events, max_duration_s: float | None):
     start_offset_s = 10.0
@@ -640,6 +669,29 @@ def test_add_default_events_with_overlap():
 
     assert output.shape[0] == 5
     assert output[output.state == "bckg"].shape[0] == 2
+
+
+def test_add_onset_events():
+    eeg = dict(type="Eeg", start=0.0, duration=60.0, frequency=100.0, filepath=":.fif")
+    labels = [
+        ("Artifact", 10.0, 2.0, "eyem"),
+        ("Artifact", 10.0, 5.0, "artf"),
+        ("Seizure", 10.0, 3.0, "seiz"),
+        ("Artifact", 20.0, 1.0, "artf"),
+    ]
+    rows = [eeg] + [
+        dict(type=t, start=s, duration=d, state=state) for t, s, d, state in labels
+    ]
+    events = standardize_events(
+        pd.DataFrame(rows).assign(subject="1", timeline="tl", split="train")
+    )
+
+    output = AddOnsetEvents(event_types=["Artifact", "Seizure"])(events)
+
+    onsets = output[output.type == "Event"].sort_values("start")
+    assert list(zip(onsets.start, onsets.duration)) == [(10.0, 5.0), (20.0, 1.0)]
+    assert (onsets.split == "train").all()
+    assert len(output) == len(events) + 2
 
 
 def test_offset_events(events):

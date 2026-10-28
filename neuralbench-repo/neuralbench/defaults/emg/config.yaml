@@ -1,0 +1,24 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+data:
+  neuro:
+    name: EmgExtractor
+    picks: [emg]
+    # raw 2 kHz EMG, as in the emg2qwerty / emg2pose papers: the models normalize per window
+    frequency: 2000.0
+    filter: null
+    notch_filter: null
+    baseline: null
+    scaler: null
+    clamp: null
+    infra:
+      min_samples_per_job: 200
+  channel_positions:
+    n_spatial_dims: 3
+    include_ref_eeg: false
+brain_model_config:
+  name: EEGNet

@@ -7,7 +7,8 @@
 """``nn.Module`` classes and pydantic config wrappers used by neuralbench.
 
 This module groups the small custom ``nn.Module`` building blocks
-(``IndexSelect``, ``Mean``, ``ConcatGroupedMean``) together with the
+(``IndexSelect``, ``Mean``, ``ConcatGroupedMean``, ``AttentivePool``) together
+with the
 pydantic configs that build trainable adapters / probes on top of a
 pretrained model (``ChannelProjection``, ``DownstreamWrapper``) and the
 runtime wrapper they produce (``DownstreamWrapperModel``).
@@ -16,6 +17,7 @@ runtime wrapper they produce (``DownstreamWrapperModel``).
 import inspect
 import logging
 import typing as tp
+import weakref
 
 import pydantic
 import torch
@@ -24,7 +26,99 @@ from torch import nn
 from neuraltrain.models.common import ChannelMerger, Mlp
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
+from .utils import detect_batch_dim, run_probe_hook
+
+if tp.TYPE_CHECKING:
+    import peft
+
 LOGGER = logging.getLogger(__name__)
+
+
+class LoraConfig(pydantic.BaseModel):
+    """Pydantic mirror of :class:`peft.LoraConfig`, exposing only the fields we sweep.
+
+    ``target_modules`` defaults to :attr:`DownstreamWrapper.lora_target_modules`.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+    r: int = 8
+    lora_alpha: int = 16
+    lora_dropout: float = 0.0
+    bias: tp.Literal["none", "all", "lora_only"] = "none"
+    target_modules: list[str] | None = None
+
+    def build(self, target_modules: list[str]) -> "peft.LoraConfig":
+        from peft import LoraConfig as _PeftLoraConfig
+
+        return _PeftLoraConfig(
+            r=self.r,
+            lora_alpha=self.lora_alpha,
+            lora_dropout=self.lora_dropout,
+            bias=self.bias,
+            target_modules=target_modules,
+            inference_mode=False,
+        )
+
+
+# TODO: delete through route_bypassed_qkv_lora once braindecode > 1.8.1 (braindecode#1194)
+class _AddDelta(nn.Module):
+    def __init__(self, delta: torch.Tensor) -> None:
+        super().__init__()
+        self.delta = delta
+
+    def forward(self, weight: torch.Tensor) -> torch.Tensor:
+        return weight + self.delta
+
+
+def _merge_qkv_lora(attn: nn.Module, args: tp.Any) -> None:
+    qkv: tp.Any = attn.qkv  # a peft LoraLayer
+    if qkv.disable_adapters or qkv.merged:
+        return
+    delta = sum(
+        qkv.get_delta_weight(name) for name in qkv.active_adapters if name in qkv.lora_A
+    )
+    if isinstance(delta, torch.Tensor):
+        nn.utils.parametrize.register_parametrization(
+            qkv.base_layer, "weight", _AddDelta(delta)
+        )
+
+
+def _unmerge_qkv_lora(attn: nn.Module, args: tp.Any, output: tp.Any) -> None:
+    qkv: tp.Any = attn.qkv
+    base = qkv.base_layer
+    if nn.utils.parametrize.is_parametrized(base, "weight"):
+        nn.utils.parametrize.remove_parametrizations(
+            base, "weight", leave_parametrized=False
+        )
+
+
+_MHA_FASTPATH_STATES: list[bool] = []
+
+
+def _disable_mha_fastpath(module: nn.Module, args: tp.Any) -> None:
+    _MHA_FASTPATH_STATES.append(torch.backends.mha.get_fastpath_enabled())
+    torch.backends.mha.set_fastpath_enabled(False)
+
+
+def _restore_mha_fastpath(module: nn.Module, args: tp.Any, output: tp.Any) -> None:
+    torch.backends.mha.set_fastpath_enabled(_MHA_FASTPATH_STATES.pop())
+
+
+def route_bypassed_qkv_lora(model: nn.Module) -> int:
+    """Make LoRA on ``qkv`` reach BEiT-style attention; return the modules patched.
+
+    BEiT-style attention (LaBraM, EEG-DINO) reads ``qkv.weight`` through
+    ``F.linear`` and never calls ``qkv``; each forward sees ``W + delta`` instead.
+    """
+    from peft.tuners.lora import Linear as LoraLinear
+
+    patched = 0
+    for attn in model.modules():
+        if isinstance(getattr(attn, "qkv", None), LoraLinear) and hasattr(attn, "q_bias"):
+            attn.register_forward_pre_hook(_merge_qkv_lora)
+            attn.register_forward_hook(_unmerge_qkv_lora, always_call=True)
+            patched += 1
+    return patched
 
 
 class IndexSelect(nn.Module):
@@ -69,6 +163,47 @@ class ConcatGroupedMean(nn.Module):
             ],
             dim=self.dim,
         )
+
+
+def _flatten_tokens(x: torch.Tensor) -> torch.Tensor:
+    """Collapse the axes between batch and embedding into a single token axis.
+
+    ``(B, emb)`` -> ``(B, 1, emb)``; ``(B, d1, ..., dk, emb)`` -> ``(B, d1 * ... * dk, emb)``.
+    """
+    if x.ndim <= 2:
+        return x.unsqueeze(1)
+    return x.reshape(x.shape[0], -1, x.shape[-1])
+
+
+class AttentivePool(nn.Module):
+    """Pool tokens with a single learnable query via multi-head cross-attention.
+
+    The attentive-probe read-out for frozen SSL features (cf. the MAE / V-JEPA
+    attentive pooler), without the surrounding transformer MLP/LayerNorm/residual.
+    """
+
+    def __init__(self, emb_dim: int, num_heads: int = 8) -> None:
+        super().__init__()
+        # nn.MultiheadAttention requires emb_dim % num_heads == 0
+        requested_heads = num_heads
+        while emb_dim % num_heads != 0:
+            num_heads //= 2
+        if num_heads != requested_heads:
+            LOGGER.warning(
+                "AttentivePool: emb_dim=%d is not divisible by num_heads=%d, "
+                "falling back to num_heads=%d.",
+                emb_dim,
+                requested_heads,
+                num_heads,
+            )
+        self.query = nn.Parameter(torch.randn(1, 1, emb_dim) * emb_dim**-0.5)
+        self.attn = nn.MultiheadAttention(emb_dim, num_heads=num_heads, batch_first=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = _flatten_tokens(x)  # (B, n_tokens, emb)
+        query = self.query.expand(x.shape[0], -1, -1)
+        pooled, _ = self.attn(query, x, x, need_weights=False)  # (B, 1, emb)
+        return pooled.squeeze(1)
 
 
 class ChannelProjection(pydantic.BaseModel):
@@ -376,18 +511,50 @@ class DownstreamWrapper(pydantic.BaseModel):
         (before the first dot) must match exactly. If False, any part of the layer name
         can match the patterns. Default is True.
     aggregation : {"flatten", "mean", "first"} or int, optional
-        Method to aggregate the model output.
+        Parameter-free reduction of the model output before the probe.
         ``"flatten"`` flattens all dimensions except batch;
         ``"mean"`` averages over the temporal/sequence dimension (dim=1);
         ``"first"`` selects only the first timestep/token;
         an ``int`` splits into n groups, averages each group, then concatenates;
-        ``None`` performs no aggregation.
-    probe_config : Mlp | "linear" | None, optional
-        Configuration for the probe layer added on top.
+        ``None`` performs no aggregation (required by ``probe_config="attention"``).
+        When ``probe_layer`` is set, the captured activation is canonicalised to
+        batch-first before aggregation (see ``probe_batch_dim``), so these
+        semantics are identical for intermediate and final outputs.
+    probe_config : Mlp | "linear" | "attention" | None, optional
+        Configuration for the probe head added on top.
         ``None`` uses identity (no additional layer), e.g. if the model already
         has a linear layer of the right output size.
         ``"linear"`` adds a single linear layer.
+        ``"attention"`` adds an ``AttentivePool`` read-out plus a linear layer;
+        it pools the raw tokens itself, so requires ``aggregation=None``.
         An ``Mlp`` instance adds a multi-layer perceptron with specified configuration.
+    probe_layer : str | None, optional
+        Dotted submodule name (from ``model.named_modules()``) where a forward
+        hook taps activations for probing.  ``None`` (default) probes the final
+        model output.  Requires ``model_output_key=None`` (intermediate captures
+        are tensors, not dicts).
+    probe_batch_dim : int | "auto", optional
+        Axis of the probed activation that indexes the batch.  ``"auto"``
+        (default) detects it by running the dummy forward at two batch sizes and
+        finding the axis that scales with the batch.  Set explicitly (e.g. ``1``
+        for sequence-first ``(T, B, D)`` transformer outputs) to skip detection
+        or resolve an ambiguous layout.  Only used when ``probe_layer`` is set.
+    lora_config : LoraConfig | None, optional
+        If set, PEFT LoRA adapters are injected into the wrapped model, leaving
+        only the adapters and the probe head trainable.  Requires the ``peft``
+        package.  Default is None.
+    lora_target_modules : list[str] | None, optional
+        ``nn.Linear`` leaf-module names the adapters target (e.g.
+        ``["to_q", "to_k", "to_v", "to_out"]``), usually set per foundation
+        model in its YAML.  Overridden by :attr:`lora_config.target_modules`,
+        ignored when :attr:`lora_config` is None.  Default is None.
+    unfreeze_at_epoch : int | None, optional
+        If set, the parameters frozen by ``layers_to_freeze`` /
+        ``layers_to_unfreeze`` become trainable at the start of this epoch, i.e.
+        the head is first fitted on frozen features, then the whole model is
+        fine-tuned from it (LP-FT, Kumar et al. 2022).  Multi-GPU runs need
+        ``trainer_config.strategy="ddp_find_unused_parameters_true"``.
+        Default is None.
     """
 
     model_config = pydantic.ConfigDict(extra="forbid")
@@ -398,7 +565,12 @@ class DownstreamWrapper(pydantic.BaseModel):
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
     strict_matching: bool = True
     aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten"
-    probe_config: Mlp | tp.Literal["linear"] | None = "linear"
+    probe_config: Mlp | tp.Literal["linear", "attention"] | None = "linear"
+    probe_layer: str | None = None
+    probe_batch_dim: int | tp.Literal["auto"] = "auto"
+    lora_config: LoraConfig | None = None
+    lora_target_modules: list[str] | None = None
+    unfreeze_at_epoch: pydantic.PositiveInt | None = None
 
     @property
     def n_adapter_target_channels(self) -> int | None:
@@ -417,10 +589,42 @@ class DownstreamWrapper(pydantic.BaseModel):
                 "Only one of layers_to_freeze and layers_to_unfreeze can be specified at once."
             )
 
+        if self.probe_layer is not None and self.model_output_key is not None:
+            raise ValueError(
+                f"probe_layer={self.probe_layer!r} requires model_output_key=None "
+                f"(intermediate captures are tensors, not dicts); "
+                f"got {self.model_output_key!r}."
+            )
+
+        if self.probe_batch_dim != "auto" and self.probe_layer is None:
+            raise ValueError(
+                "probe_batch_dim only applies when probe_layer is set; "
+                f"got probe_batch_dim={self.probe_batch_dim} with probe_layer=None."
+            )
+
+        if self.unfreeze_at_epoch is not None and (
+            self.layers_to_freeze is None and self.layers_to_unfreeze is None
+        ):
+            raise ValueError(
+                "unfreeze_at_epoch requires layers_to_freeze or layers_to_unfreeze, "
+                "otherwise nothing is frozen to begin with."
+            )
+        if self.unfreeze_at_epoch is not None and self.lora_config is not None:
+            raise ValueError(
+                "unfreeze_at_epoch and lora_config cannot be combined: unfreezing "
+                "would fully fine-tune the backbone under the adapters."
+            )
+
+        if self.probe_config == "attention" and self.aggregation is not None:
+            raise ValueError(
+                "probe_config='attention' pools the raw model tokens and "
+                f"requires aggregation=None; got aggregation={self.aggregation!r}."
+            )
+
     def build(
         self,
         model: nn.Module,
-        dummy_batch: dict[str, torch.Tensor | None],
+        dummy_batch: dict[str, tp.Any],
         n_outputs: int,
         input_channel_names: list[str] | None = None,
     ) -> "DownstreamWrapperModel":
@@ -458,9 +662,15 @@ class DownstreamWrapper(pydantic.BaseModel):
                 else:
                     x_adapted = channel_adapter(x)
                 model_batch = {input_key: x_adapted}
+            else:
+                model_batch = dummy_batch
+            probe_batch_dim = 0
+            if self.probe_layer is None:
                 orig_output = model(**model_batch)
             else:
-                orig_output = model(**dummy_batch)
+                orig_output, probe_batch_dim = self._capture_probe_output(
+                    model, model_batch
+                )
             if self.model_output_key is not None:
                 orig_output = orig_output[self.model_output_key]
             model.train()
@@ -478,13 +688,79 @@ class DownstreamWrapper(pydantic.BaseModel):
             strict_matching=self.strict_matching,
             aggregation=self.aggregation,
             probe_config=self.probe_config,
+            probe_layer=self.probe_layer,
+            probe_batch_dim=probe_batch_dim,
+            unfreeze_at_epoch=self.unfreeze_at_epoch,
         )
+
+        # must follow the freeze pattern and load_checkpoint (build_brain_model step 3)
+        if self.lora_config is not None:
+            from peft import get_peft_model
+
+            targets = self.lora_config.target_modules or self.lora_target_modules
+            if not targets:
+                raise ValueError(
+                    "LoRA requires target_modules: either set "
+                    "downstream_model_wrapper.lora_config.target_modules in the "
+                    "overlay or downstream_model_wrapper.lora_target_modules in "
+                    "the model YAML."
+                )
+            peft_cfg = self.lora_config.build(target_modules=targets)
+            # typed for HF PreTrainedModel, but only needs named_modules
+            wrapper_model.wrapped_model = get_peft_model(
+                wrapper_model.wrapped_model,  # type: ignore[arg-type]
+                peft_cfg,
+            )
+            # eval fast path skips the adapters
+            wrapper_model.wrapped_model.register_forward_pre_hook(_disable_mha_fastpath)
+            wrapper_model.wrapped_model.register_forward_hook(
+                _restore_mha_fastpath, always_call=True
+            )
+            if route_bypassed_qkv_lora(wrapper_model.wrapped_model) and (
+                self.lora_config.lora_dropout
+            ):
+                LOGGER.warning("lora_dropout is not applied to BEiT-style qkv adapters.")
 
         # Sanity check (wrapper handles preprocessing internally)
         wrapper_output = wrapper_model(**dummy_batch)
         assert wrapper_output.shape[-1] == n_outputs
 
         return wrapper_model
+
+    def _capture_probe_output(
+        self, model: nn.Module, model_batch: dict[str, torch.Tensor | None]
+    ) -> tuple[torch.Tensor, int]:
+        """Capture the activation tapped at ``probe_layer``, canonicalised to batch-first.
+
+        Runs a dummy forward with a temporary hook on the probed submodule,
+        finds the batch axis (via ``probe_batch_dim`` or auto-detection), and
+        returns ``(activation_moved_to_batch_first, detected_batch_dim)``.
+        Raises if the submodule is unreachable or returns a non-tensor.
+        """
+        assert self.probe_layer is not None  # guaranteed by the caller
+        # model_output_key=None is enforced in model_post_init.
+        try:
+            submodule = model.get_submodule(self.probe_layer)
+        except AttributeError as exc:
+            valid = [n for n, _ in model.named_modules() if n]
+            raise AttributeError(
+                f"probe_layer={self.probe_layer!r} not in "
+                f"{type(model).__name__} ({len(valid)} submodules; "
+                f"e.g. {valid[:3]})"
+            ) from exc
+
+        capture = run_probe_hook(model, submodule, model_batch, self.probe_layer)
+        if self.probe_batch_dim == "auto":
+            batch_dim = detect_batch_dim(model, submodule, model_batch, self.probe_layer)
+        else:
+            batch_dim = self.probe_batch_dim
+            if not 0 <= batch_dim < capture.ndim:
+                raise ValueError(
+                    f"probe_batch_dim={batch_dim} is out of range for "
+                    f"probe_layer={self.probe_layer!r} capture of shape "
+                    f"{tuple(capture.shape)}."
+                )
+        return capture.movedim(batch_dim, 0), batch_dim
 
 
 class DownstreamWrapperModel(nn.Module):
@@ -493,6 +769,11 @@ class DownstreamWrapperModel(nn.Module):
     Handles the full pipeline: optional preprocessing -> channel adapter ->
     model -> output key selection -> aggregation -> probe.
     """
+
+    def reset_state(self) -> None:
+        """Call the backbone's ``reset_state()``, when it has one."""
+        if hasattr(self.wrapped_model, "reset_state"):
+            tp.cast(tp.Callable[[], None], self.wrapped_model.reset_state)()
 
     def __init__(
         self,
@@ -507,10 +788,14 @@ class DownstreamWrapperModel(nn.Module):
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
         aggregation: tp.Literal["flatten", "mean", "first"] | int | None = "flatten",
-        probe_config: Mlp | tp.Literal["linear"] | None = None,
+        probe_config: Mlp | tp.Literal["linear", "attention"] | None = None,
+        probe_layer: str | None = None,
+        probe_batch_dim: int = 0,
+        unfreeze_at_epoch: int | None = None,
     ):
         super().__init__()
 
+        self.unfreeze_at_epoch = unfreeze_at_epoch
         self.preprocessor = preprocessor
         self.channel_adapter = channel_adapter
         self._adapter_needs_positions = adapter_needs_positions
@@ -525,7 +810,36 @@ class DownstreamWrapperModel(nn.Module):
 
         self._apply_freeze(layers_to_freeze, layers_to_unfreeze, strict_matching)
         n_inputs = self._build_aggregation(aggregation, brain_model_output_size)
-        self._build_probe(probe_config, n_inputs, wrapper_n_outputs)
+        self._build_probe(
+            probe_config, n_inputs, wrapper_n_outputs, brain_model_output_size
+        )
+
+        # The hook lives on ``self.wrapped_model`` (a submodule of ``self``), so
+        # a strong closure over ``self`` would form a self -> wrapped_model ->
+        # submodule -> hook -> self reference cycle that keeps this wrapper (and
+        # its captured GPU activations) alive past its useful life. A weakref
+        # lets the hook no-op once the wrapper is collected, and
+        # ``weakref.finalize`` deterministically detaches the hook on GC so a
+        # shared backbone doesn't accumulate stale hooks across CV folds.
+        # Single-slot buffer (overwrite, not append): keeps only the last fire
+        # so a submodule that runs many times costs O(1) memory.
+        self._probed_activation: list[torch.Tensor] = []
+        self._probe_handle: torch.utils.hooks.RemovableHandle | None = None
+        # Captured activations are moved to batch-first before aggregation, so
+        # the aggregation semantics match the non-probe path.
+        self._probe_batch_dim = probe_batch_dim
+        if probe_layer is not None:
+            self_ref = weakref.ref(self)
+
+            def _capture(_m, _i, out, _ref=self_ref):
+                s = _ref()
+                if s is not None:
+                    s._probed_activation[:] = [out]
+
+            self._probe_handle = self.wrapped_model.get_submodule(
+                probe_layer
+            ).register_forward_hook(_capture)
+            weakref.finalize(self, self._probe_handle.remove)
 
     def _apply_freeze(
         self,
@@ -534,6 +848,7 @@ class DownstreamWrapperModel(nn.Module):
         strict_matching: bool,
     ) -> None:
         """Freeze or unfreeze model parameters based on layer name patterns."""
+        trainable_before = [p for p in self.wrapped_model.parameters() if p.requires_grad]
         if layers_to_freeze is not None:
             for name, param in self.wrapped_model.named_parameters():
                 if strict_matching:
@@ -563,6 +878,13 @@ class DownstreamWrapperModel(nn.Module):
                 else:
                     requires_grad = any(pattern in name for pattern in layers_to_unfreeze)
                 param.requires_grad = requires_grad
+
+        self._pattern_frozen = [p for p in trainable_before if not p.requires_grad]
+
+    def set_pattern_frozen(self, frozen: bool) -> None:
+        """Freeze or unfreeze the parameters the freeze pattern froze, and only those."""
+        for param in self._pattern_frozen:
+            param.requires_grad = not frozen
 
     def _build_aggregation(
         self,
@@ -603,9 +925,10 @@ class DownstreamWrapperModel(nn.Module):
 
     def _build_probe(
         self,
-        probe_config: Mlp | tp.Literal["linear"] | None,
+        probe_config: Mlp | tp.Literal["linear", "attention"] | None,
         n_inputs: int,
         n_outputs: int,
+        brain_model_output_size: torch.Size,
     ) -> None:
         """Build the probe (classification/regression head) on top of the aggregated representations."""
         self.probe: nn.Module
@@ -613,6 +936,12 @@ class DownstreamWrapperModel(nn.Module):
             self.probe = nn.Identity()
         elif probe_config == "linear":
             self.probe = nn.Linear(n_inputs, n_outputs)
+        elif probe_config == "attention":
+            emb_dim = brain_model_output_size[-1]
+            self.probe = nn.Sequential(
+                AttentivePool(emb_dim=emb_dim),
+                nn.Linear(emb_dim, n_outputs),
+            )
         else:
             assert not isinstance(probe_config, str)
             self.probe = probe_config.build(
@@ -651,7 +980,21 @@ class DownstreamWrapperModel(nn.Module):
         if not self._inner_accepts_var_kwargs:
             kwargs = {k: v for k, v in kwargs.items() if k in self._inner_param_names}
 
+        # Clear before the forward so an activation captured by a previous
+        # (possibly failed) call cannot leak into this one; clear again after
+        # reading so we don't hold the autograd graph between steps.
+        self._probed_activation.clear()
         out = self.wrapped_model(*args, **kwargs)
+        if self._probe_handle is not None:
+            if not self._probed_activation:
+                raise RuntimeError(
+                    "probe_layer hook did not fire during forward; the configured "
+                    "submodule was not executed by this forward pass."
+                )
+            out = self._probed_activation[-1]
+            self._probed_activation.clear()
+            if self._probe_batch_dim != 0:
+                out = out.movedim(self._probe_batch_dim, 0)
         if self.model_output_key is not None:
             out = out[self.model_output_key]
         out = self.aggregation(out)

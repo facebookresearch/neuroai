@@ -9,18 +9,32 @@
 from __future__ import annotations
 
 import typing as tp
+import warnings
 from pathlib import Path
 
 import pandas as pd
 
-from neuralbench.plots._constants import MODEL_DISPLAY_NAMES
+from neuralbench.plots._constants import (
+    FM_DISPLAY,
+    MODEL_DISPLAY_NAMES,
+    AdaptationMode,
+)
 from neuralbench.plots._filters import multi_dataset_tasks
 from neuralbench.plots.ranking import compute_task_ranks
-from neuralbench.registry import FEATURE_BASED_BY_TASK, SKLEARN_BASELINE_MODELS
+from neuralbench.registry import SKLEARN_BASELINE_MODELS, feature_based_baseline
 
 # Synthetic ``brain_model_name`` assigned to the task-appropriate sklearn row
 # after collapsing; resolves to ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``.
 _FEATURE_BASED_LABEL = "feature_based"
+
+# the only models run with more than one adaptation strategy
+_FM_DISPLAY_SET: frozenset[str] = frozenset(FM_DISPLAY)
+
+# Metrics logged as a fraction but reported (and given a perfect score in
+# :data:`neuralbench.plots._constants.METRIC_PERFECT_SCORE`) as a percentage.
+SCALE_TO_PERCENT: frozenset[str] = frozenset(
+    {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
+)
 
 # ---------------------------------------------------------------------------
 # Result aggregation
@@ -31,7 +45,7 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse per-pipeline sklearn baselines into a single "Handcrafted" row.
 
     For each task, keeps only the sklearn-baseline rows whose
-    ``brain_model_name`` matches :data:`FEATURE_BASED_BY_TASK[task_name]` and
+    ``brain_model_name`` matches :func:`~neuralbench.registry.feature_based_baseline` and
     relabels the kept rows to :data:`_FEATURE_BASED_LABEL` (so they resolve to
     ``"Handcrafted"`` via ``MODEL_DISPLAY_NAMES``).  Non-matching sklearn
     rows are dropped; deep-learning and constant-predictor rows pass through
@@ -47,7 +61,7 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     is_sklearn = df["brain_model_name"].isin(SKLEARN_BASELINE_MODELS)
     if not is_sklearn.any():
         return df
-    preferred = df["task_name"].map(FEATURE_BASED_BY_TASK)
+    preferred = df["task_name"].map(feature_based_baseline, na_action="ignore")
     # Keep rows that are either non-sklearn OR the task-preferred sklearn pipeline.
     keep = (~is_sklearn) | (df["brain_model_name"] == preferred)
     out = df.loc[keep].copy()
@@ -57,16 +71,173 @@ def _collapse_feature_based_baselines(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _disambiguate_model_variants(df: pd.DataFrame) -> pd.DataFrame:
+    """Suffix ``model_name`` with the config variant when one is needed.
+
+    Distinct configs that share a ``brain_model_name`` (e.g. multiple downstream
+    wrappers, probe layers, checkpoints, or model hyperparameters on the same
+    backbone) would otherwise collapse into a single ``model_name`` and be
+    averaged together as if they were seeds.  For each model that carries more
+    than one ``model_variant``, the suffix lists only the ``key=value``
+    components that actually differ across its variants -- so labels stay
+    minimal (shared components, including the opaque ``cfg`` hash, are dropped)
+    and the canonical one-config-per-model case is left unchanged.
+    """
+    if "model_variant" not in df.columns:
+        return df
+    variant = df["model_variant"].fillna("")
+
+    def _components(tag: str) -> set[str]:
+        return {part for part in tag.split(";") if part}
+
+    labels = df["model_name"].copy()
+    for base, idx in df.groupby("model_name").groups.items():
+        # The collapsed classical baseline intentionally uses a different
+        # task-appropriate sklearn pipeline per task (see
+        # ``_collapse_feature_based_baselines`` / ``FEATURE_BASED_BY_TASK``),
+        # so its ``model_variant`` differs across tasks.  Those are not
+        # competing configs on one task -- they are one headline "Handcrafted"
+        # baseline -- so keep it as a single entry instead of splitting it into
+        # per-pipeline ``Handcrafted [cfg=...]`` rows.
+        if base == MODEL_DISPLAY_NAMES.get(_FEATURE_BASED_LABEL, "Handcrafted"):
+            continue
+        tags = variant.loc[idx]
+        if tags.nunique() <= 1:
+            continue  # single config -> keep the clean display name
+        shared = set.intersection(*(_components(t) for t in tags))
+        for i in idx:
+            distinguishing = sorted(_components(variant.loc[i]) - shared)
+            if distinguishing:
+                labels.loc[i] = f"{base} [{';'.join(distinguishing)}]"
+    df["model_name"] = labels
+    return df
+
+
+def _check_no_collisions(df: pd.DataFrame) -> None:
+    """Fail loudly if distinct experiments share one ``(model, ..., seed)`` cell.
+
+    Aggregation averages ``metric_value`` over seeds per
+    ``(model_name, task, dataset, metric)``; two rows that match on those *and*
+    ``seed`` are not seed replicates but distinct configs collapsing into one
+    cell, which would silently corrupt the reported mean/std.  After
+    :func:`_disambiguate_model_variants` this should only trigger for a config
+    axis not captured by ``brain_model_name`` / ``model_variant`` (e.g. a grid
+    sweep field) or a genuine duplicate.
+    """
+    key = [
+        c
+        for c in ("model_name", "task_name", "dataset_name", "metric_name", "seed")
+        if c in df.columns
+    ]
+    dup = df.duplicated(subset=key, keep=False)
+    if not dup.any():
+        return
+    cols = key + (["model_variant"] if "model_variant" in df.columns else [])
+    offenders = df.loc[dup, cols].sort_values(key)
+    raise ValueError(
+        "Distinct experiments collapse into the same aggregation cell "
+        f"(grouping key {key}); their results would be silently averaged.\n"
+        "This happens when configs differ in an axis not reflected in "
+        "brain_model_name or model_variant (e.g. a grid field). Give them "
+        "distinct brain_model_name values or extend the model_variant "
+        "signature in aggregator._experiment_variant.\n"
+        f"Colliding rows:\n{offenders.to_string(index=False)}"
+    )
+
+
+_STRATEGY_ABBREV: dict[str, str] = {
+    "finetune": "FT",
+    "linear_probe": "LP",
+    "attentive_probe": "AP",
+    "lpft": "LP-FT",
+}
+
+
+def eval_mode_suffix(eval_mode: str) -> str:
+    """Display-name suffix for an ``eval_mode`` tag (``"lora_r4"`` -> ``" (LoRA r4)"``).
+
+    Unknown tags get no suffix.
+    """
+    mode = AdaptationMode.parse(eval_mode)
+    if mode.is_lora:
+        abbrev = f"LoRA r{mode.lora_rank}"
+    elif mode.strategy in _STRATEGY_ABBREV:
+        abbrev = _STRATEGY_ABBREV[mode.strategy]
+    else:
+        return ""
+    return f" ({abbrev} {mode.aggregation})" if mode.aggregation else f" ({abbrev})"
+
+
+def _result_is_foundation(row: dict[str, tp.Any]) -> bool:
+    """True when *row* belongs to a foundation model (by display name)."""
+    name = row.get("brain_model_name")
+    if not isinstance(name, str):
+        return False
+    return MODEL_DISPLAY_NAMES.get(name, name) in _FM_DISPLAY_SET
+
+
+def foundation_eval_modes(results: list[dict[str, tp.Any]]) -> list[str]:
+    """Distinct adaptation strategies among FM results, in canonical order."""
+    modes = {
+        str(row.get("eval_mode") or "finetune")
+        for row in results
+        if _result_is_foundation(row)
+    }
+    return sorted(modes, key=lambda m: AdaptationMode.parse(m).sort_key)
+
+
+def filter_results_for_eval_mode(
+    results: list[dict[str, tp.Any]], eval_mode: str
+) -> list[dict[str, tp.Any]]:
+    """Keep FM rows at *eval_mode* plus every non-FM row, as a shared reference."""
+    return [
+        row
+        for row in results
+        if not _result_is_foundation(row)
+        or str(row.get("eval_mode") or "finetune") == eval_mode
+    ]
+
+
 def build_results_df(
     results: list[dict[str, tp.Any]],
     loss_to_metric_mapping: dict[str, str],
+    *,
+    suffix_eval_mode: bool = True,
 ) -> pd.DataFrame:
-    """Transform raw experiment dicts into a plot-ready DataFrame."""
+    """Transform raw experiment dicts into a plot-ready DataFrame.
+
+    With ``suffix_eval_mode`` and several FM strategies present, foundation-model
+    names carry their strategy (``"REVE (LoRA r32)"``) so each stays a distinct
+    entry; pass ``False`` for frames already holding a single strategy.
+    ``base_model_name`` always holds the unsuffixed display name.
+    """
     df = pd.DataFrame(results)
     df = _collapse_feature_based_baselines(df)
     df["model_name"] = df["brain_model_name"].map(
         lambda name: MODEL_DISPLAY_NAMES.get(name, name)
     )
+    # the plain display name, kept so consumers need not parse it back out
+    df["base_model_name"] = df["model_name"]
+    # cached results predating eval_mode are all finetunes
+    if "eval_mode" not in df.columns:
+        df["eval_mode"] = "finetune"
+    else:
+        df["eval_mode"] = df["eval_mode"].fillna("finetune")
+    is_fm = df["base_model_name"].isin(_FM_DISPLAY_SET)
+    # only FMs are swept over strategies, so only their tags decide suffixing
+    if suffix_eval_mode and df.loc[is_fm, "eval_mode"].nunique() > 1:
+        df.loc[is_fm, "model_name"] = df.loc[is_fm, "model_name"] + df.loc[
+            is_fm, "eval_mode"
+        ].map(eval_mode_suffix).fillna("")
+    if "space_name" in df.columns:
+        # a space tells runs apart only where one model/task/dataset has several
+        key = [c for c in ("model_name", "task_name", "dataset_name") if c in df.columns]
+        swept = df.groupby(key, dropna=False)["space_name"].transform("nunique") > 1
+        variant = df.get("model_variant", pd.Series("", index=df.index)).fillna("")
+        df.loc[swept, "model_variant"] = (
+            variant[swept] + ";space=" + df.loc[swept, "space_name"]
+        )
+    df = _disambiguate_model_variants(df)
     df["loss_name"] = df.loss.apply(pd.Series).name
     df["metric_name"] = df.loss_name.map(loss_to_metric_mapping)
     unmapped = df.loc[df["metric_name"].isna(), "loss_name"].unique().tolist()
@@ -77,14 +248,21 @@ def build_results_df(
             "neuralbench.aggregator.Aggregator.loss_to_metric_mapping."
         )
     df["metric_value"] = df.apply(lambda x: x[x["metric_name"]], axis=1)
-    _SCALE_TO_PERCENT = {"test/bal_acc", "test/full_retrieval/top5_acc_subject-agg"}
-    df.loc[df.metric_name.isin(_SCALE_TO_PERCENT), "metric_value"] *= 100.0
+    df.loc[df.metric_name.isin(SCALE_TO_PERCENT), "metric_value"] *= 100.0
+    _check_no_collisions(df)
     return df
 
 
 # ---------------------------------------------------------------------------
 # Results tables
 # ---------------------------------------------------------------------------
+
+
+def _format_mean_std(mean: float, std: float) -> str:
+    """Render ``mean +/- std``, dropping the spread a single seed cannot define."""
+    if pd.isna(std):
+        return f"{mean:0.3f}"
+    return f"{mean:0.3f} \u00b1 {std:0.3f}"
 
 
 def make_results_table(
@@ -98,9 +276,7 @@ def make_results_table(
     agg_df = df.groupby([facet_column, "metric_name", color_column]).metric_value.agg(
         ["mean", "std"]
     )
-    agg_df["perf"] = agg_df.apply(
-        lambda x: f"{x['mean']:0.3f} \u00b1 {x['std']:0.3f}", axis=1
-    )
+    agg_df["perf"] = agg_df.apply(lambda x: _format_mean_std(x["mean"], x["std"]), axis=1)
     wide_df = agg_df.reset_index().pivot(
         index=[facet_column, "metric_name"],
         columns=color_column,
@@ -115,9 +291,20 @@ def make_rank_table(
     df: pd.DataFrame,
     output_dir: Path,
 ) -> pd.DataFrame:
-    """Build a per-task rank table with an average row and save as CSV."""
+    """Build a per-task rank table with an average row and save as CSV.
+
+    The average covers only tasks every model ranked on, so a model missing a
+    score somewhere is not flattered by averaging over an easier task subset.
+    """
     rank_df = compute_task_ranks(df)
-    rank_df.loc["average"] = rank_df.mean(axis=0)
+    shared = rank_df.dropna()
+    partial = sorted(set(rank_df.index) - set(shared.index))
+    if partial:
+        warnings.warn(
+            f"Averaging ranks over {len(shared)} of {len(rank_df)} tasks: "
+            f"{partial} lack a score for at least one model"
+        )
+    rank_df.loc["average"] = shared.mean(axis=0)
     output_dir.mkdir(parents=True, exist_ok=True)
     rank_df.to_csv(output_dir / "core_rank_table.csv")
     return rank_df
@@ -139,7 +326,7 @@ def make_full_table(
     agg = sub.groupby(["task_name", "dataset_name", "metric_name", "model_name"])[
         "metric_value"
     ].agg(["mean", "std"])
-    agg["perf"] = agg.apply(lambda x: f"{x['mean']:0.3f} \u00b1 {x['std']:0.3f}", axis=1)
+    agg["perf"] = agg.apply(lambda x: _format_mean_std(x["mean"], x["std"]), axis=1)
     wide = agg.reset_index().pivot(
         index=["task_name", "dataset_name", "metric_name"],
         columns="model_name",
@@ -160,8 +347,14 @@ def make_full_table(
 def print_skip_table(
     total: dict[tuple[str, str], int],
     skipped: dict[tuple[str, str], int],
+    failed: dict[tuple[str, str], int] | None = None,
 ) -> None:
-    """Print a tasks x models table of included / total experiment counts."""
+    """Print a tasks x models table of included / total experiment counts.
+
+    *failed* is the subset of *skipped* whose job errored out, as opposed to
+    not having run yet; those counts are marked with a trailing ``!n``.
+    """
+    failed = failed or {}
     tasks = sorted({t for t, _ in total})
     models = sorted({m for _, m in total})
 
@@ -173,7 +366,10 @@ def print_skip_table(
             key = (task, model)
             n_total = total.get(key, 0)
             n_included = n_total - skipped.get(key, 0)
-            cells[key] = f"{n_included}/{n_total}" if n_total else "-"
+            n_failed = failed.get(key, 0)
+            cells[key] = "-" if not n_total else f"{n_included}/{n_total}"
+            if n_failed:
+                cells[key] += f"!{n_failed}"
             inc, tot = model_totals[model]
             model_totals[model] = (inc + n_included, tot + n_total)
             tinc, ttot = task_totals[task]
@@ -201,7 +397,9 @@ def print_skip_table(
 
     n_skip = sum(skipped.values())
     n_total = sum(total.values())
+    n_failed = sum(failed.values())
+    legend = f"\n!n = n experiment(s) failed ({n_failed} total)." if n_failed else ""
     print(
         f"\nExperiments with cached results ({n_total - n_skip}/{n_total} included):\n"
-        f"{table_df.to_string()}"
+        f"{table_df.to_string()}{legend}"
     )

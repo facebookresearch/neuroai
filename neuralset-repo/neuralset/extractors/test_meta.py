@@ -6,6 +6,7 @@
 
 import typing as tp
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -130,6 +131,18 @@ def test_aggregated_extractor(
         assert out["agg"].shape == (batch_size, 2, 1)
 
 
+def test_aggregated_extractor_accepts_temporal_static_extractors() -> None:
+    pulse = ns.extractors.Pulse(frequency=100.0, aggregation="sum")
+    meg = ns.extractors.MegExtractor(frequency=100.0, aggregation="sum")
+
+    aggregated = ns.extractors.AggregatedExtractor(
+        extractors=[pulse, meg],
+        extractor_aggregation="cat",
+    )
+
+    assert aggregated.frequency == 100.0
+
+
 def test_extractor_pca(tmp_path: Path) -> None:
     infra: tp.Any = {"infra": {"folder": tmp_path}}
     fparams: tp.Any = {"name": "HuggingFaceText", "cache_n_layers": 3, **infra}
@@ -167,6 +180,14 @@ def test_hf_pca(tmp_path: Path) -> None:
     for w in ["Hello", "world", "blublu", "whatever"]:
         c = w if w != "Hello" else ("blublu " * 64 + w)  # trigger key shortening
         events.append(etypes.Word(text=w, context=c, **kwargs))
+    with mock.patch("sklearn.decomposition.PCA", side_effect=RuntimeError("boom")):
+        with pytest.raises(RuntimeError):
+            feat.prepare(events)
+    staged = list(tmp_path.glob("HF-PCA-tmp-*"))
+    assert len(staged) == 1, "failure should keep one uid-keyed staging folder"
+    assert list(staged[0].rglob("*HuggingFaceText*")), "extraction was discarded"
+    msg = "staging must be keyed on the extractor, else another model shares it"
+    assert "cache_n_layers=3" in staged[0].name, msg
     feat.prepare(events)
     folder = feat.infra.uid_folder()
     assert folder is not None
@@ -182,6 +203,10 @@ def test_hf_pca(tmp_path: Path) -> None:
     assert len(dirs) == 1
     dirs = [f.name for f in folder.parent.iterdir()]
     assert len(dirs) == 1
+    # same folder as above: layers is excluded from the cached uid
+    (tmp_path / staged[0].name).mkdir()  # kill before the rmtree
+    feat.prepare(events)
+    assert not list(tmp_path.glob("HF-PCA-tmp-*")), "kill leftover not cleared"
 
 
 @pytest.mark.parametrize("offset", [0, 1.0])

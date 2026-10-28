@@ -4,6 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+compatible_spaces:
+  [fsaverage4, fsaverage5, fsaverage6, mni2fsaverage4, mni2fsaverage5, mni2fsaverage6]
 brain_model_config:
   =replace=: true
   name: FmriLinear

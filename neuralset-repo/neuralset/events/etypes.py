@@ -971,6 +971,15 @@ class Emg(MneRaw):
     """Electromyography (EMG) recording event."""
 
 
+class Ecg(MneRaw):
+    """Electrocardiography (ECG) recording event.
+
+    For a dedicated cardiac recording. When the lead is an auxiliary channel of
+    an EEG/PSG recording, the study emits its usual event instead, and
+    :class:`~neuralset.extractors.EcgExtractor` reads the lead out of that.
+    """
+
+
 class Ieeg(MneRaw):
     """Intracranial EEG (iEEG) event.
 
@@ -979,16 +988,19 @@ class Ieeg(MneRaw):
 
 
 class Spikes(BaseDataEvent):
-    """Spikes recording event saved as HDF5 object.
+    """Spikes recording event (NWB/HDF5 or pre-binned MNE data).
 
-    Base class for spikes recordings that can be loaded using HDF5.
+    By default, :meth:`read` opens an NWB-style HDF5 file (``h5py.File``).
+    With a :class:`~neuralset.events.study.SpecialLoader`, it may return an
+    ``mne.io.RawArray`` of pre-binned spike counts for use with
+    :class:`~neuralset.extractors.SpikesExtractor`.
 
     Parameters
     ----------
     subject : str
         Subject identifier (required, cannot be empty)
     filepath: str
-        Path to the HDF5 file (required, cannot be empty)
+        Path to the HDF5 file, or a SpecialLoader JSON URI (required)
 
     Notes
     -----
@@ -999,8 +1011,8 @@ class Spikes(BaseDataEvent):
     .. code-block:: python
 
         spikes = Spikes(start=0, timeline="scan1", filepath="data_raw.nwb",
-                 subject="sub-01")
-        h5py_file = spikes.read()  # Returns h5py.File object
+                 subject="sub-01", frequency=1000.0, duration=10.0)
+        h5py_file = spikes.read()  # NWB/HDF5: returns h5py.File
     """
 
     subject: StrCast = ""

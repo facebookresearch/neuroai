@@ -37,7 +37,7 @@ To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg ern --datasets kueper2024
+   neuralbench eeg ern --dataset kueper2024
 
 References
 ~~~~~~~~~~

@@ -7,6 +7,7 @@
 """Tests for the classical sklearn/pyriemann baselines."""
 
 import logging
+import typing as tp
 
 import numpy as np
 import pydantic
@@ -20,10 +21,11 @@ from sklearn.preprocessing import StandardScaler
 
 from neuraltrain.models.base import BaseModelConfig
 
-from .sklearn_baseline import (
+from .baselines import (
     CoSpectraLogLR,
     CovTsLR,
     CovTsRidge,
+    FitOnceBuildContext,
     SklearnBaseline,
     SklearnBaselineModel,
     SklearnClassifier,
@@ -37,6 +39,38 @@ _N = 80
 _C = 8
 _T = 128
 _SEED = 0
+
+
+def _fit_kwargs(X: np.ndarray, y: np.ndarray) -> dict[str, tp.Any]:
+    """``build(**_fit_kwargs(X, y))`` kwargs that materialise ``(X, y)``.
+
+    Typed ``dict[str, Any]`` so the single-key mapping unpacks cleanly into
+    ``build`` / ``FitOnceBuildContext`` (whose other parameters have unrelated
+    types).  ``frequency`` is left unset so spectral leaves (CoSpectra) fall
+    back to their configured rate, matching the synthetic data sampling rate.
+    """
+    return {
+        "load_neuro_targets": lambda: (
+            torch.from_numpy(np.asarray(X)),
+            torch.from_numpy(np.asarray(y)),
+        ),
+    }
+
+
+def _ctx(X: np.ndarray, y: np.ndarray) -> FitOnceBuildContext:
+    """A minimal :class:`FitOnceBuildContext` materialising ``(X, y)``.
+
+    Retained so a couple of tests still exercise the ``build_from_context``
+    injector for the fit-once family (the merge-gate test in
+    ``neuraltrain`` skips models that override ``build_from_context``).
+    """
+    return FitOnceBuildContext(
+        n_spatial_locations=int(X.shape[1]),
+        n_temporal_samples=int(X.shape[2]),
+        n_outputs=None,
+        **_fit_kwargs(X, y),
+    )
+
 
 _ALL_LEAVES: list[type[SklearnBaseline]] = [
     XdawnTsLR,
@@ -83,7 +117,7 @@ def _make_ssvep_signal(
     n: int = _N,
     n_classes: int = 3,
     seed: int = _SEED,
-    sfreq: float = 120.0,
+    frequency: float = 120.0,
     duration: float = 4.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Per-class narrow-band sinusoid (``8 + 3*k`` Hz) for spectral classifiers.
@@ -92,8 +126,8 @@ def _make_ssvep_signal(
     least one full Welch window at ``window=128``.
     """
     rng = np.random.default_rng(seed)
-    n_times = int(sfreq * duration)
-    t = np.arange(n_times) / sfreq
+    n_times = int(frequency * duration)
+    t = np.arange(n_times) / frequency
     X = rng.standard_normal((n, _C, n_times)).astype(np.float32)
     y = rng.integers(0, n_classes, size=n).astype(np.int64)
     for k in range(n_classes):
@@ -157,7 +191,7 @@ def _unwrap_head(pipe: Pipeline) -> object:
 def test_leaf_fit_forward(cls: type[SklearnBaseline], kind: str, out_dim: int) -> None:
     """Every concrete leaf fits on synthetic data and forwards batched tensors."""
     X, y = _synth_for(cls, out_dim=out_dim)
-    model = cls().build(X, y)
+    model = cls().build(**_fit_kwargs(X, y))
 
     assert isinstance(model, SklearnBaselineModel)
     assert model.output_dim == out_dim
@@ -167,6 +201,22 @@ def test_leaf_fit_forward(cls: type[SklearnBaseline], kind: str, out_dim: int) -
     assert out.dtype == torch.float32
     if kind == "classifier":
         assert torch.allclose(out.sum(dim=-1), torch.ones(5), atol=1e-5)
+
+
+def test_build_from_context_injects_fit_data() -> None:
+    """Fit-once ``build_from_context`` injects ``FitOnceBuildContext`` fields.
+
+    Dedicated coverage for the fit-once injector path: the ``neuraltrain``
+    merge-gate test only checks models that rely on the *base*
+    ``build_from_context``, so it skips fit-once configs (which override it to
+    narrow the context type).
+    """
+    X, y = _synth_for(CovTsRidge, out_dim=1)
+    model = CovTsRidge().build_from_context(_ctx(X, y))
+
+    assert isinstance(model, SklearnBaselineModel)
+    out = model(torch.from_numpy(X[:5]))
+    assert out.shape == (5, 1)
 
 
 @pytest.mark.parametrize(
@@ -188,7 +238,7 @@ def test_pipeline_includes_standard_scaler_and_cv_head(
     training mean on real EEG, producing Pearson r ~ 0.
     """
     X, y = _synth_for(cls, out_dim=1 if cls._kind == "regressor" else 2)
-    pipe = cls().build(X, y)._pipe
+    pipe = cls().build(**_fit_kwargs(X, y))._pipe
 
     assert isinstance(pipe.steps[-2][1], StandardScaler), (
         f"{cls.__name__}: StandardScaler must be the step immediately before the head; "
@@ -210,7 +260,7 @@ def test_covtsridge_recovers_variance_signal() -> None:
     fail both checks.
     """
     X, y = _make_reg_signal_with_variance_modulation(n=120, seed=_SEED)
-    model = CovTsRidge().build(X, y)
+    model = CovTsRidge().build(**_fit_kwargs(X, y))
     preds = model(torch.from_numpy(X)).squeeze(-1).numpy()
 
     assert float(preds.std()) > 1e-3, (
@@ -231,7 +281,7 @@ def test_cospectra_log_lr_recovers_ssvep_peak() -> None:
     X_fit, y_fit = _make_ssvep_signal(n=120, n_classes=3, seed=_SEED)
     X_test, y_test = _make_ssvep_signal(n=60, n_classes=3, seed=_SEED + 1)
 
-    model = CoSpectraLogLR().build(X_fit, y_fit)
+    model = CoSpectraLogLR().build(**_fit_kwargs(X_fit, y_fit))
     probs = model(torch.from_numpy(X_test)).numpy()
     preds = probs.argmax(axis=-1)
     acc = float((preds == y_test).mean())
@@ -303,10 +353,10 @@ def test_multilabel_handling(cls: type[SklearnClassifier], expect: str) -> None:
 
     if expect == "raise":
         with pytest.raises(ValueError, match="multilabel targets are not supported"):
-            cls().build(X, y)
+            cls().build(**_fit_kwargs(X, y))
         return
 
-    model = cls().build(X, y)
+    model = cls().build(**_fit_kwargs(X, y))
     assert isinstance(model, SklearnBaselineModel)
     pipe = model._pipe
     assert isinstance(pipe, Pipeline)
@@ -323,7 +373,7 @@ def test_drop_flat_trials(caplog: pytest.LogCaptureFixture) -> None:
     X, y = _make_class_signal(n_classes=2)
     X[:5] = 0.0
 
-    caplog.set_level(logging.INFO, logger="neuralbench.sklearn_baseline")
+    caplog.set_level(logging.INFO, logger="neuralbench.baselines")
     X_kept, y_kept = CovTsLR()._drop_flat_trials(X, y)
 
     assert X_kept.shape[0] == _N - 5
@@ -371,8 +421,8 @@ def test_pd_fallback_retries_with_logeuclid(
 
     mocker.patch.object(Pipeline, "fit", flaky_fit)
 
-    caplog.set_level(logging.WARNING, logger="neuralbench.sklearn_baseline")
-    model = CovTsLR().build(X, y)
+    caplog.set_level(logging.WARNING, logger="neuralbench.baselines")
+    model = CovTsLR().build(**_fit_kwargs(X, y))
     assert isinstance(model, SklearnBaselineModel)
     assert n_calls["n"] == 2
     assert "logeuclid" in caplog.text
@@ -383,7 +433,7 @@ def test_pd_fallback_reraises_non_pd_errors(mocker: MockerFixture) -> None:
     X, y = _make_class_signal(n_classes=2)
     mocker.patch.object(Pipeline, "fit", side_effect=ValueError("unrelated failure"))
     with pytest.raises(ValueError, match="unrelated failure"):
-        CovTsLR().build(X, y)
+        CovTsLR().build(**_fit_kwargs(X, y))
 
 
 # ---------------------------------------------------------------------------
@@ -402,8 +452,8 @@ def test_xdawn_target_class_auto_uses_minority(
     X[y == 1, 0, :] += 0.8
     rng.shuffle(y)
 
-    caplog.set_level(logging.INFO, logger="neuralbench.sklearn_baseline")
-    XdawnTsLR(xdawn_target_class=-1).build(X, y)
+    caplog.set_level(logging.INFO, logger="neuralbench.baselines")
+    XdawnTsLR(xdawn_target_class=-1).build(**_fit_kwargs(X, y))
     assert "auto-detected Xdawn target class = 1" in caplog.text
 
 

@@ -9,15 +9,19 @@ import typing as tp
 
 import numpy as np
 import torch
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import neuralset as ns
 
+from .config_manager import _ensure_initialized
+from .experiment_config import merge_task_config
 from .extractors import SleepOnsetTargetExtractor  # noqa: F401
+from .registry import _validate_inputs
 from .transforms import (  # noqa: F401
     AddDefaultEvents,
+    AddOnsetEvents,
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
@@ -28,7 +32,12 @@ from .transforms import (  # noqa: F401
     SklearnSplit,
     TextPreprocessor,
 )
-from .utils import make_regression_bin_sampler, make_weighted_sampler, seed_worker
+from .utils import (
+    finite_target_fraction,
+    make_regression_bin_sampler,
+    make_weighted_sampler,
+    seed_worker,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,8 +51,8 @@ class BaseSampler(ns.base.NamedModel):
     samplers are selected from YAML via the ``name`` discriminator, e.g.
     ``sampler: {name: ClassificationSampler}``.
 
-    Only the training DataLoader uses the configured sampler; the val and
-    test DataLoaders always iterate the dataset in order.
+    Only the training DataLoader uses the configured sampler; validation and
+    test order is set by the ``Data`` shuffle options.
     """
 
     def build(
@@ -97,14 +106,9 @@ class RegressionBinSampler(BaseSampler):
     weights so that, in expectation, every populated bin contributes the
     same total mass to each training epoch.
 
-    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`:
-
-    * Bin ``i`` covers ``[bin_edges[i], bin_edges[i + 1])`` for
-      ``i < n_bins - 1``; the top bin is closed on the right so targets
-      exactly at ``bin_edges[-1]`` are counted in the top bin.
-    * Targets outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero
-      weight** -- they are excluded from sampling and do not contribute to
-      any bin's count.
+    Bin semantics match :class:`~neuralbench.metrics.BinnedMAE`.  Targets
+    outside ``[bin_edges[0], bin_edges[-1]]`` receive **zero weight** -- they
+    are excluded from sampling and do not contribute to any bin's count.
 
     Parameters
     ----------
@@ -143,26 +147,42 @@ class Data(ns.BaseModel):
     study: ns.Step
     neuro: ns.extractors.BaseExtractor
     target: ns.extractors.BaseExtractor
-    channel_positions: ns.extractors.ChannelPositions
+    channel_positions: ns.extractors.ChannelPositions | None = None
     # Segments
     trigger_event_type: str | list[str]
     start: float = -0.5
     duration: float | None = 3
     stride: float | None = None
     stride_drop_incomplete: bool = True
+    # Drop segments missing an event for one of the extractors, rather than
+    # extracting an invalid target for them.
+    drop_incomplete: bool = False
+    # Targets are NaN wherever the label is invalid (emg/pose IK failures). 1.0 drops
+    # any segment holding one, which ``BrainModule`` would otherwise mask frame by frame.
+    min_finite_target_fraction: float | None = Field(default=None, ge=0.0, le=1.0)
     # Dataloaders
     sampler: BaseSampler | None = None
     batch_size: int = 64
+    # Validation and test batch sizes; None uses batch_size.
+    val_batch_size: int | None = None
+    test_batch_size: int | None = None
+    # Unshuffled order is by timeline then time; train_shuffle is ignored with a sampler.
+    train_shuffle: bool = True
+    val_shuffle: bool = False
+    test_shuffle: bool = False
     num_workers: int = 0
     drop_last: bool = False
     pin_memory: bool = True
     persistent_workers: bool = True
     prefetch_factor: int | None = None
     seed: int | None = None
+    # Stream key fields, e.g. [subject, session]; GroupedMetric then groups by stream
+    stream_by: list[str] | None = None
     # Others
     summary_columns: list[str] = []
 
     _subject_id: ns.extractors.LabelEncoder | None = None
+    _stream_id: ns.extractors.LabelEncoder | None = None
 
     def model_post_init(self, __context):
         super().model_post_init(__context)
@@ -171,6 +191,12 @@ class Data(ns.BaseModel):
             event_field="subject",
             return_one_hot=False,
         )
+        if self.stream_by is not None:
+            self._stream_id = ns.extractors.LabelEncoder(
+                event_types=self.neuro.event_types,
+                event_field="stream",
+                return_one_hot=False,
+            )
 
     def prepare(self) -> dict[str, DataLoader]:
         """Load events, build extractors, segment data and return train/val/test DataLoaders.
@@ -200,17 +226,27 @@ class Data(ns.BaseModel):
             "target": self.target,
             "subject_id": self._subject_id,
         }
+        if self.stream_by is not None:
+            missing = set(self.stream_by) - set(events.columns)
+            if missing:
+                raise ValueError(
+                    f"`data.stream_by` fields {sorted(missing)} are not event columns; "
+                    f"available: {sorted(events.columns)}"
+                )
+            stream = events[self.stream_by].astype(str).agg("/".join, axis=1)
+            events = events.assign(stream=stream)
+            extractors["stream_id"] = self._stream_id
 
         if isinstance(self.neuro, ns.extractors.MneRaw):
             # Prepare the neuro extractor first because the channel positions depend on it
             self.neuro.prepare(events)
             channels = self.neuro._channels
             assert channels is not None
-            channel_positions = self.channel_positions.build(self.neuro)
             LOGGER.info(
                 f"Found {len(channels)} different channels: {list(channels.keys())}"
             )
-            extractors["channel_positions"] = channel_positions
+            if self.channel_positions is not None:
+                extractors["channel_positions"] = self.channel_positions.build(self.neuro)
 
         trigger_event_type = (
             [self.trigger_event_type]
@@ -223,15 +259,31 @@ class Data(ns.BaseModel):
             trigger_query=f"type in {trigger_event_type}",
             stride=self.stride,
             stride_drop_incomplete=self.stride_drop_incomplete,
+            drop_incomplete=self.drop_incomplete,
             extractors=extractors,  # type: ignore[arg-type]
         )
         dataset = segmenter.apply(events)
         dataset.prepare()
 
+        if self.min_finite_target_fraction is not None:
+            keep = (
+                finite_target_fraction(
+                    dataset, self.target, self.batch_size, self.num_workers
+                )
+                >= self.min_finite_target_fraction
+            )
+            LOGGER.info(
+                "Dropping %d/%d segments with under %.0f%% of their frames labelled",
+                len(keep) - int(keep.sum()),
+                len(keep),
+                100 * self.min_finite_target_fraction,
+            )
+            dataset = dataset.select(keep)
+
         # Derive four independent RNG streams from ``self.seed`` so that each
-        # consumer (train DataLoader shuffle + train worker base-seeds, train
-        # WeightedRandomSampler multinomial draws, val worker base-seeds,
-        # test worker base-seeds) is a pure function of its own sub-seed.
+        # consumer (per-split DataLoader shuffle + worker base-seeds for train,
+        # val and test, train WeightedRandomSampler multinomial draws) is a pure
+        # function of its own sub-seed.
         # Per-split DataLoader generators matter when ``num_workers > 0``:
         # ``DataLoader.__iter__`` consumes one int64 from ``generator`` to
         # derive each worker's base seed, so sharing one generator across
@@ -262,11 +314,21 @@ class Data(ns.BaseModel):
 
         # Create the dataloaders
         loaders = {}
+        batch_sizes = {
+            "train": self.batch_size,
+            "val": self.val_batch_size or self.batch_size,
+            "test": self.test_batch_size or self.batch_size,
+        }
+        shuffles = {
+            "train": self.train_shuffle,
+            "val": self.val_shuffle,
+            "test": self.test_shuffle,
+        }
         for split in tqdm(["train", "val", "test"], desc="Preparing segments"):
             split_dataset = dataset.select(dataset.triggers.split == split)
             LOGGER.info(f"# {split} segments: {len(split_dataset)} \n")
 
-            sampler = None
+            sampler: tp.Iterable[int] | None = None
             if split == "train" and self.sampler is not None:
                 sampler = self.sampler.build(split_dataset, generator=sampler_gen)
 
@@ -274,8 +336,8 @@ class Data(ns.BaseModel):
             loaders[split] = DataLoader(
                 split_dataset,
                 collate_fn=split_dataset.collate_fn,
-                batch_size=self.batch_size,
-                shuffle=split == "train" and sampler is None,
+                batch_size=batch_sizes[split],
+                shuffle=shuffles[split] and sampler is None,
                 sampler=sampler,
                 num_workers=self.num_workers,
                 drop_last=self.drop_last and split == "train",
@@ -287,3 +349,48 @@ class Data(ns.BaseModel):
             )
 
         return loaders
+
+
+def get_default_dataloaders(
+    device: str, task: str, *, dataset: str | None = None, **overrides: tp.Any
+) -> dict[str, DataLoader]:
+    """Return the train/val/test DataLoaders for a task's default data config.
+
+    The dataloaders match those of a non-debug benchmark run for the same
+    task, except for model-specific preprocessing: model configs override
+    ``data.neuro`` (sampling frequency, filters, clamping) and, for some
+    models, ``data.channel_positions``, and those overrides are not applied
+    here.
+
+    Parameters
+    ----------
+    device
+        Brain recording device (``"eeg"``, ``"meg"``, ``"fmri"``, ...).
+    task
+        Single task name, e.g. ``"motor_imagery"``.
+    dataset
+        Dataset variant from the task's ``datasets/`` directory. ``None`` uses
+        the study of the task config.
+    **overrides
+        Overrides for the ``data`` config, as dotted paths, e.g.
+        ``batch_size=8`` or ``**{"neuro.frequency": 60.0}``.
+
+    Returns
+    -------
+    dict with keys ``"train"``, ``"val"``, ``"test"`` mapping to
+    :class:`~torch.utils.data.DataLoader` instances.
+
+    Examples
+    --------
+    Extraction inherits the benchmark infra, which submits SLURM jobs where a
+    cluster is available. To extract in-process instead:
+
+    >>> loaders = get_default_dataloaders(
+    ...     "eeg", "audiovisual_stimulus", **{"neuro.infra.cluster": None}
+    ... )
+    """
+    _validate_inputs(device, task, model=None, downstream_wrapper=None, allow_all=False)
+    _ensure_initialized()
+    data_config = merge_task_config(device, task, dataset)["data"]
+    data_config.update(overrides)
+    return Data(**data_config).prepare()

@@ -172,7 +172,11 @@ def test_build_from_scratch(n_times):
     # n_chans passed here is for the *adapter output*, not the inner BENDR,
     # which is fixed at 20.  The test bypasses the adapter so we feed 19
     # channels directly.
-    model = cfg.build(n_chans=BENDR_N_EEG_CHANNELS, n_times=n_times, n_outputs=_N_OUTPUTS)
+    model = cfg.build(
+        n_spatial_locations=BENDR_N_EEG_CHANNELS,
+        n_temporal_samples=n_times,
+        n_outputs=_N_OUTPUTS,
+    )
 
     assert isinstance(model, _BendrAllTokensWrapper)
     model.eval()
@@ -210,7 +214,9 @@ def test_build_pretrained():
         from_pretrained_name=PRETRAINED_NAME,
         kwargs={"final_layer": False},
     )
-    model = cfg.build()
+    model = cfg.build(
+        n_spatial_locations=BENDR_N_EEG_CHANNELS, n_temporal_samples=512, n_outputs=None
+    )
 
     assert isinstance(model, _BendrAllTokensWrapper)
 

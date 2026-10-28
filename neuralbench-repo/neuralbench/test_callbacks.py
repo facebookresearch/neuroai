@@ -4,29 +4,136 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from types import SimpleNamespace
+
+import lightning.pytorch as pl
 import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
 import torch
+import torchmetrics
+from exca.cachedict import CacheDict
+from lightning.pytorch.loggers.logger import DummyLogger
+from torch import nn
 
-from .callbacks import PlotRegressionScatter, RecordingLevelEval
+from neuralset.dataloader import Batch
+
+from .callbacks import (
+    PlotRegressionScatter,
+    RecordingLevelEval,
+    ResetPerStream,
+    UnfreezeAtEpoch,
+    WindowPredictionCollector,
+)
+from .modules import DownstreamWrapper, DownstreamWrapperModel
+from .pl_module import BrainModule
 
 matplotlib.use("Agg")
+
+
+class _Backbone(nn.Linear):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x)
+
+
+def test_unfreeze_at_epoch() -> None:
+    backbone = _Backbone(4, 8)
+    backbone.bias.requires_grad = False  # frozen by the model itself
+    wrapper = DownstreamWrapper(layers_to_unfreeze=[""], unfreeze_at_epoch=1).build(
+        backbone, {"x": torch.randn(2, 4)}, n_outputs=1
+    )
+    callback = UnfreezeAtEpoch(wrapper)
+    trainer = SimpleNamespace(max_epochs=2, current_epoch=0)
+    callback.setup(trainer, wrapper, stage="fit")  # type: ignore[arg-type]
+    assert backbone.weight.requires_grad, "DDP must see the backbone as trainable"
+    callback.on_fit_start(trainer, wrapper)  # type: ignore[arg-type]
+    callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
+    assert not backbone.weight.requires_grad
+    trainer.current_epoch = 1
+    callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
+    assert backbone.weight.requires_grad
+    assert not backbone.bias.requires_grad
+
+
+def test_reset_per_stream_in_lightning():
+    class Model(nn.Module):
+        total = torch.tensor(100.0)  # a missed reset must also fail
+
+        def reset_state(self):
+            self.total = torch.tensor(0.0)
+
+        def forward(self, x):
+            self.total = self.total + x.mean()
+            observed.append(self.total.item())
+            return self.total.expand(x.shape[0], 1)
+
+    observed: list[float] = []
+    batches = [
+        Batch(
+            segments=[SimpleNamespace(timeline=s) for s in streams],
+            data={
+                "neuro": torch.full((len(streams), 1, 4), 2.0**i),
+                "target": torch.zeros(len(streams), 1),
+                "subject_id": torch.zeros(len(streams), 1, dtype=torch.long),
+                "stream_id": torch.tensor([[s] for s in streams]),
+            },
+        )
+        for i, streams in enumerate([[0], [0], [0, 1], [1], [1]])
+    ]
+    backbone = Model()
+    model = DownstreamWrapperModel(backbone, torch.Size([1]), None, 1, aggregation=None)
+    module = BrainModule(
+        model=model,
+        loss=nn.L1Loss(),
+        metrics={"mae": torchmetrics.MeanAbsoluteError()},
+        lightning_optimizer_config=None,
+    )
+    callback = ResetPerStream()
+    trainer = pl.Trainer(
+        accelerator="cpu",
+        callbacks=[callback],
+        logger=DummyLogger(),
+        enable_checkpointing=False,
+        enable_progress_bar=False,
+        enable_model_summary=False,
+    )
+    loader = torch.utils.data.DataLoader(batches, batch_size=None)
+    for stage, run in [("test", trainer.test), ("val", trainer.validate)] * 2:
+        result = run(module, loader, verbose=False)[0]
+        assert result[f"{stage}/mae"] == pytest.approx((1 + 3 + 2 * 4 + 8 + 24) / 6)
+    per_timeline = [1.0, 3.0, 4.0, 8.0, 24.0]
+    assert observed == per_timeline * 4
+    assert module.model is model and backbone.total == 100, "original model changed"
+    observed.clear()
+    for batch_idx, i in enumerate([0, 1, 1, 2, 3, 4]):
+        if batch_idx == 2:
+            trainer.validate(module, loader, verbose=False)
+        callback.on_train_batch_start(None, module, batches[i], batch_idx)
+        module.model_forward(batches[i])
+    assert observed == [1.0, 3.0] + per_timeline + [5.0, 4.0, 8.0, 24.0]
+    stateless = SimpleNamespace(model=nn.Identity())
+    callback.on_train_batch_start(None, stateless, batches[0], 0)
 
 
 class MockSegment:
     """Mock segment with events containing timeline information."""
 
-    def __init__(self, timeline: str):
+    def __init__(self, timeline: str, group: str | None = None):
+        self.timeline = timeline
         self.events = pd.DataFrame({"timeline": [timeline]})
+        if group is not None:
+            self.trigger = SimpleNamespace(text=group)
 
 
 class MockBatch:
     """Mock batch containing segments."""
 
-    def __init__(self, segments: list[MockSegment]):
+    def __init__(
+        self, segments: list[MockSegment], data: dict[str, torch.Tensor] | None = None
+    ):
         self.segments = segments
+        self.data = data if data is not None else {}
 
 
 @pytest.fixture
@@ -110,6 +217,83 @@ def test_binary_single_window_per_recording(mock_trainer, mock_pl_module):
 
     # Check true labels (convert to same dtype for comparison)
     assert torch.equal(y_true.long(), torch.tensor([0, 1, 1]))
+
+
+def _read_predictions(folder):
+    """Read back a WindowPredictionCollector folder (metadata + arrays)."""
+    cache: CacheDict = CacheDict(folder=folder)
+    keys = set(cache.keys())
+
+    def concat(prefix):
+        chunks = sorted(k for k in keys if k.startswith(prefix))
+        return np.concatenate([np.asarray(cache[k]) for k in chunks], axis=0)
+
+    return {
+        "metadata": cache[WindowPredictionCollector._METADATA_KEY],
+        "y_pred": concat(WindowPredictionCollector._Y_PRED_PREFIX),
+        "y_true": concat(WindowPredictionCollector._Y_TRUE_PREFIX),
+    }
+
+
+@pytest.mark.parametrize("with_subject", [True, False])
+def test_prediction_collector_streams_windows(tmp_path, with_subject):
+    """WindowPredictionCollector streams raw per-window y_pred/y_true across
+    batches to disk with aligned metadata (timeline, batch_idx, dataloader_idx,
+    and a retrieval group label), and drops subject_id when it is absent."""
+    trainer = SimpleNamespace(is_global_zero=True)
+    module = SimpleNamespace()
+    folder = tmp_path / "test_predictions"
+    callback = WindowPredictionCollector(folder=folder)
+    callback.on_test_epoch_start(trainer, module)
+
+    # Two batches with multi-dim predictions (e.g. regression / embeddings) and
+    # a per-window group label exposed via the segment trigger.
+    data0 = {"subject_id": torch.tensor([0, 0])} if with_subject else {}
+    data1 = {"subject_id": torch.tensor([1])} if with_subject else {}
+    batch0 = MockBatch(
+        [MockSegment("rec0", group="cat"), MockSegment("rec0", group="dog")],
+        data=data0,
+    )
+    batch1 = MockBatch([MockSegment("rec1", group="cat")], data=data1)
+
+    callback.on_test_batch_end(
+        trainer, module, (torch.zeros(2, 4), torch.ones(2, 4)), batch0, batch_idx=0
+    )
+    callback.on_test_batch_end(
+        trainer, module, (torch.zeros(1, 4), torch.ones(1, 4)), batch1, batch_idx=1
+    )
+    callback.on_test_epoch_end(trainer, module)
+
+    preds = _read_predictions(folder)
+    assert preds["y_pred"].shape == (3, 4)
+    assert preds["y_true"].shape == (3, 4)
+    meta = preds["metadata"]
+    assert list(meta["timeline"]) == ["rec0", "rec0", "rec1"]
+    assert list(meta["batch_idx"]) == [0, 0, 1]
+    assert list(meta["dataloader_idx"]) == [0, 0, 0]
+    assert list(meta["group"]) == ["cat", "dog", "cat"]
+    if with_subject:
+        assert list(meta["subject_id"]) == [0, 0, 1]
+    else:
+        assert "subject_id" not in meta.columns
+
+
+def test_prediction_collector_skips_non_zero_rank(tmp_path):
+    """Only global rank zero persists predictions."""
+    trainer = SimpleNamespace(is_global_zero=False)
+    module = SimpleNamespace()
+    folder = tmp_path / "test_predictions"
+    callback = WindowPredictionCollector(folder=folder)
+    callback.on_test_epoch_start(trainer, module)
+    callback.on_test_batch_end(
+        trainer,
+        module,
+        (torch.zeros(1, 2), torch.ones(1, 2)),
+        MockBatch([MockSegment("rec0")]),
+        batch_idx=0,
+    )
+    callback.on_test_epoch_end(trainer, module)
+    assert not folder.exists()
 
 
 def test_binary_multiple_windows_per_recording(mock_trainer, mock_pl_module):

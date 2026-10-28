@@ -38,10 +38,11 @@ setup.
 #
 # - **Dataset**: ``Shirazi2024Hbn``, filtered to the CCD task
 #   (``task=='task-contrastChangeDetection'``).
-# - **Target**: the ``reaction_time`` field on ``Keystroke`` events,
-#   excluding trials where the reaction time was shorter than 500 ms.
-# - **Epoch window**: 0.5 s to 2.5 s relative to the keystroke
-#   (``start: 0.5``, ``duration: 2.0``).
+# - **Target**: the ``reaction_time`` field on the contrast-change
+#   ``Stimulus`` events, excluding trials where the reaction time was
+#   shorter than 500 ms.
+# - **Epoch window**: 0.5 s to 2.5 s relative to the contrast-change
+#   onset (``start: 0.5``, ``duration: 2.0``), as in the competition.
 # - **Split**: release-based with R5 held out as the test set
 #   (``PredefinedSplit``).
 # - **Loss / monitor**: MSE loss, early stopping on
@@ -71,10 +72,10 @@ setup.
 #      target:
 #        =replace=: true
 #        name: EventField
-#        event_types: Keystroke
+#        event_types: Stimulus
 #        event_field: reaction_time
 #        aggregation: trigger
-#      trigger_event_type: Keystroke
+#      trigger_event_type: Stimulus
 #      start: 0.5
 #      duration: 2.0
 #      summary_columns: [release]
@@ -82,7 +83,7 @@ setup.
 #    trainer_config.monitor: val/pearsonr
 #    loss:
 #      name: MSELoss
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_regression_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_regression_metric_configs
 #      - *brain_model_output_size
 #
 # Running it from the CLI:
@@ -93,7 +94,7 @@ setup.
 #    neuralbench eeg reaction_time --download
 #
 #    # Prepare the data
-#    neuralbench eeg reaction --prepare
+#    neuralbench eeg reaction_time --prepare
 #
 #    # Quick debug run
 #    neuralbench eeg reaction_time --debug
@@ -168,7 +169,7 @@ setup.
 #      n_epochs: 40
 #    loss:
 #      name: MSELoss
-#    metrics: !!python/object/apply:neuralbench.defaults.metrics.get_regression_metric_configs
+#    metrics: !!python/object/apply:neuralbench.metric_configs.get_regression_metric_configs
 #      - *brain_model_output_size
 #
 # Running it from the CLI:

@@ -7,6 +7,18 @@ Motor imagery classification
 | **Objective**: :bdg-info:`Multiclass classification`
 | **Split**: Leave-subjects-out
 
+.. admonition:: 🏆 EEG/EMG Foundation Challenge 2026
+   :class: tip
+
+   This page describes the NeuralBench benchmark version of the task.
+   :doc:`Track 2 -- BCI decoding
+   </neuralbench/auto_examples/biosignal_challenge_2026/plot_track2_eeg_to_bci>`
+   of the challenge uses its streamed version, ``_motor_imagery_stream``,
+   which scores each recording one window at a time, in time order, on the
+   competition's training release by default.
+   **Participants should use** ``neuralbench eeg _motor_imagery_stream``; the
+   Track 2 page has its commands, timings, and competition data notes.
+
 Usage
 ~~~~~
 
@@ -53,11 +65,28 @@ The following additional datasets from MOABB can also be used with this task:
 * ``Wei2022B`` (Beetl2021_B) -- 2 subjects, 4 classes
 * ``Zhou2016`` -- 4 subjects, 3 classes
 
+The training release of the EEG/EMG Foundation Challenge 2026 Track 2 corpus is
+available as `NEMAR nm000290, version 1.0.0
+<https://doi.org/10.82901/nemar.nm000290>`__: 112 runs from 14 sessions of 10
+participants, three cued mental commands (motor imagery, mental subtraction, word
+generation) with the Graz and BrainHero interfaces, 41 EEG channels at 500 Hz. The
+license is CC-BY-4.0.
+
+.. code-block:: bash
+
+   neuralfetch download Dreyer2026Proteus --path /path/to/DATA_DIR
+   neuralbench eeg motor_imagery --dataset dreyer2026proteus
+
+It is also the default dataset of ``_motor_imagery_stream``, which streams each
+session in recording order and adds the per-session balanced accuracy. This
+variant uses the task's subject-disjoint split. It is not the official
+cross-session split or the sealed evaluation.
+
 To run with an alternate dataset:
 
 .. code-block:: bash
 
-   neuralbench eeg motor_imagery --dataset schalk2004bci
+   neuralbench eeg motor_imagery --dataset schalk2004bci2000
 
 References
 ~~~~~~~~~~
