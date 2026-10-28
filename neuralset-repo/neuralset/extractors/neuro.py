@@ -181,6 +181,182 @@ class FmriTimedArray(TimedArray):
         return nibabel.Nifti1Image(data, affine)
 
 
+class BaseReference(DiscriminatedModel, discriminator_key="name"):
+    """Base class for MNE referencing schemes.
+
+    Subclasses must implement :meth:`apply`.
+    """
+
+    def apply(self, raw: mne.io.Raw) -> mne.io.Raw:
+        raise NotImplementedError
+
+
+class BipolarReference(BaseReference):
+    """Bipolar reference via explicit or auto-derived anode/cathode pairs.
+
+    If ``anodes`` and ``cathodes`` are provided, they are used directly via
+    ``mne.set_bipolar_reference``. If omitted, pairs are auto-derived from
+    adjacent contacts on the same probe — only valid when every picked channel
+    is sEEG. Cross-probe pairs are skipped; if a neighboring contact is missing
+    the next available one is used.
+
+    Parameters
+    ----------
+    anodes : list of str, optional
+        Anode channel names. Must be provided together with ``cathodes``.
+    cathodes : list of str, optional
+        Cathode channel names. Must be the same length as ``anodes``.
+    ch_types : tuple of str, optional
+        Channel types to auto-derive pairs from, leaving other channels
+        untouched, e.g. ``("seeg",)`` on a raw mixing sEEG and ECoG; a raw
+        without these types is left unchanged. Defaults to every channel.
+        Not allowed with explicit anodes/cathodes.
+
+    Notes
+    -----
+    Auto-derivation (no anodes/cathodes) can only be applied to sEEG channels
+    and nothing else: pairs are derived from every channel of ``ch_types``, so
+    mixed types (e.g. sEEG + ECoG) would pair across them whenever the
+    names share a nonnumeric prefix. It expects that ``raw.ch_names`` are
+    ordered by probe with ascending contact numbers, and that each name
+    consists of the probe label followed by the contact position, e.g.::
+
+        ['OF1', 'OF2', ..., 'OF14', 'H1', 'H2', ..., 'H15', ...]
+
+    If the neighboring contact is missing (e.g. rejected before referencing),
+    the next available contact on the same probe is used instead.
+    """
+
+    anodes: list[str] | None = None
+    cathodes: list[str] | None = None
+    ch_types: tuple[str, ...] | None = None
+
+    def model_post_init(self, __context: tp.Any) -> None:
+        if (self.anodes is None) != (self.cathodes is None):
+            raise ValueError("anodes and cathodes must both be provided or both be None")
+        if self.anodes is not None and self.ch_types is not None:
+            raise ValueError(
+                "ch_types only applies to auto-derived pairs, not explicit anodes"
+            )
+        if self.anodes is not None and len(self.anodes) != len(self.cathodes):  # type: ignore[arg-type]
+            raise ValueError(
+                f"anodes and cathodes must have equal length, "
+                f"got {len(self.anodes)} and {len(self.cathodes)}"  # type: ignore[arg-type]
+            )
+
+    def apply(self, raw: mne.io.Raw) -> mne.io.Raw:
+        if self.anodes is not None:
+            return mne.set_bipolar_reference(
+                raw, self.anodes, self.cathodes, verbose="WARNING"
+            )
+
+        types = dict(zip(raw.ch_names, raw.get_channel_types()))
+        reference_ch = [
+            ch for ch, t in types.items() if self.ch_types is None or t in self.ch_types
+        ]
+        if self.ch_types is not None and not reference_ch:
+            return raw
+        present_types = {types[ch] for ch in reference_ch}
+        if present_types != {"seeg"}:
+            raise ValueError(
+                "BipolarReference with no anodes/cathodes requires seeg-only channels, "
+                f"got {sorted(present_types)}; adjacent-contact pairs are derived from "
+                "every channel of ch_types, so mixing types would pair across them. Set "
+                "ch_types=('seeg',), or provide explicit anodes and cathodes."
+            )
+        logger.info("Applying bipolar reference")
+        logger.warning(
+            "Assumes raw.ch_names are ordered by probe, with ascending order for each probe, "
+            "and the names consists of the probe name followed by the probe position."
+        )
+        logger.warning(
+            "WATCH-OUT: Taking the closest electrode on the probe... If the neighboring "
+            "electrode is missing (e.g., rejected before applying the reference) then the "
+            "next electrode will be used as the reference."
+        )
+        anodes = reference_ch[0:-1]
+        cathodes = reference_ch[1:]
+        to_del = []
+        # allow constructions that are on the same probe
+        #  (e.g., HA 5-HA 6 or HA 5-HA 7 if contact HA 6 is turned off)
+        # don't allow constructions across probes
+        #  (e.g., HA 5 with FA 6, or RT2c 2 with RT1c 1)
+        for i, (a, c) in enumerate(zip(anodes, cathodes)):
+            if a.rstrip("0123456789") != c.rstrip("0123456789"):
+                to_del.append(i)
+        for idx in to_del[::-1]:
+            del anodes[idx]
+            del cathodes[idx]
+        if not anodes:
+            raise ValueError(
+                f"No same-probe adjacent contact pairs found in {reference_ch}; "
+                "provide explicit anodes and cathodes."
+            )
+        return mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
+
+
+class CommonAverageReference(BaseReference):
+    """Common-average reference, computed independently per channel type.
+
+    Each CAR-eligible channel type present in the raw (``eeg``, ``ecog``,
+    ``seeg``, ``dbs``) is referenced to its own average via
+    ``mne.set_eeg_reference``. Not supported on ``MegExtractor``,
+    ``EmgExtractor``, or ``FnirsExtractor``.
+
+    Parameters
+    ----------
+    ch_types : tuple of str, optional
+        CAR-eligible channel types to reference, leaving other channels
+        untouched, e.g. ``("ecog",)``; a raw without these types is left
+        unchanged. Defaults to every eligible type.
+    """
+
+    _CAR_ELIGIBLE: tp.ClassVar[tuple[str, ...]] = ("eeg", "ecog", "seeg", "dbs")
+    ch_types: tuple[str, ...] | None = None
+
+    def model_post_init(self, __context: tp.Any) -> None:
+        if self.ch_types is not None and not set(self.ch_types) <= set(
+            self._CAR_ELIGIBLE
+        ):
+            raise ValueError(
+                "CommonAverageReference ch_types must be among "
+                f"{list(self._CAR_ELIGIBLE)}, got {self.ch_types}"
+            )
+
+    def apply(self, raw: mne.io.Raw) -> mne.io.Raw:
+        present_types = set(raw.get_channel_types())
+        candidates = self.ch_types or self._CAR_ELIGIBLE
+        eligible = [t for t in candidates if t in present_types]
+        if self.ch_types is not None and not eligible:
+            return raw
+        if not eligible:
+            raise ValueError(
+                f"CommonAverageReference requires at least one of {list(candidates)}, "
+                f"got {sorted(present_types)}."
+            )
+        logger.info("Applying CAR reference per channel type: %s", eligible)
+        # Per-type loop, not ch_type=eligible: list ch_type with projection=False
+        # applies a union average (https://github.com/mne-tools/mne-python/issues/13913).
+        for ch_type in eligible:
+            raw, _ = mne.set_eeg_reference(
+                raw,
+                ref_channels="average",
+                ch_type=ch_type,
+                projection=False,
+                copy=False,
+                verbose="WARNING",
+            )
+        return raw
+
+
+Reference = (
+    BipolarReference
+    | CommonAverageReference
+    | list[BipolarReference | CommonAverageReference]
+    | None
+)
+
+
 class MneRaw(BaseExtractor):
     """
     Feature extractor for raw MNE data files.
@@ -191,7 +367,7 @@ class MneRaw(BaseExtractor):
     The steps of preprocessing, if specified, are ordered as follows:
     1. Channel selection
     2. Drop bad channels
-    3. Bipolar referencing
+    3. Referencing (Bipolar, Car, None)
     4. Notch filtering
     5. Band-pass filtering
     6. Hilbert transform
@@ -253,13 +429,22 @@ class MneRaw(BaseExtractor):
         If a float, any non-finite values (NaN / +inf / -inf) found after
         preprocessing are replaced with this value and a warning is logged.
         If None (the default), no replacement is performed.
-    bipolar_ref : tuple of (list of str, list of str), optional
-        Explicit anode/cathode channel name lists for bipolar referencing via
-        ``mne.set_bipolar_reference``. The first list contains anode names and
-        the second list contains cathode names; they must have the same length.
-        Applied after channel selection and dropping bad channels but before
-        filtering. The original monopolar channels consumed by the pairs are
-        removed and replaced with the new bipolar channels.
+    reference : BaseReference | list of BaseReference | None, default=None
+        Optional referencing scheme applied after channel selection and bad
+        channel dropping. Use ``BipolarReference(anodes=[...], cathodes=[...])``
+        for explicit bipolar referencing, ``BipolarReference()`` for auto-derived
+        adjacent-contact bipolar pairs (sEEG-only picks), or
+        ``CommonAverageReference()`` for common-average referencing.
+        ``CommonAverageReference`` is not supported on ``MegExtractor``,
+        ``EmgExtractor``, or ``FnirsExtractor``.
+        A list is applied in order, e.g. bipolar sEEG and CAR ECoG::
+
+            [
+                BipolarReference(ch_types=("seeg",)),
+                CommonAverageReference(ch_types=("ecog",)),
+            ]
+
+        Each entry must set ``ch_types``, without overlap across entries.
     channel_order: ["unique", "original"]
         `if self.channel_order=="original"`
         Assigns channel indices for each raw file (doesn't match channel names across files).
@@ -299,7 +484,7 @@ class MneRaw(BaseExtractor):
     scale_factor: float | None = None
     clamp: float | None = None
     fill_non_finite: float | None = None
-    bipolar_ref: tuple[list[str], list[str]] | None = None
+    reference: Reference = None
     channel_order: tp.Literal["unique", "original"] = "unique"
     allow_maxshield: bool = False
 
@@ -324,13 +509,23 @@ class MneRaw(BaseExtractor):
             if issue:
                 msg = f"baseline must be None or 2 floats, got {self.baseline}"
                 raise ValueError(msg)
-        if self.bipolar_ref is not None:
-            anodes, cathodes = self.bipolar_ref
-            if len(anodes) != len(cathodes):
-                raise ValueError(
-                    f"bipolar_ref anodes and cathodes must have equal length, "
-                    f"got {len(anodes)} and {len(cathodes)}"
-                )
+        if isinstance(self.reference, list):
+            seen: set[str] = set()
+            for ref in self.reference:
+                if ref.ch_types is None:
+                    raise ValueError(
+                        f"Each reference in a list must set ch_types, got {ref!r}"
+                    )
+                if overlap := seen & set(ref.ch_types):
+                    raise ValueError(
+                        f"Reference list ch_types overlap on {sorted(overlap)}"
+                    )
+                seen |= set(ref.ch_types)
+
+    def _references(self) -> list[BipolarReference | CommonAverageReference]:
+        if self.reference is None:
+            return []
+        return self.reference if isinstance(self.reference, list) else [self.reference]
 
     def prepare(self, obj: DataframeOrEventsOrSegments) -> None:
         """Specify how to load and preprocess the event.
@@ -374,10 +569,9 @@ class MneRaw(BaseExtractor):
             raw.load_data()
             raw = raw.drop_channels(raw.info["bads"])
 
-        if self.bipolar_ref is not None:
+        for ref in self._references():
             raw.load_data()
-            anodes, cathodes = self.bipolar_ref
-            raw = mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
+            raw = ref.apply(raw)
 
         if self.notch_filter is not None:
             raw.load_data()
@@ -642,6 +836,14 @@ class MegExtractor(MneRaw):
     event_types: tp.Literal["Meg"] = "Meg"
     picks: str | tuple[str, ...] = pydantic.Field(("meg",), min_length=1)
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if any(isinstance(ref, CommonAverageReference) for ref in self._references()):
+            raise ValueError(
+                "CommonAverageReference is not supported for MEG; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
+
 
 class EegExtractor(MneRaw):
     """
@@ -669,6 +871,14 @@ class EmgExtractor(MneRaw):
 
     event_types: tp.Literal["Emg"] = "Emg"
     picks: tuple[str, ...] = pydantic.Field(("emg",), min_length=1)
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if any(isinstance(ref, CommonAverageReference) for ref in self._references()):
+            raise ValueError(
+                "CommonAverageReference is not supported for EMG; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
 
 
 class EcgExtractor(MneRaw):
@@ -699,29 +909,20 @@ class IeegExtractor(MneRaw):
     ----------
     picks: default = ("seeg", "ecog", )
         pick "seeg" and "ecog" channels by default.
-    reference: "bipolar" or None, default=None
-        If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
-        Uses mne.set_bipolar_reference under the hood. [ieeg1]_
+    reference : BaseReference | list of BaseReference | None, default=None
+        Referencing scheme. Use ``BipolarReference()`` for auto-derived
+        adjacent-contact bipolar pairs, which requires ``picks=("seeg",)`` or
+        ``ch_types=("seeg",)``, ``BipolarReference(anodes=[...], cathodes=[...])``
+        for explicit pairs, or ``CommonAverageReference()`` for common-average
+        referencing. A list is applied in order, e.g. with
+        ``picks=("seeg", "ecog")``::
 
-    Notes
-    ----------
-    Bipolar reference currently can only be applied to sEEG. It expects
-    that the channels in raw.ch_names are ordered by probe,
-    and with ascending order for each probe, and the names consists of
-    the probe name followed by the position on the probe.
-    eg: ['OF1', 'OF2', 'OF3', ... , 'OF12', 'OF13', 'OF14', 'H1', 'H2',
-    'H3', ... , 'H13', 'H14', 'H15', ...]
+            [
+                BipolarReference(ch_types=("seeg",)),
+                CommonAverageReference(ch_types=("ecog",)),
+            ]
 
-    WATCH-OUT: this will take the closest electrode on the probe,
-    meaning that if the neighboring electrode is missing for some
-    reason (eg: rejected before applying the reference) then the next
-    electrode will be used for referencing.
-
-
-    References
-    ----------
-    .. [ieeg1] https://mne.tools/stable/generated/mne.set_bipolar_reference.html
-
+        See ``BipolarReference`` for assumptions on channel ordering.
     """
 
     event_types: tp.Literal["Ieeg"] = "Ieeg"
@@ -732,21 +933,18 @@ class IeegExtractor(MneRaw):
         ),
         min_length=1,
     )
-    reference: tp.Literal["bipolar"] | None = None
 
-    def model_post_init(self, log__):
+    def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-
-        if self.reference == "bipolar" and self.picks != ("seeg",):
-            raise ValueError(
-                f"Bipolar reference can only be applied on seeg signals, got picks {self.picks} instead"
-            )
-        if self.reference == "bipolar" and self.bipolar_ref is not None:
-            raise ValueError(
-                "Cannot use both reference='bipolar' (auto-derived from "
-                "neighboring electrodes) and bipolar_ref (explicit "
-                "anode/cathode lists) at the same time."
-            )
+        for ref in self._references():
+            if not isinstance(ref, BipolarReference) or ref.anodes is not None:
+                continue
+            if (ref.ch_types or self.picks) != ("seeg",):
+                raise ValueError(
+                    "Auto-derived BipolarReference requires seeg-only picks or ch_types, "
+                    f"got picks={self.picks} and ch_types={ref.ch_types}. Set "
+                    "ch_types=('seeg',), or provide explicit anodes and cathodes."
+                )
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
         raw = self._pick_channels(raw, self.picks)
@@ -755,52 +953,7 @@ class IeegExtractor(MneRaw):
             raw.load_data()
             raw = raw.drop_channels(raw.info["bads"])
 
-        if self.reference == "bipolar":
-            raw.load_data()
-            raw = self._apply_bipolar_ref(raw)
-
         return super()._preprocess_raw(raw, event)
-
-    def _apply_bipolar_ref(self, raw: mne.io.Raw) -> mne.io.Raw:
-        """
-        Apply bipolar reference for EEG, i.e., uses neighboring electrode as reference.
-
-        Parameters
-        ----------
-        raw : mne.io.Raw
-            Raw instance that will be referenced.
-
-        Returns
-        -------
-        raw : mne.io.Raw
-            Referenced Raw object
-
-        """
-        logger.info("Applying bipolar reference")
-        logger.warning(
-            "Assumes raw.ch_names are ordered by probe, with ascending order for each probe, and the names consists of the probe name followed by the probe position."
-        )
-        logger.warning(
-            "WATCH-OUT: Taking the closest electrode on the probe... If the neighboring electrode is missing (e.g., rejected before applying the reference) then the next electrode will be used as the reference."
-        )
-
-        reference_ch = list(raw.ch_names)
-
-        anodes = reference_ch[0:-1]
-        cathodes = reference_ch[1:]
-        to_del = []
-        # allow constructions that are on the same probe
-        #  (e.g., HA 5-HA 6 or HA 5-HA 7 if contact HA 6 is turned off)
-        # don't allow constructions across probes
-        #  (e.g., HA 5 with FA 6)
-        for i, (a, c) in enumerate(zip(anodes, cathodes)):
-            if [j for j in a if not j.isdigit()] != [j for j in c if not j.isdigit()]:
-                to_del.append(i)
-        for idx in to_del[::-1]:
-            del anodes[idx]
-            del cathodes[idx]
-        bipol = mne.set_bipolar_reference(raw, anodes, cathodes, verbose="WARNING")
-        return bipol
 
 
 class SpikesExtractor(BaseExtractor):
@@ -1117,6 +1270,12 @@ class FnirsExtractor(MneRaw):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
+
+        if any(isinstance(ref, CommonAverageReference) for ref in self._references()):
+            raise ValueError(
+                "CommonAverageReference is not supported for fNIRS; CAR is a reference "
+                "manipulation for EEG-like data (eeg, ecog, seeg, dbs)."
+            )
 
         # Ensure preprocessing steps are consistent with one another
         if self.compute_heamo_response and not self.compute_optical_density:
