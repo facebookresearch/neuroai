@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.download.BaseDownload
+=================================
+
+.. currentmodule:: neuralfetch.download
+
+.. autopydantic_model:: BaseDownload
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.utils.bids.export.study\_to\_bids
+=============================================
+
+.. currentmodule:: neuralfetch.utils.bids.export
+
+.. autofunction:: study_to_bids
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

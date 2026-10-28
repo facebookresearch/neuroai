@@ -1,0 +1,20 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`« Back to API reference <../reference>`
+
+neuraltrain.losses.losses.MultiLoss
+===================================
+
+.. currentmodule:: neuraltrain.losses.losses
+
+.. autoclass:: MultiLoss
+   :members:
+   :exclude-members: model_post_init, model_fields, model_computed_fields, model_config
+
+
+
+
+
+.. container:: autosummary-back-link
+
+   :doc:`« Back to API reference <../reference>`

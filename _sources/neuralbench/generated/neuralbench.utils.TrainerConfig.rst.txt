@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.utils.TrainerConfig
+===============================
+
+.. currentmodule:: neuralbench.utils
+
+.. autopydantic_model:: TrainerConfig
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
