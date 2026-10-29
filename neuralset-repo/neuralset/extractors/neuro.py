@@ -21,6 +21,7 @@ from itertools import compress
 from pathlib import Path
 
 import mne
+import mne.baseline  # type: ignore
 import numpy as np
 import pandas as pd
 import pydantic
@@ -44,6 +45,7 @@ logger = logging.getLogger(__name__)
 DataframeOrEventsOrSegments = (
     pd.DataFrame | tp.Sequence[etypes.Event] | tp.Sequence[ns.segments.Segment]
 )
+BaselineMode = tp.Literal["mean", "ratio", "logratio", "percent", "zscore", "zlogratio"]
 
 FSAVERAGE_SIZES = {
     "fsaverage3": 642,
@@ -208,6 +210,12 @@ class MneRaw(BaseExtractor):
         times (in seconds) relative to the **beginning of the analysis window**
         — note this differs from MNE's convention, which defines baseline
         relative to the epoch onset. Used for baseline correction.
+    baseline_mode : {"mean", "ratio", "logratio", "percent", "zscore", "zlogratio"}, default="mean"
+        Baseline correction mode passed to ``mne.baseline.rescale`` when
+        ``baseline`` is provided. ``"mean"`` preserves the historical behavior
+        and is appropriate for signed EEG/MEG. ``"ratio"`` and ``"logratio"``
+        are commonly used for non-negative power or amplitude envelopes, such
+        as iEEG high-gamma with ``apply_hilbert=True``.
     picks : str or tuple of str
         Channels to pick from the raw data. Can be channel types (e.g. `'meg'`,
         `'eeg'`), channel names (e.g. `'MEG 0111'`), `"all"` for all channels,
@@ -281,6 +289,7 @@ class MneRaw(BaseExtractor):
     frequency: tp.Literal["native"] | float = "native"
     offset: float = 0.0
     baseline: tuple[float, float] | None = None
+    baseline_mode: BaselineMode = "mean"
     picks: str | tuple[str, ...] = pydantic.Field(("data",), min_length=1)
     apply_proj: bool = False
     filter: tuple[float | None, float | None] | None = None
@@ -312,7 +321,14 @@ class MneRaw(BaseExtractor):
 
     def _exclude_from_cache_uid(self) -> list[str]:
         prev = super()._exclude_from_cache_uid()
-        return prev + ["baseline", "offset", "scale_factor", "clamp", "channel_order"]
+        return prev + [
+            "baseline",
+            "baseline_mode",
+            "offset",
+            "scale_factor",
+            "clamp",
+            "channel_order",
+        ]
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -466,9 +482,17 @@ class MneRaw(BaseExtractor):
 
         if self.baseline is not None:
             baseline_duration = self.baseline[1] - self.baseline[0]
-            base = tdata.overlap(start + self.baseline[0], baseline_duration).data
-            if base.size:
-                tdata.data = tdata.data - base.mean(1, keepdims=True)
+            base = tdata._overlap_slice(start + self.baseline[0], baseline_duration)
+            if base is not None and base[2] is not None:
+                sl = base[2]
+                # sample-index times make MNE's inclusive mask match the overlap slice
+                tdata.data = mne.baseline.rescale(
+                    tdata.data,
+                    np.arange(tdata.data.shape[-1], dtype=float),
+                    (sl.start, sl.stop - 1),
+                    mode=self.baseline_mode,
+                    verbose=False,
+                )
         tdata = tdata.overlap(start=start, duration=duration)
 
         # initialize output

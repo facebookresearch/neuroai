@@ -30,7 +30,12 @@ from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
 from neuralset.extractors import neuro
-from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, _overlap
+from neuralset.extractors.neuro import (
+    BaselineMode,
+    FmriTimedArray,
+    MneTimedArray,
+    _overlap,
+)
 
 
 @pytest.mark.parametrize("cls", (ns.extractors.MegExtractor, ns.extractors.FmriExtractor))
@@ -622,6 +627,72 @@ def test_meg_baseline(
 
 
 @pytest.mark.parametrize(
+    "mode",
+    ["mean", "ratio", "logratio", "percent", "zscore", "zlogratio"],
+)
+def test_ieeg_baseline_mode_matches_mne(mode: BaselineMode, test_data_path: Path) -> None:
+    events = ns.Study(name="Test2025Ieeg", path=test_data_path).run()
+    event = ns.events.Event.from_dict(events.loc[events.type == "Ieeg"].iloc[0])
+
+    sfreq = 100.0
+    start = 2.0
+    duration = 1.0
+    baseline = (-0.2, 0.0)
+    high_gamma: dict[str, tp.Any] = dict(
+        frequency=sfreq, filter=(70.0, 150.0), apply_hilbert=True
+    )
+
+    # Extract extended window (includes baseline period) without normalization
+    full_start = start + baseline[0]
+    full_duration = duration - baseline[0]
+    extractor = ns.extractors.IeegExtractor(**high_gamma)
+    full_data = extractor(event, start=full_start, duration=full_duration).numpy()
+
+    # Compute expected using MNE rescale, then crop to the target window
+    n_full = full_data.shape[-1]
+    times = baseline[0] + (np.arange(n_full, dtype=float) + 0.5) / sfreq
+    rescaled = mne.baseline.rescale(
+        full_data, times, baseline, mode=mode, copy=True, verbose=False
+    )
+    n_bl_samples = round(-baseline[0] * sfreq)
+    expected = rescaled[:, n_bl_samples:]
+
+    # Extract with baseline normalization
+    extractor = ns.extractors.IeegExtractor(
+        **high_gamma, baseline=baseline, baseline_mode=mode
+    )
+    actual = extractor(event, start=start, duration=duration).numpy()
+
+    atol = 1e-6 * np.nanmax(np.abs(expected))
+    np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=atol)
+
+
+def test_ieeg_baseline_mode_repeatable(test_data_path: Path) -> None:
+    events = ns.Study(name="Test2025Ieeg", path=test_data_path).run()
+    event = ns.events.Event.from_dict(events.loc[events.type == "Ieeg"].iloc[0])
+    extractor = ns.extractors.IeegExtractor(
+        frequency=100.0, baseline=(-0.2, 0.0), baseline_mode="percent"
+    )
+    first = extractor(event, start=2.0, duration=1.0)
+    second = extractor(event, start=2.0, duration=1.0)
+    assert torch.equal(first, second), "rescaling must not modify the RAM cache"
+
+
+def test_ieeg_baseline_single_sample(test_data_path: Path) -> None:
+    events = ns.Study(name="Test2025Ieeg", path=test_data_path).run()
+    event = ns.events.Event.from_dict(events.loc[events.type == "Ieeg"].iloc[0])
+    raw = ns.extractors.IeegExtractor(frequency=100.0)(event, start=2.0, duration=1.0)
+    extractor = ns.extractors.IeegExtractor(frequency=100.0, baseline=(0.0, 0.001))
+    out = extractor(event, start=2.0, duration=1.0)
+    torch.testing.assert_close(out, raw - raw[:, :1])
+
+
+def test_ieeg_baseline_mode_invalid() -> None:
+    with pytest.raises(ValueError, match="baseline_mode"):
+        ns.extractors.IeegExtractor(baseline_mode="median")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
     "offset,minmax",
     [
         (0, (0.5, 1.49)),
@@ -839,6 +910,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "drop_bads",
         "picks",
         "baseline",
+        "baseline_mode",
         "frequency",
         "apply_proj",
         "offset",
