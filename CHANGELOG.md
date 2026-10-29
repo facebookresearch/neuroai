@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralfetch`: `Grootswagers2022Human` (THINGS-EEG1) and its sample download NEMAR on003825, which ships the THINGS images (~50 GB, no OSF password). The test split comes from the events' `isteststim` column, so `PredefinedSplit` no longer fails for want of a `test_images.csv` that no release ships. The broken `shared_filepath` column is gone; cached timelines are rebuilt (#27).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

@@ -246,7 +246,7 @@ re-run the top three submissions of each track.
 # end. Among Track 1's alternatives, ``Xu2024Alljoined`` is ~5 GB and under
 # a minute to fetch, ``Xu2025Alljoined`` (Alljoined-1.6M) ~8.5 GB and ~8
 # minutes (mostly its many small sidecar files), and
-# ``Grootswagers2022Human`` ~75 GB. Track 4's ``--download --debug``
+# ``Grootswagers2022Human`` ~50 GB. Track 4's ``--download --debug``
 # fetches three subjects instead of 193.
 
 # %%
