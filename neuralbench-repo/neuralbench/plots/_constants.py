@@ -37,6 +37,7 @@ from neuralbench.plots._models import MODELS, load_param_counts
 # ---------------------------------------------------------------------------
 
 _NON_REGISTRY_DISPLAY_NAMES: dict[str, str] = {
+    "Llama32EEGGenerate": "Llama 3.2 3B + EEG (generate)",
     "DummyPredictor": "Dummy",
     "Chance": "Chance",
     "SimpleConv": "SimpleConv",

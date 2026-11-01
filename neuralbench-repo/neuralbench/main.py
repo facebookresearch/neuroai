@@ -176,6 +176,7 @@ class Experiment(BaseExperiment):
             val_loader=val_loader,
             wandb_logger=self._wandb_logger,
             loss=self.loss,
+            task_name=self.task_name,
         )
 
         if self.target_scaler is not None:

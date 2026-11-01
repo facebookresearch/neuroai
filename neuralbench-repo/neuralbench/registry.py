@@ -428,7 +428,9 @@ ECG_INCOMPATIBLE_MODELS: frozenset[str] = frozenset(
 
 DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "eeg": CLASSIC_MODELS,
-    "meg": CLASSIC_MODELS,
+    # MEG reuses the EEG architectures except models whose input contract is
+    # specifically EEG (for example the Llama EEG-prefix adapter).
+    "meg": [name for name in CLASSIC_MODELS if name != "llama32"],
     "fmri": _cli_names(family="classic", device="fmri"),
     "emg": _cli_names(family="classic", device="emg"),
     "ecg": [m for m in CLASSIC_MODELS if m not in ECG_INCOMPATIBLE_MODELS],

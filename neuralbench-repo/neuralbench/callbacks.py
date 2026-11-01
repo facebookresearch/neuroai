@@ -571,6 +571,13 @@ class WindowPredictionCollector(Callback):
         self._metadata["timeline"].extend(seg.timeline for seg in batch.segments)
         self._metadata["batch_idx"].extend([batch_idx] * n_windows)
         self._metadata["dataloader_idx"].extend([dataloader_idx] * n_windows)
+        generated_texts = getattr(
+            getattr(pl_module, "model", None), "last_generated_texts", None
+        )
+        if generated_texts is not None:
+            if len(generated_texts) != n_windows:
+                raise ValueError("Generated text count does not match test windows")
+            self._metadata["generated_text"].extend(generated_texts)
 
         subject = batch.data.get("subject_id")
         if subject is None:
@@ -599,6 +606,8 @@ class WindowPredictionCollector(Callback):
                     columns.append("subject_id")
                 if self._has_group and len(self._metadata["group"]) == n_windows:
                     columns.append("group")
+                if len(self._metadata["generated_text"]) == n_windows:
+                    columns.append("generated_text")
                 self._cache[self._METADATA_KEY] = pd.DataFrame(
                     {col: self._metadata[col] for col in columns}
                 )
