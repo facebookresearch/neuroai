@@ -20,13 +20,13 @@ from torch.nn import functional as F
 from neuralset import base as nsbase
 from neuralset.events import etypes, eventquery
 
-from .base import BaseExtractor, ContextWindow
+from .base import BaseExtractor, ContextWindow, _ContextMixin
 from .hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
 
 
-class BaseAudio(BaseExtractor):
+class BaseAudio(BaseExtractor, _ContextMixin):
     """Audio extractor
 
     Parameters
@@ -69,11 +69,6 @@ class BaseAudio(BaseExtractor):
         min_samples_per_job=4096,
         version="v8",
     )
-
-    @pydantic.field_validator("context", mode="before")
-    @classmethod
-    def _complete_context(cls, value: tp.Any) -> tp.Any:
-        return cls.model_fields["context"].default.complete(value)
 
     @property
     @abstractmethod

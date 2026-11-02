@@ -147,11 +147,11 @@ def test_aggregated_extractor_accepts_temporal_static_extractors() -> None:
 
 def test_extractor_pca(tmp_path: Path) -> None:
     infra: tp.Any = {"infra": {"folder": tmp_path}}
-    fparams: tp.Any = {"name": "HuggingFaceText", "cache_n_layers": 3, **infra}
+    fparams: tp.Any = {"name": "HuggingFaceWord", "cache_n_layers": 3, **infra}
     feat = meta.ExtractorPCA(extractor=fparams, n_components=2)  # infra folder is copied
     events: list[tp.Any] = []
     for w in ["Hello", "world", "world", "blublu", "whatever"]:
-        events.append(etypes.Word(start=0, duration=1, timeline="t", text=w, context=w))
+        events.append(etypes.Word(start=0, duration=1, timeline="t", text=w))
     feat.prepare(events)
     np.random.shuffle(events)
     events.append(etypes.Image(start=0, duration=1, filepath=__file__, timeline="t"))
@@ -171,23 +171,22 @@ def test_extractor_pca(tmp_path: Path) -> None:
 
 def test_hf_pca(tmp_path: Path) -> None:
     fparams: tp.Any = {
-        "name": "HuggingFaceText",
+        "name": "HuggingFaceWord",
         "cache_n_layers": 3,
-        "contextualized": True,
         "infra": {"folder": tmp_path},
     }
     feat = meta.HuggingFacePCA(extractor=fparams, n_components=2)
     events = []
     kwargs: tp.Any = dict(start=0, duration=1, timeline="t")
     for w in ["Hello", "world", "blublu", "whatever"]:
-        c = w if w != "Hello" else ("blublu " * 64 + w)  # trigger key shortening
-        events.append(etypes.Word(text=w, context=c, **kwargs))
+        w = w if w != "Hello" else ("blublu" * 64 + w)  # trigger key shortening
+        events.append(etypes.Word(text=w, **kwargs))
     with mock.patch("sklearn.decomposition.PCA", side_effect=RuntimeError("boom")):
         with pytest.raises(RuntimeError):
             feat.prepare(events)
     staged = list(tmp_path.glob("HF-PCA-tmp-*"))
     assert len(staged) == 1, "failure should keep one uid-keyed staging folder"
-    assert list(staged[0].rglob("*HuggingFaceText*")), "extraction was discarded"
+    assert list(staged[0].rglob("*HuggingFaceWord*")), "extraction was discarded"
     msg = "staging must be keyed on the extractor, else another model shares it"
     assert "cache_n_layers=3" in staged[0].name, msg
     feat.prepare(events)

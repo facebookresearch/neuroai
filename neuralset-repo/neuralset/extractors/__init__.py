@@ -55,7 +55,9 @@ from .neuro import (
 )
 from .text import (
     BaseText,
+    HuggingFaceSentence,
     HuggingFaceText,
+    HuggingFaceWord,
     SentenceTransformer,
     SonarEmbedding,
     SpacyEmbedding,

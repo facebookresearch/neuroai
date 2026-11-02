@@ -4,6 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import dataclasses
+import itertools
+import logging
 import typing as tp
 from abc import abstractmethod
 
@@ -14,15 +17,21 @@ import torch
 from exca import MapInfra
 from exca.utils import environment_variables
 from torch import nn
-from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 import neuralset as ns
 from neuralset import events as _ev  # avoid circular import
 from neuralset import utils
 from neuralset.base import TimedArray
-from neuralset.extractors.base import BaseStatic
+from neuralset.extractors.base import (
+    BaseExtractor,
+    BaseStatic,
+    ContextWindow,
+    _ContextMixin,
+)
 from neuralset.extractors.hf import HuggingFaceConfig, HuggingFaceMixin
+
+logger = logging.getLogger(__name__)
 
 # pylint: disable=attribute-defined-outside-init
 # pylint: disable=unused-variable
@@ -286,22 +295,6 @@ class SentenceTransformer(BaseText):
         return vector.squeeze(0)
 
 
-class TextDataset(Dataset):
-    """
-    Dataset for contextual embeddings.
-    """
-
-    def __init__(self, events: list[_ev.etypes.Word | _ev.etypes.Sentence]) -> None:
-        self.events = events
-
-    def __len__(self) -> int:
-        return len(self.events)
-
-    def __getitem__(self, idx) -> tuple[str, str]:
-        sel = self.events[idx]
-        return sel.text, getattr(sel, "context", "")
-
-
 class HuggingFaceTextConfig(HuggingFaceConfig):
     processor_cls_name: str = "AutoTokenizer"
     processor_kwargs: dict[str, tp.Any] | None = {
@@ -317,51 +310,47 @@ class HuggingFaceTextConfig(HuggingFaceConfig):
     }
 
 
-class HuggingFaceText(BaseStatic, HuggingFaceMixin):
-    """
-    Get embeddings from HuggingFace language models.
-    This extractor can be applied to any kind of event which has a text attribute: Word, Sentence, etc.
+class _HuggingFaceLanguageModel(HuggingFaceMixin):
+    """Tokenizer and token limit of the HuggingFace text extractors."""
 
-    Parameters
-    ----------
-    batch_size: int
-        Batch size for the language model.
-    contextualized: bool
-        True by default, the context of the event is used to compute the embeddings.
+    hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
 
-    Note
-    ----
-    The tokenizer truncates the input to the maximum size specified by the model.
-    An empty context will raise an error to the default HuggingFaceText
-    since contextualized is True by default.
-    To get non-contextualized embeddings, set contextualized to False.
-    """
+    @property
+    def tokenizer(self) -> tp.Any:
+        tokenizer = self.processor
+        if tokenizer.pad_token is None:
+            # an existing token, so that model weights stay unchanged
+            tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+
+    def _max_length(self) -> int | None:
+        """Token truncation limit, falling back to the model's positional capacity."""
+        limit = self.tokenizer.model_max_length
+        # HF "infinite" sentinel (~1e30) would disable truncation (overflows OPT)
+        if isinstance(limit, int) and limit < int(1e29):
+            return limit
+        # learned-position tables are sized capacity + offset, so the offset cancels
+        config = self.model.config
+        for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
+            value = getattr(config, attr, None)
+            if isinstance(value, int) and value > 0:
+                return value
+        return None
+
+
+class _HuggingFaceStaticText(BaseStatic, _HuggingFaceLanguageModel):
+    """One vector per text event, which the language model reads alone (without
+    context), aggregating its tokens with ``token_aggregation``."""
 
     model_name: str = "openai-community/gpt2"
-
-    # class attributes
-    event_types: tp.Literal["Word", "Sentence"] = "Word"
-    requirements: tp.ClassVar[tuple[str, ...]] = ("transformers>=4.29.2",)
     infra: MapInfra = MapInfra(
         timeout_min=25,
         gpus_per_node=1,
         cpus_per_task=10,
         min_samples_per_job=4096,
-        version="v7",
+        version="1",
     )
-
-    # extractor attributes
     batch_size: int = 32
-    contextualized: bool = True
-
-    _max_length: int | None = pydantic.PrivateAttr(None)
-    hf_config: HuggingFaceTextConfig = HuggingFaceTextConfig()
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        if self.event_types == "Sentence" and self.contextualized:
-            msg = "Contextualized embeddings are not supported for Sentence events."
-            raise ValueError(msg)
 
     @classmethod
     def _exclude_from_cls_uid(cls) -> list[str]:
@@ -372,99 +361,52 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        excluded = ["frequency", "duration", "batch_size"]
         return (
-            excluded
+            ["frequency", "batch_size"]
             + BaseStatic._exclude_from_cache_uid(self)
             + HuggingFaceMixin._exclude_from_cache_uid(self)
         )
 
-    @property
-    def tokenizer(self) -> tp.Any:
-        tokenizer = self.processor
-        if tokenizer.pad_token is None:
-            # Use an existing token so model weights stay unchanged.
-            tokenizer.pad_token = tokenizer.eos_token
-        return tokenizer
-
-    def _get_max_length(self) -> int | None:
-        """Token truncation limit, falling back to the model's positional capacity."""
-        if self._max_length is not None:
-            return self._max_length
-        tok_max = self.tokenizer.model_max_length
-        # HF "infinite" sentinel (~1e30) would disable truncation (overflows OPT)
-        if isinstance(tok_max, int) and tok_max < int(1e29):
-            self._max_length = tok_max
-            return self._max_length
-        # learned-position table is sized capacity + offset, so the offset cancels
-        config = self.model.config
-        for attr in ("max_position_embeddings", "n_positions", "n_ctx"):
-            value = getattr(config, attr, None)
-            if isinstance(value, int) and value > 0:
-                self._max_length = value
-                return self._max_length
-        return None
+    def get_static(self, event: _ev.etypes.BaseText) -> torch.Tensor:  # type: ignore[override]
+        (ta,) = self._get_timed_arrays([event], start=event.start, duration=0)
+        return torch.from_numpy(np.asarray(ta.data))
 
     def _get_timed_arrays(
         self,
-        events: list[_ev.etypes.Word | _ev.etypes.Sentence],
+        events: list[_ev.etypes.BaseText],  # type: ignore[override]
         start: float,
         duration: float,
     ) -> tp.Iterable[TimedArray]:
-        if self.contextualized and any(
-            not getattr(event, "context", None) for event in events
-        ):
-            msg = (
-                "Contextualized embeddings require non-empty context for all events. "
-                "Set contextualized=False for context-free text."
-            )
-            raise ValueError(msg)
-        # optimized fetch of multiple events compared to individual get_static calls:
+        # one fetch for all the events, instead of a get_static call per event
         for event, latent in zip(events, self._get_data(events)):
             if self.cache_n_layers is not None:
                 latent = self._aggregate_layers(latent)
-            ta = TimedArray(
-                frequency=0,
-                duration=event.duration,
-                start=event.start,
-                data=latent,
+            yield TimedArray(
+                frequency=0, duration=event.duration, start=event.start, data=latent
             )
-            yield ta
 
     @infra.apply(
-        item_uid=lambda event: f"{event.text}_{getattr(event, 'context', '')}",
+        item_uid=lambda event: event.text,
         exclude_from_cache_uid="method:_exclude_from_cache_uid",
         cache_type="MemmapArray",
     )
-    def _get_data(
-        self, events: list[_ev.etypes.Word | _ev.etypes.Sentence]
-    ) -> tp.Iterator[np.ndarray]:
-        dataset = TextDataset(events)
-        dloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
-
-        # Processing the data in batches
-        if len(dloader) > 1:
-            dloader = tqdm(dloader, desc="Computing word embeddings")  # type: ignore
+    def _get_data(self, events: list[_ev.etypes.BaseText]) -> tp.Iterator[np.ndarray]:
+        batches = list(itertools.batched(events, self.batch_size))
+        if len(batches) > 1:
+            batches = tqdm(batches, desc="Computing text embeddings")  # type: ignore
         device = self.model_device
         with torch.no_grad():
-            for target_words, context in dloader:
-                # tokenize context
+            for batch in batches:
+                texts = [event.text for event in batch]
                 with environment_variables(TOKENIZERS_PARALLELISM="false"):
-                    text = context if self.contextualized else target_words
-                    if isinstance(text, tuple):
-                        # temporary fix for tokenizers==0.20.2
-                        # https://github.com/huggingface/tokenizers/issues/1672
-                        text = list(text)
-                    if not all(text):
-                        msg = f"Empty text or context for target_words {target_words!r}"
-                        raise ValueError(msg)
                     inputs = self.tokenizer(
-                        text,
+                        texts,
                         add_special_tokens=False,
                         return_tensors="pt",
                         padding=True,
-                        truncation=True,  # beware to have set truncation_side="left" in init
-                        max_length=self._get_max_length(),  # guard tokenizers reporting no real limit (e.g. OPT)
+                        truncation=True,
+                        # guards tokenizers reporting no real limit (e.g. OPT)
+                        max_length=self._max_length(),
                     ).to(device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
@@ -472,46 +414,437 @@ class HuggingFaceText(BaseStatic, HuggingFaceMixin):
                 else:  # bart (encoder/decoder)
                     states = outputs.encoder_hidden_states + outputs.decoder_hidden_states
                 hidden_states = torch.stack([layer.cpu() for layer in states])
-                n_layers, n_batch, n_tokens, n_dims = hidden_states.shape  # noqa
-
-                # attention_mask is the model's truth, hoisted to one device sync per batch
-                n_pads_per_row: list[int] = (
-                    (inputs["attention_mask"] == 0).sum(dim=1).tolist()
-                )
-
-                # -- for each target word, remove padding, and select target tokens
-                for i, target_word in enumerate(target_words):
-                    # select batch element
-                    hidden_state = hidden_states[:, i]  # n_layers x tokens x embd
-
-                    n_pads = n_pads_per_row[i]
-                    if n_pads > 0:
-                        hidden_state = hidden_state[:, :-n_pads]
-
-                    # select tokens that belong to the target word
-                    if self.contextualized:
-                        # inputs already has the tokenized context; subtract
-                        # the prefix token count to get the target word's tokens
-                        prefix = context[i][: -len(target_word)].rstrip()
-                        n_prefix = (
-                            len(self.tokenizer.encode(prefix, add_special_tokens=False))
-                            if prefix
-                            else 0
-                        )
-                        n_target = hidden_state.shape[1] - n_prefix
-                        word_state = hidden_state[:, -max(1, n_target) :]
-                    else:
-                        word_state = hidden_state
-                    # aggregate in cuda for smaller data transfer:
-                    word_state = self._aggregate_tokens(word_state)
-                    out = word_state.cpu().numpy()
+                # attention_mask is the model's truth, synced once per batch
+                n_tokens: list[int] = inputs["attention_mask"].sum(dim=1).tolist()
+                for i, text in enumerate(texts):
+                    # (n_layers, n_tokens, n_dims), without the padding (on the right)
+                    state = hidden_states[:, i, : n_tokens[i]]
+                    out = self._aggregate_tokens(state).cpu().numpy()
                     if self.cache_n_layers is None:
                         out = self._aggregate_layers(out)
                     if np.isnan(out).any():
-                        msg = f"NaN in output for target_word {target_word} with context {context}"
-                        raise ValueError(msg)
+                        raise ValueError(f"NaN in the embedding of {text!r}")
                     yield out
-                # erase variables / free memory
-                del hidden_states, hidden_state, word_state, states, outputs, inputs
+                # free memory
+                del hidden_states, states, outputs, inputs
                 if device.type == "cuda":
                     torch.cuda.empty_cache()
+
+
+class HuggingFaceWord(_HuggingFaceStaticText):
+    """Embeddings of Word events, each read alone by a HuggingFace language model:
+    one vector per word, aggregating its tokens (``token_aggregation``).
+
+    For the embeddings of words in their context, use :class:`HuggingFaceText`.
+
+    Parameters
+    ----------
+    batch_size: int
+        Number of words per forward pass.
+    """
+
+    event_types: tp.Literal["Word"] = "Word"
+
+
+class HuggingFaceSentence(_HuggingFaceStaticText):
+    """Embeddings of Sentence events, each read alone by a HuggingFace language
+    model: one vector per sentence, aggregating its tokens (``token_aggregation``).
+
+    Parameters
+    ----------
+    batch_size: int
+        Number of sentences per forward pass.
+
+    Note
+    ----
+    The tokenizer truncates sentences beyond the token limit of the model (their
+    first tokens, with the default ``truncation_side="left"``).
+    """
+
+    event_types: tp.Literal["Sentence"] = "Sentence"
+
+
+@dataclasses.dataclass(frozen=True)
+class _AlignedText:
+    """An AlignedText to embed, identified by its text and word spans, and also by
+    its word onsets when they set its windows (``timed``, for ``context.duration``)."""
+
+    event: _ev.etypes.AlignedText
+    timed: bool
+
+    def uid(self) -> str:
+        uid = self.event.content_uid()
+        return f"{uid}_{self.event.onsets_uid()}" if self.timed else uid
+
+
+class WordContextWindow(ContextWindow):
+    """``ContextWindow`` over the words of a text, spanning either ``words`` words
+    or ``duration`` seconds (the words starting within it, whatever their number).
+    ``min_context`` is then in words or in seconds.
+
+    Parameters
+    ----------
+    words :
+        Number of words per window, exclusive with ``duration``.
+    min_context_words :
+        Input only, exclusive with ``overlap``: ``min_context`` in words, converted
+        to ``overlap`` (with ``words``).
+    """
+
+    words: pydantic.PositiveInt | None = None
+    _MIN_CONTEXT: tp.ClassVar[dict[str, str]] = {
+        **ContextWindow._MIN_CONTEXT,
+        "min_context_words": "words",
+    }
+
+    @pydantic.model_validator(mode="after")
+    def _one_size(self) -> tp.Self:
+        if (self.words is None) == (self.duration is None):
+            msg = f"Set exactly one of words and duration, got words={self.words}, "
+            msg += f"duration={self.duration} (words=None to unset a preset's)"
+            raise ValueError(msg)
+        return self
+
+    @property
+    def _size(self) -> float | None:
+        return self.duration if self.words is None else self.words
+
+
+@dataclasses.dataclass(frozen=True)
+class _TextWindow:
+    """Words [first, stop) of a text, read in one forward pass to embed
+    words [embed_from, embed_stop)."""
+
+    event: _ev.etypes.AlignedText
+    first: int
+    stop: int
+    embed_from: int
+    embed_stop: int
+
+    @classmethod
+    def strided(
+        cls, event: _ev.etypes.AlignedText, context: WordContextWindow
+    ) -> list["_TextWindow"]:
+        """Windows of ``context.words`` words embedding each word once."""
+        n_words = len(event.word_starts)
+        return [cls(event, *bounds) for bounds in context.windows(n_words, 1)]
+
+    @classmethod
+    def timed(
+        cls, event: _ev.etypes.AlignedText, context: WordContextWindow
+    ) -> list["_TextWindow"]:
+        """As ``strided``, on the word onsets: each window holds the words starting
+        within ``context.duration`` seconds. Windows embedding no word (within
+        pauses) are skipped."""
+        ticks = event.onset_ticks()
+        windows = []
+        for bounds in context.windows(int(ticks[-1]) + 1, 1 / event.ONSET_TICK):
+            first, stop, embed_from, embed_stop = np.searchsorted(ticks, bounds).tolist()
+            if embed_from < embed_stop:
+                windows.append(cls(event, first, stop, embed_from, embed_stop))
+        return windows
+
+    @property
+    def is_last(self) -> bool:
+        return self.embed_stop == len(self.event.word_starts)
+
+    @property
+    def text(self) -> str:
+        end = self.event.word_char_stops[self.first : self.stop].max()
+        return self.event.text[self._offset : end]
+
+    @property
+    def embedded_spans(self) -> np.ndarray:
+        """(n_embedded_words, 2) character spans in the window text."""
+        words = slice(self.embed_from, self.embed_stop)
+        chars = [self.event.word_char_starts[words], self.event.word_char_stops[words]]
+        return np.stack(chars, axis=1) - self._offset
+
+    @property
+    def _offset(self) -> int:
+        return int(self.event.word_char_starts[self.first])
+
+
+class HuggingFaceText(BaseExtractor, _HuggingFaceLanguageModel, _ContextMixin):
+    """Contextual word embeddings of AlignedText events from a language model.
+
+    Each text is read with overlapping windows of words (``context``), each
+    embedding only part of its words, so that every word is embedded once and sees
+    at least ``context.min_context`` words of context (fewer at the edges of the
+    text): in the past with ``context.causal`` (default), else on each side. With
+    ``context.duration``, windows span a duration instead of a number of words:
+    every word then sees the words starting up to ``context.min_context`` seconds
+    before it (and after it, if not causal). A word's tokens are the tokens
+    overlapping its characters. One vector per word is cached, and each word fills
+    the segment samples over its own time span, as Word events do.
+
+    The AlignedText events, which hold the words of each Text, are built by
+    :class:`~neuralset.events.transforms.text.AddAlignedTexts`. Context stops at
+    their boundaries: with ``AddAlignedTexts(text_type="Sentence")``, every word
+    sees only its sentence. For the embeddings of Word or Sentence events read
+    alone, use :class:`HuggingFaceWord` or :class:`HuggingFaceSentence`.
+
+    Parameters
+    ----------
+    frequency: float
+        Output sampling rate in Hz (required). With 0, the output is static: the
+        vectors of the words overlapping the segment are aggregated into one
+        (``aggregation``).
+    context: WordContextWindow
+        Windows of words, 1024 words sharing half of them by default. The first
+        window of each text must fit in the model's token limit. With
+        ``context.duration``, windows, hence features and their cache, depend on
+        the word onsets, not only on the text.
+    batch_size: int
+        Number of windows per forward pass.
+
+    Note
+    ----
+    Requires a fast tokenizer, for character offsets. With ``context.causal`` and a
+    bidirectional model, a word would also see the following words of its
+    window, up to ``(1 - context.overlap) * context.words - 1``. Windows longer
+    than the model's token limit lose their first words (``truncation_side``),
+    so their words see less context than requested (a warning is logged).
+    """
+
+    model_name: str = "Qwen/Qwen3-0.6B"
+    event_types: tp.Literal["AlignedText"] = "AlignedText"
+    aggregation: tp.Literal["single", "sum", "mean"] = "sum"
+    frequency: pydantic.NonNegativeFloat
+    # one vector per word, so the token dimension must be reduced
+    token_aggregation: tp.Literal["first", "last", "mean", "sum", "max"] = "mean"
+    context: WordContextWindow = WordContextWindow(words=1024, causal=True)
+    batch_size: pydantic.PositiveInt = 4
+    infra: MapInfra = MapInfra(
+        timeout_min=60,
+        gpus_per_node=1,
+        cpus_per_task=10,
+        min_samples_per_job=16,
+        version="v8",
+    )
+    _warned_truncation: bool = False
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _reject_previous_api(cls, data: tp.Any) -> tp.Any:
+        # in neuralset 0.4, HuggingFaceText embedded Word and Sentence events
+        if not isinstance(data, dict):
+            return data
+        if "contextualized" in data or data.get("event_types", "AlignedText") not in (
+            "AlignedText",
+            ("AlignedText",),
+        ):
+            msg = (
+                "HuggingFaceText now embeds the words of AlignedText events in their "
+                "context (changed after neuralset 0.4). For the embeddings of Word "
+                "or Sentence events read alone (previously contextualized=False), "
+                "use HuggingFaceWord or HuggingFaceSentence. For contextual word "
+                "embeddings (previously contextualized=True, with AddContextToWords), "
+                "add AddAlignedTexts to the events transforms and set the windows of "
+                "words with HuggingFaceText.context (e.g. {'words': 1024}), instead "
+                "of the context of each Word; for sentence_only=True, use "
+                f"AddAlignedTexts(text_type='Sentence') (got {data!r})."
+            )
+            raise ValueError(msg)
+        return data
+
+    def _is_static(self) -> bool:
+        # words are static vectors: the output has no time axis with frequency=0
+        return not self.frequency
+
+    @classmethod
+    def _exclude_from_cls_uid(cls) -> list[str]:
+        return (
+            ["batch_size"]
+            + BaseExtractor._exclude_from_cls_uid()
+            + HuggingFaceMixin._exclude_from_cls_uid()
+        )
+
+    def _exclude_from_cache_uid(self) -> list[str]:
+        return (
+            ["frequency", "batch_size"]
+            + BaseExtractor._exclude_from_cache_uid(self)
+            + HuggingFaceMixin._exclude_from_cache_uid(self)
+        )
+
+    def prepare(self, obj: tp.Any) -> None:
+        # the extracted events are of event_types, i.e. AlignedText
+        events = tp.cast(
+            list[_ev.etypes.AlignedText], self._event_types_helper.extract(obj)
+        )
+        # a previous call (e.g. on another split) may have set the output shape
+        if not events and self._missing_default is None:
+            # Words left unaligned: AddAlignedTexts is missing from the events chain
+            if _ev.etypes.EventTypesHelper("Word").extract(obj):
+                raise ValueError(
+                    f"{self.name} found Word events but no AlignedText events to "
+                    "prepare on: add AddAlignedTexts to the events chain (or use "
+                    "HuggingFaceWord for the embeddings of Word events read alone)."
+                )
+            return  # no text to embed (e.g. image or resting-state data)
+        # as BaseExtractor.prepare, on the items of _get_data
+        self._get_data(self._texts(events))
+        if events:  # populates the output shape
+            event = events[0]
+            self(event, start=event.start, duration=0.001, trigger=event)
+
+    def _texts(self, events: tp.Sequence[_ev.etypes.AlignedText]) -> list[_AlignedText]:
+        timed = self.context.duration is not None
+        return [_AlignedText(event, timed) for event in events]
+
+    def _windows(self, event: _ev.etypes.AlignedText) -> list[_TextWindow]:
+        if self.context.duration is None:
+            return _TextWindow.strided(event, self.context)
+        return _TextWindow.timed(event, self.context)
+
+    @property
+    def tokenizer(self) -> tp.Any:
+        tokenizer = super().tokenizer
+        if not tokenizer.is_fast:
+            msg = f"{self.name} needs a fast tokenizer (for character offsets), "
+            msg += f"got {type(tokenizer).__name__}"
+            raise ValueError(msg)
+        return tokenizer
+
+    def _aggregate_word_layers(self, latents: np.ndarray) -> np.ndarray:
+        """Layer aggregation of (n_words, n_layers, ...) latents."""
+        out = self._aggregate_layers(np.moveaxis(np.asarray(latents), 1, 0))
+        return np.moveaxis(out, 0, 1) if out.ndim == latents.ndim else out
+
+    def _read_words(self, latents: np.ndarray, indices: np.ndarray) -> np.ndarray:
+        out = np.asarray(latents[indices])
+        if self.cache_n_layers is not None:
+            out = self._aggregate_word_layers(out)
+        return out
+
+    def _get_timed_arrays(
+        self,
+        events: list[_ev.etypes.AlignedText],  # type: ignore[override]
+        start: float,
+        duration: float,
+    ) -> tp.Iterable[TimedArray]:
+        if not events:  # the zero placeholder below needs the latents of one
+            raise RuntimeError("_get_timed_arrays should not be called with no event")
+        found = False
+        for event, latents in zip(events, self._get_data(self._texts(events))):
+            indices = event.overlapping_words(start, start + duration)
+            if not len(indices):
+                continue
+            found = True
+            word_starts = event.start + event.word_starts[indices]
+            word_durations = event.word_durations[indices]
+            word_latents = self._read_words(latents, indices)
+            for word_start, word_duration, latent in zip(
+                word_starts, word_durations, word_latents
+            ):
+                yield TimedArray(
+                    frequency=0,
+                    start=float(word_start),
+                    duration=float(word_duration),
+                    data=latent,
+                )
+        if not found:  # zero placeholder carrying the feature shape
+            latent = self._read_words(latents, np.arange(1))[0]
+            yield TimedArray(
+                frequency=0, start=start, duration=duration, data=np.zeros_like(latent)
+            )
+
+    @infra.apply(
+        item_uid=_AlignedText.uid,
+        exclude_from_cache_uid="method:_exclude_from_cache_uid",
+        cache_type="MemmapArray",
+    )
+    def _get_data(self, texts: list[_AlignedText]) -> tp.Iterator[np.ndarray]:
+        windows = [window for item in texts for window in self._windows(item.event)]
+        batches = list(itertools.batched(windows, self.batch_size))
+        if len(batches) > 1:
+            batches = tqdm(batches, desc="Computing contextual word embeddings")  # type: ignore
+        parts: list[np.ndarray] = []
+        for batch in batches:
+            for window, latents in zip(batch, self._embed_windows(batch)):
+                parts.append(latents)
+                if not window.is_last:
+                    continue
+                out = np.concatenate(parts)
+                parts = []
+                if self.cache_n_layers is None:
+                    out = self._aggregate_word_layers(out)
+                if np.isnan(out).any():
+                    text = window.event.text[:100]
+                    raise ValueError(f"NaN in embeddings of text {text!r}")
+                yield out
+
+    @torch.no_grad()
+    def _embed_windows(self, windows: tp.Sequence[_TextWindow]) -> list[np.ndarray]:
+        """(n_embedded_words, n_layers, *embedding_shape) latents per window."""
+        texts = [window.text for window in windows]
+        max_length = self._max_length()
+        with environment_variables(TOKENIZERS_PARALLELISM="false"):
+            inputs = self.tokenizer(
+                texts,
+                add_special_tokens=False,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,  # truncation_side="left" in hf_config: trims context
+                max_length=max_length,
+                return_offsets_mapping=True,
+            )
+        offsets = inputs.pop("offset_mapping").numpy()
+        real = inputs["attention_mask"].numpy().astype(bool)
+        self._warn_truncation(texts, offsets, real, max_length)
+        outputs = self.model(**inputs.to(self.model_device), output_hidden_states=True)
+        hidden = self._layer_subselection(torch.stack(outputs.hidden_states))
+        out = []
+        for b, (text, window) in enumerate(zip(texts, windows)):
+            word_spans = window.embedded_spans
+            tok_starts, tok_stops = offsets[b, :, 0], offsets[b, :, 1]
+            overlaps = (
+                real[b]
+                & (tok_starts < word_spans[:, 1:])
+                & (tok_stops > word_spans[:, :1])
+            )
+            latents = []
+            for (char_start, char_stop), overlap in zip(word_spans, overlaps):
+                tokens = np.flatnonzero(overlap)
+                if not len(tokens):
+                    msg = f"No token for word {text[char_start:char_stop]!r}: its window "
+                    msg += f"was probably truncated to the {max_length}-token limit "
+                    msg += f"of {self.model_name}, lower {self._context_field}"
+                    raise ValueError(msg)
+                word_state = hidden[:, b, tokens[0] : tokens[-1] + 1]
+                latents.append(self._aggregate_tokens(word_state))
+            out.append(torch.stack(latents).cpu().numpy())
+        return out
+
+    @property
+    def _context_field(self) -> str:
+        return "context.words" if self.context.duration is None else "context.duration"
+
+    def _warn_truncation(
+        self,
+        texts: list[str],
+        offsets: np.ndarray,
+        real: np.ndarray,
+        max_length: int | None,
+    ) -> None:
+        """Warns once if windows were truncated to the token limit, as their
+        words then see less context than requested."""
+        if self._warned_truncation or max_length is None:
+            return
+        n_truncated = 0
+        for text, offset, mask in zip(texts, offsets, real):
+            tokens = np.flatnonzero(mask)
+            cut = offset[tokens[0], 0] > 0 or offset[tokens[-1], 1] < len(text)
+            n_truncated += bool(len(tokens) >= max_length and cut)
+        if n_truncated:
+            self._warned_truncation = True
+            logger.warning(
+                "%s: %d of %d windows were truncated to the %d-token limit of %s, "
+                "so their words see less context than set by %s (warned once)",
+                self.name,
+                n_truncated,
+                len(texts),
+                max_length,
+                self.model_name,
+                self._context_field,
+            )

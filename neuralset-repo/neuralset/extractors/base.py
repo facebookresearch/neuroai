@@ -838,3 +838,17 @@ class ContextWindow(base.BaseModel):
                 n_samples, context, stride, causal=self.causal
             )
         ]
+
+
+class _ContextMixin(base.BaseModel):
+    """``context`` field (see :class:`ContextWindow`) of the extractors embedding
+    long events in windows (audio, ``HuggingFaceText``, ``HuggingFaceVideo``...),
+    which override its default. The fields missing from a ``context`` input keep
+    the values of the class default (see :meth:`ContextWindow.complete`)."""
+
+    context: ContextWindow = ContextWindow()
+
+    @pydantic.field_validator("context", mode="before")
+    @classmethod
+    def _complete_context(cls, value: tp.Any) -> tp.Any:
+        return cls.model_fields["context"].default.complete(value)

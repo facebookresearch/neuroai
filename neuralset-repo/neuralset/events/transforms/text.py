@@ -419,6 +419,186 @@ class AddConcatenationContext(EventsTransform):
         return events
 
 
+class AddAlignedTexts(EventsTransform):
+    """Create one :class:`~neuralset.events.etypes.AlignedText` per Text (or per
+    sentence of each Text), carrying the timing and character span of its Words
+    (for :class:`~neuralset.extractors.text.HuggingFaceText`, whose context stops
+    at the boundaries of the AlignedText events).
+
+    Only ``text_type`` changes the ``AlignedText`` events, so a stimulus gets the
+    same ones, and thus the same cached features, whatever the project:
+
+    1. Timelines with Words but no Text get one built from their Words, as with
+       ``EnsureTexts()`` (spaCy punctuation).
+    2. Each Word goes to the last Text enclosing it in time, and is matched to
+       its characters as in ``AddSentenceToWords``; it spans the length of its
+       ``text`` from there. Unmatched Words are left out, with a warning.
+    3. Each Text with matched Words yields an ``AlignedText``, which copies the
+       other columns of the Text, spans both the Text and its Words, and
+       stores word times relative to its start. With ``text_type="Sentence"``,
+       each sentence of the Text with matched Words does instead (the spaCy
+       sentences of ``AddSentenceToWords``), spanning its Words.
+
+    Text rows are kept, Sentence rows are ignored, no column is added to Word
+    rows, and events without any Word are returned unchanged.
+
+    Parameters
+    ----------
+    drop_words : bool
+        If True, remove all Word rows from the output.
+    text_type : {"Text", "Sentence"}
+        One AlignedText per Text, or per sentence: with ``"Sentence"``, every word
+        of ``HuggingFaceText`` sees only its sentence (the preceding words of its
+        sentence with causal windows, as with
+        ``AddContextToWords(sentence_only=True)``). Sentences are split from the
+        Texts, whatever the Sentence events, so that they do not depend on the
+        segmentation of a study or project.
+    """
+
+    drop_words: bool = False
+    text_type: tp.Literal["Text", "Sentence"] = "Text"
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        word_names = ev.EventTypesHelper("Word").names
+        if not events.type.isin(word_names).any():
+            logger.info("No Word events found, skipping")  # as AddSentenceToWords
+            return events
+        events = self._ensure_texts(events)
+        text_names = ev.EventTypesHelper("Text").names
+        new_rows: list[dict[str, tp.Any]] = []
+        n_words = n_unmatched = n_empty_timelines = 0
+        for _, tl_events in events.groupby("timeline", sort=False):
+            words = tl_events.loc[tl_events.type.isin(word_names)]
+            if words.empty:
+                continue
+            texts = tl_events.loc[tl_events.type.isin(text_names)]
+            texts = texts.sort_values("start", kind="stable")
+            owners, text_chars, sentence_spans = self._match(words, texts)
+            matched = text_chars >= 0
+            n_words += len(words)
+            n_unmatched += int((~matched).sum())
+            n_empty_timelines += not matched.any()
+            for k, (_, text) in enumerate(texts.iterrows()):
+                mine = matched & (owners == k)
+                if not mine.any():
+                    continue
+                order = np.argsort(text_chars[mine], kind="stable")
+                sel = words.loc[mine].iloc[order]
+                char_starts = text_chars[mine][order]
+                if self.text_type == "Text":
+                    new_rows.append(self._aligned_text(text, sel, char_starts))
+                    continue
+                spans = sentence_spans[mine][order]
+                for sent_start, sent_stop in np.unique(spans, axis=0):
+                    in_sentence = spans[:, 0] == sent_start
+                    sentence = (int(sent_start), int(sent_stop))
+                    row = self._aligned_text(
+                        text, sel.loc[in_sentence], char_starts[in_sentence], sentence
+                    )
+                    new_rows.append(row)
+        if n_unmatched:
+            # with allow_missing, the extractor returns zeros for them
+            logger.warning(
+                "AddAlignedTexts: %d of %d Words (%.1f%%) match no character of a "
+                "Text and get no AlignedText features; %d timelines have no "
+                "matched Word",
+                n_unmatched,
+                n_words,
+                100 * n_unmatched / n_words,
+                n_empty_timelines,
+            )
+        if self.drop_words:
+            events = events.loc[~events.type.isin(word_names)]
+        if new_rows:
+            events = pd.concat([events, pd.DataFrame(new_rows)], ignore_index=True)
+        return events
+
+    @staticmethod
+    def _aligned_text(
+        text: pd.Series,
+        words: pd.DataFrame,
+        char_starts: np.ndarray,
+        sentence: tuple[int, int] | None = None,
+    ) -> dict[str, tp.Any]:
+        """AlignedText row of the Words of a Text (sorted by character), or of
+        those of its sentence spanning characters ``sentence``."""
+        content: str = text.text
+        word_stops = (words.start + words.duration).to_numpy()
+        start, stop = float(words.start.min()), float(word_stops.max())
+        if sentence is None:  # spans the Text too
+            start = min(float(text.start), start)
+            stop = max(float(text.start + text.duration), stop)
+        else:
+            content = content[sentence[0] : sentence[1]].rstrip()
+            char_starts = char_starts - sentence[0]
+        # same assumption as AddContextToWords: the word text is in the Text
+        char_stops = char_starts + words.text.str.len().to_numpy()
+        row = text.to_dict()
+        row.update(
+            type="AlignedText",
+            text=content,
+            start=start,
+            duration=stop - start,
+            word_starts=words.start.to_numpy() - start,
+            word_durations=words.duration.to_numpy(),
+            word_char_starts=char_starts,
+            word_char_stops=np.minimum(char_stops, len(content)),
+        )
+        return ev.AlignedText.from_dict(row).to_dict()
+
+    @staticmethod
+    def _ensure_texts(events: pd.DataFrame) -> pd.DataFrame:
+        """Add Texts built from the Words to the timelines without any Text."""
+        text_names = ev.EventTypesHelper("Text").names
+        is_text = events.type.isin(text_names)
+        has_text = events.timeline.isin(events.loc[is_text, "timeline"].unique())
+        if has_text.all():
+            return events
+        texts = EnsureTexts()(events.loc[~has_text])
+        texts = texts.loc[texts.type.isin(text_names)]
+        return pd.concat([events, texts], ignore_index=True)
+
+    @staticmethod
+    def _match(
+        words: pd.DataFrame, texts: pd.DataFrame
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Index of the last Text enclosing each word (-1 if none), character
+        offset of the word in that Text (-1 if unmatched), and (start, stop)
+        characters of its sentence in the Text (spaCy, as ``AddSentenceToWords``)."""
+        word_starts = words.start.to_numpy()
+        word_stops = word_starts + words.duration.to_numpy()
+        text_starts = texts.start.to_numpy()
+        text_stops = text_starts + texts.duration.to_numpy()
+        languages = texts.get("language", pd.Series("", index=texts.index))
+        owners = np.full(len(words), -1)
+        text_chars = np.full(len(words), -1)
+        sentence_spans = np.full((len(words), 2), -1)
+        for k, (start, stop, content, language) in enumerate(
+            zip(text_starts, text_stops, texts.text, languages)
+        ):
+            enclosed = (word_starts >= start) & (word_stops <= stop)
+            if not enclosed.any():
+                continue
+            matcher = TextWordMatcher(
+                content, language=language if isinstance(language, str) else ""
+            )
+            matches = matcher.match(words.text.to_numpy()[enclosed].tolist())
+            owners[enclosed] = k
+            text_chars[enclosed] = [
+                -1 if m.get("text_char") is None else m["text_char"] for m in matches
+            ]
+            sentence_spans[enclosed] = [
+                (-1, -1)
+                if m.get("text_char") is None
+                else (
+                    m["text_char"] - m["sentence_char"],
+                    m["text_char"] - m["sentence_char"] + len(m["sentence"]),
+                )
+                for m in matches
+            ]
+        return owners, text_chars, sentence_spans
+
+
 class AddSummary(EventsTransform):
     """
     Generate concise summaries for Text events using a pretrained language model.

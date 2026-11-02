@@ -1176,3 +1176,57 @@ def test_no_circular_import_extractors() -> None:
         timeout=120,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_add_aligned_texts(tmp_path: Path) -> None:
+    words = "he runs she eats".split()
+    rows = [
+        dict(type="Word", text=w, start=float(i), duration=0.5, timeline=tl)
+        for tl in ("text", "words")
+        for i, w in enumerate(words)
+    ]
+    # a Text in one timeline, built from the Words in the other
+    rows.append(
+        dict(
+            type="Text",
+            text="He runs. She eats!",
+            start=-0.1,
+            duration=4.2,
+            timeline="text",
+        )
+    )
+    df = ns.events.standardize_events(pd.DataFrame(rows).assign(language="english"))
+    out = _transf.AddAlignedTexts(drop_words=True)(df)
+    assert set(out.type) == {"Text", "AlignedText"}
+    # standardize_events + parquet round trip of the array cells
+    cache: tp.Any = CacheDict(folder=tmp_path, cache_type="ValidatedParquet")
+    with cache.write() as writer:
+        writer["events"] = out
+    events = etypes.EventTypesHelper("AlignedText").extract(cache["events"])
+    assert sorted(event.timeline for event in events) == ["text", "words"]
+    for event in events:
+        assert isinstance(event, etypes.AlignedText)
+        spans = zip(event.word_char_starts, event.word_char_stops)
+        texts = [event.text[start:stop] for start, stop in spans]
+        assert [text.lower() for text in texts] == words
+        np.testing.assert_allclose(event.start + event.word_starts, [0, 1, 2, 3])
+        np.testing.assert_allclose(event.word_durations, 0.5)
+    # one AlignedText per sentence of the Texts, whatever the Sentence events
+    sentence = dict(type="Sentence", text="He runs. She eats!", start=-0.1)
+    sentence.update(duration=4.2, timeline="text", language="english")
+    df = pd.concat([df, pd.DataFrame([sentence])], ignore_index=True)
+    out = _transf.AddAlignedTexts(text_type="Sentence")(ns.events.standardize_events(df))
+    aligned = etypes.EventTypesHelper("AlignedText").extract(out)
+    sentence_texts = tp.cast(list[etypes.AlignedText], aligned)
+    sentences = [e.text for e in sentence_texts if e.timeline == "text"]
+    assert sentences == ["He runs.", "She eats!"]
+    for timeline in ("text", "words"):
+        in_timeline = [e for e in sentence_texts if e.timeline == timeline]
+        spanned = [
+            e.text[start:stop]
+            for e in in_timeline
+            for start, stop in zip(e.word_char_starts, e.word_char_stops)
+        ]
+        assert [text.lower() for text in spanned] == words
+        starts = [e.start + e.word_starts for e in in_timeline]
+        np.testing.assert_allclose(np.concatenate(starts), [0, 1, 2, 3])
