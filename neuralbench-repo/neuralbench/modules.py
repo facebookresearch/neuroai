@@ -60,7 +60,7 @@ class LoraConfig(pydantic.BaseModel):
         )
 
 
-# TODO: delete through route_bypassed_qkv_lora once braindecode > 1.8.1 (braindecode#1194)
+# TODO: delete through route_bypassed_qkv_lora once the braindecode floor is > 1.8.1 (braindecode#1194)
 class _AddDelta(nn.Module):
     def __init__(self, delta: torch.Tensor) -> None:
         super().__init__()
@@ -109,8 +109,15 @@ def route_bypassed_qkv_lora(model: nn.Module) -> int:
 
     BEiT-style attention (LaBraM, EEG-DINO) reads ``qkv.weight`` through
     ``F.linear`` and never calls ``qkv``; each forward sees ``W + delta`` instead.
+    No-op on braindecode > 1.8.1, whose LaBraM calls ``self.qkv(x)`` so peft
+    already applies the delta (patching would apply it twice).
     """
+    import braindecode
+    from packaging.version import Version
     from peft.tuners.lora import Linear as LoraLinear
+
+    if Version(braindecode.__version__) > Version("1.8.1"):
+        return 0
 
     patched = 0
     for attn in model.modules():

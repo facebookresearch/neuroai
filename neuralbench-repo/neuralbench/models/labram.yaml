@@ -24,6 +24,8 @@ brain_model_config:
     n_times: 3000
     n_chans: 128
     n_outputs: 0
+    # braindecode 2.0 defaults to True, which drops the checkpoint's final norm
+    use_mean_pooling: false
   channel_mapping: !include channel_mappings/labram.json
 downstream_model_wrapper:
   model_output_key: null
