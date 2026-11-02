@@ -53,6 +53,7 @@ from .neuro import (
     SpikesExtractor,
     SurfaceProjector,
 )
+from .omni import QwenOmni
 from .text import (
     BaseText,
     HuggingFaceSentence,
