@@ -725,3 +725,27 @@ def test_downstream_wrapper_lora_yaml_targets_reach_eval_output(
             assert not torch.allclose(out, ref), f"LoRA on {target} is inert"
             ref = out
     assert torch.backends.mha.get_fastpath_enabled(), "fast path must stay on globally"
+
+
+def test_downstream_wrapper_labram_qkv_lora_applied_once():
+    # Unmerged attention must match peft's merged weights: the delta lands exactly once.
+    # Compared at the attention output; layer scale shrinks the gap at the model output.
+    torch.manual_seed(0)
+    batch = {"x": torch.randn(2, 128, 200)}
+    backbone = Labram(n_chans=128, n_times=200, n_outputs=2)
+    wrapped = _lora_wrapper(targets=["qkv"], aggregation="flatten").build(
+        backbone, batch, 3
+    )
+    attn = next(m for m in wrapped.wrapped_model.modules() if hasattr(m, "q_bias"))
+    outs: list[torch.Tensor] = []
+    attn.register_forward_hook(lambda m, args, out: outs.append(out))
+    wrapped.eval()
+    with torch.no_grad():
+        for n, p in _lora_params(wrapped).items():
+            if ".lora_B" in n:
+                p.copy_(torch.randn_like(p))
+        wrapped(**batch)
+        wrapped.wrapped_model.merge_adapter()
+        wrapped(**batch)
+    unmerged, merged = outs
+    torch.testing.assert_close(unmerged, merged)
