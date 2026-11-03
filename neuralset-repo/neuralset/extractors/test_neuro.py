@@ -851,7 +851,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "on_filter_too_long",
         "event_types",
         "scale_factor",
-        "bipolar_ref",
+        "reference",
         "infra",  # for version
         "fill_non_finite",
         "store_dtype",
@@ -1695,8 +1695,8 @@ def test_ieeg(test_data_path: Path) -> None:
         frequency=sfreq,
         baseline=(tmin, tmax),
         filter=(0.05, 20.0),
-        reference="bipolar",
-        picks=("seeg",),  # bipolar is only allowed with seeg
+        reference=ns.extractors.BipolarReference(),
+        picks=("seeg",),  # auto bipolar is only valid for seeg
         notch_filter=50.0,
         drop_bads=True,
     )
@@ -1705,24 +1705,54 @@ def test_ieeg(test_data_path: Path) -> None:
     assert preproc_data.shape == (24, sfreq * duration)
 
 
-def test_bipolar_ieeg(tmp_path: Path) -> None:
-    expected = "Bipolar reference can only be applied on seeg signals"
-    with pytest.raises(ValueError, match=expected):
-        ns.extractors.IeegExtractor(picks=("ecog",), reference="bipolar")
-
-
-def test_ieeg_cannot_combine_bipolar_modes() -> None:
-    expected = "Cannot use both reference='bipolar'"
-    with pytest.raises(ValueError, match=expected):
+@pytest.mark.parametrize("picks", [("ecog",), ("seeg", "ecog")])
+def test_bipolar_ref_auto_requires_seeg_only_picks(picks: tuple[str, ...]) -> None:
+    """BipolarReference() auto-derive raises at construction unless picks are
+    seeg-only."""
+    with pytest.raises(ValueError, match="requires seeg-only picks"):
         ns.extractors.IeegExtractor(
-            picks=("seeg",),
-            reference="bipolar",
-            bipolar_ref=(["A1"], ["A2"]),
+            picks=picks, reference=ns.extractors.BipolarReference()
         )
 
 
+def test_bipolar_ref_auto_rejects_default_picks() -> None:
+    """The ("seeg", "ecog") default is not seeg-only, so auto-derive must refuse it."""
+    with pytest.raises(ValueError, match="requires seeg-only picks"):
+        ns.extractors.IeegExtractor(reference=ns.extractors.BipolarReference())
+
+
+def test_bipolar_ref_auto_rejects_mixed_channel_types() -> None:
+    """BipolarReference() auto-derive raises at apply time on a raw mixing channel
+    types."""
+    ch_names = ["A1", "A2", "A3"]
+    sfreq = 200.0
+    data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types=["seeg", "seeg", "ecog"])
+    raw = mne.io.RawArray(data, info)
+
+    with pytest.raises(ValueError, match="requires seeg-only channels"):
+        ns.extractors.BipolarReference().apply(raw)
+
+
+def test_bipolar_ref_auto_skips_probes_differing_by_digit() -> None:
+    names = ["RT2c1", "RT2c2", "RT1c1", "RT1c2"]
+    raw = mne.io.RawArray(np.zeros((4, 200)), mne.create_info(names, 100.0, "seeg"))
+    assert ns.extractors.BipolarReference().apply(raw).ch_names == [
+        "RT2c1-RT2c2",
+        "RT1c1-RT1c2",
+    ]
+
+
+def test_bipolar_ref_auto_no_pairs() -> None:
+    info = mne.create_info(["A1", "B1", "C1"], sfreq=200.0, ch_types="seeg")
+    raw = mne.io.RawArray(np.zeros((3, 400)), info)
+    with pytest.raises(ValueError, match="No same-probe adjacent contact pairs"):
+        ns.extractors.BipolarReference().apply(raw)
+
+
 def test_bipolar_ref_explicit() -> None:
-    """MneRaw.bipolar_ref produces the expected bipolar channels."""
+    """BipolarReference with explicit anodes/cathodes produces the expected bipolar
+    channels."""
     ch_names = ["Fp1", "F7", "T7", "P7"]
     sfreq = 200.0
     data = np.random.RandomState(0).randn(len(ch_names), int(sfreq * 2))
@@ -1733,7 +1763,7 @@ def test_bipolar_ref_explicit() -> None:
     cathodes = ["F7", "T7", "P7"]
     extractor = ns.extractors.EegExtractor(
         picks=tuple(ch_names),
-        bipolar_ref=(anodes, cathodes),
+        reference=ns.extractors.BipolarReference(anodes=anodes, cathodes=cathodes),
     )
 
     result = extractor._preprocess_raw(
@@ -1747,12 +1777,144 @@ def test_bipolar_ref_explicit() -> None:
     np.testing.assert_array_almost_equal(result.data[fp1_f7_idx], data[0] - data[1])
 
 
-def test_bipolar_ref_validation() -> None:
-    """bipolar_ref anodes and cathodes must have equal length."""
-    with pytest.raises(ValueError, match="equal length"):
-        ns.extractors.EegExtractor(
-            bipolar_ref=(["Fp1", "F7"], ["F7"]),
-        )
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"anodes": ["Fp1", "F7"], "cathodes": ["F7"]}, "equal length"),
+        ({"anodes": ["Fp1"]}, "both be provided or both be None"),
+        ({"anodes": ["A1"], "cathodes": ["A2"], "ch_types": ("seeg",)}, "only applies"),
+    ],
+)
+def test_bipolar_ref_construction_errors(kwargs: dict, match: str) -> None:
+    """BipolarReference raises at construction for invalid anode/cathode
+    configurations."""
+    with pytest.raises(ValueError, match=match):
+        ns.extractors.BipolarReference(**kwargs)
+
+
+def test_reference_list_bipolar_seeg_car_ecog() -> None:
+    seeg_names, ecog_names = ["A1", "A2", "A3"], ["G1", "G2", "G3", "G4"]
+    ch_types = ["seeg"] * len(seeg_names) + ["ecog"] * len(ecog_names)
+    sfreq = 100.0
+    data = np.random.RandomState(0).randn(len(ch_types), int(sfreq * 2))
+    raw = mne.io.RawArray(data, mne.create_info(seeg_names + ecog_names, sfreq, ch_types))
+    extractor = ns.extractors.IeegExtractor(
+        picks=("seeg", "ecog"),
+        reference=[
+            ns.extractors.BipolarReference(ch_types=("seeg",)),
+            ns.extractors.CommonAverageReference(ch_types=("ecog",)),
+        ],
+    )
+    result = extractor._preprocess_raw(
+        raw, tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+    assert sorted(result.ch_names) == ["A1-A2", "A2-A3", *ecog_names]
+    bipolar = [result.ch_names.index(n) for n in ["A1-A2", "A2-A3"]]
+    np.testing.assert_array_almost_equal(result.data[bipolar], data[:2] - data[1:3])
+    ecog = data[3:] - data[3:].mean(axis=0, keepdims=True)
+    car = [result.ch_names.index(n) for n in ecog_names]
+    np.testing.assert_array_almost_equal(result.data[car], ecog, decimal=5)
+
+
+@pytest.mark.parametrize("ch_type", ["seeg", "ecog"])
+def test_reference_list_skips_absent_ch_types(ch_type: str) -> None:
+    """A study mixing sEEG-only and ECoG-only recordings uses one reference list."""
+    raw = mne.io.RawArray(
+        np.random.RandomState(0).randn(3, 200),
+        mne.create_info(["A1", "A2", "A3"], 100.0, ch_type),
+    )
+    refs = [
+        ns.extractors.BipolarReference(ch_types=("seeg",)),
+        ns.extractors.CommonAverageReference(ch_types=("ecog",)),
+    ]
+    for ref in refs:
+        raw = ref.apply(raw)
+    expected = {"seeg": ["A1-A2", "A2-A3"], "ecog": ["A1", "A2", "A3"]}[ch_type]
+    assert raw.ch_names == expected
+
+
+@pytest.mark.parametrize(
+    "car_types,bipolar_types,match",
+    [
+        (None, ("seeg",), "must set ch_types"),
+        (("seeg", "ecog"), ("seeg",), "overlap on \\['seeg'\\]"),
+        (("ecog",), ("seeg", "dbs"), "requires seeg-only picks or ch_types"),
+    ],
+)
+def test_reference_list_errors(
+    car_types: tuple[str, ...] | None, bipolar_types: tuple[str, ...], match: str
+) -> None:
+    reference: list[
+        ns.extractors.BipolarReference | ns.extractors.CommonAverageReference
+    ] = [
+        ns.extractors.BipolarReference(ch_types=bipolar_types),
+        ns.extractors.CommonAverageReference(ch_types=car_types),
+    ]
+    with pytest.raises(ValueError, match=match):
+        ns.extractors.IeegExtractor(picks=("seeg", "ecog"), reference=reference)
+
+
+def test_car_ref_rejects_ineligible_ch_types() -> None:
+    with pytest.raises(ValueError, match="ch_types must be among"):
+        ns.extractors.CommonAverageReference(ch_types=("meg",))
+
+
+def test_car_ref() -> None:
+    """CommonAverageReference references each channel type to its own per-type
+    average independently.
+
+    Groups are offset in opposite directions so a global CAR would produce wrong
+    values, ensuring the per-type isolation is verified by the value check.
+    """
+    seeg_names = ["A1", "A2", "A3"]
+    ecog_names = ["G1", "G2", "G3", "G4"]
+    ch_names = seeg_names + ecog_names
+    ch_types = ["seeg"] * len(seeg_names) + ["ecog"] * len(ecog_names)
+    sfreq = 100.0
+    rng = np.random.RandomState(0)
+    data = rng.randn(len(ch_names), int(sfreq * 2))
+    data[: len(seeg_names)] += 5.0
+    data[len(seeg_names) :] -= 5.0
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types=ch_types)
+    raw = mne.io.RawArray(data, info)
+
+    extractor = ns.extractors.IeegExtractor(
+        picks=("seeg", "ecog"),
+        reference=ns.extractors.CommonAverageReference(),
+    )
+    result = extractor._preprocess_raw(
+        raw.copy(), tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+    )
+
+    seeg_data = data[: len(seeg_names)]
+    ecog_data = data[len(seeg_names) :]
+    expected_seeg = seeg_data - seeg_data.mean(axis=0, keepdims=True)
+    expected_ecog = ecog_data - ecog_data.mean(axis=0, keepdims=True)
+
+    seeg_idx = [result.ch_names.index(n) for n in seeg_names]
+    ecog_idx = [result.ch_names.index(n) for n in ecog_names]
+    np.testing.assert_array_almost_equal(result.data[seeg_idx], expected_seeg, decimal=5)
+    np.testing.assert_array_almost_equal(result.data[ecog_idx], expected_ecog, decimal=5)
+
+
+@pytest.mark.parametrize(
+    "extractor_cls,match",
+    [
+        (ns.extractors.MegExtractor, "CommonAverageReference is not supported for MEG"),
+        (ns.extractors.EmgExtractor, "CommonAverageReference is not supported for EMG"),
+    ],
+)
+@pytest.mark.parametrize("as_list", [False, True])
+def test_car_ref_not_supported(extractor_cls: type, match: str, as_list: bool) -> None:
+    """CommonAverageReference raises at instantiation for channel types that don't
+    support it."""
+    with pytest.raises(ValueError, match=match):
+        if as_list:
+            extractor_cls(
+                reference=[ns.extractors.CommonAverageReference(ch_types=("eeg",))]
+            )
+        else:
+            extractor_cls(reference=ns.extractors.CommonAverageReference())
 
 
 def test_overlap() -> None:

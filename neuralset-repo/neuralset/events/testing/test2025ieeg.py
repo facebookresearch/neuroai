@@ -32,7 +32,7 @@ class _BaseTest2025Ieeg(study.Study):
 
         if not fname.exists():
             ch_names = [
-                f"electrode-{i}-{tl['subject']}" for i in range(len(self.ch_types) - 1)
+                f"electrode-{tl['subject']}-{i}" for i in range(len(self.ch_types) - 1)
             ] + ["INVALID_CHANNEL"]
             n_times = int(self.sfreq * 5 * 60)
             info = mne.create_info(ch_names, sfreq=self.sfreq, ch_types=self.ch_types)
