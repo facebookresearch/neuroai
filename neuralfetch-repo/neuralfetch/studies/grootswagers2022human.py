@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from neuralfetch import download, utils
+from neuralfetch import download
 from neuralset.events import study
 
 
 class Grootswagers2022Human(study.Study):
-    url: tp.ClassVar[str] = "https://openneuro.org/datasets/ds003825/versions/1.2.0"
+    url: tp.ClassVar[str] = "https://nemar.org/dataexplorer/detail?dataset_id=on003825"
     """THINGS-EEG1: EEG responses to RSVP streams of object images from THINGS database.
 
     This study provides EEG recordings from 50 participants viewing rapid serial
@@ -33,19 +33,20 @@ class Grootswagers2022Human(study.Study):
             * Images from THINGS database covering all 1,854 object concepts
 
     Data Format:
-        - BIDS-compliant dataset structure (OpenNeuro ds003825)
+        - NEMAR on003825 v1.0.2: BIDS import of OpenNeuro ds003825
         - EEG data in BrainVision format
-        - Shared THINGS image database expected in ../THINGS-images/
+        - The THINGS images are included under stimuli/<concept>/
 
     Download Requirements:
-        - OpenNeuro dataset: ds003825
-        - THINGS-images database (shared across THINGS studies): checked for in
-          ../THINGS-images/ and downloaded automatically if missing
+        - NEMAR dataset on003825 (EEG and images, ~50 GB; no OSF password)
 
     Notes:
         - Data was referenced online to Cz, which is not recorded (63 of 64 channels
           available for most participants)
         - Participants 49-50 have 127 channels; all others have 63
+        - Test split: the 200 validation images (``isteststim`` in the events),
+          each shown 12 times to 48 participants. Participants 1 and 6 never saw
+          them, so all their events are train.
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("THINGS-EEG1",)
@@ -75,15 +76,16 @@ class Grootswagers2022Human(study.Study):
         doi={10.18112/OPENNEURO.DS003825.V1.2.0},
         url={https://openneuro.org/datasets/ds003825/versions/1.2.0}
     }
+
+    @misc{nemar.on003825,
+        title={Human electroencephalography recordings from 50 subjects for 22,248 images from 1,854 object concepts},
+        publisher={NEMAR},
+        doi={10.82901/nemar.on003825},
+        url={https://doi.org/10.82901/nemar.on003825}
+    }
     """
     description: tp.ClassVar[str] = (
         "EEG recordings from 50 participants watching still images."
-    )
-    requirements: tp.ClassVar[tuple[str, ...]] = (
-        "pyunpack",
-        "boto3",
-        "osfclient>=0.0.5",
-        "openneuro-py",
     )
     _info: tp.ClassVar[study.StudyInfo] = study.StudyInfo(
         num_timelines=50,
@@ -94,79 +96,75 @@ class Grootswagers2022Human(study.Study):
         frequency=1000,
     )
 
-    _test_image_names: list[str] | None = None
+    # Participants 1 and 6 never saw the validation images; the other 48 saw
+    # the same 200, so any of them lists the test set.
+    _TEST_REFERENCE_SUBJECT: tp.ClassVar[str] = "02"
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"  # NEMAR layout, onsets in s, test split from events
 
     def _download(self, overwrite: bool = False) -> None:
-        # Download EEG data from OpenNeuro
-        download.Openneuro(study="ds003825", dset_dir=self.path).download(
-            overwrite=overwrite
+        download.Nemar(
+            study="on003825",
+            dset_dir=self.path,
+            version="1.0.2",
+            exclude=["code/**", "derivatives/**"],
+        ).download(overwrite=overwrite)
+
+    def _events_file(self, subject: str) -> Path:
+        sub = f"sub-{int(subject):02}"
+        return (
+            self.path
+            / "download"
+            / "on003825"
+            / sub
+            / "eeg"
+            / f"{sub}_task-rsvp_events.tsv"
         )
-        # Check for / Download THINGS-images database (used across multiple THINGS studies)
-        # Note: Images must be preprocessed and placed in prepare/ folder separately
-        utils.download_things_images(self.path)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
         for k in range(1, 51):
-            folder = self.path / "download" / f"sub-{k:02}" / "eeg"
+            folder = self._events_file(str(k)).parent
             if not folder.exists():
                 raise RuntimeError(f"Folder does not exist: {folder}")
             yield dict(subject=str(k))
 
     def _format_img_path(self, img_path: str) -> str:
-        correct = img_path.endswith(".jpg") & img_path.startswith("stimuli")
-        img_path = img_path.replace("\\", "/")
-        correct &= img_path.count("/") == 2
-        if not correct:
-            msg = f"img_path must be .jpg, starting with stiumuli, with 2 '/', got {img_path}"
-            raise ValueError(msg)
-        filename = Path(img_path).name
-        category = Path(img_path).parent.name
-        out = self.path / "prepare" / category / filename
+        out = self.path / "download" / "on003825" / img_path
         if not out.exists():
             raise RuntimeError(f"Output path does not exist: {out}")
         return str(out)
 
-    def _get_test_info(self) -> tuple[list[str], list[str]]:
-        test_image_file = self.path / "download" / "test_images.csv"
-        if not test_image_file.exists():
-            # Some partial OpenNeuro downloads may omit this optional file.
-            return [], []
-        test_image_names = pd.read_csv(test_image_file, header=None)[0].tolist()
-        test_categories = [name.split("/")[0] for name in test_image_names]
-        return test_image_names, test_categories
+    def _get_test_info(self) -> tuple[set[str], set[str]]:
+        ref = pd.read_csv(
+            self._events_file(self._TEST_REFERENCE_SUBJECT),
+            sep="\t",
+            usecols=["stim", "isteststim"],
+        )
+        test_stims = set(ref.stim[ref.isteststim == 1])
+        return test_stims, {Path(stim).parent.name for stim in test_stims}
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        subj_str = f"sub-{int(timeline['subject']):02}"
-        folder = self.path / "download" / subj_str / "eeg"
-        events_file = folder / f"{subj_str}_task-rsvp_events.tsv"
+        events_file = self._events_file(timeline["subject"])
         events = pd.read_csv(events_file, sep="\t")
 
         events["filepath"] = events.stim.apply(self._format_img_path)
         events["category"] = events.filepath.apply(lambda x: x.split("/")[-2])
         events["type"] = "Image"
-
-        sfreq = 1e3
-        events["start"] = events.onset / sfreq
-        events["duration"] /= sfreq
+        events["start"] = events.onset  # on003825 >= 1.0.1 gives seconds
 
         events["caption"] = events.filepath.apply(
             lambda x: " ".join(Path(x).stem.split("_")[:-1])
         ).apply(lambda s: re.sub(r"\d", "", s))
 
         # Identify test images (called "validation images" in the paper)
-        test_image_names, test_categories = self._get_test_info()
+        test_stims, test_categories = self._get_test_info()
         events["split"] = "train"
-        image_names = events.filepath.apply(lambda x: "/".join(x.split("/")[-2:]))
-        events.loc[image_names.isin(test_image_names), "split"] = "test"
+        events.loc[events.stim.isin(test_stims), "split"] = "test"
         events["is_test_category"] = events.category.isin(test_categories)
         events["stem"] = events.filepath.apply(lambda x: Path(x).stem)
-
-        # Add shared THINGS filepaths to images
-        shared_things_path = (self.path / ".." / "THINGS-images").resolve(strict=False)
-        if shared_things_path.exists():
-            fp = f"{shared_things_path}/{events.category}/{events.stem}.jpg"
-            events["shared_filepath"] = fp
 
         # Only keep useful columns
         cols = [
@@ -179,32 +177,28 @@ class Grootswagers2022Human(study.Study):
             "split",
             "is_test_category",
             "stem",
-            "shared_filepath",
         ]
         events = events[cols]
 
         # Add raw Eeg event
-        raw_fname = folder / f"{subj_str}_task-rsvp_eeg.vhdr"
+        raw_fname = str(events_file).replace("_events.tsv", "_eeg.vhdr")
         # NOTE 1: Data was referenced online to Cz, which has not been recorded
         # NOTE 2: Subjects 1-48 have 63 channels; subject 49-50 have 127
-        eeg = {"filepath": str(raw_fname), "type": "Eeg", "start": 0}
+        eeg = {"filepath": raw_fname, "type": "Eeg", "start": 0}
         events = pd.concat([pd.DataFrame([eeg]), events])
 
         return events
 
 
 class Grootswagers2022HumanSample(Grootswagers2022Human):
-    """Sample version of Grootswagers2022Human with selective OpenNeuro download.
+    """Sample version of Grootswagers2022Human with selective NEMAR download.
 
-    Keeps one EEG timeline (sub-01) and image events to enable fast loading
-    checks without downloading the full dataset.
-
-    Still needs to download the full THINGS-images database (shared across THINGS studies)
-    to access the image files, but this is a much smaller download than the full EEG dataset.
+    Keeps one EEG timeline (sub-01) and the THINGS images (~6 GB in total) to
+    enable fast loading checks without downloading the full EEG dataset.
     """
 
     description: tp.ClassVar[str] = (
-        "Sample Grootswagers2022: OpenNeuro EEG + image events for sub-01."
+        "Sample Grootswagers2022: NEMAR EEG + image events for sub-01."
     )
 
     _SAMPLE_SUBJECT: tp.ClassVar[str] = "01"
@@ -219,76 +213,23 @@ class Grootswagers2022HumanSample(Grootswagers2022Human):
     )
 
     def _download(self, overwrite: bool = False) -> None:
-        sub = self._SAMPLE_SUBJECT
-        include_patterns = [
-            "dataset_description.json",
-            "participants.tsv",
-            f"sub-{sub}/eeg/sub-{sub}_task-rsvp_eeg.vhdr",
-            f"sub-{sub}/eeg/sub-{sub}_task-rsvp_eeg.eeg",
-            f"sub-{sub}/eeg/sub-{sub}_task-rsvp_eeg.vmrk",
-            f"sub-{sub}/eeg/sub-{sub}_task-rsvp_events.tsv",
-        ]
-        download.Openneuro(
-            study="ds003825",
+        ref = self._TEST_REFERENCE_SUBJECT
+        download.Nemar(
+            study="on003825",
             dset_dir=self.path,
-            include=include_patterns,
+            version="1.0.2",
+            include=[
+                f"sub-{self._SAMPLE_SUBJECT}/eeg/**",
+                f"sub-{ref}/eeg/sub-{ref}_task-rsvp_events.tsv",  # test split
+                "stimuli/**",
+            ],
         ).download(overwrite=overwrite)
 
-        utils.download_things_images(self.path)
-
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
-        sub = self._SAMPLE_SUBJECT
-        eeg_file = (
-            self.path
-            / "download"
-            / f"sub-{sub}"
-            / "eeg"
-            / f"sub-{sub}_task-rsvp_eeg.vhdr"
-        )
-        if not eeg_file.exists():
+        events_file = self._events_file(self._SAMPLE_SUBJECT)
+        if not events_file.exists():
             raise FileNotFoundError(
-                f"Missing sample EEG file for {self.__class__.__name__}: {eeg_file}. "
+                f"Missing sample events file for {self.__class__.__name__}: {events_file}. "
                 "Please run study.download() first."
             )
-        yield dict(subject=str(int(sub)))
-
-    def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        subj_str = f"sub-{int(timeline['subject']):02}"
-        folder = self.path / "download" / subj_str / "eeg"
-        events_file = folder / f"{subj_str}_task-rsvp_events.tsv"
-        events = pd.read_csv(events_file, sep="\t")
-
-        events["filepath"] = events.stim.astype(str).str.replace("\\", "/", regex=False)
-        events["category"] = events.filepath.apply(lambda x: Path(x).parent.name)
-        events["type"] = "Image"
-        sfreq = 1e3
-        events["start"] = events.onset / sfreq
-        events["duration"] /= sfreq
-        events["caption"] = events.filepath.apply(
-            lambda x: " ".join(Path(x).stem.split("_")[:-1])
-        ).apply(lambda s: re.sub(r"\d", "", s))
-
-        test_image_names, test_categories = self._get_test_info()
-        image_names = events.filepath.apply(lambda x: "/".join(x.split("/")[-2:]))
-        events["split"] = "train"
-        events.loc[image_names.isin(test_image_names), "split"] = "test"
-        events["is_test_category"] = events.category.isin(test_categories)
-        events["stem"] = events.filepath.apply(lambda x: Path(x).stem)
-
-        cols = [
-            "filepath",
-            "type",
-            "start",
-            "duration",
-            "category",
-            "caption",
-            "split",
-            "is_test_category",
-            "stem",
-        ]
-        events = events[cols]
-
-        raw_fname = folder / f"{subj_str}_task-rsvp_eeg.vhdr"
-        eeg = {"filepath": str(raw_fname), "type": "Eeg", "start": 0}
-        events = pd.concat([pd.DataFrame([eeg]), events], ignore_index=True)
-        return events
+        yield dict(subject=str(int(self._SAMPLE_SUBJECT)))
