@@ -41,7 +41,11 @@ def test_conformer(fake_input, use_default_config):
     assert isinstance(model, Conformer)
 
     x = fake_input.transpose(1, 2)  # (B, C, T) → (B, T, C)
-    out = model(x)  # Only one output now
+    if use_default_config:
+        out = model(x)
+    else:
+        lengths = torch.tensor([n_times // 2, n_times])
+        out = model(x, lengths=lengths)
 
     # Check shape of the output
     assert out.shape == (batch_size, n_times, n_in_channels)
