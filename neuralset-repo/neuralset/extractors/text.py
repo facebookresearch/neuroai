@@ -340,7 +340,11 @@ class _HuggingFaceLanguageModel(HuggingFaceMixin):
 
 class _HuggingFaceStaticText(BaseStatic, _HuggingFaceLanguageModel):
     """One vector per text event, which the language model reads alone (without
-    context), aggregating its tokens with ``token_aggregation``."""
+    context), aggregating its tokens with ``token_aggregation``.
+
+    The text is read with the special tokens the tokenizer adds (e.g. Llama's BOS,
+    without which the first token of the text becomes the attention sink and its
+    states barely depend on it), but only the tokens of the text are aggregated."""
 
     model_name: str = "openai-community/gpt2"
     infra: MapInfra = MapInfra(
@@ -348,7 +352,7 @@ class _HuggingFaceStaticText(BaseStatic, _HuggingFaceLanguageModel):
         gpus_per_node=1,
         cpus_per_task=10,
         min_samples_per_job=4096,
-        version="1",
+        version="2",  # special tokens added (no BOS before)
     )
     batch_size: int = 32
 
@@ -401,24 +405,28 @@ class _HuggingFaceStaticText(BaseStatic, _HuggingFaceLanguageModel):
                 with environment_variables(TOKENIZERS_PARALLELISM="false"):
                     inputs = self.tokenizer(
                         texts,
-                        add_special_tokens=False,
                         return_tensors="pt",
                         padding=True,
                         truncation=True,
                         # guards tokenizers reporting no real limit (e.g. OPT)
                         max_length=self._max_length(),
-                    ).to(device)
+                        return_special_tokens_mask=True,
+                    )
+                # the text's own tokens: neither special tokens nor padding
+                special = inputs.pop("special_tokens_mask").bool()
+                text_tokens = inputs["attention_mask"].bool() & ~special
+                inputs = inputs.to(device)
                 outputs = self.model(**inputs, output_hidden_states=True)
                 if "hidden_states" in outputs:
                     states = outputs.hidden_states
                 else:  # bart (encoder/decoder)
-                    states = outputs.encoder_hidden_states + outputs.decoder_hidden_states
+                    # decoder position j + 1 reads token j (shift_tokens_right): realign
+                    decoder = [s.roll(-1, dims=1) for s in outputs.decoder_hidden_states]
+                    states = (*outputs.encoder_hidden_states, *decoder)
                 hidden_states = torch.stack([layer.cpu() for layer in states])
-                # attention_mask is the model's truth, synced once per batch
-                n_tokens: list[int] = inputs["attention_mask"].sum(dim=1).tolist()
                 for i, text in enumerate(texts):
-                    # (n_layers, n_tokens, n_dims), without the padding (on the right)
-                    state = hidden_states[:, i, : n_tokens[i]]
+                    # (n_layers, n_tokens, n_dims), the text's tokens only
+                    state = hidden_states[:, i, text_tokens[i]]
                     out = self._aggregate_tokens(state).cpu().numpy()
                     if self.cache_n_layers is None:
                         out = self._aggregate_layers(out)

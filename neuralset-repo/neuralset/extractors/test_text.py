@@ -304,6 +304,25 @@ def test_word_tokens() -> None:
     assert extractor(word, 0, 1).shape == (2, 768)
 
 
+@pytest.mark.parametrize("model_name", ["openai-community/gpt2", "google-t5/t5-small"])
+def test_special_tokens_read_but_not_aggregated(model_name: str) -> None:
+    """The model reads the special tokens of its tokenizer (none for GPT-2, EOS for
+    T5, BOS for Llama), but only the tokens of the text are aggregated."""
+    extractor = text.HuggingFaceWord(layers=0.5, model_name=model_name, device="cpu")
+    word = etypes.Word(text="internationalization", start=0, duration=1, timeline="x")
+    tokenizer = extractor.tokenizer
+    ids = tokenizer(word.text, return_tensors="pt", return_special_tokens_mask=True)
+    is_text = ids.pop("special_tokens_mask")[0] == 0
+    assert bool(is_text.all()) == (model_name == "openai-community/gpt2")
+    with torch.no_grad():
+        states = torch.stack(
+            extractor.model(**ids, output_hidden_states=True).hidden_states
+        )
+    latent = extractor._aggregate_tokens(states[:, 0, is_text]).numpy()
+    expected = extractor._aggregate_layers(latent)
+    np.testing.assert_allclose(extractor.get_static(word), expected, rtol=1e-4, atol=1e-4)
+
+
 def _make_sentence(n_words: int) -> etypes.Sentence:
     words = " ".join(str(k) for k in range(n_words))
     return etypes.Sentence(text=words, start=0, duration=1, timeline="foo")
@@ -345,8 +364,19 @@ def test_bart() -> None:
     extractor = text.HuggingFaceWord(
         aggregation="sum", model_name="facebook/bart-base", device="cpu"
     )
-    word = etypes.Word(text="Hello", start=0, duration=1, timeline="foo")
-    _ = extractor(word, 0, 1)
+    word = etypes.Word(text="Hello world", start=0, duration=1, timeline="foo")
+    ids = extractor.tokenizer(
+        word.text, return_tensors="pt", return_special_tokens_mask=True
+    )
+    is_text = ids.pop("special_tokens_mask")[0] == 0
+    with torch.no_grad():
+        outputs = extractor.model(**ids, output_hidden_states=True)
+    encoder = torch.stack(outputs.encoder_hidden_states)[:, 0, is_text]
+    # the decoder reads the input shifted right by one
+    decoder = torch.stack(outputs.decoder_hidden_states)[:, 0, 1:][:, is_text[:-1]]
+    latent = extractor._aggregate_tokens(torch.cat([encoder, decoder])).numpy()
+    expected = extractor._aggregate_layers(latent)
+    np.testing.assert_allclose(extractor.get_static(word), expected, rtol=1e-4, atol=1e-4)
 
 
 def test_llm_pretrained() -> None:
