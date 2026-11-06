@@ -77,7 +77,7 @@ def _is_transient_lock_error(exc: BaseException) -> bool:
     return False
 
 
-def _iter_subclasses(cls: type) -> tp.Iterator[type]:
+def _iter_subclasses(cls: type[tp.Any]) -> tp.Iterator[type[tp.Any]]:
     """Recursively yield all subclasses of cls."""
     for sub in cls.__subclasses__():
         yield sub
