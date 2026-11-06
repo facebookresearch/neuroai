@@ -130,6 +130,8 @@ def test_event_types_helper() -> None:
         ({"language": "nl"}, "nl_core_news_lg"),  # ISO code
         ({"language": "Dutch"}, "nl_core_news_lg"),  # case-insensitive
         ({"language": "french"}, "fr_core_news_lg"),
+        ({"language": "el"}, "el_core_news_lg"),
+        ({"language": "greek"}, "el_core_news_lg"),
         ({"model": "custom_model"}, "custom_model"),  # explicit model wins
     ],
 )
@@ -145,6 +147,17 @@ def test_get_spacy_model_language_resolution(
 def test_get_spacy_model_unknown_language() -> None:
     with pytest.raises(ValueError, match="not available"):
         utils.get_spacy_model(language="klingon")
+
+
+def test_spacy_model_name_resolves_without_loading(mocker: tp.Any) -> None:
+    """Resolution alone never loads or installs a model."""
+    loader = mocker.patch.object(utils, "_get_model")
+    installer = mocker.patch.object(utils, "install_spacy_model")
+    assert utils.spacy_model_name(language="de") == "de_core_news_lg"
+    with pytest.raises(ValueError, match="not available"):
+        utils.spacy_model_name(language="klingon")
+    loader.assert_not_called()
+    installer.assert_not_called()
 
 
 def test_train_test_split_by_group():
