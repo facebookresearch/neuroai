@@ -360,6 +360,16 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
     """Returns a cached version of a spacy model based on either model name or language
     (defaults to using the language large version of the model)
     """
+    return _get_model(spacy_model_name(model=model, language=language))
+
+
+def spacy_model_name(*, model: str = "", language: str = "") -> str:
+    """Resolve the spacy model name for an explicit *model* or a *language*.
+
+    *language* may be a name or an ISO 639-1 code (case-insensitive); it maps to
+    the language's large model.  Raises ``ValueError`` for an unsupported
+    language, without loading or installing anything.
+    """
     if language and model:
         msg = f"Language and model cannot be specified at the same time, got {language=} and {model=}"
         raise ValueError(msg)
@@ -377,6 +387,7 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             "de": "german",
             "it": "italian",
             "pt": "portuguese",
+            "el": "greek",
         }
         language = _iso_to_lang.get(language.lower(), language.lower())
         # Large ("_lg") models are used because only they ship static word
@@ -392,21 +403,36 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             german="de_core_news_lg",
             italian="it_core_news_lg",
             portuguese="pt_core_news_lg",
+            greek="el_core_news_lg",
         )
         if language not in defaults:
             raise ValueError(f"Language {language!r} not available: {defaults}")
         model = defaults[language]
-    return _get_model(model)
+    return model
 
 
-@functools.lru_cache(maxsize=3)
-def _get_model(model: str) -> tp.Any:
+def install_spacy_model(model: str) -> None:
+    """Install the spacy *model* package if it is not installed yet.
+
+    Call this once in the submitting process before fanning work out to
+    cluster workers that share its environment: otherwise every worker that
+    misses the model pip-installs it concurrently into the same site-packages,
+    and those racing installs fail (e.g. ``Stale file handle`` on a network
+    filesystem).
+    """
     import spacy
 
     if not spacy.util.is_package(model):
         import spacy.cli
 
         spacy.cli.download(model)  # type: ignore
+
+
+@functools.lru_cache(maxsize=3)
+def _get_model(model: str) -> tp.Any:
+    import spacy
+
+    install_spacy_model(model)
     nlp = spacy.load(model)
     return nlp
 

@@ -99,6 +99,79 @@ def test_spacy_embedding_api() -> None:
         ext_bare.get_embedding("hello")
 
 
+def test_spacy_prepare_installs_each_model_once_before_dispatch(
+    mocker: tp.Any,
+) -> None:
+    """prepare() installs every needed model up front, in the submitting process.
+
+    Cluster workers sharing the environment then find the models instead of each
+    pip-installing the same one concurrently.
+    """
+    calls: list[str] = []
+    mocker.patch.object(
+        text.utils, "install_spacy_model", side_effect=lambda m: calls.append(m)
+    )
+    dispatch = mocker.patch.object(
+        text.BaseText,
+        "prepare",
+        autospec=True,
+        side_effect=lambda self, events: calls.append("dispatch"),
+    )
+    words = [
+        dict(type="Word", text=t, start=i, duration=1, language=lang, timeline="t")
+        for i, (t, lang) in enumerate(
+            [("hello", "en"), ("bonjour", "fr"), ("hi", "en"), ("γεια", "el")]
+        )
+    ]
+    events = standardize_events(pd.DataFrame(words))
+    text.SpacyEmbedding(aggregation="sum").prepare(events)
+    assert calls == ["el_core_news_lg", "en_core_web_lg", "fr_core_news_lg", "dispatch"]
+    dispatch.assert_called_once()
+    # An unsupported language fails here, before anything is dispatched.
+    calls.clear()
+    bad = standardize_events(pd.DataFrame([{**words[0], "language": "klingon"}]))
+    with pytest.raises(ValueError, match="not available"):
+        text.SpacyEmbedding(aggregation="sum").prepare(bad)
+    assert calls == []
+
+
+def test_spacy_prepare_skips_install_when_cached(
+    mocker: tp.Any, tmp_path: tp.Any
+) -> None:
+    """A fully cached run (or no events) requests no spaCy model install.
+
+    Nothing is downloaded or loaded: ``install_spacy_model`` is mocked to record
+    the requested model names and ``get_embedding`` returns a stub vector.
+    """
+    installs: list[str] = []
+    mocker.patch.object(
+        text.utils, "install_spacy_model", side_effect=lambda m: installs.append(m)
+    )
+    mocker.patch.object(
+        text.SpacyEmbedding, "get_embedding", return_value=np.zeros(300, dtype=np.float32)
+    )
+    words = [
+        dict(type="Word", text=t, start=i, duration=1, language="el", timeline="t")
+        for i, t in enumerate(["γεια", "σου"])
+    ]
+    events = standardize_events(pd.DataFrame(words))
+    ext = text.SpacyEmbedding(aggregation="sum", infra={"folder": tmp_path})  # type: ignore
+    ext.prepare(events)  # first run computes, so it requests the model (mocked)
+    assert installs == ["el_core_news_lg"]
+    installs.clear()
+    text.SpacyEmbedding(aggregation="sum", infra={"folder": tmp_path}).prepare(  # type: ignore
+        events
+    )
+    assert installs == []  # every embedding is cached now
+    named = text.SpacyEmbedding(
+        model_name="xx_custom",
+        aggregation="sum",
+        infra={"folder": tmp_path},  # type: ignore
+    )
+    named.prepare([])
+    assert installs == []  # no events, nothing to compute
+
+
 @pytest.mark.parametrize("contextualized", [True, False])
 @pytest.mark.parametrize("layer", [0, 0.5, 1])
 @pytest.mark.parametrize("cache_n_layers", [None, 10])
