@@ -197,6 +197,10 @@ class _Module(BaseModel):
             if breqs is not cls.requirements:
                 reqs = breqs + reqs
         cls.requirements = reqs
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: tp.Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
         # check for _exclude_from_cls_uid override as attribute as it gets ignored
         exc_tag = "_exclude_from_cls_uid"
         if exc_tag in getattr(cls, "__private_attributes__", {}):
