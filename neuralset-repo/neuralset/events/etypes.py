@@ -975,7 +975,7 @@ class Ecg(MneRaw):
     """Electrocardiography (ECG) recording event.
 
     For a dedicated cardiac recording. When the lead is an auxiliary channel of
-    an EEG/PSG recording, the study emits its usual event instead, and
+    an EEG/PSG or iEEG recording, the study emits its usual event instead, and
     :class:`~neuralset.extractors.EcgExtractor` reads the lead out of that.
     """
 

@@ -681,16 +681,16 @@ class EcgExtractor(MneRaw):
     Parameters
     ----------
     event_types: default = "Ecg"
-        set ``"Eeg"`` when the cardiac lead is an auxiliary channel of an EEG
-        or PSG recording, which is how most studies carry it -- the study then
-        emits no event of its own for the lead.
+        set ``"Eeg"`` or ``"Ieeg"`` when the cardiac lead is an auxiliary
+        channel of an EEG/PSG or iEEG recording, which is how most studies carry
+        it -- the study then emits no event of its own for the lead.
     picks: default = ("ecg",)
         pick "ecg" channels by default. A study that leaves its cardiac
         channel typed as ``eeg`` will not be picked up -- fix the channel type
         in the study rather than naming the channel here.
     """
 
-    event_types: tp.Literal["Ecg", "Eeg"] = "Ecg"
+    event_types: tp.Literal["Ecg", "Eeg", "Ieeg"] = "Ecg"
     picks: tuple[str, ...] = pydantic.Field(("ecg",), min_length=1)
 
 
@@ -700,8 +700,8 @@ class IeegExtractor(MneRaw):
 
     Parameters
     ----------
-    picks: default = ("seeg", "ecog", )
-        pick "seeg" and "ecog" channels by default.
+    picks: default = ("seeg", "ecog", "dbs")
+        pick "seeg", "ecog" and "dbs" (DBS-lead LFP) channels by default.
     reference: "bipolar" or None, default=None
         If "bipolar", applies a bipolar reference to the data, i.e., uses neighboring electrode as reference.
         Uses mne.set_bipolar_reference under the hood. [ieeg1]_
@@ -728,13 +728,7 @@ class IeegExtractor(MneRaw):
     """
 
     event_types: tp.Literal["Ieeg"] = "Ieeg"
-    picks: tuple[str, ...] = pydantic.Field(
-        (
-            "seeg",
-            "ecog",
-        ),
-        min_length=1,
-    )
+    picks: tuple[str, ...] = pydantic.Field(("seeg", "ecog", "dbs"), min_length=1)
     reference: tp.Literal["bipolar"] | None = None
 
     def model_post_init(self, log__):

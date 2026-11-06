@@ -216,6 +216,23 @@ def test_dryad_missing_token_raises(tmp_path: Path) -> None:
         )
 
 
+def test_dryad_files_follow_pagination(tmp_path: Path) -> None:
+    dryad = download.Dryad(
+        study="test", doi="12.3456/dryad.abc", token="t", dset_dir=tmp_path / "dryad"
+    )
+    version = {"_links": {"stash:files": {"href": "/api/v2/versions/1/files"}}}
+    pages = [
+        {"_embedded": {"stash:versions": [version]}},
+        {
+            "_embedded": {"stash:files": [{"path": "a"}]},
+            "_links": {"next": {"href": "/api/v2/versions/1/files?page=2"}},
+        },
+        {"_embedded": {"stash:files": [{"path": "b"}]}, "_links": {}},
+    ]
+    with patch.object(download.Dryad, "_api_get", side_effect=pages):
+        assert [f["path"] for f in dryad._latest_version_files()] == ["a", "b"]
+
+
 def _make_gin(tmp_path: Path, **kwargs: tp.Any) -> download.Gin:
     """Factory that builds a Gin instance rooted at *tmp_path*."""
     defaults: dict[str, tp.Any] = {

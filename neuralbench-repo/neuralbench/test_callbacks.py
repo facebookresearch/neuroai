@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from collections import defaultdict
 from types import SimpleNamespace
 
 import lightning.pytorch as pl
@@ -514,6 +515,78 @@ def test_edge_case_all_same_prediction(mock_trainer, mock_pl_module):
 
     # Should complete without error
     mock_pl_module.test_full_metrics["test/acc"].update.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestFullRetrievalMetrics tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "window_decimals, times", [(0, ["50", "50", "52"]), (1, ["50.0", "49.8", "52.0"])]
+)
+def test_window_items_pool_the_subjects_that_saw_the_same_moment(
+    tmp_path, window_decimals, times
+):
+    """Two subjects enter one film at different recording times and offsets."""
+    from neuralset.events.etypes import Video
+
+    from .callbacks import TestFullRetrievalMetrics
+
+    film = tmp_path / "cars-2.mp4"
+    film.touch()
+
+    def segment(subject: str, trigger_start: float, offset: float, start: float):
+        trigger = Video(
+            start=trigger_start,
+            timeline=subject,
+            offset=offset,
+            duration=30.0,
+            frequency=25.0,
+            filepath=film,
+            extra={"subject": subject},
+        )
+        return SimpleNamespace(start=start, trigger=trigger)
+
+    batch = SimpleNamespace(
+        segments=[
+            # film time 50.0 s and 49.8 s
+            segment("sub_3", trigger_start=100.0, offset=40.0, start=110.0),
+            segment("sub_7", trigger_start=7.5, offset=48.0, start=9.3),
+            segment("sub_3", trigger_start=100.0, offset=40.0, start=112.0),
+        ]
+    )
+    callback = TestFullRetrievalMetrics(
+        retrieval_item="window", window_decimals=window_decimals
+    )
+    callback.full_outputs = {0: defaultdict(list)}
+    outputs = (torch.randn(3, 4), torch.randn(3, 4))
+
+    callback._collate_outputs(outputs, batch, dataloader_idx=0)
+
+    assert callback.full_outputs[0]["window"] == [f"{film}@{t}s" for t in times]
+
+
+def test_a_retrieval_set_of_one_candidate_raises_rather_than_logging_nan():
+    """One ``Audio`` event over the whole podcast leaves a single candidate."""
+    from .callbacks import TestFullRetrievalMetrics
+
+    callback = TestFullRetrievalMetrics()
+    callback.full_outputs = {
+        0: {
+            "y_pred": [torch.randn(4, 8)],
+            "y_true": [torch.randn(4, 8)],
+            "subject": ["sub0"] * 4,
+            "text": ["the podcast"] * 4,
+        }
+    }
+    pl_module = SimpleNamespace(
+        test_full_retrieval_metrics={"test/full_retrieval/inv_norm_rank_mean": None}
+    )
+    trainer = SimpleNamespace(test_dataloaders=[None])
+
+    with pytest.raises(ValueError, match="1 candidate"):
+        callback._compute_metrics(trainer, pl_module, step_name="test")
 
 
 # ---------------------------------------------------------------------------

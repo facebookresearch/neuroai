@@ -1720,6 +1720,28 @@ def test_ieeg(test_data_path: Path) -> None:
     assert preproc_data.shape == (24, sfreq * duration)
 
 
+def test_ieeg_default_picks_dbs(tmp_path: Path) -> None:
+    info = mne.create_info(["L1-L2", "R1-R2", "ACC"], 100.0, ["dbs", "dbs", "misc"])
+    fif = tmp_path / "dbs_raw.fif"
+    mne.io.RawArray(np.zeros((3, 500)), info).save(fif)
+    event = dict(
+        type="Ieeg", start=0.0, duration=5.0, timeline="t", filepath=str(fif), subject="s"
+    )
+    data = ns.extractors.IeegExtractor(frequency=100.0, baseline=None)(event, 0.0, 5.0)
+    assert data.shape == (2, 500), "DBS-lead LFP must be picked by default"
+
+
+def test_ecg_from_ieeg_event(tmp_path: Path) -> None:
+    info = mne.create_info(["A1", "A2", "EKG"], 100.0, ["seeg", "seeg", "ecg"])
+    fif = tmp_path / "ieeg_raw.fif"
+    mne.io.RawArray(np.zeros((3, 500)), info).save(fif)
+    event = dict(
+        type="Ieeg", start=0.0, duration=5.0, timeline="t", filepath=str(fif), subject="s"
+    )
+    ecg = ns.extractors.EcgExtractor(event_types="Ieeg", frequency=100.0, baseline=None)
+    assert ecg(event, 0.0, 5.0).shape == (1, 500), "ECG lead of an iEEG recording"
+
+
 def test_bipolar_ieeg(tmp_path: Path) -> None:
     expected = "Bipolar reference can only be applied on seeg signals"
     with pytest.raises(ValueError, match=expected):

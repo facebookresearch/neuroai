@@ -98,6 +98,8 @@ class Experiment(BaseExperiment):
     validate_before_training: bool = True
     test_full_metrics: list[BaseMetric] = []
     test_full_retrieval_metrics: list[BaseMetric] = []
+    retrieval_item: tp.Literal["trigger", "window"] = "trigger"
+    retrieval_window_decimals: int = 0
     # When True, raw per-window test predictions/targets are folded into the
     # cached ``run`` result (see ``WindowPredictionCollector``).
     save_test_predictions: bool = False
@@ -319,6 +321,8 @@ class Experiment(BaseExperiment):
                 callbacks.append(
                     TestFullRetrievalMetrics(
                         event_type=self.data.target.event_types,  # type: ignore[arg-type]
+                        retrieval_item=self.retrieval_item,
+                        window_decimals=self.retrieval_window_decimals,
                         retrieval_set_sizes=(None, 250),
                         logger=LOGGER,
                         eval_val=False,
