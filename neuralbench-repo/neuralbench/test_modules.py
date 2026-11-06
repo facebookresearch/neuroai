@@ -166,6 +166,16 @@ class _TokenModel3D(nn.Module):
         return self.lin(x).reshape(x.shape[0], *self.shape)
 
 
+def test_mean_aggregation_passes_pooled_output_through():
+    B, F, E, Fp = 8, 10, 5, 3
+    dummy_batch = {"input": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation="mean").build(
+        nn.Linear(F, E), dummy_batch, Fp
+    )
+    assert wrapped.probe.in_features == E
+    assert wrapped(**dummy_batch).shape == (B, Fp)
+
+
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_attention_probe_is_trainable_on_frozen_backbone(ndim):
     B, F, C, P, E, Fp = 8, 10, 3, 4, 5, 3

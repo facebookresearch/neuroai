@@ -911,6 +911,9 @@ class DownstreamWrapperModel(nn.Module):
             self.aggregation = IndexSelect(dim=1, index=torch.LongTensor([0]))
             return brain_model_output_size[1]
         elif aggregation == "mean":
+            if len(brain_model_output_size) == 1:  # already pooled, e.g. BIOT
+                self.aggregation = nn.Identity()
+                return brain_model_output_size.numel()
             dim: int | tuple[int, ...] = 1
             if len(brain_model_output_size) == 2:  # (n_patches, emb_dim)
                 dim = 1
@@ -918,7 +921,7 @@ class DownstreamWrapperModel(nn.Module):
                 dim = (1, 2)
             else:
                 raise ValueError(
-                    f"aggregation='mean' requires model output of 3D or 4D "
+                    f"aggregation='mean' requires model output of 2D, 3D or 4D "
                     f"(got brain_model_output_size={brain_model_output_size})"
                 )
             self.aggregation = Mean(dim=dim)

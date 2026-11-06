@@ -14,6 +14,7 @@ This module builds the module-level registries (``TASKS``, ``ALL_MODELS``,
 import functools
 import importlib
 import importlib.metadata
+import importlib.resources
 import json
 import logging
 import typing as tp
@@ -42,16 +43,22 @@ _SafeIgnoreLoader.add_multi_constructor(
 
 
 def _make_include_loader(base_dir: Path, parent: type = yaml.Loader) -> type:
-    """Create a YAML loader subclass that resolves ``!include`` relative to *base_dir*."""
+    """Create a YAML loader subclass that resolves ``!include`` relative to *base_dir*.
+
+    A ``package:path`` include resolves within that installed package instead.
+    """
 
     class IncludeLoader(parent):  # type: ignore[valid-type]
         pass
 
     def _include_constructor(loader: yaml.Loader, node: yaml.ScalarNode) -> tp.Any:
-        rel_path = loader.construct_scalar(node)
-        full_path = base_dir / rel_path
-        with open(full_path) as f:
-            if full_path.suffix == ".json":
+        include = loader.construct_scalar(node)
+        package, sep, rel_path = include.partition(":")
+        full_path = (
+            importlib.resources.files(package) / rel_path if sep else base_dir / include
+        )
+        with full_path.open() as f:
+            if full_path.name.endswith(".json"):
                 return json.load(f)
             return yaml.load(f, Loader=IncludeLoader)
 
