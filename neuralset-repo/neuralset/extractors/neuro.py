@@ -191,13 +191,13 @@ class MneRaw(BaseExtractor):
     The steps of preprocessing, if specified, are ordered as follows:
     1. Channel selection
     2. Drop bad channels
-    3. Bipolar referencing
-    4. Notch filtering
-    5. Band-pass filtering
-    6. Hilbert transform
-    7. Resampling
-    8. Scaling
-    9. Applying projectors
+    3. Applying projectors
+    4. Bipolar referencing
+    5. Notch filtering
+    6. Band-pass filtering
+    7. Hilbert transform
+    8. Resampling
+    9. Scaling
     10. Baseline correction (applied on segments)
     11. Clamp (applied on segments)
 
@@ -219,7 +219,9 @@ class MneRaw(BaseExtractor):
     offset : float, default=0.0
         Time offset (in seconds) to apply to the event (typically for aligning with the response)
     apply_proj : bool, default=False
-        Whether to apply projectors stored in the MNE raw object.
+        Whether to apply projectors stored in the MNE raw object. They are defined on the
+        sensor signals, so they are applied right after channel selection, before any
+        referencing, filtering or scaling.
     filter : tuple of (float or None, float or None), optional
         Band-pass filter limits as ``(l_freq, h_freq)``. If None, no band-pass
         filtering is applied.
@@ -374,6 +376,10 @@ class MneRaw(BaseExtractor):
             raw.load_data()
             raw = raw.drop_channels(raw.info["bads"])
 
+        if self.apply_proj:
+            raw.load_data()
+            raw.apply_proj()
+
         if self.bipolar_ref is not None:
             raw.load_data()
             anodes, cathodes = self.bipolar_ref
@@ -399,9 +405,6 @@ class MneRaw(BaseExtractor):
             raw.load_data()
             scaler = getattr(sklearn.preprocessing, self.scaler)()
             raw._data = scaler.fit_transform(raw._data.T).T
-
-        if self.apply_proj:
-            raw.apply_proj()
 
         if self.fill_non_finite is not None:
             raw.load_data()
