@@ -22,7 +22,7 @@ dependencies = [
   "neuralfetch[quickstart]~=0.4.0",
   "neuralset~=0.4.0",
   "neuraltrain~=0.4.0",
-  "exca",
+  "exca>=0.6.0,<=0.6.2",
   "lightning>=2.0.8",
   "peft>=0.13",
   # peft imports EncoderDecoderCache (transformers>=4.43) but declares no floor
