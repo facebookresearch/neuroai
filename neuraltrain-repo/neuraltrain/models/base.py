@@ -365,8 +365,12 @@ def _register_braindecode_models() -> None:
 
     Called at import time only when braindecode is installed.
     """
-    import braindecode.models
-    from braindecode.models import __all__ as bd_models
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "Montage name 'standard_1020' is deprecated", FutureWarning
+        )
+        import braindecode.models
+        from braindecode.models import __all__ as bd_models
 
     for name in bd_models:
         cls: type[BaseBrainDecodeModel] = pydantic.create_model(  # type: ignore[assignment]

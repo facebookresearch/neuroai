@@ -13,10 +13,12 @@ import pytest
 from . import config_manager
 
 
-def test_default_config_includes_cluster() -> None:
-    """The non-interactive default config exposes CLUSTER='auto'."""
-    config = config_manager._default_config()
-    assert config["CLUSTER"] == "auto"
+def test_load_config_without_a_file_fails_when_not_interactive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_manager, "_is_interactive", lambda: False)
+    with pytest.raises(FileNotFoundError, match="NEURALBENCH_CONFIG"):
+        config_manager.load_config(tmp_path / "config.json")
 
 
 def test_load_config_creates_the_configured_dirs(tmp_path: Path) -> None:
@@ -27,6 +29,12 @@ def test_load_config_creates_the_configured_dirs(tmp_path: Path) -> None:
     )
     config_manager.load_config(config_path)
     assert all((tmp_path / name).is_dir() for name in names)
+
+
+def test_make_dirs_returns_only_new_dirs(tmp_path: Path) -> None:
+    (tmp_path / "save").mkdir()
+    config = {"SAVE_DIR": str(tmp_path / "save"), "DATA_DIR": str(tmp_path / "data")}
+    assert config_manager._make_dirs(config) == [tmp_path / "data"]
 
 
 def test_load_config_warns_rather_than_fails_on_an_uncreatable_dir(
