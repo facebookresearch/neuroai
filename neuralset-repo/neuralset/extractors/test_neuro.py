@@ -907,6 +907,21 @@ def test_epoch_correct(apply_proj: bool) -> None:
     np.testing.assert_almost_equal(meg / data[:, :, :-1], np.ones(meg.shape), decimal=3)
 
 
+def test_proj_before_scaling() -> None:
+    names = ["MEG 0111", "MEG 0121"]
+    # sensors of different sizes, so that scaling before projecting changes the result
+    data = np.random.default_rng(0).normal(size=(2, 100)) * [[1.0], [5.0]]
+    raw = mne.io.RawArray(data, mne.create_info(names, sfreq=100.0, ch_types="mag"))
+    proj = dict(nrow=1, ncol=2, row_names=None, col_names=names, data=np.ones((1, 2)))
+    raw.add_proj(mne.Projection(data=proj))  # removes the signal common to both sensors
+    projected = raw.copy().apply_proj().get_data()
+    expected = sklearn.preprocessing.StandardScaler().fit_transform(projected.T).T
+    extractor = ns.extractors.MegExtractor(apply_proj=True, scaler="StandardScaler")
+    fake_event = SimpleNamespace(frequency=100.0)
+    out = extractor._preprocess_raw(raw, fake_event).data  # type: ignore[arg-type]
+    np.testing.assert_allclose(out, expected, atol=1e-6)
+
+
 @pytest.mark.parametrize("n_spatial_dims", [3])
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize(
