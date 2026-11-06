@@ -7,7 +7,7 @@
 import concurrent.futures
 import logging
 import multiprocessing as mp
-import os
+import stat
 import subprocess
 import sys
 import typing as tp
@@ -111,11 +111,19 @@ def test_loader_on_external_study(tmp_path: Path) -> None:
 
 def test_study_download(tmp_path: Path) -> None:
     study = FakeData2025(path=tmp_path)
-    study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
+
+    def download() -> None:
+        study.path.chmod(0o700)
+        data = study.path / "data.txt"
+        data.touch()
+        data.chmod(0o600)
+
+    study._download = download  # type: ignore
     study.download()
     assert study.path.exists()
     assert (study.path / "data.txt").is_file()
-    assert oct(os.stat(study.path).st_mode & 0o777) == "0o777"
+    assert stat.S_IMODE(study.path.stat().st_mode) == 0o700
+    assert stat.S_IMODE((study.path / "data.txt").stat().st_mode) == 0o600
 
 
 @pytest.mark.parametrize("with_name", [False, True])
@@ -621,18 +629,3 @@ def test_no_full_scan_on_unpickle(tmp_path: Path) -> None:
         f"Unpickling triggered {len(full_scans)} full package scan(s); "
         f"__new__ should skip _resolve_study when name is missing"
     )
-
-
-@pytest.mark.parametrize("with_files", [False, True])
-def test_set_dir_permissions(tmp_path: Path, with_files: bool) -> None:
-    subdir = tmp_path / "sub"
-    subdir.mkdir()
-    if with_files:
-        (subdir / "file.txt").write_text("hello")
-        (subdir / "nested").mkdir()
-        (subdir / "nested" / "deep.txt").write_text("world")
-    base._set_dir_permissions(subdir)
-    assert oct(os.stat(subdir).st_mode & 0o777) == "0o777"
-    if with_files:
-        assert oct(os.stat(subdir / "file.txt").st_mode & 0o777) == "0o777"
-        assert oct(os.stat(subdir / "nested" / "deep.txt").st_mode & 0o777) == "0o777"

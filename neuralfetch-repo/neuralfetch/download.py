@@ -461,8 +461,7 @@ class BaseDownload(_Module):
 
         self._download(overwrite=overwrite)
         self.get_success_file().write_text("success")
-        print("Done! Consider running giving read/write permissions to everyone:")
-        print(f"chmod -R 777 {self._dl_dir}")  # we should do this on FAIR cluster
+        print("Done!")
 
     @abstractmethod
     def _download(self, overwrite: bool = False) -> None:
