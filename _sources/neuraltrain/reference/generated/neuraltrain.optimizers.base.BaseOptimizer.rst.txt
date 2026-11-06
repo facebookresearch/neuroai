@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.optimizers.base.BaseOptimizer
+=========================================
+
+.. currentmodule:: neuraltrain.optimizers.base
+
+.. autopydantic_model:: BaseOptimizer
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

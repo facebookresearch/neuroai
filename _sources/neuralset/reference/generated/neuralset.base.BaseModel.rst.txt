@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.base.BaseModel
+========================
+
+.. currentmodule:: neuralset.base
+
+.. autopydantic_model:: BaseModel
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
