@@ -54,3 +54,21 @@ def test_cluster_resolves_to_configured_value(
     """A non-null CLUSTER value is surfaced verbatim."""
     patch_config(CLUSTER="slurm")
     assert config_manager.CLUSTER == "slurm"
+
+
+@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+def test_slurm_account_and_qos_resolve_to_configured_value(
+    patch_config: Callable[..., None], key: str
+) -> None:
+    patch_config(**{key: "my_value"})
+    assert getattr(config_manager, key) == "my_value"
+
+
+@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+@pytest.mark.parametrize("value", ["", None])
+def test_slurm_account_and_qos_unset_resolve_to_none(
+    patch_config: Callable[..., None], key: str, value: str | None
+) -> None:
+    """Empty or null values leave SLURM's per-user default instead of ``--qos=``."""
+    patch_config(**{key: value})
+    assert getattr(config_manager, key) is None
