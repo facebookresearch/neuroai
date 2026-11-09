@@ -69,7 +69,7 @@ downstream_model_wrapper:
       - P8
       - O1
       - O2
-    rename_mapping: !include channel_mappings/bendr.json
+    rename_mapping: !include channel_mappings/standard_1020.json
   # Mean aggregation over all contextualizer tokens (including the CLS/start
   # token at index 0), for uniformity with the other FMs (CBraMod, LaBraM,
   # LUNA, REVE).

@@ -62,7 +62,7 @@ downstream_model_wrapper:
       - P4-O2
       - C3-A2
       - C4-A1
-    rename_mapping: !include channel_mappings/biot.json
+    rename_mapping: !include channel_mappings/standard_1020.json
   # BIOT's encoder already averages all patches internally (.mean(dim=1) in
   # _BIOTEncoder), so its output is (B, emb_dim). No further aggregation needed.
   aggregation: null

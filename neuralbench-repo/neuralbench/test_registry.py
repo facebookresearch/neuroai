@@ -21,6 +21,7 @@ these tests guard the end-to-end wiring:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -39,6 +40,17 @@ from neuralbench.registry import (
     _resolve_dataset_stem,
     _task_aware_baseline,
 )
+
+
+def test_include_resolves_within_a_package(tmp_path: Path) -> None:
+    rel_path = "models/channel_mappings/standard_1020.json"
+    config_path = tmp_path / "model.yaml"
+    config_path.write_text(f"mapping: !include neuralbench:{rel_path}\n")
+    config = registry.load_yaml_config(config_path)
+    assert config is not None
+    assert config["mapping"] == json.loads(
+        (Path(registry.__file__).parent / rel_path).read_text("utf8")
+    )
 
 
 def test_space_is_rejected_on_a_task_without_spaces() -> None:
