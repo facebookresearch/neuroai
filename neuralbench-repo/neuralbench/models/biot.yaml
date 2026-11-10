@@ -27,6 +27,7 @@ downstream_model_wrapper:
     scaler: QuantileAbsScaler
     scaler_quantile: 0.95
     scale_dim: -1
+  preprocess_after_adapter: true  # upstream scales the bipolar derivations
   # Learned 1x1 Conv1d projecting dataset channels to the 18 bipolar
   # derivations BIOT's six-datasets checkpoint expects.  Initialised with
   # the +1/-1 bipolar pattern *added on top of* the default Kaiming-uniform

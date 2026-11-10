@@ -251,6 +251,23 @@ def test_downstream_wrapper_with_preprocessor():
     assert not torch.allclose(out, out_no_preproc), "preprocessor did not alter output"
 
 
+@pytest.mark.parametrize("after", [False, True])
+def test_downstream_wrapper_preprocess_after_adapter(after: bool):
+    B, C_in, T, C_target = 4, 8, 100, 3
+    dummy_batch = {"input": torch.randn(B, C_in, T)}
+    wrapped = DownstreamWrapper(
+        on_the_fly_preprocessor=OnTheFlyPreprocessor(
+            scaler="StandardScaler", scale_dim=-1
+        ),
+        channel_adapter_config=ChannelProjection(n_target_channels=C_target),
+        preprocess_after_adapter=after,
+        aggregation=None,
+        probe_config=None,
+    ).build(nn.Identity(), dummy_batch, T)
+    std = wrapped(**dummy_batch).std(dim=-1)
+    assert torch.allclose(std, torch.ones_like(std)) == after
+
+
 def test_downstream_wrapper_with_channel_merger():
     B, C_in, T, C_virtual = 4, 32, 200, 8
     channel_positions = torch.rand(B, C_in, 3)
