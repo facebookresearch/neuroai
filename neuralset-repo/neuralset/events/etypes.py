@@ -121,7 +121,7 @@ class Event(_Module):
         kwargs: dict[str, tp.Any] = {}
         extra = {}
         for k, v in row.items():
-            if pd.isna(v):
+            if pd.api.types.is_scalar(v) and pd.isna(v):
                 continue
             if k in fs:
                 kwargs[k] = v
