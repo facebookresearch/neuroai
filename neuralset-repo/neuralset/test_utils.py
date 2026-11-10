@@ -176,3 +176,23 @@ def test_train_test_split_by_group():
     assert X_train.shape[0] == y_train.shape[0]
     assert X_test.shape[0] == y_test.shape[0]
     assert X_train.shape[0] + X_test.shape[0] == n_examples
+
+
+@pytest.mark.parametrize("mode", ["bidirectional", "causal"])
+@pytest.mark.parametrize(
+    "n_samples,context,stride",
+    [(5, 8, 4), (8, 8, 4), (20, 8, 8), (21, 8, 3), (50, 10, 1)],
+)
+def test_strided_windows(n_samples: int, context: int, stride: int, mode: tp.Any) -> None:
+    windows = utils.strided_windows(n_samples, context, stride, mode=mode)
+    kept = [
+        i for _, keep_start, keep_stop in windows for i in range(keep_start, keep_stop)
+    ]
+    assert kept == list(range(n_samples))
+    for start, keep_start, keep_stop in windows:
+        assert start <= keep_start < keep_stop <= min(start + context, n_samples)
+        if mode == "causal":  # up to the end of the window
+            assert keep_stop == min(start + context, n_samples)
+    assert min(windows[-1][0] + context, n_samples) == n_samples
+    with pytest.raises(ValueError):
+        utils.strided_windows(n_samples, context, context + 1)

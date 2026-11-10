@@ -70,6 +70,19 @@ def test_mel_spectrum_no_freq(tmp_path: Path) -> None:
     assert out.shape == (40, 500)
 
 
+def test_context_windows(tmp_path: Path) -> None:
+    fp = tmp_path / "noise.wav"
+    create_wav(fp, fs=16_000, duration=10)
+    event = etypes.Audio(start=0, timeline="whatever", filepath=fp)
+    full = audio.MelSpectrum()(event, start=0, duration=10)
+    # windows start on the 128-sample hop grid, with margins (1.5 s) wider than the
+    # STFT window; the odd number of hops in the stride (125) puts the splits
+    # between windows half-way between frames, where the rounding matters
+    feat = audio.MelSpectrum(context_duration=4.0, context_overlap=0.75)
+    windowed = feat(event, start=0, duration=10)
+    np.testing.assert_allclose(windowed, full, atol=1e-5)
+
+
 @pytest.mark.skipif(
     "IN_GITHUB_ACTION" in os.environ, reason="Models are too big for CI cache"
 )
