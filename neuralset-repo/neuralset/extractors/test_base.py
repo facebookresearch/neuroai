@@ -168,6 +168,11 @@ def test_fill_slice(start: float, duration: float, expected: list[float]) -> Non
     np.testing.assert_array_almost_equal(out, expected)
 
 
+def test_event_types_sorted() -> None:
+    feat = Time(event_types=("Text", "Image", "Text"))
+    assert feat.event_types == ("Image", "Text")
+
+
 def test_fill_small_event() -> None:
     feat = Time(frequency=6)
     event = etypes.Image(start=0.5, duration=0.01, timeline="stuff", filepath=__file__)
