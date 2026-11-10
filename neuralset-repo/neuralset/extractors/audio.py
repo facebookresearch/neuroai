@@ -100,9 +100,14 @@ class BaseAudio(BaseExtractor):
                 wav = event.read()
                 sfreq = event.frequency
             elif isinstance(event, etypes.Video):
-                audio = event.read().audio
-                wav = torch.tensor(audio.to_soundarray(), dtype=torch.float32)
-                sfreq = audio.fps
+                clip = event.read()
+                audio = clip.audio
+                if audio is None:  # silent video
+                    sfreq = self._input_frequency
+                    wav = torch.zeros(int(round(clip.duration * sfreq)), 1)
+                else:
+                    wav = torch.tensor(audio.to_soundarray(), dtype=torch.float32)
+                    sfreq = audio.fps
             else:
                 raise ValueError(
                     f"Unsupported event type for Audio extractor: {type(event)}"

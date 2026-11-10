@@ -52,6 +52,15 @@ def test_event_from_dict_with_nan() -> None:
     assert out["category"] == "verb"
 
 
+def test_event_from_dict_with_sequences() -> None:
+    # parquet loads list columns back as ndarray cells
+    row: dict[str, tp.Any] = {"type": "Word", "start": 0, "timeline": "t"}
+    row.update(text="hello", a=[1, 2], b=np.array([0.5, 1.5]))
+    word = ns.events.Event.from_dict(row)
+    assert word.extra["a"] == [1, 2]
+    np.testing.assert_array_equal(word.extra["b"], [0.5, 1.5])
+
+
 def test_sound(tmp_path: Path) -> None:
     fp = tmp_path / "Sub1" / "Sub2" / "Sub3" / "noise.wav"
     fp.parent.mkdir(parents=True)

@@ -30,6 +30,11 @@ from .segments import find_incomplete_segments
 
 logger = logging.getLogger(__name__)
 
+
+def _hashable(value: tp.Any) -> tp.Any:
+    return tuple(value) if isinstance(value, (list, np.ndarray)) else value
+
+
 T = tp.TypeVar("T", bound="SegmentsMixin")
 
 
@@ -103,7 +108,13 @@ class SegmentsMixin:
         """All of the events spanned by all the segments"""
         # TODO FIXME why are segments events with both an index AND and Index column
         # TODO discuss should the trigger event be in events? Probably not
-        return pd.concat([seg.events for seg in self.segments]).drop_duplicates()
+        events = pd.concat([seg.events for seg in self.segments])
+        # same as drop_duplicates, which fails on unhashable (e.g. list) cells;
+        # indices alone can collide across event stores
+        rows = events.apply(
+            lambda col: col.map(_hashable) if col.dtype == object else col
+        )
+        return events[~rows.duplicated().to_numpy()]
 
     def __len__(self) -> int:
         return len(self.segments)
