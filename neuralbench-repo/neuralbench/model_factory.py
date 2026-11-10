@@ -93,9 +93,9 @@ def build_dummy_batch(
         if "subject_ids" not in dummy_batch:
             dummy_batch["subject_ids"] = batch.data["subject_id"][:1].to("cpu")
 
-    # The preprocessor runs first in ``DownstreamWrapperModel.forward`` and may
-    # resize the input (``min_temporal_samples``), so both the lazy-layer init
-    # and the wrapper's output-shape probe have to see its output.
+    # The preprocessor may resize the input (``min_temporal_samples``), so both the
+    # lazy-layer init and the wrapper's output-shape probe have to see its output;
+    # shapes don't depend on ``preprocess_after_adapter``, so it runs first here.
     if (
         downstream_model_wrapper is not None
         and downstream_model_wrapper.on_the_fly_preprocessor is not None

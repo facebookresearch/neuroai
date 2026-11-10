@@ -30,8 +30,7 @@ class OnTheFlyPreprocessor(BaseModelConfig):
         channel is divided by the ``scaler_quantile``-th percentile of its absolute value;
         this is the robust per-channel scaling used by the BIOT model (Yang et al., NeurIPS 2023).
         If "MinMaxScaler", each channel is linearly rescaled to [-1, 1] across the time
-        dimension (dim=-1); this is the per-window normalization used by BENDR
-        (Kostas et al., Front. Hum. Neurosci. 2021).
+        dimension (dim=-1).
     scale_dim :
         Dimensions along which to apply scaling (see `scaler`). If None, scale along all
         dimensions.

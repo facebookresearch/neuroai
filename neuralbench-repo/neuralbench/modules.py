@@ -503,6 +503,11 @@ class DownstreamWrapper(pydantic.BaseModel):
         channels to a fixed number of target channels.  Supply a ``ChannelMerger``
         for position-based spatial attention, or a ``ChannelProjection`` for a
         simple Conv1d(kernel_size=1) linear mixing.  Default is None.
+    preprocess_after_adapter : bool, optional
+        If True, ``on_the_fly_preprocessor`` runs on the channel adapter's output
+        instead of its input, e.g. when the model expects scaling of the derived
+        channels (BIOT's bipolar montage).  Requires both to be set.
+        Default is False.
     model_output_key : str | int | None, optional
         Key or index to extract from model output dictionary. If None, assumes the model returns a
         tensor directly. Default is None.
@@ -567,6 +572,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     on_the_fly_preprocessor: OnTheFlyPreprocessor | None = None
     channel_adapter_config: ChannelMerger | ChannelProjection | None = None
+    preprocess_after_adapter: bool = False
     model_output_key: str | int | None = None
     layers_to_freeze: list[str] | None = None
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
@@ -594,6 +600,15 @@ class DownstreamWrapper(pydantic.BaseModel):
         if self.layers_to_freeze is not None and self.layers_to_unfreeze is not None:
             raise ValueError(
                 "Only one of layers_to_freeze and layers_to_unfreeze can be specified at once."
+            )
+
+        if self.preprocess_after_adapter and (
+            self.on_the_fly_preprocessor is None or self.channel_adapter_config is None
+        ):
+            raise ValueError(
+                "preprocess_after_adapter=True requires both on_the_fly_preprocessor "
+                f"and channel_adapter_config; got {self.on_the_fly_preprocessor!r} and "
+                f"{self.channel_adapter_config!r}."
             )
 
         if self.probe_layer is not None and self.model_output_key is not None:
@@ -688,6 +703,7 @@ class DownstreamWrapper(pydantic.BaseModel):
             preprocessor=preprocessor,
             channel_adapter=channel_adapter,
             adapter_needs_positions=adapter_needs_positions,
+            preprocess_after_adapter=self.preprocess_after_adapter,
             model_output_key=self.model_output_key,
             wrapper_n_outputs=n_outputs,
             layers_to_freeze=self.layers_to_freeze,
@@ -774,7 +790,8 @@ class DownstreamWrapperModel(nn.Module):
     """Wrapper for downstream evaluation of pretrained models.
 
     Handles the full pipeline: optional preprocessing -> channel adapter ->
-    model -> output key selection -> aggregation -> probe.
+    model -> output key selection -> aggregation -> probe (preprocessing
+    follows the adapter when ``preprocess_after_adapter``).
     """
 
     def reset_state(self) -> None:
@@ -791,6 +808,7 @@ class DownstreamWrapperModel(nn.Module):
         preprocessor: nn.Module | None = None,
         channel_adapter: nn.Module | None = None,
         adapter_needs_positions: bool = False,
+        preprocess_after_adapter: bool = False,
         layers_to_freeze: list[str] | None = None,
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
@@ -806,6 +824,7 @@ class DownstreamWrapperModel(nn.Module):
         self.preprocessor = preprocessor
         self.channel_adapter = channel_adapter
         self._adapter_needs_positions = adapter_needs_positions
+        self._preprocess_after_adapter = preprocess_after_adapter
         self.wrapped_model = model
         self.model_output_key = model_output_key
 
@@ -956,33 +975,43 @@ class DownstreamWrapperModel(nn.Module):
                 output_size=n_outputs,
             )
 
-    def forward(self, *args, return_embedding: bool = False, **kwargs) -> torch.Tensor:
-        if self.preprocessor is not None:
-            if args:
-                x, *rest_args = args
-                x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
-                args = (x, *rest_args)
-            else:
-                input_key = next(iter(kwargs))
-                x = kwargs[input_key]
-                x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
-                kwargs = {**kwargs, input_key: x}
-            if ch_pos is not None and "channel_positions" in kwargs:
-                kwargs["channel_positions"] = ch_pos
-
-        if self.channel_adapter is not None:
+    def _preprocess(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
+        assert self.preprocessor is not None
+        if args:
+            x, *rest_args = args
+            x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
+            args = (x, *rest_args)
+        else:
             input_key = next(iter(kwargs))
             x = kwargs[input_key]
-            if self._adapter_needs_positions:
-                subject_ids = kwargs.get(
-                    "subject_ids",
-                    torch.zeros(x.shape[0], dtype=torch.long, device=x.device),
-                )
-                ch_pos = kwargs.get("channel_positions")
-                x = self.channel_adapter(x, subject_ids, ch_pos)
-            else:
-                x = self.channel_adapter(x)
+            x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
             kwargs = {**kwargs, input_key: x}
+        if ch_pos is not None and "channel_positions" in kwargs:
+            kwargs["channel_positions"] = ch_pos
+        return args, kwargs
+
+    def _adapt_channels(self, kwargs: dict) -> dict:
+        assert self.channel_adapter is not None
+        input_key = next(iter(kwargs))
+        x = kwargs[input_key]
+        if self._adapter_needs_positions:
+            subject_ids = kwargs.get(
+                "subject_ids",
+                torch.zeros(x.shape[0], dtype=torch.long, device=x.device),
+            )
+            ch_pos = kwargs.get("channel_positions")
+            x = self.channel_adapter(x, subject_ids, ch_pos)
+        else:
+            x = self.channel_adapter(x)
+        return {**kwargs, input_key: x}
+
+    def forward(self, *args, return_embedding: bool = False, **kwargs) -> torch.Tensor:
+        if self.preprocessor is not None and not self._preprocess_after_adapter:
+            args, kwargs = self._preprocess(args, kwargs)
+        if self.channel_adapter is not None:
+            kwargs = self._adapt_channels(kwargs)
+        if self.preprocessor is not None and self._preprocess_after_adapter:
+            args, kwargs = self._preprocess(args, kwargs)
 
         if not self._inner_accepts_var_kwargs:
             kwargs = {k: v for k, v in kwargs.items() if k in self._inner_param_names}
