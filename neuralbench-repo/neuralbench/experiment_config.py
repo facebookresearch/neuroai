@@ -74,13 +74,21 @@ def _apply_debug_overlay(config: ConfDict) -> None:
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
     if "data" in config:
-        config["data.batch_size"] = 8
+        # Preserve smaller model-specific batches (for example a large LLM).
+        config["data.batch_size"] = min(config["data.batch_size"], 8)
         config["trainer_config"] = {
             "strategy": "auto",
             "n_epochs": 2,
             "limit_train_batches": 5,
             "limit_val_batches": 5,
         }
+        # The 3B Llama smoke otherwise tests thousands of windows even in
+        # debug mode. Keep full test evaluation for every production run.
+        if config.get("brain_model_config", {}).get("name") in {
+            "Llama32EEG",
+            "Llama32EEGGenerate",
+        }:
+            config["trainer_config.limit_test_batches"] = 5
         config["lightning_optimizer_config.scheduler"] = None
         config["data.num_workers"] = 0
         config["data.study.source.query"] = DEBUG_STUDY_QUERIES.get(

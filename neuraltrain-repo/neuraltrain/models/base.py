@@ -54,6 +54,10 @@ class BrainModelBuildContext:
     mesh : str or None
         Surface-mesh id for surface-sampled data (e.g. ``"FS6"``), consumed by
         surface models such as :class:`SiTConfig`.  ``None`` otherwise.
+    task_name : str or None
+        Benchmark task used by models with task-specific instructions.
+    target_labels : list of str or None
+        Ordered class names from a prepared label extractor, when available.
 
     Notes
     -----
@@ -68,6 +72,8 @@ class BrainModelBuildContext:
     frequency: float | None = None
     ch_names: list[str] | None = None
     mesh: str | None = None
+    task_name: str | None = None
+    target_labels: list[str] | None = None
 
     def __post_init__(self) -> None:
         # Channel names, when present, must line up with the spatial axis -- a

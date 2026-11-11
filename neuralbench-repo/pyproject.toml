@@ -42,6 +42,7 @@ dependencies = [
   Tracker = "https://github.com/facebookresearch/neuroai/issues"
 
 [project.optional-dependencies]
+    llama = ["accelerate>=0.26"]
     wandb = [
         "wandb>=0.15.11",
     ]

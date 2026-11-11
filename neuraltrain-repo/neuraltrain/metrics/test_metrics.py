@@ -234,6 +234,15 @@ def test_rank_half_bin():
     assert out == 0.5
 
 
+def test_rank_accepts_mixed_precision_retrieval_vectors():
+    metric = metrics.Rank("median")
+    predictions = torch.eye(4).to(torch.bfloat16)
+    targets = torch.eye(4, dtype=torch.float32)
+    result = metric(predictions, targets)
+    assert torch.isfinite(result)
+    assert result == 0
+
+
 @pytest.mark.parametrize("reduction", ["mean", "median"])
 def test_inverse_normalized_rank(reduction):
     F = 8
