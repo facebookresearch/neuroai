@@ -8,6 +8,7 @@
 # ruff: noqa: F401
 
 # Import modules to ensure configs are registered with DiscriminatedModel
+from . import axon as _axon  # noqa: F401
 from . import bendr as _bendr  # noqa: F401
 from . import common as _common  # noqa: F401
 from . import conformer as _conformer  # noqa: F401

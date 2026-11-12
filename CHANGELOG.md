@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuraltrain` / `neuralbench`: added the AXON EEG foundation model (`NtAxon`, `-m axon`, checkpoint `MannasAI/axon-eeg`; requires braindecode ≥ 2.0).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).
