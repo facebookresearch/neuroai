@@ -5,8 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 """Publish a Sphinx HTML build into the versioned gh-pages tree: ``dev/`` (main),
-``X.Y/`` (latest vX.Y.* tag), ``stable/`` (copy of the highest X.Y), ``versions.json``
-and redirects from the unversioned root URLs to ``stable/``.
+``X.Y/`` (latest vX.Y.* tag), ``stable/`` (copy of the highest X.Y), ``versions.json``,
+redirects from the unversioned root URLs to ``stable/`` and a ``404.html`` retrying
+missing URLs in ``stable/`` then ``dev/``.
 """
 
 import argparse
@@ -16,6 +17,7 @@ import shutil
 from pathlib import Path
 
 _SWITCHER = Path(__file__).with_name("version_switcher.js")
+_NOT_FOUND = Path(__file__).with_name("404.html")
 _KEEP = {".git", ".nojekyll", "CNAME", "robots.txt", "404.html", "versions.json"}
 _BLOB = "https://github.com/facebookresearch/neuroai/blob/"
 _REDIRECT = """<!DOCTYPE html>
@@ -96,6 +98,7 @@ def publish(site: Path, build: Path, ref: str) -> None:
         json.dumps({"stable": stable, "versions": versions, "tags": tags}, indent=2)
     )
     shutil.copy(_SWITCHER, site / _SWITCHER.name)
+    shutil.copy(_NOT_FOUND, site / _NOT_FOUND.name)
     (site / ".nojekyll").touch()
     if version == stable:
         _copy_build(build, site / "stable", "stable", ref)

@@ -49,6 +49,7 @@ def test_publish(tmp_path: Path) -> None:
     assert (site / "objects.inv").read_text() == "v0.4.1"
     assert (site / "dev/index.html").exists(), "root cleanup deleted a version"
     assert (site / "CNAME").exists(), "root cleanup deleted CNAME"
+    assert (site / "404.html").exists(), "root cleanup deleted 404.html"
     for ref, error in [
         ("v0.4.0", "older than the published v0.4.1"),
         ("v0.5.0rc1", "vX.Y.Z"),
