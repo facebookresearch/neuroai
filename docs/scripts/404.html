@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Page not found</title>
+<script>
+// published by publish_docs.py: retry a missing URL in stable/ then dev/, else a version index
+(async () => {
+  const exists = (url) => fetch(url, { method: "HEAD" }).then((r) => r.ok, () => false);
+  const parts = location.pathname.split("/");
+  for (let i = 1; i < parts.length; i++) {
+    const base = parts.slice(0, i).join("/") + "/";
+    const index = await fetch(base + "versions.json").then((r) => (r.ok ? r.json() : null), () => null);
+    if (index === null) continue;
+    const path = parts.slice(i).join("/");
+    const candidates = ["stable", ...index.versions].includes(parts[i])
+      ? [`${base}${parts[i]}/`]
+      : [`${base}stable/${path}`, `${base}dev/${path}`, `${base}stable/`, `${base}dev/`];
+    for (const url of candidates) {
+      if (await exists(url)) return location.replace(url + location.search + location.hash);
+    }
+    return;
+  }
+})();
+</script>
+</head><body><p>Page not found.</p></body></html>
