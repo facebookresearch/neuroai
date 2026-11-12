@@ -13,7 +13,7 @@
     const index = new URL(`${version}/`, root);
     const target = new URL(page, index);
     const found = await fetch(target, { method: "HEAD" }).then((r) => r.ok, () => false);
-    return found ? target.href + location.hash : index.href;
+    return found ? target.href + location.search + location.hash : index.href;
   };
 
   fetch(new URL("versions.json", root))

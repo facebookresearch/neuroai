@@ -37,7 +37,6 @@ project = "neuroai"
 copyright = "Meta Platforms, Inc. and affiliates"
 author = "FAIR"
 release = importlib.metadata.version("neuralset")
-_git_ref = os.environ.get("DOCS_GIT_REF", "main")  # set by .github/workflows/docs.yml
 
 # -- General configuration ---------------------------------------------------
 
@@ -154,7 +153,7 @@ html_theme_options = {
         "color-announcement-text": "#FFFFFF",
     },
     "source_repository": "https://github.com/facebookresearch/neuroai/",
-    "source_branch": _git_ref,
+    "source_branch": "main",
     "source_directory": "docs/",
     "footer_icons": [
         {
@@ -359,7 +358,7 @@ def linkcode_resolve(domain, info):
         filepath += f"/{filename}"
     top = info["module"].split(".", 1)[0]
     repo = _PACKAGE_TO_REPO.get(top, "neuralset-repo")
-    return f"https://github.com/facebookresearch/neuroai/blob/{_git_ref}/{repo}/{filepath}.py"
+    return f"https://github.com/facebookresearch/neuroai/blob/main/{repo}/{filepath}.py"
 
 
 # -- Sphinx-Gallery configuration --------------------------------------------
