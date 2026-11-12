@@ -1,0 +1,76 @@
+name: Docs
+# published layout: see docs/scripts/publish_docs.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  pull_request:
+    paths: ['docs/**', '.github/workflows/docs.yml']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or release tag to build and publish (e.g. v0.4.0)
+        required: true
+        default: main
+
+jobs:
+  build-docs:
+    name: Build documentation
+    # Require 8-core machines (Github Actions Larger Runners) to have more than 14GB disk space
+    runs-on: 8-core-ubuntu  # ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DOCS_GIT_REF: ${{ github.event_name != 'pull_request' && (inputs.ref || github.ref_name) || 'main' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      # publishing scripts from the workflow commit: an old tag may predate them
+      - uses: actions/checkout@v4
+        with:
+          path: publish-tools
+          sparse-checkout: docs/scripts
+      - uses: ./.github/actions/setup-python-env
+
+      - name: Install Sphinx extras
+        run: |
+          source .venv/bin/activate
+          pip install sphinx furo myst_parser sphinx_rtd_theme sphinx-copybutton sphinx-design sphinx-gallery
+
+      - name: Sphinx build
+        run: |
+          source .venv/bin/activate
+          make -C docs html
+
+      - name: Test publishing script
+        run: |
+          source .venv/bin/activate
+          pytest publish-tools/docs/scripts/test_publish_docs.py
+
+      - name: Publish to gh-pages
+        if: github.event_name != 'pull_request'
+        run: |
+          source .venv/bin/activate
+          export GIT_AUTHOR_NAME=github-actions[bot] GIT_AUTHOR_EMAIL=41898282+github-actions[bot]@users.noreply.github.com
+          export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
+          # single orphan commit keeps the branch small; the lease retries concurrent deploys
+          for attempt in 1 2 3; do
+            git fetch --depth 1 origin gh-pages
+            lease=$(git rev-parse FETCH_HEAD)
+            git worktree add --force site "$lease"
+            python publish-tools/docs/scripts/publish_docs.py site docs/_build/html "$DOCS_GIT_REF"
+            git -C site add --all
+            commit=$(git -C site commit-tree "$(git -C site write-tree)" -m "Publish docs for $DOCS_GIT_REF ($(git rev-parse --short HEAD))")
+            git push --force-with-lease="gh-pages:$lease" origin "$commit:refs/heads/gh-pages" && exit 0
+            git worktree remove --force site
+          done
+          exit 1
