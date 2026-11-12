@@ -49,7 +49,8 @@ class BaseExtractor(base.NamedModel, base._Module):
     event_types : str or tuple of str
         Event type name(s) this extractor operates on (e.g. ``"Audio"`` or
         ``("Image", "Text")``).  Must be set as a class-level default in
-        every concrete subclass.
+        every concrete subclass.  Tuples are sorted and deduplicated so that
+        their order does not change the cache uid.
     aggregation : str
         Strategy for combining values when multiple matching events fall
         inside the same segment:
@@ -141,6 +142,14 @@ class BaseExtractor(base.NamedModel, base._Module):
         type_helper = EventTypesHelper(event_types)
         for etype in type_helper.classes:
             cls.requirements = cls.requirements + etype.requirements
+
+    @pydantic.field_validator("event_types", mode="after")
+    @classmethod
+    def _sort_event_types(cls, event_types: tp.Any) -> tp.Any:
+        # a set would not do: exca dumps it as a list in (randomized) hash order
+        if isinstance(event_types, tuple):
+            return tuple(sorted(set(event_types)))
+        return event_types
 
     def _is_static(self) -> bool:
         # no time axis in the data; may depend on the config (override)
