@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.config\_manager.get\_config
+=======================================
+
+.. currentmodule:: neuralbench.config_manager
+
+.. autofunction:: get_config
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.linear.Linear
+================================
+
+.. currentmodule:: neuraltrain.models.linear
+
+.. autopydantic_model:: Linear
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

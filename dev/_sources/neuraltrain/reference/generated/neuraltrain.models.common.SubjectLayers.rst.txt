@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.common.SubjectLayers
+=======================================
+
+.. currentmodule:: neuraltrain.models.common
+
+.. autopydantic_model:: SubjectLayers
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

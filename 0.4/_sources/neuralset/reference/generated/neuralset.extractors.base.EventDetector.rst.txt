@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.base.EventDetector
+=======================================
+
+.. currentmodule:: neuralset.extractors.base
+
+.. autopydantic_model:: EventDetector
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

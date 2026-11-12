@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.utils.BaseExperiment
+================================
+
+.. currentmodule:: neuraltrain.utils
+
+.. autopydantic_model:: BaseExperiment
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

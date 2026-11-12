@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.EyeState
+================================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: EyeState
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

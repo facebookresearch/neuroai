@@ -1,0 +1,20 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`« Back to API reference <../reference>`
+
+neuralset.events.study.SpecialLoader
+====================================
+
+.. currentmodule:: neuralset.events.study
+
+.. autoclass:: SpecialLoader
+   :members:
+   :exclude-members: model_post_init, model_fields, model_computed_fields, model_config
+
+
+
+
+
+.. container:: autosummary-back-link
+
+   :doc:`« Back to API reference <../reference>`

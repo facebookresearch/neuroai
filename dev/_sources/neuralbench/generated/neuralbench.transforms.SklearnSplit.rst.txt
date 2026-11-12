@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.transforms.SklearnSplit
+===================================
+
+.. currentmodule:: neuralbench.transforms
+
+.. autopydantic_model:: SklearnSplit
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.text.AddPartOfSpeech
+================================================
+
+.. currentmodule:: neuralset.events.transforms.text
+
+.. autopydantic_model:: AddPartOfSpeech
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

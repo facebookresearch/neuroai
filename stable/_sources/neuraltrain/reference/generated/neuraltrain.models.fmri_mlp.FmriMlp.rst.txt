@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.fmri\_mlp.FmriMlp
+====================================
+
+.. currentmodule:: neuraltrain.models.fmri_mlp
+
+.. autopydantic_model:: FmriMlp
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
