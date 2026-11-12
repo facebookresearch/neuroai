@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import pickle
 import typing as tp
 from pathlib import Path
 
@@ -355,6 +356,19 @@ def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     hf.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(RepositoryNotFoundError):
         hf.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_auto_device_resolved_on_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **kw: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    built_on_cpu_node = hf.HuggingFaceMixin(model_name="gpt2")
+    on_gpu_worker = pickle.loads(pickle.dumps(built_on_cpu_node))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert on_gpu_worker.device == "auto"
+    assert on_gpu_worker._torch_device() == "cuda"
+    assert hf.HuggingFaceMixin(model_name="gpt2", device="cpu")._torch_device() == "cpu"
 
 
 def test_huggingface_config_resolves_class_defaults() -> None:

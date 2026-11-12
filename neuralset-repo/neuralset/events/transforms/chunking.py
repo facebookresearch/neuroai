@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import typing as tp
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -127,8 +128,12 @@ def _build_sections(
 class ChunkEvents(EventsTransform):
     """Chunk long events into shorter events.
 
-    Typical use: keep long recordings under a deep-learning model's memory
-    budget (e.g. Wav2Vec).
+    Typical use: split long recordings at train/val/test boundaries
+    (``event_type_to_split_by``). To keep long Audio or Video events under an
+    extractor's memory budget, use its context windows instead (e.g.
+    ``context_duration`` and ``context_overlap`` of audio extractors), which cache
+    features per whole event and keep context at the window edges: chunking these
+    event types without ``event_type_to_split_by`` emits a ``FutureWarning``.
 
     Parameters
     ----------
@@ -246,6 +251,20 @@ class ChunkEvents(EventsTransform):
                 f"min_duration={self.min_duration} must be <= "
                 f"max_duration/2={self.max_duration / 2} for tiling='equal' "
                 f"so chunks always land in [min_duration, max_duration]"
+            )
+        if self.event_type_to_split_by is None and self.event_type_to_chunk in (
+            "Audio",
+            "Video",
+        ):
+            warnings.warn(
+                f"ChunkEvents should only be used on {self.event_type_to_chunk} "
+                "events to split them at train/test boundaries "
+                "(event_type_to_split_by). To bound the memory of an extractor on "
+                "long events, use its context windows instead (e.g. "
+                "context_duration and context_overlap of audio extractors): whole "
+                "events are embedded in overlapping windows, so their features are "
+                "cached per event and keep context at the window edges.",
+                FutureWarning,
             )
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:

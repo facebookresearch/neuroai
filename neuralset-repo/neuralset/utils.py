@@ -8,6 +8,7 @@ import contextlib
 import dataclasses
 import functools
 import itertools
+import math
 import os
 import re
 import typing as tp
@@ -220,6 +221,51 @@ def approx_match_samples(
             out = tuple(np.array(s.matches) for s in seqs)  # type: ignore
             raise NoApproximateMatch(msg, matches=out)
     return tuple(np.array(s.matches) for s in seqs)  # type: ignore
+
+
+def strided_windows(
+    n_samples: int,
+    context: int,
+    stride: int,
+    mode: tp.Literal["bidirectional", "causal"] = "bidirectional",
+) -> list[tuple[int, int, int]]:
+    """Overlapping windows over ``n_samples`` samples, and the samples each one keeps.
+
+    Windows of ``context`` samples start every ``stride`` samples, and the last
+    one is shifted to end at ``n_samples``, so that it is never shorter than the
+    others. The kept samples of the windows partition ``[0, n_samples)``, and
+    depend on the model reading the windows:
+
+    - ``"bidirectional"``: two overlapping windows split their overlap in its
+      middle, so every kept sample has at least ``(context - stride) // 2``
+      samples of context on each side (fewer at the edges);
+    - ``"causal"``: each window keeps its samples after the end of the previous
+      window, so every kept sample has at least ``context - stride`` samples of
+      past context (fewer at the start).
+
+    Returns
+    -------
+    list of (window_start, keep_start, keep_stop)
+        First sample of each window and the range of samples it keeps, all in
+        absolute indices. A single ``(0, 0, n_samples)`` window if
+        ``n_samples <= context``.
+    """
+    if not 1 <= stride <= context:
+        raise ValueError(f"stride must be in [1, context={context}], got {stride}")
+    if n_samples <= context:
+        return [(0, 0, n_samples)]
+    n_windows = 1 + math.ceil((n_samples - context) / stride)
+    starts = [min(i * stride, n_samples - context) for i in range(n_windows)]
+    if mode == "bidirectional":
+        splits = [
+            (prev + context + start) // 2 for prev, start in zip(starts, starts[1:])
+        ]
+    elif mode == "causal":
+        splits = [prev + context for prev in starts[:-1]]
+    else:
+        raise ValueError(f"mode must be 'bidirectional' or 'causal', got {mode!r}")
+    bounds = [0, *splits, n_samples]
+    return list(zip(starts, bounds[:-1], bounds[1:]))
 
 
 def get_bids_filepath(
