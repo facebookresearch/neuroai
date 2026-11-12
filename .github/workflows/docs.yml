@@ -64,33 +64,42 @@ jobs:
   publish-docs:
     name: Publish documentation
     needs: build-docs
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
+          path: publish-tools
           sparse-checkout: docs/scripts
+          persist-credentials: false
+      # separate full checkout: a worktree of a sparse checkout cannot stage the site
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+          persist-credentials: ${{ github.event_name != 'pull_request' }}
       - uses: actions/download-artifact@v4
         with:
           name: docs-html
           path: html
+      # PRs run everything up to the push, as a publish of main
       - name: Push to gh-pages
         env:
-          REF: ${{ inputs.ref || github.ref_name }}
+          REF: ${{ github.event_name == 'pull_request' && 'main' || inputs.ref || github.ref_name }}
         run: |
           export GIT_AUTHOR_NAME=github-actions[bot] GIT_AUTHOR_EMAIL=41898282+github-actions[bot]@users.noreply.github.com
           export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
           # single orphan commit keeps the branch small; the lease retries concurrent deploys
           for attempt in 1 2 3; do
-            git fetch --depth 1 origin gh-pages
-            lease=$(git rev-parse FETCH_HEAD)
-            git worktree add --force site "$lease"
-            python3 docs/scripts/publish_docs.py site html "$REF"
+            git -C site fetch --depth 1 origin gh-pages
+            lease=$(git -C site rev-parse FETCH_HEAD)
+            git -C site reset --quiet --hard "$lease"
+            git -C site clean --quiet -dfx
+            python3 publish-tools/docs/scripts/publish_docs.py site html "$REF"
             git -C site add --all
             commit=$(git -C site commit-tree "$(git -C site write-tree)" -m "Publish docs for $REF")
-            git push --force-with-lease="gh-pages:$lease" origin "$commit:refs/heads/gh-pages" && exit 0
-            git worktree remove --force site
+            [ "$GITHUB_EVENT_NAME" = pull_request ] && exit 0
+            git -C site push --force-with-lease="gh-pages:$lease" origin "$commit:refs/heads/gh-pages" && exit 0
           done
           exit 1
