@@ -77,6 +77,17 @@ def _fir_n_samples(sfreq: float, l_freq: float | None, h_freq: float | None) -> 
     return len(mne.filter.create_filter(None, sfreq, l_freq, h_freq, verbose=False))
 
 
+def _scaler_header(scaler: tp.Any) -> dict[str, np.ndarray | None]:
+    """Fitted per-channel stats, such that ``x = x_scaled * scale + center``."""
+    if scaler is None:
+        return {"scaler_center": None, "scaler_scale": None}
+    center = scaler.center_ if hasattr(scaler, "center_") else scaler.mean_
+    return {
+        "scaler_center": np.asarray(center, dtype=np.float32),
+        "scaler_scale": np.asarray(scaler.scale_, dtype=np.float32),
+    }
+
+
 @DumpContext.register
 class MneTimedArray(TimedArray):
     """TimedArray subclass for MNE data with convenience accessors for channel info.
@@ -100,11 +111,14 @@ class MneTimedArray(TimedArray):
         if any("," in name for name in raw.ch_names):
             raise ValueError("Channel names must not contain commas")
         ch_locs = np.array([ch["loc"] for ch in raw.info["chs"]])
+        dev_head_t = raw.info["dev_head_t"]
         header: dict[str, tp.Any] = {
             # comma-sep: 0.18ms init vs 0.73ms for JSON list
             "ch_names": ",".join(raw.ch_names),
             "ch_types": ",".join(raw.get_channel_types()),
             "ch_locs": ch_locs,
+            # stored even when None, to tell apart caches written before this key
+            "dev_head_t": None if dev_head_t is None else np.array(dev_head_t["trans"]),
             "highpass": raw.info["highpass"],
             "lowpass": raw.info["lowpass"],
         }
@@ -129,8 +143,9 @@ class MneTimedArray(TimedArray):
     def to_info(self) -> mne.Info:
         """Reconstruct an ``mne.Info`` from the stored header.
 
-        Includes ch_names, ch_types, sfreq, channel locations, highpass/lowpass.
-        Rich fields (bads, projs, filter history, …) are not preserved.
+        Includes ch_names, ch_types, sfreq, channel locations, ``dev_head_t``
+        and highpass/lowpass. Rich fields (bads, projs, filter history, …) are
+        not preserved.
         """
         info = mne.create_info(
             self.ch_names, sfreq=float(self.frequency), ch_types=self.ch_types
@@ -141,6 +156,11 @@ class MneTimedArray(TimedArray):
         with info._unlock():
             info["highpass"] = self.header["highpass"]
             info["lowpass"] = self.header["lowpass"]
+        dev_head_t = self.header.get("dev_head_t")
+        if dev_head_t is not None:
+            info["dev_head_t"] = mne.transforms.Transform(
+                "meg", "head", np.array(dev_head_t, dtype=np.float64)
+            )
         return info
 
     def to_native(self) -> mne.io.RawArray:
@@ -243,7 +263,9 @@ class MneRaw(BaseExtractor):
         Number of CPUs to use for multiprocessing in MNE operations.
     scaler : {"RobustScaler", "StandardScaler"}, optional
         Optional scaling strategy to normalize channel data using scikit-learn
-        scalers.
+        scalers. The fitted stats are cached in the header as ``scaler_center``
+        and ``scaler_scale`` (``x = x_cached * scale + center``; exact only
+        without ``apply_proj``, and before post-load steps like ``scale_factor``).
     store_dtype : {"float32", "float16"}, default="float32"
         Cache dtype. Reads always return float32.
     scale_factor : float, optional
@@ -367,8 +389,9 @@ class MneRaw(BaseExtractor):
                 f"Data for {event!r} was recorded with Elekta MaxShield "
                 "(Internal Active Shielding). These recordings contain "
                 "compensation signals that corrupt brain data unless removed "
-                "by SSS/tSSS (MaxFilter). Set allow_maxshield=True on the "
-                "extractor to proceed anyway."
+                "by SSS/tSSS (MaxFilter). Set apply_sss='maxshield' on "
+                "MegExtractor to remove them, or allow_maxshield=True to proceed "
+                "anyway."
             )
         raw = self._pick_channels(raw, self.picks)
 
@@ -401,6 +424,7 @@ class MneRaw(BaseExtractor):
             raw.load_data()
             raw = raw.resample(float(self.frequency), n_jobs=self.mne_cpus, verbose=False)
 
+        scaler = None
         if self.scaler is not None:
             raw.load_data()
             scaler = getattr(sklearn.preprocessing, self.scaler)()
@@ -421,7 +445,9 @@ class MneRaw(BaseExtractor):
                 )
                 raw._data = np.nan_to_num(raw._data, nan=val, posinf=val, neginf=val)
 
-        return MneTimedArray.from_native(raw)
+        ta = MneTimedArray.from_native(raw)
+        ta.header.update(_scaler_header(scaler))
+        return ta
 
     @infra.apply(
         item_uid=lambda e: e._splittable_event_uid(),
@@ -640,10 +666,89 @@ class MegExtractor(MneRaw):
         resolves ``"meg"`` to the reference channels as well: 300 rather than
         272 on a CTF-275. Those sit away from the head and measure the room,
         so pass ``("mag", "grad")`` to get head sensors only on every system.
+    apply_sss : bool or "maxshield", default=False
+        Detect bad channels and apply Maxwell filtering (SSS) before any other
+        preprocessing, on Elekta/MEGIN recordings only: on all of them (True),
+        or only on those made with Internal Active Shielding (MaxShield), which
+        require it ("maxshield"). Recordings from other systems, or already
+        Maxwell-filtered, are left untouched.
+        Fine-calibration and cross-talk files are taken from the BIDS
+        ``acq-calibration`` / ``acq-crosstalk`` siblings of the raw file when
+        present.
+    compensation_grade : int, optional
+        Gradient compensation grade applied before channel selection, on
+        recordings carrying compensation information (CTF); ignored on other
+        systems. It needs the reference channels, which ``("mag", "grad")``
+        picks then drop.
     """
 
     event_types: tp.Literal["Meg"] = "Meg"
     picks: str | tuple[str, ...] = pydantic.Field(("meg",), min_length=1)
+    apply_sss: bool | tp.Literal["maxshield"] = False
+    compensation_grade: int | None = None
+
+    def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
+        grade = self.compensation_grade
+        # Elekta/KIT report grade 0 without any compensation matrix
+        if grade is not None and raw.info["comps"] and raw.compensation_grade != grade:
+            # lazily, picking out the reference channels would drop the compensation
+            raw.load_data()
+            raw.apply_gradient_compensation(grade, verbose=False)
+        if self._needs_sss(raw):
+            raw = self._maxwell_filter(raw)
+        elif raw.info.get("maxshield", False) and self.allow_maxshield:
+            utils.warn_once(
+                "Processing MaxShield recordings without SSS: their active-shielding "
+                "compensation signals are left in the data. Set apply_sss='maxshield' "
+                "on MegExtractor to remove them."
+            )
+        return super()._preprocess_raw(raw, event)
+
+    def _needs_sss(self, raw: mne.io.Raw) -> bool:
+        info = raw.info
+        if not self.apply_sss:
+            return False
+        # MaxShield recordings are unfiltered by definition (MaxFilter clears the flag)
+        if self.apply_sss == "maxshield":
+            return bool(info.get("maxshield", False))
+        # Elekta/MEGIN Vectorview/TRIUX coils are the 30xx family
+        meg = [
+            ch for ch in info["chs"] if ch["kind"] == mne.io.constants.FIFF.FIFFV_MEG_CH
+        ]
+        if not any(ch["coil_type"] // 1000 == 3 for ch in meg):
+            return False
+        # Skip recordings already Maxwell-filtered (e.g. by MaxFilter at
+        # acquisition), which MNE records in the processing history.
+        if any(p.get("max_info", {}).get("sss_info") for p in info["proc_history"]):
+            return False
+        # Some exports drop the processing history (e.g. LibriBrain), so also
+        # check the data rank: SSS output spans ~80 dimensions out of 306
+        # sensors, while unfiltered data is full rank.
+        picks = mne.pick_types(info, meg=True, exclude="bads")
+        stop = min(raw.n_times, int(10 * info["sfreq"]))
+        if stop <= len(picks):
+            # too few samples to tell a reduced rank from a short chunk
+            return True
+        data = raw.get_data(picks=picks, stop=stop)
+        sv = np.linalg.svd(data - data.mean(1, keepdims=True), compute_uv=False)
+        return int((sv > sv[0] * 1e-6).sum()) > len(picks) // 2
+
+    @staticmethod
+    def _maxwell_filter(raw: mne.io.Raw) -> mne.io.Raw:
+        raw.load_data()
+        cal = ctc = None
+        # raw.filenames is the file actually read, also behind special loaders
+        if raw.filenames and raw.filenames[0] is not None:
+            folder = Path(raw.filenames[0]).parent
+            cal = next(folder.glob("*acq-calibration_meg.dat"), None)
+            ctc = next(folder.glob("*acq-crosstalk_meg.fif"), None)
+        frame = "head" if raw.info["dev_head_t"] is not None else "meg"
+        kwargs: dict[str, tp.Any] = dict(
+            calibration=cal, cross_talk=ctc, coord_frame=frame, verbose=False
+        )
+        noisy, flat = mne.preprocessing.find_bad_channels_maxwell(raw, **kwargs)[:2]
+        raw.info["bads"] = sorted(set(raw.info["bads"]) | set(noisy) | set(flat))
+        return mne.preprocessing.maxwell_filter(raw, **kwargs)
 
 
 class EegExtractor(MneRaw):
@@ -957,11 +1062,13 @@ class SpikesExtractor(BaseExtractor):
         else:
             raise ValueError(f"Unsupported spike data type: {type(h5py_or_raw)}")
 
+        scaler = None
         if self.scaler is not None:
-            scaler_cls = getattr(sklearn.preprocessing, self.scaler)()
-            data = scaler_cls.fit_transform(data.T).T
+            scaler = getattr(sklearn.preprocessing, self.scaler)()
+            data = scaler.fit_transform(data.T).T
 
         header: dict[str, tp.Any] = {"ch_names": ",".join(ch_names)}
+        header.update(_scaler_header(scaler))
         return TimedArray(data=data, frequency=sfreq, start=event.start, header=header)
 
     @infra.apply(
@@ -1173,12 +1280,15 @@ class FnirsExtractor(MneRaw):
             raw.load_data()
             raw = raw.resample(float(self.frequency), n_jobs=self.mne_cpus, verbose=False)
 
+        scaler = None
         if self.scaler is not None:
             raw.load_data()
             scaler = getattr(sklearn.preprocessing, self.scaler)()
             raw._data = scaler.fit_transform(raw._data.T).T
 
-        return MneTimedArray.from_native(raw)
+        ta = MneTimedArray.from_native(raw)
+        ta.header.update(_scaler_header(scaler))
+        return ta
 
 
 # ---------------------------------------------------------------------------
@@ -2387,10 +2497,12 @@ class FmriExtractor(BaseExtractor):
 class ChannelPositions(BaseStatic):
     """Channel positions in 2D or 3D, extracted from a Raw object's mne.Info.
 
-    3D positions (``n_spatial_dims=3``) are always returned in MNE's **head coordinate frame**,
-    which is defined by the LPA, RPA, and nasion fiducial landmarks (origin at the midpoint of
-    LPA–RPA, x-axis toward RPA, y-axis toward nasion, z-axis upward). This holds regardless of
-    whether positions come from a named standard montage or from the raw data's channel locations.
+    3D positions (``n_spatial_dims=3``) are returned by default in MNE's **head coordinate
+    frame**, which is defined by the LPA, RPA, and nasion fiducial landmarks (origin at the
+    midpoint of LPA–RPA, x-axis toward RPA, y-axis toward nasion, z-axis upward). This holds
+    regardless of whether positions come from a named standard montage or from the raw data's
+    channel locations. MNE stores MEG sensor locations in the **device** (helmet) frame; they are
+    mapped to the head frame with the recording's ``dev_head_t`` unless ``coord_frame="device"``.
     See https://mne.tools/stable/documentation/implementation.html#coordinate-systems for details.
 
     Parameters
@@ -2402,7 +2514,7 @@ class ChannelPositions(BaseStatic):
         Number of spatial dimensions (i.e. coordinates) to extract for each channel. For
         `n_spatial_dims=2`, the 2D projection of the channel positions as obtained through
         `mne.Layout` will be used. For `n_spatial_dims=3`, the 3D positions are extracted from
-        `mne.Montage` in head coordinate frame.
+        a standard `mne.Montage` or from the recording's channel locations.
     layout_or_montage_name:
         Name of the Layout or Montage to use. See `mne.channels.read_layout()` for a list of valid
         layouts and `mne.channels.get_builtin_montages()` for standard montages. If not provided,
@@ -2416,12 +2528,26 @@ class ChannelPositions(BaseStatic):
         of shape (n_channels, n_spatial_dims * 2). If True, `event_types` must be one of
         Eeg or Ieeg.
     normalize:
-        If True, min-max normalize channel positions between 0 and 1 across each dimension. If
-        False, 2D positions are in arbitrary units given by the mne.Layout projection, while 3D
-        positions will be in head coordinate frame (approximately in the range [-0.1, 0.1] meters).
+        Normalization of each recording's channel positions, computed over its valid channels.
+        ``"min_max"`` rescales each dimension separately to [0, 1], which distorts the geometry.
+        ``"center_and_scale"`` subtracts the mean position and divides by
+        ``sqrt(n_spatial_dims * mean squared norm)``, as in BrainOmni (arXiv:2505.18185), which
+        preserves the geometry. ``None`` keeps 2D positions in the arbitrary units of the
+        mne.Layout projection and 3D positions in meters (approximately in [-0.1, 0.1]). Booleans
+        are accepted for backward compatibility: ``True`` is ``"min_max"`` and ``False`` is
+        ``None``.
     factor:
-        Factor to scale the channel positions by. E.g. set it to 10.0 to get 3D coordinates in
-        decimeters, which yields values approximately in the range [-1, 1].
+        Factor to scale the channel positions by, after ``normalize``. E.g. set it to 10.0 to get
+        3D coordinates in decimeters, which yields values approximately in the range [-1, 1].
+    coord_frame:
+        Frame of 3D MEG sensor positions (``mag``, ``grad`` and ``ref_meg`` channels read from the
+        recording's channel locations); other channels are always in the head frame. ``"head"``
+        maps MEG sensors to the head frame with each recording's ``dev_head_t`` (positions through
+        the full transform, coil orientations through its rotation), so that they follow the head
+        pose and share the frame of EEG electrodes. Recordings without ``dev_head_t`` stay in the
+        device frame, with a warning, and MEG neuro caches written before neuralset stored
+        ``dev_head_t`` raise an error. ``"device"`` keeps the frame of the MEG helmet, in which a
+        sensor has the same coordinates in every recording of a system, wherever the head sits.
     """
 
     event_types: tp.Literal["MneRaw", "Meg", "Eeg", "Ieeg"] = "MneRaw"
@@ -2430,15 +2556,23 @@ class ChannelPositions(BaseStatic):
     n_spatial_dims: tp.Literal[2, 3] = 2
     layout_or_montage_name: str | None = None
     include_ref_eeg: bool = False
-    normalize: bool = True
+    normalize: tp.Literal["min_max", "center_and_scale"] | None = "min_max"
     factor: float = 1.0
+    coord_frame: tp.Literal["head", "device"] = "head"
 
     _neuro: MneRaw = pydantic.PrivateAttr()
 
     # Value to use for channels that are not found in the layout
     INVALID_VALUE: tp.ClassVar[float] = -0.1
 
-    infra: MapInfra = MapInfra()
+    infra: MapInfra = MapInfra(version="1")
+
+    @pydantic.field_validator("normalize", mode="before")
+    @classmethod
+    def _normalize_from_bool(cls, value: tp.Any) -> tp.Any:
+        if isinstance(value, bool):
+            return "min_max" if value else None
+        return value
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -2496,12 +2630,48 @@ class ChannelPositions(BaseStatic):
         mapping = {name: pos[:2].tolist() for name, pos in zip(layout.names, layout.pos)}
         return mapping
 
-    def _get_positions_from_ch_locs(self, ta: MneTimedArray) -> dict[str, list[float]]:
+    def _get_ch_locs(self, ta: MneTimedArray) -> np.ndarray:
+        """Channel ``loc`` arrays of a cached recording, of shape ``(n_channels, 12)``, with MEG
+        sensors in the frame set by ``coord_frame``."""
+        ch_locs = np.array(ta.header["ch_locs"], dtype=np.float64)
+        if self.coord_frame == "device":
+            return ch_locs
+        # MNE stores the loc of MEG sensors in the device frame, and that of other
+        # channels in the head frame; [0, 0, 0] positions are unknown
+        moved = np.isin(ta.ch_types, ("mag", "grad", "ref_meg"))
+        moved &= ~np.all(ch_locs[:, :3] == 0, axis=1)
+        if not moved.any():
+            return ch_locs
+        if "dev_head_t" not in ta.header:
+            raise ValueError(
+                "The cached header of this MEG recording has no dev_head_t, likely "
+                "because it was written before neuralset stored it, so its sensors "
+                "cannot be mapped to the head frame. Recompute the neuro extractor "
+                "cache (e.g. by changing its infra.version), or set "
+                'coord_frame="device".'
+            )
+        if ta.header["dev_head_t"] is None:
+            utils.warn_once(
+                "MEG recording without dev_head_t: its sensor locations stay in the "
+                "device frame."
+            )
+            return ch_locs
+        trans = np.array(ta.header["dev_head_t"], dtype=np.float64)
+        ch_locs[moved, :3] = mne.transforms.apply_trans(trans, ch_locs[moved, :3])
+        ch_locs[moved, 3:] = mne.transforms.apply_trans(
+            trans, ch_locs[moved, 3:].reshape(-1, 3), move=False
+        ).reshape(-1, 9)
+        return ch_locs
+
+    def _get_positions_from_ch_locs(
+        self, ta: MneTimedArray, ch_locs: np.ndarray | None = None
+    ) -> dict[str, list[float]]:
         """Extract 3D channel positions from cached ch_locs, filtering out zero positions."""
-        ch_locs: np.ndarray = ta.header["ch_locs"]
+        if ch_locs is None:
+            ch_locs = self._get_ch_locs(ta)
         mapping: dict[str, list[float]] = {}
         for i, name in enumerate(ta.ch_names):
-            loc = np.asarray(ch_locs[i, :3])
+            loc = ch_locs[i, :3]
             # [0, 0, 0] means the position is unknown. This shouldn't happen for
             # MEG sensors or when ch_locs are properly set, but we filter
             # defensively for robustness.
@@ -2514,7 +2684,9 @@ class ChannelPositions(BaseStatic):
             )
         return mapping
 
-    def _get_montage_positions(self, ta: MneTimedArray) -> dict[str, list[float]]:
+    def _get_montage_positions(
+        self, ta: MneTimedArray, ch_locs: np.ndarray | None = None
+    ) -> dict[str, list[float]]:
         if self.layout_or_montage_name is not None:
             montage = mne.channels.make_standard_montage(self.layout_or_montage_name)
             native_head_t = mne.channels.compute_native_head_t(montage)
@@ -2532,10 +2704,19 @@ class ChannelPositions(BaseStatic):
                     "Please check the montage name."
                 )
             return mapping
-        return self._get_positions_from_ch_locs(ta)
+        return self._get_positions_from_ch_locs(ta, ch_locs)
 
-    def _compute_positions(self, ta: MneTimedArray) -> torch.Tensor:
+    def _compute_positions(
+        self, ta: MneTimedArray, ch_locs: np.ndarray | None = None
+    ) -> torch.Tensor:
         """Get scaled channel positions from a cached MneTimedArray.
+
+        Parameters
+        ----------
+        ta :
+            Cached recording.
+        ch_locs :
+            Output of ``self._get_ch_locs(ta)``, computed if not provided.
 
         Returns
         -------
@@ -2551,9 +2732,9 @@ class ChannelPositions(BaseStatic):
             pos_mapping = self._get_layout_positions(ta)
         elif self.n_spatial_dims == 3:
             if is_meg:
-                pos_mapping = self._get_positions_from_ch_locs(ta)
+                pos_mapping = self._get_positions_from_ch_locs(ta, ch_locs)
             else:
-                pos_mapping = self._get_montage_positions(ta)
+                pos_mapping = self._get_montage_positions(ta, ch_locs)
 
         ta_ch_names = ta.ch_names
         ch_names: list[str] = []
@@ -2593,13 +2774,18 @@ class ChannelPositions(BaseStatic):
             ]
         )
 
-        if self.normalize:
+        if self.normalize == "min_max":
             ptp = np.nanmax(positions, axis=0, keepdims=True) - np.nanmin(
                 positions, axis=0, keepdims=True
             )
             if (ptp == 0.0).any():
                 ptp[ptp == 0.0] = 1.0
             positions = (positions - np.nanmin(positions, axis=0, keepdims=True)) / ptp
+        elif self.normalize == "center_and_scale":
+            valid = ~np.isnan(positions).any(axis=1)
+            positions -= positions[valid].mean(axis=0)
+            sq_norm = (positions[valid] ** 2).sum(axis=1).mean()
+            positions /= np.sqrt(self.n_spatial_dims * sq_norm)
 
         positions *= self.factor
         positions = np.nan_to_num(positions, nan=self.INVALID_VALUE)

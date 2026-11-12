@@ -121,7 +121,8 @@ class Event(_Module):
         kwargs: dict[str, tp.Any] = {}
         extra = {}
         for k, v in row.items():
-            if pd.isna(v):
+            # pd.isna is elementwise on sequences (e.g. ndarray cells from parquet)
+            if not isinstance(v, (list, tuple, np.ndarray)) and pd.isna(v):
                 continue
             if k in fs:
                 kwargs[k] = v
