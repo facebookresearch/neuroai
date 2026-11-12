@@ -21,6 +21,7 @@ pip install braindecode[hub]
 | [BENDR](https://huggingface.co/braindecode/braindecode-bendr) | `braindecode/braindecode-bendr` | |
 | [REVE](https://huggingface.co/brain-bzh/reve-base) | `brain-bzh/reve-base` | |
 | [LUNA](https://huggingface.co/PulpBio/LUNA) | `PulpBio/LUNA` | Multi-file repo, selected via `pretrained_filename` |
+| [AXON](https://huggingface.co/MannasAI/axon-eeg) | `MannasAI/axon-eeg` | Requires `braindecode >= 2.0` |
 
 ## [LUNA](https://huggingface.co/PulpBio/LUNA)
 
