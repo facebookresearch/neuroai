@@ -624,21 +624,77 @@ def _datalad(tmp_path: Path, **kwargs: tp.Any) -> download.Datalad:
 def test_datalad_selected_paths_filters(tmp_path: Path) -> None:
     obj = _datalad(tmp_path, include=["sub-01"])
     repo_root = obj._dl_dir / obj.repo_name
-    for rel in [
-        "sub-01/eeg/a.set",
-        "sub-02/eeg/b.set",
-        "dataset_description.json",
-        ".git/config",
-    ]:
-        p = repo_root / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("x")
-    assert obj._selected_paths(repo_root) == [str(repo_root / "sub-01" / "eeg" / "a.set")]
+    dataset = MagicMock(path=str(repo_root))
+    dataset.status.return_value = [
+        {"path": str(repo_root / rel), "type": kind}
+        for rel, kind in [
+            ("sub-01/eeg/a.set", "symlink"),
+            ("sub-01/.datalad/config", "file"),
+            ("sub-01/derivatives", "dataset"),
+            ("sub-02/eeg/b.set", "file"),
+            ("dataset_description.json", "file"),
+            (".datalad/config", "file"),
+        ]
+    ]
+    assert obj._selected_paths(dataset) == [str(repo_root / "sub-01" / "eeg" / "a.set")]
+    dataset.status.assert_called_once_with(
+        recursive=True,
+        untracked="no",
+        return_type="generator",
+        result_renderer="disabled",
+    )
 
 
 def test_datalad_selected_paths_no_filter_returns_dot(tmp_path: Path) -> None:
     obj = _datalad(tmp_path)
-    assert obj._selected_paths(obj._dl_dir / obj.repo_name) == ["."]
+    dataset = MagicMock()
+    assert obj._selected_paths(dataset) == ["."]
+    dataset.status.assert_not_called()
+
+
+@pytest.fixture
+def datalad_dataset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    dataset = MagicMock(path=str(tmp_path / "repo"))
+    dataset.status.return_value = []
+    api = types.ModuleType("datalad.api")
+    api.clone = MagicMock(return_value=dataset)  # type: ignore[attr-defined]
+    module = types.ModuleType("datalad")
+    module.api = api  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "datalad", module)
+    monkeypatch.setitem(sys.modules, "datalad.api", api)
+    return dataset
+
+
+def test_datalad_empty_selection_gets_no_payload(
+    tmp_path: Path, datalad_dataset: MagicMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    obj = _datalad(tmp_path, include=["sub-03"], threads=2)
+    obj._download()
+    datalad_dataset.get.assert_called_once_with(
+        ".", recursive=True, get_data=False, jobs=2
+    )
+    assert "No files matched" in caplog.text
+
+
+@pytest.mark.parametrize("phase", ["metadata", "selection", "payload"])
+def test_datalad_failure_leaves_no_marker(
+    tmp_path: Path, datalad_dataset: MagicMock, phase: str
+) -> None:
+    obj = _datalad(tmp_path, include=["sub-01"])
+    datalad_dataset.status.return_value = [
+        {"path": str(Path(datalad_dataset.path) / "sub-01/a.bin"), "type": "file"}
+    ]
+    error = RuntimeError("boom")
+    if phase == "selection":
+        datalad_dataset.status.side_effect = error
+    else:
+        datalad_dataset.get.side_effect = [error] if phase == "metadata" else [[], error]
+    with (
+        patch.object(download.Datalad, "_check_requirements"),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        obj.download()
+    assert not obj.get_success_file().exists()
 
 
 @pytest.mark.parametrize("name", ["Dandi", "Synapse", "Eegdash", "Donders"])
@@ -666,6 +722,132 @@ def test_download_does_not_mark_success_on_failure(tmp_path: Path) -> None:
     ):
         with pytest.raises(RuntimeError, match="boom"):
             obj.download()
+    assert not obj.get_success_file().exists()
+
+
+@pytest.mark.parametrize("name", ["Gin", "Globus", "S3"])
+@pytest.mark.parametrize(
+    "first,second",
+    [
+        ({"include": ["sub-01"]}, {"include": ["sub-01", "sub-02"]}),
+        ({"include": ["sub-*"], "exclude": ["sub-02"]}, {"include": ["sub-*"]}),
+        ({"include": ["sub-01"]}, {}),
+    ],
+)
+def test_download_changed_selection_runs_without_overwrite(
+    tmp_path: Path, name: str, first: dict, second: dict
+) -> None:
+    cls = getattr(download, name)
+    with (
+        patch.dict(os.environ, _ENV_VARS.get(name, {})),
+        patch.object(cls, "_check_requirements"),
+        patch.object(cls, "_download") as fetch,
+    ):
+        kwargs = dict(study="s", dset_dir=tmp_path / "s", **_EXTRA_KWARGS[name])
+        cls(**kwargs, **first).download()
+        cls(**kwargs, **second).download()
+    assert fetch.call_count == 2
+    assert all(call.kwargs == {"overwrite": False} for call in fetch.call_args_list)
+
+
+def test_download_equivalent_selection_skips(tmp_path: Path) -> None:
+    with (
+        patch.object(download.S3, "_check_requirements"),
+        patch.object(download.S3, "_download") as fetch,
+    ):
+        _s3(tmp_path, include=["sub-01", "sub-02"], exclude=["*.json"]).download()
+        _s3(
+            tmp_path, include=["sub-02", "sub-01", "sub-01"], exclude=["*.json"]
+        ).download()
+    fetch.assert_called_once_with(overwrite=False)
+
+
+@pytest.mark.parametrize("marker", ["success", '{"include":'])
+def test_download_old_or_incomplete_marker_is_rechecked(
+    tmp_path: Path, marker: str
+) -> None:
+    obj = _s3(tmp_path)
+    obj.get_success_file().write_text(marker)
+    with (
+        patch.object(download.S3, "_check_requirements"),
+        patch.object(obj, "_download") as fetch,
+    ):
+        obj.download()
+    fetch.assert_called_once_with(overwrite=False)
+
+
+@pytest.mark.parametrize("overwrite", [False, True])
+def test_download_failed_rerun_invalidates_marker(
+    tmp_path: Path, overwrite: bool
+) -> None:
+    obj = _s3(tmp_path, include=["sub-01"])
+    with (
+        patch.object(download.S3, "_check_requirements"),
+        patch.object(obj, "_download") as fetch,
+    ):
+        obj.download()
+        if not overwrite:
+            obj.include = ["sub-02"]
+        fetch.side_effect = RuntimeError("boom")
+        with pytest.raises(RuntimeError, match="boom"):
+            obj.download(overwrite=overwrite)
+        assert not obj.get_success_file().exists()
+        fetch.side_effect = None
+        obj.download()
+    assert fetch.call_count == 3
+
+
+def test_openneuro_changed_selection_cannot_claim_success(tmp_path: Path) -> None:
+    obj = download.Openneuro(study="s", dset_dir=tmp_path / "s", include=["sub-01"])
+    existing = obj._dl_dir / "sub-01/a.bin"
+
+    def fetch(**kwargs: tp.Any) -> None:
+        existing.parent.mkdir(parents=True, exist_ok=True)
+        existing.write_bytes(b"original")
+
+    client = MagicMock()
+    client.download.side_effect = fetch
+    with (
+        patch.dict(sys.modules, {"openneuro": client}),
+        patch.object(download.Openneuro, "_check_requirements"),
+    ):
+        obj.download()
+        obj.include = ["sub-01", "sub-02"]
+        with pytest.raises(RuntimeError, match="cannot safely resume or change"):
+            obj.download()
+    client.download.assert_called_once()
+    assert existing.read_bytes() == b"original"
+    assert not obj.get_success_file().exists()
+
+
+def test_donders_keeps_complete_old_marker(tmp_path: Path) -> None:
+    with patch.dict(os.environ, _ENV_VARS["Donders"]):
+        obj = download.Donders(study="s", dset_dir=tmp_path / "s", study_id="test")
+    existing = obj._dl_dir / "s/a.bin"
+    existing.parent.mkdir(parents=True)
+    existing.write_bytes(b"original")
+    obj.get_success_file().write_text("success")
+    with patch.object(download.subprocess, "run") as request:
+        obj.download()
+    request.assert_not_called()
+    assert existing.read_bytes() == b"original"
+    assert obj.get_success_file().read_text() == "success"
+
+
+def test_download_preflight_failure_invalidates_marker(tmp_path: Path) -> None:
+    obj = _s3(tmp_path)
+    with (
+        patch.object(download.S3, "_check_requirements"),
+        patch.object(obj, "_download"),
+    ):
+        obj.download()
+    with (
+        patch.object(
+            download.S3, "_check_requirements", side_effect=RuntimeError("boom")
+        ),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        obj.download(overwrite=True)
     assert not obj.get_success_file().exists()
 
 
