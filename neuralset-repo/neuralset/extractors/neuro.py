@@ -654,6 +654,24 @@ class MneRaw(BaseExtractor):
         )
 
 
+class Whitening(base.BaseModel):
+    """Spatial (ZCA) whitening of each recording: channels become uncorrelated with
+    unit variance, each staying tied to its sensor.
+
+    Parameters
+    ----------
+    shrinkage : float, default=1e-3
+        Shrinkage of the covariance towards its mean variance, in (0, 1]: it bounds
+        the amplification of the weakest spatial patterns (smaller is stronger).
+    duration : "all" or float, default="all"
+        Part of the recording on which the covariance is computed: all of it, or
+        its first seconds (e.g. a calibration period).
+    """
+
+    shrinkage: float = pydantic.Field(1e-3, gt=0, le=1)
+    duration: tp.Literal["all"] | pydantic.PositiveFloat = "all"
+
+
 class MegExtractor(MneRaw):
     """
     MEG feature extractor.
@@ -680,12 +698,16 @@ class MegExtractor(MneRaw):
         recordings carrying compensation information (CTF); ignored on other
         systems. It needs the reference channels, which ``("mag", "grad")``
         picks then drop.
+    whitening : Whitening or dict, optional
+        Spatial whitening of each recording after the other preprocessing steps
+        (see ``Whitening``); ``{}`` uses its defaults.
     """
 
     event_types: tp.Literal["Meg"] = "Meg"
     picks: str | tuple[str, ...] = pydantic.Field(("meg",), min_length=1)
     apply_sss: bool | tp.Literal["maxshield"] = False
     compensation_grade: int | None = None
+    whitening: Whitening | None = None
 
     def _preprocess_raw(self, raw: mne.io.Raw, event: etypes.MneRaw) -> MneTimedArray:
         grade = self.compensation_grade
@@ -702,7 +724,21 @@ class MegExtractor(MneRaw):
                 "compensation signals are left in the data. Set apply_sss='maxshield' "
                 "on MegExtractor to remove them."
             )
-        return super()._preprocess_raw(raw, event)
+        ta = super()._preprocess_raw(raw, event)
+        if self.whitening is not None:
+            duration = self.whitening.duration
+            stop = None if duration == "all" else int(duration * ta.frequency)
+            if stop is not None and stop < 2:
+                raise ValueError(
+                    f"whitening.duration={duration}s gives {stop} samples at "
+                    f"{ta.frequency} Hz; need at least 2"
+                )
+            cov = np.cov(ta.data[:, :stop])
+            n, g = len(cov), self.whitening.shrinkage
+            cov = (1 - g) * cov + g * np.trace(cov) / n * np.eye(n)
+            evals, evecs = np.linalg.eigh(cov)
+            ta.data = (evecs * evals**-0.5) @ evecs.T @ ta.data
+        return ta
 
     def _needs_sss(self, raw: mne.io.Raw) -> bool:
         info = raw.info
