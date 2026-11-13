@@ -4,19 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Neuraltrain custom configuration for LaBraM.
-
-Includes the following adaptations:
-
-* Channel name remapping via an explicit user-provided mapping.
-* Fixed, batch-independent channel selection: every channel that resolves to a
-  ``LABRAM_CHANNEL_ORDER`` name is kept and unmapped channels are dropped,
-  with ``ch_names`` naming them when the caller's montage differs from the one
-  built with.
-* Dynamic temporal resolution at forward time, so one instance serves any
-  window length: the pretrained temporal embedding is sliced per call
-  (interpolated when a window needs more patches than pretraining had).
-"""
+"""Neuraltrain wrapper for LaBraM (Jiang et al., ICLR 2024)."""
 
 import logging
 import typing as tp
@@ -273,18 +261,19 @@ class _LabramChannelWrapper(nn.Module):
 
 
 class NtLabram(BaseBrainDecodeModel):
-    """Config for the braindecode LaBraM model with pretrained-model support.
+    """Config for the braindecode LaBraM model.
 
-    Extends :class:`BaseBrainDecodeModel` with LaBraM-specific logic:
+    Extends :class:`BaseBrainDecodeModel` with:
 
-    1. **Channel remapping** -- an explicit ``channel_mapping`` dict maps
-       dataset channel names to LaBraM channel names.  Channels whose names
-       already match ``LABRAM_CHANNEL_ORDER`` (case-insensitively) need no
-       entry.
-    2. **Forward-time adaptation** -- the model is wrapped in
-       :class:`_LabramChannelWrapper`, which keeps the channels resolving to a
-       LaBraM name and picks the number of time patches from each batch, so
-       one instance serves any montage and window length.
+    1. **Channel handling** -- channels are matched by name to
+       ``LABRAM_CHANNEL_ORDER`` (case-insensitively, after ``channel_mapping``,
+       falling back to the anode of bipolar names) and the others are dropped.
+    2. **Window length** -- the number of time patches is picked per batch
+       (pretrained temporal embedding sliced, or interpolated beyond its
+       length), so one instance serves any montage and window length (see
+       :class:`_LabramChannelWrapper`).
+    3. **Encoder-only output** -- the wrapped model returns all tokens
+       (``return_all_tokens=True``).
 
     Parameters
     ----------

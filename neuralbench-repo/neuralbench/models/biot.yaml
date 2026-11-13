@@ -11,6 +11,7 @@ data:
     notch_filter: null
     baseline: null
     scaler: null
+    scale_factor: null
     clamp: null
   channel_positions:
     include_ref_eeg: false
@@ -22,29 +23,16 @@ brain_model_config:
     n_times: 1000
     return_feature: true
 downstream_model_wrapper:
-  model_output_key: 1
   on_the_fly_preprocessor:
     scaler: QuantileAbsScaler
     scaler_quantile: 0.95
     scale_dim: -1
   preprocess_after_adapter: true  # upstream scales the bipolar derivations
-  # Learned 1x1 Conv1d projecting dataset channels to the 18 bipolar
-  # derivations BIOT's six-datasets checkpoint expects.  Initialised with
-  # the +1/-1 bipolar pattern *added on top of* the default Kaiming-uniform
-  # init (the default nn.Conv1d init), so:
-  #   - Rows for fully-covered pairs start as "pair + small Kaiming noise"
-  #     (BIOT's pretrained channel_tokens[i] sees approximately the right
-  #     bipolar derivation at step 0).
-  #   - Rows for partial/missing pairs keep the Kaiming baseline so they
-  #     can still learn -- this matters for BIOT specifically because
-  #     |torch.stft(0)|==0 and the abs singularity would freeze a fully
-  #     zero row's gradient.
-  # Pair order follows BIOT's pretraining order (BIOT README & braindecode
-  # biot.py channel_tokens indexing): 16 scalp bipolar pairs + C3-A2, C4-A1.
+  # +/-1 pairs on top of Kaiming init: an all-zero row freezes (|stft(0)| = 0)
   channel_adapter_config:
     n_target_channels: 18
     init: bipolar
-    target_channel_names:
+    target_channel_names:  # pretraining order: 16 TCP pairs + C3-A2, C4-A1
       - FP1-F7
       - F7-T7
       - T7-P7
@@ -64,9 +52,8 @@ downstream_model_wrapper:
       - C3-A2
       - C4-A1
     rename_mapping: !include channel_mappings/standard_1020.json
-  # BIOT's encoder already averages all patches internally (.mean(dim=1) in
-  # _BIOTEncoder), so its output is (B, emb_dim). No further aggregation needed.
-  aggregation: null
+  model_output_key: 1
+  aggregation: null  # the encoder mean-pools its patches: (B, emb_dim)
   # encoder.transformer.layers.layers.*.0.fn.{to_q,to_k,to_v,to_out}
   lora_target_modules:
     - to_q
@@ -74,4 +61,4 @@ downstream_model_wrapper:
     - to_v
     - to_out
 
-# Paper config (Yang et al. NeurIPS 2023): Adam lr 1e-3 wd 1e-5, 100ep, batch 512, mean pool + ELU+Linear head, full FT.
+# Paper config (Yang et al., NeurIPS 2023): Adam lr 1e-3 wd 1e-5, 100ep, batch 512, mean pool + ELU+Linear head, full FT.

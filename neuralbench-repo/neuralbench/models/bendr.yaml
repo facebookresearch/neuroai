@@ -10,26 +10,9 @@ data:
     filter: null
     notch_filter: null
     baseline: null
-    scaler: null
+    scaler: null  # NtBendr min-max scales each window
+    scale_factor: null
     clamp: null
-trainer_config:
-  gradient_clip_val: 0.5
-lightning_optimizer_config:
-  optimizer:
-    name: AdamW
-    lr: 1.0e-5
-    kwargs:
-      weight_decay: 0.05
-  scheduler:
-    name: OneCycleLR
-    kwargs:
-      max_lr: 1.0e-5
-      pct_start: 0.1
-      anneal_strategy: cos
-  interval: step
-# Enable CSVLogger so per-step train/val loss curves are saved alongside the
-# wandb run, for offline diagnostic inspection.
-csv_config: {}
 brain_model_config:
   =replace=: true
   name: NtBendr
@@ -37,15 +20,7 @@ brain_model_config:
   kwargs:
     final_layer: false
 downstream_model_wrapper:
-  model_output_key: null
-  on_the_fly_preprocessor: null
-  # Learned 1x1 Conv1d projecting dataset channels to the 19 EEG channels
-  # BENDR expects.  Identity-initialised by channel name: rows matching a
-  # named input channel (optionally via rename_mapping) start as a one-hot
-  # pass-through; unmatched target channels start as zero.  This makes the
-  # adapter a no-op for 10/20-compatible datasets on step 0 (matching the
-  # pretraining distribution) while remaining fully trainable for channels
-  # outside the standard 10/20 set.
+  # identity-init by name: a pass-through on 10-20 montages at step 0
   channel_adapter_config:
     n_target_channels: 19
     init: identity
@@ -70,13 +45,25 @@ downstream_model_wrapper:
       - O1
       - O2
     rename_mapping: !include channel_mappings/standard_1020.json
-  # Mean aggregation over all contextualizer tokens (including the CLS/start
-  # token at index 0), for uniformity with the other FMs (CBraMod, LaBraM,
-  # LUNA, REVE).
-  aggregation: mean
-  probe_config: linear
+  aggregation: mean  # start token included
   # whole nn.MultiheadAttention: it never calls out_proj
   lora_target_modules:
     - self_attn
+trainer_config:
+  gradient_clip_val: 0.5
+lightning_optimizer_config:
+  optimizer:
+    name: AdamW
+    lr: 1.0e-5
+    kwargs:
+      weight_decay: 0.05
+  scheduler:
+    name: OneCycleLR
+    kwargs:
+      max_lr: 1.0e-5
+      pct_start: 0.1
+      anneal_strategy: cos
+  interval: step
+csv_config: {}  # per-step loss curves
 
-# Paper config (Kostas et al. 2021): Adam lr 1e-5-5e-5 wd 0.01, cosine+10% warmup, full FT, linear head on CLS.
+# Paper config (Kostas et al., Front. Hum. Neurosci. 2021): Adam lr 1e-5-5e-5 wd 0.01, cosine+10% warmup, full FT, linear head on CLS.

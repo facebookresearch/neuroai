@@ -172,6 +172,20 @@ class ConcatGroupedMean(nn.Module):
         )
 
 
+def _require_rank(
+    aggregation: str | int,
+    output_size: torch.Size,
+    allowed: tuple[int, ...],
+) -> None:
+    """Raise if *aggregation* cannot act on a per-sample output of this rank."""
+    if len(output_size) not in allowed:
+        expected = " or ".join(f"{rank}-D" for rank in allowed)
+        raise ValueError(
+            f"aggregation={aggregation!r} needs a {expected} per-sample brain "
+            f"model output, got {tuple(output_size)}."
+        )
+
+
 def _flatten_tokens(x: torch.Tensor) -> torch.Tensor:
     """Collapse the axes between batch and embedding into a single token axis.
 
@@ -925,32 +939,40 @@ class DownstreamWrapperModel(nn.Module):
         elif aggregation == "flatten":
             self.aggregation = nn.Flatten(start_dim=1)
             return brain_model_output_size.numel()
-        elif aggregation == "first":
-            assert len(brain_model_output_size) == 2
+
+        # rank-1 output is an already-pooled embedding (e.g. BIOT): "mean" is a no-op
+        if len(brain_model_output_size) == 1:
+            if aggregation == "mean":
+                self.aggregation = nn.Identity()
+                return brain_model_output_size.numel()
+            raise ValueError(
+                f"aggregation={aggregation!r} needs a token axis to reduce, but "
+                f"the brain model output is already pooled (per-sample shape "
+                f"{tuple(brain_model_output_size)}). Use 'mean', 'flatten' or "
+                f"null for pooled-embedding models."
+            )
+
+        if aggregation == "first":
+            _require_rank(aggregation, brain_model_output_size, (2,))
             self.aggregation = IndexSelect(dim=1, index=torch.LongTensor([0]))
             return brain_model_output_size[1]
         elif aggregation == "mean":
-            if len(brain_model_output_size) == 1:  # already pooled, e.g. BIOT
-                self.aggregation = nn.Identity()
-                return brain_model_output_size.numel()
-            dim: int | tuple[int, ...] = 1
-            if len(brain_model_output_size) == 2:  # (n_patches, emb_dim)
-                dim = 1
-            elif len(brain_model_output_size) == 3:  # (n_chans, n_patches, emb_dim)
-                dim = (1, 2)
-            else:
-                raise ValueError(
-                    f"aggregation='mean' requires model output of 2D, 3D or 4D "
-                    f"(got brain_model_output_size={brain_model_output_size})"
-                )
+            _require_rank(aggregation, brain_model_output_size, (2, 3))
+            # (n_patches, emb_dim) or (n_chans, n_patches, emb_dim)
+            dim: int | tuple[int, ...] = (
+                1 if len(brain_model_output_size) == 2 else (1, 2)
+            )
             self.aggregation = Mean(dim=dim)
             return brain_model_output_size[-1]
         elif isinstance(aggregation, int):
-            assert len(brain_model_output_size) == 2
+            _require_rank(aggregation, brain_model_output_size, (2,))
             self.aggregation = ConcatGroupedMean(dim=1, n_splits=aggregation)
             return aggregation * brain_model_output_size[1]
         else:
-            raise NotImplementedError()
+            raise ValueError(
+                f"unsupported aggregation={aggregation!r}; expected 'flatten', "
+                f"'mean', 'first', an int number of splits, or null."
+            )
 
     def _build_probe(
         self,

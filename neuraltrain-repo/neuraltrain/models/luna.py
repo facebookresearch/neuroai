@@ -4,21 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Neuraltrain custom configuration for LUNA.
-
-Includes the following adaptations over the raw braindecode LUNA model:
-
-* **Keyword mapping** — the data pipeline provides per-sample 3-D
-  electrode positions as ``channel_positions``, whereas braindecode's LUNA
-  forward signature expects ``channel_locations``.  The wrapper transparently
-  maps between the two.
-* **Time padding** — zero-pads the time dimension so it is a multiple of
-  LUNA's ``patch_size``.
-* **Encoder-only output** — when ``n_outputs`` is not provided (i.e. the
-  downstream classification head is handled externally), the classification
-  head is replaced with ``nn.Identity()`` so the model returns the normalised
-  encoder latent of shape ``(B, n_patches, num_queries * embed_dim)``.
-"""
+"""Neuraltrain wrapper for LUNA (Döner et al., NeurIPS 2025)."""
 
 import logging
 import typing as tp
@@ -67,16 +53,15 @@ class _LunaEncoderWrapper(nn.Module):
 class NtLuna(BaseBrainDecodeModel):
     """Config for the braindecode LUNA model.
 
-    Extends :class:`BaseBrainDecodeModel` with LUNA-specific logic:
+    Extends :class:`BaseBrainDecodeModel` with:
 
-    1. **Keyword mapping** — wraps the model so its forward accepts
-       ``channel_positions`` and maps it to LUNA's ``channel_locations``.
-    2. **Time padding** — zero-pads the time dimension to a multiple of
+    1. **Channel handling** -- the forward takes the batch's
+       ``channel_positions`` as LUNA's ``channel_locations``.
+    2. **Time padding** -- zero-pads the time dimension to a multiple of
        ``patch_size``.
-    3. **Encoder-only output** — when ``n_outputs`` is not passed (i.e. when
-       a ``DownstreamWrapperModel`` handles the classification head), the
-       classification head is replaced with ``nn.Identity()`` so the model
-       returns the encoder latent.
+    3. **Encoder-only output** -- when ``n_outputs`` is ``None``, the
+       classification head is replaced with ``nn.Identity`` and the model
+       returns the encoder latent ``(B, n_patches, num_queries * embed_dim)``.
 
     Parameters
     ----------
