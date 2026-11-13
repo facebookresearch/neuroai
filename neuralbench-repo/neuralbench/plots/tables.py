@@ -235,7 +235,9 @@ def build_results_df(
         swept = df.groupby(key, dropna=False)["space_name"].transform("nunique") > 1
         variant = df.get("model_variant", pd.Series("", index=df.index)).fillna("")
         df.loc[swept, "model_variant"] = (
-            variant[swept] + ";space=" + df.loc[swept, "space_name"]
+            variant.loc[swept].astype("object").fillna("").astype(str)
+            + ";space="
+            + df.loc[swept, "space_name"].astype("object").fillna("").astype(str)
         )
     df = _disambiguate_model_variants(df)
     df["loss_name"] = df.loss.apply(pd.Series).name
