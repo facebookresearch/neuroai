@@ -30,7 +30,7 @@ from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
 from neuralset.extractors import neuro
-from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, _overlap
+from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, Whitening, _overlap
 
 
 @pytest.mark.parametrize("cls", (ns.extractors.MegExtractor, ns.extractors.FmriExtractor))
@@ -857,6 +857,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "store_dtype",
         "apply_sss",
         "compensation_grade",
+        "whitening",
     }
 
 
@@ -907,6 +908,33 @@ def test_epoch_correct(apply_proj: bool) -> None:
     meg = batch.data["Meg"].cpu().numpy()
     # np.testing.assert_almost_equal(meg * 10**12, data[:, :, :-1] * 10**12, decimal=3)
     np.testing.assert_almost_equal(meg / data[:, :, :-1], np.ones(meg.shape), decimal=3)
+
+
+@pytest.mark.parametrize("duration,stop", ((0.001, 0), (0.01, 1)))
+def test_meg_whitening_short_duration(duration: float, stop: int) -> None:
+    raw = mne.io.RawArray(
+        np.ones((2, 10)), mne.create_info(["MEG 0111", "MEG 0121"], 100.0, "mag")
+    )
+    event = tp.cast(etypes.MneRaw, SimpleNamespace(frequency=100.0))
+    extractor = ns.extractors.MegExtractor(whitening=Whitening(duration=duration))
+    with pytest.raises(
+        ValueError,
+        match=f"whitening.duration={duration}s gives {stop} samples at 100.0 Hz; need at least 2",
+    ):
+        extractor._preprocess_raw(raw, event)
+
+
+@pytest.mark.parametrize("duration,stop", (("all", 1000), (5.0, 500)))
+def test_meg_whitening(duration: tp.Literal["all"] | float, stop: int) -> None:
+    rng = np.random.default_rng(0)
+    data = rng.normal(size=(4, 1000)) + 3 * rng.normal(size=(1, 1000))  # a shared field
+    names = [f"MEG 01{k}1" for k in range(1, 5)]
+    raw = mne.io.RawArray(data, mne.create_info(names, 100.0, "mag"))
+    event = tp.cast(etypes.MneRaw, SimpleNamespace(frequency=100.0))
+    whitening = Whitening(shrinkage=1e-6, duration=duration)
+    extractor = ns.extractors.MegExtractor(whitening=whitening)
+    out = extractor._preprocess_raw(raw, event).data
+    np.testing.assert_allclose(np.cov(out[:, :stop]), np.eye(4), atol=1e-4)
 
 
 def test_proj_before_scaling() -> None:
