@@ -9,6 +9,7 @@
 # pylint: disable=unused-variable
 
 import math
+import re
 import typing as tp
 from collections import deque
 
@@ -58,6 +59,37 @@ def resolve_with_anode_fallback(
         return None, False
     anode_value = lookup(pair[0])
     return anode_value, anode_value is not None
+
+
+def remap_chs_info(
+    chs_info: list[dict[str, tp.Any]],
+    channel_mapping: dict[str, str] | None,
+) -> list[dict[str, tp.Any]]:
+    """Rename channels in *chs_info* via *channel_mapping*, returning a new list.
+
+    Shared by the foundation-model wrappers that resolve channels by name
+    (REVE); channels absent from the mapping are left
+    untouched. MEG sensor names are also tried in either spelling of the
+    mapping: Neuromag / KIT whatever the separator (``MEG0113``, ``MEG-0113`` ->
+    ``MEG 0113`` or ``MEG0113``) and CTF without the serial suffix
+    (``MLC11-4504`` -> ``MLC11``). Other names must match exactly.
+    """
+    if not channel_mapping:
+        return chs_info
+    mapping = channel_mapping
+
+    def remap(name: str) -> str:
+        candidates = [name]
+        if neuromag := re.fullmatch(r"MEG[ -]?(\d+)", name):
+            candidates += [f"MEG {neuromag.group(1)}", f"MEG{neuromag.group(1)}"]
+        elif ctf := re.fullmatch(r"(M[LRZ][FCTPO]\d{2})-\d+", name):
+            candidates.append(ctf.group(1))
+        for candidate in candidates:
+            if candidate in mapping:
+                return mapping[candidate]
+        return name
+
+    return [{**ch, "ch_name": remap(ch["ch_name"])} for ch in chs_info]
 
 
 def compute_temporal_adjustment(n_times: int, patch_size: int) -> tuple[int, int]:

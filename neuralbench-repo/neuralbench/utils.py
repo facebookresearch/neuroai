@@ -536,6 +536,7 @@ class TrainerConfig(ns.BaseModel):
     # Hardware
     strategy: str = "auto"
     precision: str = "32-true"
+    float32_matmul_precision: tp.Literal["highest", "high", "medium"] | None = None
     accelerator: str = "auto"
     devices: int = 1
     num_nodes: int = 1
@@ -553,6 +554,8 @@ class TrainerConfig(ns.BaseModel):
         devices: int | None = None,
         num_nodes: int | None = None,
     ) -> pl.Trainer:
+        if self.float32_matmul_precision is not None:
+            torch.set_float32_matmul_precision(self.float32_matmul_precision)
         return pl.Trainer(
             strategy=self.strategy,
             precision=self.precision,  # type: ignore[arg-type]

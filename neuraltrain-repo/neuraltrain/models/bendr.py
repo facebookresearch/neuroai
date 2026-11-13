@@ -4,30 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Neuraltrain custom configuration for BENDR.
-
-Includes the following adaptations over the raw braindecode BENDR model:
-
-* **Global per-window min-max scaling** to ``[-1, 1]`` (single ``(min, max)``
-  pair across channels and time), matching the original BENDR pretraining
-  recipe (DN3 ``MappingDeep1010``).  Per-channel scaling would destroy
-  inter-channel amplitude relationships, which BENDR's channel-unmixed 1D
-  convolutional feature encoder relies on.
-* **Relative amplitude 20th channel** ``2 * (clamp(window_range / R, 1.0) - 0.5)``
-  producing values in ``[-1, 1]``, reproducing the DN3 ``MappingDeep1010``
-  20th channel from the BENDR paper.
-* **All-tokens output** -- the wrapper returns the full contextualiser token
-  sequence ``(B, T+1, D)`` instead of just the CLS token, letting the
-  :class:`DownstreamWrapper` handle aggregation (e.g. ``aggregation: "mean"``)
-  consistently with other foundation models (CBraMod, LaBraM, LUNA, REVE).
-
-Channel remapping is **not** handled here: the downstream wrapper's
-``channel_adapter_config`` (a learned ``Conv1d(kernel_size=1)`` projection,
-see :class:`neuralbench.modules.ChannelProjection`) is expected to project from
-arbitrary input channels to the 19 channels BENDR consumes.  This mirrors
-BIOT's handling and avoids the information loss of zero-filling missing
-standard 10/20 channels.
-"""
+"""Neuraltrain wrapper for BENDR (Kostas et al., Front. Hum. Neurosci. 2021)."""
 
 import logging
 import typing as tp
@@ -40,16 +17,9 @@ from .base import BaseBrainDecodeModel
 logger = logging.getLogger(__name__)
 
 
-# Approximate global amplitude range (max - min over the entire pretraining
-# dataset) used as the denominator for the relative-amplitude 20th channel.
-# Derived from the BENDR pretraining config for TUEG:
-#   data_max=3276.7, data_min=-1583.93  =>  R_ds ~ 4860.6
-# The exact value is not critical; it acts as a normalising constant.
-_DEFAULT_AMPLITUDE_RANGE: float = 4861.0
+_DEFAULT_AMPLITUDE_RANGE: float = 4861.0  # TUEG data_max - data_min, pretraining config
 
-# Number of EEG channels the pretrained BENDR encoder expects (before the
-# internal relative-amplitude channel is appended).
-BENDR_N_EEG_CHANNELS: int = 19
+BENDR_N_EEG_CHANNELS: int = 19  # excluding the relative-amplitude channel
 
 
 class _BendrAllTokensWrapper(nn.Module):
@@ -118,47 +88,26 @@ class _BendrAllTokensWrapper(nn.Module):
 class NtBendr(BaseBrainDecodeModel):
     """Config for the braindecode BENDR model.
 
-    Extends :class:`BaseBrainDecodeModel` with BENDR-specific logic:
+    Extends :class:`BaseBrainDecodeModel` with:
 
-    1. **Preprocessing** -- global per-window min-max to ``[-1, 1]`` with a
-       20th relative-amplitude channel, matching the BENDR paper.
-    2. **All-tokens output** -- the model is wrapped to return the full
-       contextualiser sequence ``(B, T+1, encoder_h)`` so the downstream
-       wrapper can pool it (e.g. ``aggregation: "mean"``) uniformly with
-       the other FMs.
+    1. **Preprocessing** -- each window is scaled to ``[-1, 1]`` with a single
+       ``(min, max)`` across channels and time (keeping the inter-channel
+       amplitude ratios the encoder relies on), and the relative-amplitude
+       channel is appended, as in DN3's ``MappingDeep1010``.
+    2. **Encoder-only output** -- returns all contextualiser tokens
+       ``(B, T+1, encoder_h)``, start token included.
 
-    Channel mapping is delegated to the downstream wrapper's
-    ``channel_adapter_config`` (a 1x1 Conv1d projection), which must project
-    to :data:`BENDR_N_EEG_CHANNELS` (19) channels.
+    Channels are not mapped here: the downstream wrapper's
+    ``channel_adapter_config`` must project to :data:`BENDR_N_EEG_CHANNELS`.
 
     Parameters
     ----------
     amplitude_range : float
-        Approximate global amplitude range used as the denominator of the
-        relative amplitude 20th channel.  Defaults to the value derived from
-        the TUEG pretraining dataset (~4861).
+        Denominator of the relative-amplitude channel.
     """
 
+    _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.BENDR"
     amplitude_range: float = _DEFAULT_AMPLITUDE_RANGE
-
-    @classmethod
-    def _ensure_model_class(cls) -> None:
-        """Resolve ``_MODEL_CLASS`` on first use with a friendlier error.
-
-        BENDR is an optional braindecode dependency; the default base-class
-        path-based loader would raise ``AttributeError`` if it is missing.
-        """
-        if cls._MODEL_CLASS is not None:
-            return
-        import braindecode.models
-
-        resolved = getattr(braindecode.models, "BENDR", None)
-        if resolved is None:
-            raise ImportError(
-                "braindecode.models.BENDR is not available. "
-                "Upgrade braindecode or install missing dependencies."
-            )
-        cls._MODEL_CLASS = resolved
 
     def build(
         self,
@@ -175,13 +124,7 @@ class NtBendr(BaseBrainDecodeModel):
             chs_info=chs_info,
             frequency=frequency,
         )
-        # The wrapper prepends an amplitude channel internally, so the
-        # underlying BENDR encoder always receives 20 channels.  The upstream
-        # channel adapter is responsible for producing the 19 EEG channels;
-        # here we hard-set n_chans=20 for the inner BENDR regardless of the
-        # dataset channel count (the adapter target + our amp channel
-        # combine into 20).
-        construct_kwargs["n_chans"] = BENDR_N_EEG_CHANNELS + 1
+        construct_kwargs["n_chans"] = BENDR_N_EEG_CHANNELS + 1  # + amplitude channel
 
         model = self._construct(**construct_kwargs)
         return _BendrAllTokensWrapper(model, amplitude_range=self.amplitude_range)

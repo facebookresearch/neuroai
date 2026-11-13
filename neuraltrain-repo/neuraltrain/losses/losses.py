@@ -69,6 +69,8 @@ class ClipLoss(nn.Module):
     def _compute_similarity(
         x: torch.Tensor, y: torch.Tensor, norm: str | None = None, eps=1e-15
     ) -> torch.Tensor:
+        dtype = torch.promote_types(torch.promote_types(x.dtype, y.dtype), torch.float32)
+        x, y = x.to(dtype), y.to(dtype)
         if norm is None:
             eq, inv_norms = "b", torch.ones(x.shape[0])
         elif norm == "x":
@@ -84,7 +86,8 @@ class ClipLoss(nn.Module):
             raise ValueError(f"norm must be None, x, y or xy, got {norm}.")
 
         # Normalize inside einsum to avoid creating a copy of candidates which can be pretty big
-        return torch.einsum(f"bc,oc,{eq}->bo", x, y, inv_norms)
+        with torch.autocast(x.device.type, enabled=False):  # bf16 logits keep ~3 digits
+            return torch.einsum(f"bc,oc,{eq}->bo", x, y, inv_norms)
 
     def get_scores(self, estimate: torch.Tensor, candidate: torch.Tensor) -> torch.Tensor:
         """Given estimates of shape [B, F] and candidates of shape [B', F], return a [B, B'] matrix
