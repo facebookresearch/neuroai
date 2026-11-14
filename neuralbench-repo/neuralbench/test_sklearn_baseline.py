@@ -43,6 +43,7 @@ from .baselines import (
     StatisticalRBFSVM,
     XdawnTsLR,
     _hemodynamic_features,
+    _HemodynamicClassifier,
     _UpperTriLog1p,
 )
 
@@ -508,7 +509,7 @@ def test_leaf_rejects_unknown_fields() -> None:
 
 @pytest.mark.parametrize("cls", _FNIRS_LEAVES)
 def test_fnirs_classical_baselines_recover_hemodynamic_ramp(
-    cls: type[SklearnClassifier],
+    cls: type[_HemodynamicClassifier],
 ) -> None:
     """Classical fNIRS baselines recover class-specific hemodynamic slopes/HRFs."""
     n_fit, n_test, n_classes = 90, 45, 3
