@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 import torch
@@ -149,13 +150,29 @@ def test_fnirs_defaults_build_the_fnirs_extractor() -> None:
     FnirsExtractor(**neuro)
 
 
+def _fnirs_chs_info(n_pairs: int) -> list[dict]:
+    """HbO then HbR channels of ``n_pairs`` source-detector pairs, 3 cm apart on an
+    8 cm ring, with midpoint, source and detector in ``loc[:9]`` as MNE stores them."""
+    chs = []
+    for kind in ("hbo", "hbr"):
+        for i in range(n_pairs):
+            src = np.array([0.08 * np.cos(i), 0.08 * np.sin(i), 0.05])
+            det = src + np.array([0.03, 0.0, 0.0])
+            loc = np.concatenate([(src + det) / 2, src, det, np.zeros(3)])
+            chs.append({"ch_name": f"S{i + 1}_D{i + 1} {kind}", "kind": kind, "loc": loc})
+    return chs
+
+
 @pytest.mark.parametrize("cls_name", _FNIRS_NETS.values())
 def test_fnirs_braindecode_model_forward(cls_name: str) -> None:
     bdm = pytest.importorskip("braindecode.models")
     if not hasattr(bdm, cls_name):
         pytest.skip(f"installed braindecode has no {cls_name}")
     torch.manual_seed(0)
-    model = getattr(bdm, cls_name)(n_chans=40, n_outputs=2, n_times=150, sfreq=5.0)
+    kwargs: dict = {"n_chans": 40}
+    if cls_name in ("GeoNIRS", "MtReNIRS"):  # both need optode geometry in chs_info
+        kwargs = {"chs_info": _fnirs_chs_info(20)}
+    model = getattr(bdm, cls_name)(n_outputs=2, n_times=150, sfreq=5.0, **kwargs)
     with torch.no_grad():
         out = model.eval()(torch.randn(2, 40, 150))
     assert out.shape == (2, 2)
