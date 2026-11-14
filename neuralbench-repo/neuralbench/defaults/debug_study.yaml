@@ -12,6 +12,7 @@ Albrecht2019Increased: "subject in ['Albrecht2019Increased/CC_EEG_s128_P', 'Albr
 Allen2022Massive: "timeline_index < 4"
 Allen2022MassiveRaw: "timeline_index < 4"
 Alvarez2022Haaglanden: "subject_index < 5"
+Bak2019Open: "subject_index < 5"
 Brennan2019Hierarchical: "subject_index == 0"
 Broderick2018Electrophysiological: "subject_index == 0"
 Chang2019Bold5000: "timeline_index < 6"

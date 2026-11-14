@@ -299,3 +299,31 @@ def test_brennan2019_timeline_count(tmp_path: Path) -> None:
     subjects = {t["subject"] for t in timelines}
     no_proc = {"S28", "S29", "S31", "S33", "S46", "S47", "S49"}
     assert subjects.isdisjoint(no_proc)
+
+
+def test_bak2019open_timelines_and_events(tmp_path: Path) -> None:
+    """Bak2019Open finds recordings with and without ``ses-*`` and emits one
+    ``Stimulus`` per ``events.tsv`` row, without network or SNIRF reads."""
+    from neuralfetch.studies.bak2019open import Bak2019Open
+
+    study = Bak2019Open(path=tmp_path)
+    stems = ["sub-01/nirs/sub-01", "sub-02/ses-1/nirs/sub-02_ses-1"]
+    for stem in stems:
+        base = study.bids_root / f"{stem}_task-tapping"
+        base.parent.mkdir(parents=True)
+        Path(f"{base}_nirs.snirf").touch()
+        Path(f"{base}_events.tsv").write_text(
+            "onset\tduration\ttrial_type\tvalue\n"
+            "1.875\t10.0\tright_finger_tapping\t1.0\n"
+            "30.9\t10.0\tfoot_tapping\t1.0\n"
+        )
+    timelines = list(study.iter_timelines())
+    assert timelines == [
+        {"subject": "01", "task": "tapping"},
+        {"subject": "02", "session": "1", "task": "tapping"},
+    ]
+    events = study._load_timeline_events(timelines[1])  # noqa: SLF001
+    assert events.type.tolist() == ["Fnirs", "Stimulus", "Stimulus"]
+    assert events.filepath[0] == f"{study.bids_root / stems[1]}_task-tapping_nirs.snirf"
+    assert events.code[1:].tolist() == [0, 2]
+    assert events.start[1:].tolist() == [1.875, 30.9]

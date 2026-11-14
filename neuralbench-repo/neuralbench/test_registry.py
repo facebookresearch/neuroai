@@ -24,8 +24,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
+import torch
 
 from neuralbench import registry
 from neuralbench.data import Data
@@ -34,12 +36,15 @@ from neuralbench.plots.tables import _collapse_feature_based_baselines
 from neuralbench.registry import (
     ALL_DATASETS,
     DEVICE_BASELINE_MODELS,
+    DEVICE_CLASSIC_MODELS,
+    DEVICE_FM_MODELS,
     FEATURE_BASED_BY_TASK,
     SKLEARN_BASELINE_MODELS,
     _expand_models,
     _resolve_dataset_stem,
     _task_aware_baseline,
 )
+from neuralset.extractors.neuro import FnirsExtractor
 
 
 def test_include_resolves_within_a_package(tmp_path: Path) -> None:
@@ -94,6 +99,84 @@ def test_task_aware_baseline_meg_typing_uses_multi_output_pipeline() -> None:
 def test_task_aware_baseline_fmri_still_excludes_sklearn_pipelines() -> None:
     # Regression guard: fMRI is still chance+dummy only.
     assert _task_aware_baseline("fmri", "image") == ["chance", "dummy"]
+
+
+_FNIRS_NETS = {
+    "fnirsnet": "FNIRSNet",
+    "fnirst": "FNIRST",
+    "fnirspret": "FNIRSPreT",
+    "fnirs4d": "FNIRS4D",
+    "fnirscnn1d": "FNIRSCNN1D",
+    "fnirsstatnet": "FNIRSStatNet",
+    "fnirslstm": "FNIRSLSTM",
+    "fnirsmlp": "FNIRSMLP",
+    "fnirsgcn": "FNIRSGCN",
+    "geonirs": "GeoNIRS",
+    "mtrenirs": "MtReNIRS",
+    "jungmae": "JungMAE",
+}
+_FNIRS_BASELINES = {
+    "mean_slope_lda": "MeanSlopeLDA",
+    "statistical_rbf_svm": "StatisticalRBFSVM",
+    "hrf_glm_lr": "HRFGLMLR",
+    "hemodynamic_knn": "HemodynamicKNN",
+    "hemodynamic_rf": "HemodynamicRF",
+    "hemodynamic_gbdt": "HemodynamicGBDT",
+    "hemodynamic_nb": "HemodynamicNB",
+}
+
+
+def test_fnirs_device_lists() -> None:
+    assert DEVICE_CLASSIC_MODELS["fnirs"] + DEVICE_FM_MODELS["fnirs"] == list(_FNIRS_NETS)
+    assert DEVICE_FM_MODELS["fnirs"] == ["geonirs", "mtrenirs", "jungmae"]
+    # No fNIRS baseline is task-dispatched: every task runs all of them.
+    assert _task_aware_baseline("fnirs", "motor_execution") == [
+        "chance",
+        "dummy",
+        *_FNIRS_BASELINES,
+    ]
+
+
+@pytest.mark.parametrize("model,cls_name", {**_FNIRS_NETS, **_FNIRS_BASELINES}.items())
+def test_fnirs_model_config_names_its_class(model: str, cls_name: str) -> None:
+    config = registry.load_yaml_config(registry._resolve_model_config_path(model))
+    assert config is not None
+    assert config["brain_model_config"]["name"] == cls_name
+
+
+def test_fnirs_defaults_build_the_fnirs_extractor() -> None:
+    neuro = dict(registry.load_default_config("fnirs")["data"]["neuro"])
+    assert neuro.pop("name") == "FnirsExtractor"
+    FnirsExtractor(**neuro)
+
+
+def _fnirs_chs_info(n_pairs: int) -> list[dict]:
+    """HbO then HbR channels of ``n_pairs`` source-detector pairs, 3 cm apart on an
+    8 cm ring, with midpoint, source and detector in ``loc[:9]`` as MNE stores them."""
+    chs = []
+    for kind in ("hbo", "hbr"):
+        for i in range(n_pairs):
+            src = np.array([0.08 * np.cos(i), 0.08 * np.sin(i), 0.05])
+            det = src + np.array([0.03, 0.0, 0.0])
+            loc = np.concatenate([(src + det) / 2, src, det, np.zeros(3)])
+            chs.append({"ch_name": f"S{i + 1}_D{i + 1} {kind}", "kind": kind, "loc": loc})
+    return chs
+
+
+@pytest.mark.parametrize("cls_name", _FNIRS_NETS.values())
+def test_fnirs_braindecode_model_forward(cls_name: str) -> None:
+    bdm = pytest.importorskip("braindecode.models")
+    if not hasattr(bdm, cls_name):
+        pytest.skip(f"installed braindecode has no {cls_name}")
+    torch.manual_seed(0)
+    kwargs: dict = {"n_chans": 40}
+    if cls_name in ("GeoNIRS", "MtReNIRS"):  # both need optode geometry in chs_info
+        kwargs = {"chs_info": _fnirs_chs_info(20)}
+    model = getattr(bdm, cls_name)(n_outputs=2, n_times=150, sfreq=5.0, **kwargs)
+    with torch.no_grad():
+        out = model.eval()(torch.randn(2, 40, 150))
+    assert out.shape == (2, 2)
+    assert torch.isfinite(out).all()
 
 
 def test_task_aware_baseline_unknown_task_drops_sklearn_pipelines() -> None:
@@ -199,15 +282,15 @@ def test_collapse_relabels_meg_sklearn_row_as_handcrafted() -> None:
 def test_load_default_config_overlays_plugin_device_defaults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    device_dir = tmp_path / "fnirs"
+    device_dir = tmp_path / "ieeg"
     device_dir.mkdir()
-    (device_dir / "config.yaml").write_text("data:\n  neuro:\n    name: FnirsExtractor\n")
+    (device_dir / "config.yaml").write_text("data:\n  neuro:\n    name: IeegExtractor\n")
     monkeypatch.setattr(
         registry, "_all_defaults_roots", lambda: [registry.DEFAULTS_DIR, tmp_path]
     )
-    overlaid = registry.load_default_config("fnirs")
+    overlaid = registry.load_default_config("ieeg")
     base = registry.load_default_config()
-    assert overlaid["data"]["neuro"]["name"] == "FnirsExtractor"
+    assert overlaid["data"]["neuro"]["name"] == "IeegExtractor"
     assert "name" not in base["data"]["neuro"]
     # A device with no overlay falls back to the base.
     assert registry.load_default_config("unknown") == base

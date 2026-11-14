@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralfetch`: `Bak2019Open` loads NEMAR nm000891, unilateral finger- and foot-tapping fNIRS (30 subjects, 75 trials each, HbO/HbR at 13.33 Hz), from `sub-*/nirs/` or `sub-*/ses-*/nirs/`.
+- `neuralbench`: `neuralbench fnirs motor_execution` classifies right-finger, left-finger and foot tapping on `Bak2019Open` (10 s trials, 3 classes).
+- `neuralbench`: `--device fnirs` has its own model lists, where it used the EEG ones: seven classical hemodynamic baselines (`mean_slope_lda`, `statistical_rbf_svm`, `hrf_glm_lr`, `hemodynamic_knn`, `hemodynamic_rf`, `hemodynamic_gbdt`, `hemodynamic_nb`) and the twelve braindecode fNIRS models (`fnirsnet`, `fnirst`, `fnirspret`, `fnirs4d`, `fnirscnn1d`, `fnirsstatnet`, `fnirslstm`, `fnirsmlp`, `fnirsgcn`; `geonirs`, `mtrenirs` and `jungmae` as foundation architectures trained from scratch), plus an fNIRS device default (`FnirsExtractor` at 10 Hz, 0.01-0.1 Hz band-pass).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).
