@@ -640,7 +640,7 @@ class BaseText(Event):
         The text content (must be non-empty)
     context : str, optional
         Contextual information (e.g., preceding words). Default: ""
-    modality : Literal["heard", "read", "imagined", "typed", "written", "caption"], optional
+    modality : Literal["heard", "spoken", "signed", "read", "imagined", "typed", "written", "caption"], optional
         Modality of the text event. Default: None
 
     Raises
@@ -653,7 +653,10 @@ class BaseText(Event):
     language: str = ""
     context: str = ""
     modality: (
-        tp.Literal["heard", "read", "imagined", "typed", "written", "caption"] | None
+        tp.Literal[
+            "heard", "spoken", "signed", "read", "imagined", "typed", "written", "caption"
+        ]
+        | None
     ) = None
 
 
