@@ -22,6 +22,7 @@ dependencies = [
   "packaging",
   "pydantic>=2.5.0",
   "torchmetrics>=1.1.2",
+  "tqdm>=4.65.0",
 ]
 
 [project.optional-dependencies]
