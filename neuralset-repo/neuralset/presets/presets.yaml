@@ -195,7 +195,7 @@ extractors:
   # TRIBE's text features, on the AlignedText events of AddAlignedTexts (one per
   # Text, the default text_type). Each word sees 512 to 1024 words of context
   # within its Text. frequency is excluded from the cache uid
-  text_qwen3_2hz:
+  text_qwen3:
     name: HuggingFaceText
     model_name: Qwen/Qwen3-0.6B
     layers: 0.6666666666666666  # 2/3

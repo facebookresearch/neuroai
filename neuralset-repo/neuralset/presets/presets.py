@@ -33,7 +33,7 @@ Usage::
     )
     study = presets.study("Hebart2023ThingsMeg", path=..., query="subject_index < 2")
 
-Word embeddings in context are covered by ``text_qwen3_2hz``
+Word embeddings in context are covered by ``text_qwen3``
 (``HuggingFaceText``), which reads the ``AlignedText`` events of
 ``neuralset.events.transforms.AddAlignedTexts`` (one per Text, the default).
 Audio, video and audio-visual extractors (``QwenOmni``) embed whole events in
