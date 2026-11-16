@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pydantic
 import torch
-from exca.base import DEFAULT_CHECK_SKIPS
 
 import neuralset as ns
 from neuralset import base
@@ -449,16 +448,6 @@ class BaseStatic(BaseExtractor):
                 data=embedding.numpy(),
             )
             yield ta
-
-
-# pylint: disable=unused-argument
-def _skip_new_event_types(key, val, prev):
-    if "event_types" in key and not prev:
-        return True
-    return False
-
-
-DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
 
 
 class Pulse(BaseStatic):
