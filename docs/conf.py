@@ -152,6 +152,8 @@ html_theme_options = {
         "color-announcement-background": "#935610",
         "color-announcement-text": "#FFFFFF",
     },
+    "light_logo": "logos/neuroai-mark-on-light.svg",
+    "dark_logo": "logos/neuroai-mark-on-dark.svg",
     "source_repository": "https://github.com/facebookresearch/neuroai/",
     "source_branch": "main",
     "source_directory": "docs/",

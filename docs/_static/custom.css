@@ -22,13 +22,6 @@
     }
 }
 
-.banner-brain-icon {
-    font-size: 3em;
-    color: var(--color-brand-primary);
-    animation: brain-pulse 2s ease-in-out infinite;
-    display: inline-block;
-}
-
 @keyframes brain-pulse {
     0%, 100% {
         transform: scale(1);
@@ -36,18 +29,6 @@
     50% {
         transform: scale(1.12);
     }
-}
-
-.banner-text {
-    display: inline-block;
-    font-size: 2.2em;
-    font-weight: 900;
-    background: linear-gradient(90deg, var(--color-brand-primary), #6BB6FF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: 1px;
-    vertical-align: middle;
 }
 
 /* ===== SIDEBAR BRAND ===== */
@@ -484,6 +465,26 @@ body[data-theme="dark"] .figure img {
     padding: 0.1rem 0.4rem;
     border-radius: 3px;
     background: var(--color-code-background);
+}
+
+/* ---- Logos (light/dark pairs, toggled by furo's only-light/only-dark) ---- */
+.banner-logo {
+    height: 96px;
+    max-width: 100%;
+}
+
+.sidebar-logo {
+    max-width: 96px;
+}
+
+.landing-logo-hero {
+    text-align: center;
+    margin: 0 auto 1.5rem auto;
+}
+
+.landing-logo-hero img {
+    height: 88px;
+    max-width: 100%;
 }
 
 /* ---- Landing page hero logo ---- */
@@ -1507,6 +1508,11 @@ body[data-theme="dark"] .result-item {
     color: var(--color-brand-primary);
     display: block;
     transition: transform 0.2s ease-out;
+}
+
+.package-card-icon img {
+    height: 1.6em;
+    width: auto;
 }
 
 .package-card:hover .package-card-icon {

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuraltrain-repo/assets/logo-on-dark.svg">
+    <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuraltrain-repo/assets/logo-on-light.svg" alt="neuraltrain" height="80">
+  </picture>
+</p>
+
 # neuraltrain
 
 A lightweight deep learning library for M/EEG, fMRI, and other

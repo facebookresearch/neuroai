@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralfetch-repo/assets/logo-on-dark.svg">
+    <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralfetch-repo/assets/logo-on-light.svg" alt="neuralfetch" height="80">
+  </picture>
+</p>
+
 # neuralfetch
 
 Download backends and data-fetching utilities for neuroimaging datasets.

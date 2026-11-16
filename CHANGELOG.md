@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Docs and READMEs: new Neural Suite logos (favicon, sidebar and landing page logos, package README headers); old unused logo images removed.
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).
