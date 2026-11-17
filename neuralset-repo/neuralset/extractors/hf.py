@@ -129,6 +129,7 @@ class HuggingFaceMixin(base.BaseModel):
         - "all": keep all layers
         - a float between 0 and 1 (or list of): the relative depth of the layer(s) to use,
         where 0 stands for the first layer and 1 for the last layer.
+        Selects the nearest hidden state, including the embedding output.
     cache_n_layers: None, int
         if provided, n equidistributed layers will be cached
         If None, only cache the output of the layers specified by `layers`.
@@ -136,7 +137,8 @@ class HuggingFaceMixin(base.BaseModel):
         How to aggregate the layers (first dimension of the tensor of activations).
         Can be "mean", "sum", "group_mean" or None (in which case we keep the original dimension).
         "group_mean" will average the layers by groups defined by the layers parameter,
-        e.g. if layers=[0, 0.5, 1] and there are 10 layers, the layers will be grouped as [0:5], [5:10].
+        e.g. with layers=[0, 0.5, 1] and 10 hidden states,
+        the groups are [0:4] and [4:10].
     token_aggregation: str
         How to aggregate the tokens (second dimension of the tensor of activations).
         Can be "first", "last", "mean", "sum", "max", "cat", or None (in which case we
@@ -329,7 +331,7 @@ class HuggingFaceMixin(base.BaseModel):
         else:
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             layer_indices = np.unique(
-                [int(i * (n_model_layers - 1)) for i in layers]
+                [round(i * (n_model_layers - 1)) for i in layers]
             ).tolist()  # type: ignore
         if len(layer_indices) == 1:
             if self.layer_aggregation is None:

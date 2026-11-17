@@ -320,7 +320,7 @@ def standardize_events(
         model (``from_dict`` → ``to_dict``). This fills missing fields
         with defaults, validates types, and coerces values. This is
         **significantly slower** than the rest of the normalization
-        (~10 s on 100k rows vs ~60 ms) and is only needed the first time
+        (~2-4 s on 100k rows vs ~60 ms) and is only needed the first time
         raw events are ingested. Pass ``False`` when the data has already
         been through ``auto_fill`` (e.g. post-concat re-normalization,
         transform wrapper, cache load).
@@ -347,8 +347,10 @@ def standardize_events(
     if not all(isinstance(typ, str) for typ in types):
         raise ValueError(msg)
     if auto_fill:
-        validated = events.apply(_coerce_event, axis=1)
-        df = pd.DataFrame(validated.tolist(), index=events.index)
+        lower = {x.lower() for x in Event._CLASSES}
+        columns = list(events.columns)
+        records = [dict(zip(columns, row)) for row in events.to_numpy()]
+        df = pd.DataFrame([_coerce_event(r, lower) for r in records], index=events.index)
         null = df.loc[df.duration <= 0, :]
         if not null.empty:
             types = null["type"].unique()
@@ -390,18 +392,15 @@ def standardize_events(
     return df
 
 
-def _coerce_event(event: pd.Series) -> dict[str, tp.Any]:
+def _coerce_event(event: dict[str, tp.Any], lower: set[str]) -> dict[str, tp.Any]:
     """Coerce a single event row through its pydantic Event model.
 
     Instantiates the Event subclass for this row's ``type``, which validates
     fields and fills defaults, then converts back to a dict.
     """
-    from . import etypes
-
     event_type = event["type"]
-    lower = {x.lower() for x in etypes.Event._CLASSES}
-    if event_type in etypes.Event._CLASSES:
-        event_class = etypes.Event._CLASSES[event_type]
+    event_class = Event._CLASSES.get(event_type)
+    if event_class is not None:
         event_obj = event_class.from_dict(event).to_dict()
         event_dict = {**event, **event_obj}
     elif event_type in lower:

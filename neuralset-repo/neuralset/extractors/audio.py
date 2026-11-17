@@ -115,10 +115,8 @@ class BaseAudio(BaseExtractor):
     def _resample_wav(
         self, wav: torch.Tensor, old_frequency: float, new_frequency: float
     ) -> torch.Tensor:
-        for freq in (old_frequency, new_frequency):
-            if not float(freq).is_integer():
-                raise ValueError(f"Frequencies need to be integers, got {freq}")
-        old_frequency, new_frequency = int(old_frequency), int(new_frequency)
+        # drift-corrected rates (e.g. MEG-SCANS, 44078.8 Hz): rounding stretches by < 1e-5
+        old_frequency, new_frequency = round(old_frequency), round(new_frequency)
         import julius  # noqa
 
         wav = julius.resample.ResampleFrac(

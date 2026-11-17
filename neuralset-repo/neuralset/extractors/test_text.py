@@ -222,6 +222,13 @@ def test_layer_aggregation(
         assert out.ndim == 1
 
 
+def test_aggregate_layers_depth_grid() -> None:
+    latents = np.arange(13)[:, None]
+    for k, depth in [*enumerate(np.linspace(0, 1, 13)), (7, 0.58)]:
+        extractor = text.HuggingFaceText(layers=float(depth))
+        assert extractor._aggregate_layers(latents).item() == k, depth
+
+
 def test_huggingface_text_with_sentence_events():
     events = _make_test_events()
     events["type"] = "Sentence"
