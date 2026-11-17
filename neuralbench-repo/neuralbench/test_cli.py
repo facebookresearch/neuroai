@@ -8,6 +8,7 @@ import shutil
 import typing as tp
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
@@ -16,7 +17,7 @@ from exca import ConfDict
 import neuralset as ns
 
 from . import transforms as _transforms  # noqa: F401  — registers Step subclasses
-from .cli import run_benchmark
+from .cli import run_benchmark, run_benchmark_cli
 from .experiment_config import (
     _apply_prepare_overlay,
     _warn_slurm_partition,
@@ -73,24 +74,6 @@ def test_prepare_task_configs(dataset: str | None) -> None:
     source: tp.Any = steps["source"]
     assert source.path is not None
     assert source.infra is not None
-
-
-def test_config_overlay_wins_over_task_but_not_debug() -> None:
-    configs = prepare_task_configs(
-        ConfDict(load_default_config("eeg")),
-        ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml")),
-        "eeg",
-        "motor_imagery",
-        use_task_grid=False,
-        debug=True,
-        force=False,
-        prepare=False,
-        download=False,
-        models=[None],
-        config_overlay={"data.neuro.filter": [4.0, 40.0], "trainer_config.n_epochs": 300},
-    )
-    assert configs[0]["data.neuro.filter"] == [4.0, 40.0]
-    assert configs[0]["trainer_config.n_epochs"] == 2  # debug overlay still applies
 
 
 @pytest.mark.parametrize("cluster", [None, "auto", "slurm"])
@@ -166,7 +149,7 @@ def test_prepare_overlay_respects_cluster(
 
 
 def _capture_assembled_experiments(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, **kwargs: tp.Any
 ) -> list[ConfDict]:
     """Run ``run_benchmark`` with a stubbed aggregator, returning assembled configs."""
     captured: dict[str, tp.Any] = {}
@@ -179,8 +162,36 @@ def _capture_assembled_experiments(
             pass
 
     monkeypatch.setattr("neuralbench.main.BenchmarkAggregator", _FakeAggregator)
-    run_benchmark("eeg", "motor_imagery")
+    run_benchmark("eeg", "motor_imagery", **kwargs)
     return captured["experiments"]
+
+
+def test_run_benchmark_overrides_survive_the_debug_overlay(
+    monkeypatch: pytest.MonkeyPatch, patch_config: Callable[..., None]
+) -> None:
+    patch_config(WANDB_HOST="", SLURM_PARTITION="dummy")
+    overrides = {"trainer_config.n_epochs": 7, "data": {"neuro": {"filter": [4.0, 40.0]}}}
+    for cfg in _capture_assembled_experiments(
+        monkeypatch, debug=True, overrides=overrides
+    ):
+        assert cfg["trainer_config.n_epochs"] == 7
+        assert cfg["data.neuro.filter"] == [4.0, 40.0]
+
+
+def test_run_benchmark_cli_reads_overrides_from_yaml(
+    monkeypatch: pytest.MonkeyPatch, patch_config: Callable[..., None], tmp_path: Path
+) -> None:
+    patch_config(WANDB_HOST="", SLURM_PARTITION="dummy")
+    path = tmp_path / "filter.yaml"
+    path.write_text("data.neuro.filter: [4.0, 40.0]\n")
+    captured: dict[str, tp.Any] = {}
+    monkeypatch.setattr(
+        "neuralbench.cli.run_benchmark", lambda **kwargs: captured.update(kwargs)
+    )
+    argv = ["neuralbench", "eeg", "motor_imagery", "--overrides", str(path)]
+    monkeypatch.setattr("sys.argv", argv)
+    run_benchmark_cli()
+    assert ConfDict(captured["overrides"]).flat() == {"data.neuro.filter": [4.0, 40.0]}
 
 
 def test_run_benchmark_disables_wandb_when_host_blank(

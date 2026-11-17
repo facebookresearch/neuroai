@@ -66,12 +66,10 @@ def _experiment_configs(
     cluster: str | None,
     **selection: tp.Any,
 ) -> list[ConfDict]:
-    configs = build_experiment_configs(model=model_overlay, quiet=True, **selection)
+    configs = build_experiment_configs(
+        model=model_overlay, quiet=True, overrides=overrides, **selection
+    )
     for config in configs:
-        # Last, because the debug and prepare overlays run after a model config
-        # is merged and would otherwise silently revert an override.
-        if overrides:
-            config.update(dict(overrides))
         apply_cluster(config, cluster)
     return configs
 

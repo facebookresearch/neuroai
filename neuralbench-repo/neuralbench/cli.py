@@ -51,7 +51,7 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
-    config_overlay: dict[str, tp.Any] | None = None,
+    overrides: tp.Mapping[str, tp.Any] | None = None,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -102,10 +102,12 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
-    config_overlay : dict or None
-        Config keys (dotted or nested) merged over every experiment after the
-        task, model and dataset configs, e.g. ``{"data.neuro.filter": [4, 40]}``.
-        Overridden values change the cache keys, so the runs are cached apart.
+    overrides : mapping or None
+        Dotted-key or nested config overrides, e.g.
+        ``{"data.neuro.filter": [4.0, 40.0]}``, applied last to every experiment
+        (after the debug and prepare overlays), as in
+        :func:`~neuralbench.evaluate_model`.  Overridden values change the cache
+        keys, so the runs are cached apart.
 
     Returns
     -------
@@ -148,7 +150,7 @@ def run_benchmark(
         prepare=prepare,
         download=download,
         quiet=plot_cached,
-        config_overlay=config_overlay,
+        overrides=overrides,
     )
 
     if download:
@@ -288,11 +290,11 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
-        "--config-overlay",
+        "--overrides",
         metavar="YAML",
         help=(
-            "YAML of config keys merged over every experiment after the task, "
-            "model and dataset configs, e.g. 'data.neuro.filter: [4.0, 40.0]'."
+            "YAML file of dotted-key or nested config overrides applied last to every "
+            "experiment, e.g. 'data.neuro.filter: [4.0, 40.0]'."
         ),
     )
     parser.add_argument(
@@ -340,11 +342,9 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
-            config_overlay=(
-                None
-                if args.config_overlay is None
-                else load_yaml_config(args.config_overlay)
-            ),
+            overrides=None
+            if args.overrides is None
+            else load_yaml_config(args.overrides),
         )
     except Exception:
         if not args.pdb:

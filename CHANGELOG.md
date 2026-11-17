@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- `neuralbench`: `--config-overlay YAML` (`run_benchmark(config_overlay=...)`) merges config keys over every experiment after the task, model and dataset configs, so one file sweeps a setting such as `data.neuro.filter` across a benchmark; overridden values are cached apart.
+- `neuralbench`: `--overrides YAML` and `run_benchmark(overrides=...)` apply dotted-key or nested config overrides last to every experiment, like `evaluate_model(overrides=...)`, which now goes through the same `build_experiment_configs(overrides=...)` (#358).
 
 ## [0.4.0] - 2026-10-10
 

@@ -279,14 +279,9 @@ def _prepare_single_task_config(
     quiet: bool = False,
     retry: bool = False,
     max_neuro_hours_per_epoch: float | None = None,
-    config_overlay: dict[str, tp.Any] | None = None,
 ) -> list[ConfDict]:
     """Assemble experiment configs for a single task, applying mode overlays and grid expansion."""
     config["task_name"] = task_name
-    # after the task/model/dataset merge so it wins, before the mode overlays so
-    # --debug stays short
-    if config_overlay is not None:
-        config.update(config_overlay)
     if config.get("wandb_config") is not None:
         config["wandb_config.group"] = f"{device}/{task_name}"
 
@@ -329,7 +324,6 @@ def prepare_task_configs(
     quiet: bool = False,
     retry: bool = False,
     max_neuro_hours_per_epoch: float | None = None,
-    config_overlay: dict[str, tp.Any] | None = None,
 ) -> list[ConfDict]:
     """Run a specific neuralbench task with given configuration."""
     if not quiet:
@@ -389,7 +383,6 @@ def prepare_task_configs(
                         quiet=quiet,
                         retry=retry,
                         max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
-                        config_overlay=config_overlay,
                     )
                 )
 
@@ -421,7 +414,7 @@ def build_experiment_configs(
     prepare: bool = False,
     download: bool = False,
     quiet: bool = False,
-    config_overlay: dict[str, tp.Any] | None = None,
+    overrides: tp.Mapping[str, tp.Any] | None = None,
 ) -> list[ConfDict]:
     """Assemble one experiment config per (task, dataset, space, model, grid point).
 
@@ -540,11 +533,15 @@ def build_experiment_configs(
                     quiet=quiet,
                     retry=retry,
                     max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
-                    config_overlay=config_overlay,
                 )
             )
     if tasks and not configs:
         raise ValueError("No experiment left for this selection; see the warnings above.")
+    if overrides:
+        # Last, because the debug and prepare overlays run after a model config
+        # is merged and would otherwise silently revert an override.
+        for config in configs:
+            config.update(dict(overrides))
     return configs
 
 
