@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 from neuralfetch import utils
+from neuralfetch.utils.montage import set_bipolar_montage
 from neuralset.events import study
 from neuralset.events.etypes import CategoricalEvent
 from neuralset.events.study import _identify_study_subfolder
@@ -177,8 +178,8 @@ class _BaseTuhEeg(study.Study):
         raw = raw.drop_channels(to_drop)
         if to_drop:
             logger.info("Dropped %s unrecognized EEG channels: %s", len(to_drop), to_drop)
-        # XXX Double check whether this is necessary
-        raw = raw.set_montage(montage, on_missing="ignore")
+        # bipolar channels (e.g. FP1-F7) at their first electrode
+        set_bipolar_montage(raw, "standard_1005")
 
         return raw
 
