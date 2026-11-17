@@ -1183,10 +1183,13 @@ _CV_SCHEMES: dict[str, dict[str, tp.Any]] = {  # the --cv presets of neuralbench
 
 
 @pytest.mark.parametrize(
-    "scheme, n_splits",
-    [("cross_subject", 3), ("cross_session", 6), ("within_session", 12)],
+    "scheme, n_splits, n_val",
+    # validation is ceil(0.2 x the group): 1 of 3 subjects (8 trials); 2 of a
+    # subject's 8 trials, its one training session being the only value left; 1 of
+    # a session's 4 trials
+    [("cross_subject", 3, 8), ("cross_session", 6, 2), ("within_session", 12, 1)],
 )
-def test_cross_validation_split(scheme: str, n_splits: int) -> None:
+def test_cross_validation_split(scheme: str, n_splits: int, n_val: int) -> None:
     events = _cv_events()
     kw: tp.Any = dict(event_types="Stimulus", **_CV_SCHEMES[scheme])
     assert _transf.CrossValidationSplit(**kw).get_n_splits(events) == n_splits
@@ -1195,6 +1198,7 @@ def test_cross_validation_split(scheme: str, n_splits: int) -> None:
         out = _transf.CrossValidationSplit(fold=fold, **kw)(events.copy())
         trials = out[out.type == "Stimulus"].dropna(subset=["split"])
         assert set(trials.split) == {"train", "val", "test"}
+        assert (trials.split == "val").sum() == n_val
         held_out += trials.index[trials.split == "test"].tolist()
         # a cross-subject fold tests one subject; the others stay in one subject
         assert trials[trials.split == "test"].subject.nunique() == 1

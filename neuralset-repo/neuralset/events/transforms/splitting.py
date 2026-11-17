@@ -6,6 +6,7 @@
 
 import hashlib
 import logging
+import math
 import typing as tp
 from collections import Counter
 
@@ -312,8 +313,10 @@ class CrossValidationSplit(EventsTransform):
     random_state : int
         Random state of the k-fold shuffling.
     valid_split_ratio : float
-        Ratio of the training values drawn for validation, or of the training
-        events when the fold trains on a single value.
+        Ratio of the fold's group drawn for validation, as in :class:`SklearnSplit`
+        (rounded up, as ``train_test_split``): that many of its values, taken from
+        the training ones, or, when the fold trains on a single value, that many of
+        its events, taken from that value's.
     valid_random_state : int
         Random state for the validation draw.
     """
@@ -401,20 +404,24 @@ class CrossValidationSplit(EventsTransform):
             in_group &= events[column] == value
         values = events[self.split_by]
         if len(train) >= 2:
-            _, val = train_test_split(
-                train,
-                test_size=self.valid_split_ratio,
-                random_state=self.valid_random_state,
-            )
-            is_val = in_group & values.isin(val)
+            pool: tp.Any = train
+            n_val = math.ceil(self.valid_split_ratio * (len(train) + len(test)))
         else:  # a single training value: draw validation events from it
-            candidates = in_group & values.isin(train) & self._drawn(events)
-            _, val_index = train_test_split(
-                events.index[candidates],
-                test_size=self.valid_split_ratio,
-                random_state=self.valid_random_state,
+            drawn = in_group & self._drawn(events)
+            pool = events.index[drawn & values.isin(train)]
+            n_val = math.ceil(self.valid_split_ratio * int(drawn.sum()))
+        if n_val >= len(pool):
+            raise ValueError(
+                f"CrossValidationSplit: valid_split_ratio={self.valid_split_ratio} leaves "
+                f"no training data in fold {self.fold}"
             )
-            is_val = pd.Series(events.index.isin(val_index), index=events.index)
+        _, val = train_test_split(
+            pool, test_size=n_val, random_state=self.valid_random_state
+        )
+        if len(train) >= 2:
+            is_val = in_group & values.isin(val)
+        else:
+            is_val = pd.Series(events.index.isin(val), index=events.index)
         events["split"] = None
         events.loc[in_group & values.isin(train), "split"] = "train"
         events.loc[is_val, "split"] = "val"

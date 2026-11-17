@@ -226,8 +226,9 @@ scores compare with the MOABB literature; they are presets of
 can also use directly.  The folds are counted on each dataset's events when the
 configs are built, so ``--dataset all`` gives each dataset its own folds.  Each
 fold runs once, with the first seed of the grid, so tables report mean ± std
-across folds.  Validation is drawn from the training subjects (sessions, trials);
-the test fold is held out whole.
+across folds.  Validation takes the task split's share of the data
+(``valid_split_ratio``), drawn from the training subjects (sessions, trials); the
+test fold is held out whole.
 
 Visualizing results
 --------------------
