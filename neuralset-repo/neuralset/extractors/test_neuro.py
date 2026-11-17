@@ -528,6 +528,31 @@ def test_ecg_extractor_reads_and_filters_lead_in_eeg_recording(tmp_path: Path) -
     )
 
 
+def test_emg_extractor_takes_the_envelope_of_emg_channels(tmp_path: Path) -> None:
+    sfreq = 1000.0
+    times = np.arange(0, 4, 1 / sfreq)
+    burst = (times >= 2.0) * 1e-3 * np.sin(2 * np.pi * 100.0 * times)
+    info = mne.create_info(["deltoid"], sfreq=sfreq, ch_types="emg")
+    fif = tmp_path / "emg-raw.fif"
+    mne.io.RawArray(burst[None], info).save(fif)
+    event = etypes.Emg.from_dict(
+        dict(
+            start=0.0,
+            duration=4.0,
+            timeline="foo",
+            filepath=str(fif),
+            type="Emg",
+            subject="janedoe",
+        )
+    )
+    extractor = ns.extractors.EmgExtractor(apply_hilbert=True, scaler=None)
+    envelope = next(iter(extractor._get_data([event]))).data[0]
+    # emg is outside MNE's 'data' picks, which apply_hilbert defaults to
+    assert envelope.min() >= 0.0
+    assert envelope[2500:3500].mean() == pytest.approx(1e-3, rel=0.05)
+    assert envelope[500:1500].max() < 1e-5
+
+
 @pytest.mark.parametrize(
     "filtr,culprits,expected",
     [
