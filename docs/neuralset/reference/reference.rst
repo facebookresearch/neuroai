@@ -168,6 +168,7 @@ Extractors — Neuro
    IeegExtractor
    MegExtractor
    MneRaw
+   RawTransform
    SpikesExtractor
 
 Extractors — Audio
