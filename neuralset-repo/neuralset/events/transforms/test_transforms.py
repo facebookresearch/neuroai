@@ -533,6 +533,8 @@ def test_ensure_texts_encloses_words() -> None:
 @pytest.mark.skipif("CI" in os.environ, reason="DL punctuation model not in CI")
 def test_ensure_texts_fullstop() -> None:
     _, df = _make_test_events()
+    # the model re-predicts punctuation, so already punctuated words come back as is
+    df["text"] = df.text.str.rstrip(".")
     df = ns.events.standardize_events(df)
     try:
         result = _transf.EnsureTexts(punctuation="fullstop")(df)

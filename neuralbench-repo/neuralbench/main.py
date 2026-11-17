@@ -393,7 +393,10 @@ class Experiment(BaseExperiment):
             logger=loggers,
             callbacks=callbacks,
             accelerator="cpu" if self.infra.gpus_per_node == 0 else "auto",
-            devices=1 if is_test else self.infra.gpus_per_node,
+            # the cpu accelerator rejects devices=0
+            devices=1
+            if is_test or self.infra.gpus_per_node == 0
+            else self.infra.gpus_per_node,
             num_nodes=1,
         )
 
