@@ -1,6 +1,9 @@
-<h1 align="center">
-  <span style="font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-weight: 800; font-size: 3em; color: #4169e1; letter-spacing: -1px;">Neuro AI</span>
-</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/logos/neuroai-on-dark.svg">
+    <img src="docs/_static/logos/neuroai-on-light.svg" alt="neuroai" height="96">
+  </picture>
+</p>
 
 <p align="center">
   <strong style="font-size: 1.15em; letter-spacing: 0.04em;">made easy</strong>
