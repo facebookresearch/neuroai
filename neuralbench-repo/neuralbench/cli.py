@@ -189,6 +189,11 @@ def run_benchmark(
                     results.append(None)
             return results
 
+        if any((c.get("infra.gpus_per_node") or 0) > 1 for c in configs):
+            # optuna-integration prunes multi-GPU (DDP) runs only with an RDB storage
+            logger.warning(
+                "Optuna pruning is off for the multi-GPU runs of this selection"
+            )
         first_seed = configs[0]["seed"]
         for task_name in dict.fromkeys(c["task_name"] for c in configs):
             task_configs = [

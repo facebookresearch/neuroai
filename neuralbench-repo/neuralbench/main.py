@@ -471,9 +471,11 @@ class Experiment(BaseExperiment):
             best_model_path = getattr(
                 trainer.checkpoint_callback, "best_model_path", None
             )
-            assert best_model_path is not None
-            Path(best_model_path).unlink(missing_ok=True)
-            LOGGER.info("Deleted checkpoint: %s", best_model_path)
+            # empty when no epoch was checkpointed, e.g. a run pruned at its first
+            # validation; Path("") would be the working directory
+            if best_model_path:
+                Path(best_model_path).unlink(missing_ok=True)
+                LOGGER.info("Deleted checkpoint: %s", best_model_path)
 
         if self._wandb_logger is not None:
             import wandb

@@ -21,12 +21,13 @@ trials early.  Re-running the same command resumes the studies.
 import hashlib
 import logging
 import typing as tp
+import uuid
 from pathlib import Path
 
-import pydantic
 import yaml
 from exca import ConfDict
 
+import neuralset as ns
 from neuralbench.registry import DEFAULTS_DIR, _resolve_task_dir
 
 LOGGER = logging.getLogger(__name__)
@@ -34,13 +35,18 @@ LOGGER = logging.getLogger(__name__)
 RunBatch = tp.Callable[[list[ConfDict]], list[dict[str, tp.Any] | None]]
 
 
-class OptunaTrial(pydantic.BaseModel):
-    """The Optuna trial an experiment reports its validation monitor to."""
+class OptunaTrial(ns.BaseModel):
+    """The Optuna trial an experiment reports its validation monitor to.
 
-    model_config = pydantic.ConfigDict(extra="forbid")
+    Part of the experiment's cache uid, so each trial caches apart.  ``study_uid``
+    is drawn when the study is created: a study recreated from scratch (e.g. after
+    deleting its journal) does not reuse the runs of an older one, while a
+    resumed study does.
+    """
 
     storage: str  # journal file
     study_name: str
+    study_uid: str
     trial_id: int
 
     def pruning_callback(self, monitor: str) -> tp.Any:
@@ -140,6 +146,8 @@ def tune(
             else "minimize",
             pruner=_pruner(),
         )
+        if "uid" not in study.user_attrs:  # a new study
+            study.set_user_attr("uid", uuid.uuid4().hex[:12])
         # reseeded with the trial count, so a resumed study does not redraw its trials;
         # constant_liar spreads the trials asked before a batch's results are in
         study.sampler = optuna.samplers.TPESampler(
@@ -168,7 +176,10 @@ def tune(
             trial_config = config.copy()
             trial_config.update(trial.params)
             trial_config["optuna_trial"] = OptunaTrial(
-                storage=journal, study_name=study.study_name, trial_id=trial._trial_id
+                storage=journal,
+                study_name=study.study_name,
+                study_uid=study.user_attrs["uid"],
+                trial_id=trial._trial_id,
             ).model_dump()
             trial_configs.append(trial_config)
         for (study, config, _, trial), result in zip(asked, run_batch(trial_configs)):

@@ -101,7 +101,7 @@ namespaces = false
   plugins = ['pydantic.mypy']
   show_error_codes = true
 [[tool.mypy.overrides]]
-  module = ['pytest', 'setuptools', 'mne', 'cloudpickle', 'torchvision', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'seaborn', 'seaborn.*', 'wandb', 'wandb.*', 'pyriemann', 'pyriemann.*', 'safetensors', 'safetensors.*', 'huggingface_hub']
+  module = ['pytest', 'setuptools', 'mne', 'cloudpickle', 'torchvision', 'spacy', 'spacy.cli', 'osfclient', 'botocore', 'botocore.*', 'boto3', 'wordfreq', 'transformers', 'sklearn.*', 'scipy.*', 'torchmetrics', 'torchmetrics.*', 'braindecode', 'braindecode.*', 'lightning.pytorch.*', 'x_transformers', 'seaborn', 'seaborn.*', 'wandb', 'wandb.*', 'pyriemann', 'pyriemann.*', 'safetensors', 'safetensors.*', 'huggingface_hub', 'optuna_integration', 'optuna_integration.*']
   ignore_missing_imports = true
 
 [tool.pydantic-mypy]

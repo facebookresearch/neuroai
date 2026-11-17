@@ -41,8 +41,14 @@ def test_tune_batches_resumes_and_tells_states(tmp_path: Path, mode: str) -> Non
         sizes.append(len(configs))
         return _run_batch(configs)
 
+    uid = study.user_attrs["uid"]
     (study,) = tune([config], SPACE, counting, 9, tmp_path, batch_size=3)
-    assert sizes == [2] and len(study.trials) == 9
+    assert sizes == [2] and len(study.trials) == 9 and study.user_attrs["uid"] == uid
+    # a study recreated from scratch gets a new uid, so its runs are cached apart
+    for journal in tmp_path.glob("*.journal"):
+        journal.unlink()
+    (study,) = tune([config], SPACE, _run_batch, 1, tmp_path)
+    assert study.user_attrs["uid"] != uid
 
 
 class _Module(pl.LightningModule):
@@ -71,7 +77,8 @@ def test_pruning_callback_stops_a_bad_run_from_the_journal(tmp_path: Path) -> No
             good.report(1.0, epoch)
         study.tell(good, 1.0)
     # the training job only gets this reference and rebuilds the trial from the journal
-    ref = OptunaTrial(storage=str(path), study_name="s", trial_id=study.ask()._trial_id)
+    trial_id = study.ask()._trial_id
+    ref = OptunaTrial(storage=str(path), study_name="s", study_uid="u", trial_id=trial_id)
     trainer = pl.Trainer(
         max_epochs=5,
         callbacks=[ref.pruning_callback("val/score")],

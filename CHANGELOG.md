@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- `neuralbench`: `--optuna N [--optuna-batch K]` (`run_benchmark(optuna_trials=...)`) tunes each task/model/dataset with `N` Optuna TPE trials over `defaults/search_space.yaml` (a task's `search_space.yaml` overrides keys), run and cached as ordinary experiments, ranked on the validation monitor and pruned early through optuna-integration's `PyTorchLightningPruningCallback`; studies are journal files under `<SAVE_DIR>/optuna` and resume on re-run. `optuna` is a new optional extra. Experiment results carry the best validation score under the `trainer_config.monitor` key.
+- `neuralbench`: `--optuna N [--optuna-batch K]` (`run_benchmark(optuna_trials=...)`) tunes each task/model/dataset with `N` Optuna TPE trials over `defaults/search_space.yaml` (a task's `search_space.yaml` overrides keys), run and cached as ordinary experiments, ranked on the validation monitor and pruned early through optuna-integration's `PyTorchLightningPruningCallback`; studies are journal files under `<SAVE_DIR>/optuna` and resume on re-run. `optuna` is a new optional extra. Experiment results carry the best validation score under the `trainer_config.monitor` key (#357).
 
 ## [0.4.0] - 2026-10-10
 
