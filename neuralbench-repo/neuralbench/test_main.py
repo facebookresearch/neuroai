@@ -371,3 +371,16 @@ def test_test_predictions_accessor_errors_when_unsaved(monkeypatch, tmp_path) ->
     monkeypatch.setattr(type(experiment.infra), "uid_folder", lambda self: tmp_path)
     with pytest.raises(ValueError, match="save_test_predictions=True"):
         experiment.test_predictions()
+
+
+def test_setup_trainer_trains_on_cpu_without_gpus(
+    patch_config: tp.Callable[..., None],
+) -> None:
+    from .experiment_config import build_experiment_configs
+
+    patch_config(WANDB_HOST="", SLURM_PARTITION="dummy")
+    config = build_experiment_configs("eeg", "motor_imagery", debug=True, quiet=True)[0]
+    config["infra.gpus_per_node"] = 0  # the cpu accelerator rejects devices=0
+    trainer = Experiment(**config).setup_trainer()
+    assert trainer.num_devices == 1
+    assert type(trainer.accelerator).__name__ == "CPUAccelerator"

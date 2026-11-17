@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: training with `infra.gpus_per_node=0` passed `devices=0` to the CPU accelerator, which Lightning rejects; it now trains on one CPU device (#361).
+- `neuralfetch`: `Hebart2023ThingsMeg` downloads again: it built its `Openneuro` client with positional arguments, which the model rejects (#361).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).
