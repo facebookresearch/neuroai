@@ -148,7 +148,7 @@ def test_prepare_overlay_respects_cluster(
 
 
 def _capture_assembled_experiments(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, **kwargs: tp.Any
 ) -> list[ConfDict]:
     """Run ``run_benchmark`` with a stubbed aggregator, returning assembled configs."""
     captured: dict[str, tp.Any] = {}
@@ -161,8 +161,28 @@ def _capture_assembled_experiments(
             pass
 
     monkeypatch.setattr("neuralbench.main.BenchmarkAggregator", _FakeAggregator)
-    run_benchmark("eeg", "motor_imagery")
+    run_benchmark("eeg", "motor_imagery", **kwargs)
     return captured["experiments"]
+
+
+@pytest.mark.parametrize("debug, folds", [(False, [0, 1, 2]), (True, [0])])
+def test_run_benchmark_cv_sweeps_folds_on_one_seed(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_config: Callable[..., None],
+    debug: bool,
+    folds: list[int],
+) -> None:
+    patch_config(WANDB_HOST="", SLURM_PARTITION="dummy")
+    exps = _capture_assembled_experiments(
+        monkeypatch, cv="cross_subject", cv_folds=3, debug=debug
+    )
+    assert [e["data.study.split.fold"] for e in exps] == folds
+    assert {e["seed"] for e in exps} == {33}
+    split = exps[0]["data.study.split"]
+    assert split["name"] == "MoabbCVSplit" and "split_by" not in split
+    assert split["label_field"] == "code"
+    # debug sees a few subjects, so it cannot check the full fold count
+    assert split["n_splits"] == (None if debug else 3)
 
 
 def test_run_benchmark_disables_wandb_when_host_blank(

@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `--cv {cross_subject,cross_session,within_session} --cv-folds N` evaluates on the folds of the MOABB splitter (`transforms.MoabbCVSplit`) instead of the task's split, one run per fold on the first grid seed; results carry a `fold` column and tables report the spread across folds.
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

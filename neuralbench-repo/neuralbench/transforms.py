@@ -617,6 +617,108 @@ class OffsetEvents(_transf.EventsTransform):
         return events
 
 
+class MoabbCVSplit(_transf.EventsTransform):
+    """One fold of a MOABB cross-validation scheme, as the ``split`` column.
+
+    Runs the ``moabb.evaluations.splitters`` splitter of *scheme* over the
+    trigger events, marks the *fold*-th partition ``train``/``test``, then
+    carves ``val`` out of train by ``valid_split_by`` groups (rows when train
+    has fewer than two groups), so the test set is exactly MOABB's.
+
+    Parameters
+    ----------
+    scheme : {"cross_subject", "cross_session", "within_session"}
+        Leave-one-subject-out, leave-one-session-out per subject, or stratified
+        k-fold within each (subject, session).
+    fold : int
+        Partition to materialize, in ``[0, n_splits)``.
+    n_splits : int or None
+        Number of partitions the splitter must produce; a mismatch raises with
+        the actual count.  ``None`` skips the check.
+    trigger_event_type : str or list of str
+        Event type(s) whose rows are the trials to split.
+    label_field : str or None
+        Trial column the ``within_session`` stratification uses.
+    """
+
+    scheme: tp.Literal["cross_subject", "cross_session", "within_session"]
+    fold: int
+    n_splits: int | None
+    trigger_event_type: str | list[str]
+    label_field: str | None = None
+    n_folds: int = 5  # within_session only
+    random_state: int = 33
+    valid_split_ratio: float = 0.2
+    valid_random_state: int = 33
+    valid_split_by: str = "timeline"
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        # lazy: moabb is only needed when a CV split runs
+        from moabb.evaluations import splitters
+
+        splitter = {
+            "cross_subject": lambda: splitters.CrossSubjectSplitter(),
+            "cross_session": lambda: splitters.CrossSessionSplitter(),
+            "within_session": lambda: splitters.WithinSessionSplitter(
+                n_folds=self.n_folds, random_state=self.random_state
+            ),
+        }[self.scheme]()
+        events = events.reset_index(drop=True)
+        types = (
+            [self.trigger_event_type]
+            if isinstance(self.trigger_event_type, str)
+            else self.trigger_event_type
+        )
+        trials = events.loc[events["type"].isin(types)]
+        if trials.empty:
+            raise ValueError(f"MoabbCVSplit: no trigger events of type {types}")
+        metadata = pd.DataFrame(
+            {
+                "subject": trials["subject"].astype(str),
+                "session": trials.get(
+                    "session", pd.Series("", index=trials.index)
+                ).astype(str),
+            }
+        )
+        y = (
+            trials[self.label_field]
+            if self.label_field in trials
+            else np.zeros(len(trials))
+        )
+        splits = list(splitter.split(np.asarray(y), metadata))
+        if self.n_splits is not None and len(splits) != self.n_splits:
+            raise ValueError(
+                f"MoabbCVSplit(scheme={self.scheme!r}) produced {len(splits)} folds, "
+                f"not n_splits={self.n_splits}: re-run with --cv-folds {len(splits)}"
+            )
+        if not 0 <= self.fold < len(splits):
+            raise ValueError(f"MoabbCVSplit: fold={self.fold} not in [0, {len(splits)})")
+        # moabb splitters yield metadata.index labels, i.e. the trials' event rows
+        train_idx, test_idx = splits[self.fold]
+        events["split"] = None  # object dtype, so the string labels below don't warn
+        events.loc[test_idx, "split"] = "test"
+        events.loc[train_idx, "split"] = "train"
+
+        train = events.loc[events["split"] == "train"]
+        # np array: sklearn cannot index the pyarrow array .unique() returns
+        groups = np.asarray(train[self.valid_split_by].dropna().unique())
+        if len(groups) >= 2:
+            _, val_groups = train_test_split(
+                groups,
+                test_size=self.valid_split_ratio,
+                random_state=self.valid_random_state,
+            )
+            val = train.index[train[self.valid_split_by].isin(val_groups)]
+        else:
+            _, val = train_test_split(
+                train.index,
+                test_size=self.valid_split_ratio,
+                random_state=self.valid_random_state,
+            )
+        events.loc[val, "split"] = "val"
+        return events
+
+
 class ShuffleTrainingLabels(_transf.EventsTransform):
     """Randomly permute the label field of training events (diagnostic ablation).
 

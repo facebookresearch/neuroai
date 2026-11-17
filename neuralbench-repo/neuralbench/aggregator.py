@@ -199,6 +199,12 @@ class BenchmarkAggregator(ns.BaseModel):
         out["model_variant"] = _experiment_variant(experiment)
         out["loss"] = {"name": type(experiment.loss).__name__}
         out["seed"] = experiment.seed
+        split = (
+            study["split"]
+            if isinstance(study, ns.Chain) and "split" in study.steps
+            else None
+        )
+        out["fold"] = getattr(split, "fold", None)  # set by --cv (MoabbCVSplit)
         out["eval_mode"] = _infer_eval_mode(experiment)
         return out, task, model, "completed"
 

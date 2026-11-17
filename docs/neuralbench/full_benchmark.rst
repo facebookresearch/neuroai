@@ -204,6 +204,28 @@ all dataset variants for a task:
    neuralbench eeg motor_imagery --dataset all      # Run on all 18 motor imagery datasets
    neuralbench eeg p3 --dataset all                 # Run on all 24 P300 datasets
 
+Cross-validation
+----------------
+
+``--cv`` replaces a task's fixed split with the folds of a `MOABB splitter
+<https://moabb.neurotechx.com/docs/>`_, so scores compare with the MOABB
+literature:
+
+.. code-block:: bash
+
+   neuralbench eeg motor_imagery --cv cross_subject --cv-folds 20
+
+- ``cross_subject``: leave one subject out; one fold per subject.
+- ``cross_session``: within each subject, leave one session out; one fold per
+  (subject, held-out session), subjects with a single session are skipped.
+- ``within_session``: stratified 5-fold within each (subject, session).
+
+The last two train and test each fold on a single subject.  ``--cv-folds`` is
+the number of folds the scheme produces on the selected data; a wrong count
+fails the run with the right one.  Each fold runs once, with the first seed of
+the grid, so tables report mean ± std across folds.  Validation is carved out
+of the training folds; the test fold is exactly MOABB's.
+
 Visualizing results
 --------------------
 

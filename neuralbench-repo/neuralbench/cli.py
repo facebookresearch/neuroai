@@ -19,7 +19,7 @@ import sys
 import traceback
 import typing as tp
 
-from neuralbench.experiment_config import build_experiment_configs
+from neuralbench.experiment_config import CV_SCHEMES, build_experiment_configs
 from neuralbench.plots._constants import DEFAULT_EVAL_MODE
 from neuralbench.registry import (
     ALL_DEVICES,
@@ -50,6 +50,8 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    cv: str | None = None,
+    cv_folds: int | None = None,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -100,6 +102,14 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+    cv : str or None
+        Evaluate on MOABB cross-validation folds instead of the task's split:
+        ``"cross_subject"``, ``"cross_session"`` or ``"within_session"``.  Each
+        fold runs once, with the first grid seed, so tables report the spread
+        across folds.
+    cv_folds : int or None
+        Number of folds the scheme produces on the selected data, required with
+        *cv*.  A wrong count fails the run with the right one.
 
     Returns
     -------
@@ -142,6 +152,8 @@ def run_benchmark(
         prepare=prepare,
         download=download,
         quiet=plot_cached,
+        cv=cv,
+        cv_folds=cv_folds,
     )
 
     if download:
@@ -281,6 +293,17 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--cv",
+        choices=CV_SCHEMES,
+        help="Evaluate on MOABB cross-validation folds instead of the task's split.",
+    )
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        metavar="N",
+        help="Folds the --cv scheme produces; a wrong count fails with the right one.",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -325,6 +348,8 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            cv=args.cv,
+            cv_folds=args.cv_folds,
         )
     except Exception:
         if not args.pdb:
