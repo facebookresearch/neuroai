@@ -1,3 +1,7 @@
+.. raw:: html
+
+   <p class="landing-logo-hero"><img class="only-light" src="../_static/logos/neuralfetch-on-light.svg" alt="neuralfetch"><img class="only-dark" src="../_static/logos/neuralfetch-on-dark.svg" alt="neuralfetch"></p>
+
 NeuralFetch
 ===========
 
@@ -29,7 +33,7 @@ system and returns the same tidy events DataFrame regardless of the source.
        <span class="hub-source"><i class="fas fa-archive"></i> Zenodo</span>
      </div>
      <div class="hub-arrows">↓ ↓ ↓ ↓ ↓</div>
-     <div class="hub-center"><i class="fas fa-download"></i> NeuralFetch</div>
+     <div class="hub-center"><img class="only-light hub-mark" src="../_static/logos/neuralfetch-mark-on-light.svg" alt=""><img class="only-dark hub-mark" src="../_static/logos/neuralfetch-mark-on-dark.svg" alt=""> NeuralFetch</div>
      <div class="hub-arrow-down">↓</div>
      <div class="hub-output">
        <i class="fas fa-table"></i>

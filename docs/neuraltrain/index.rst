@@ -1,3 +1,7 @@
+.. raw:: html
+
+   <p class="landing-logo-hero"><img class="only-light" src="../_static/logos/neuraltrain-on-light.svg" alt="neuraltrain"><img class="only-dark" src="../_static/logos/neuraltrain-on-dark.svg" alt="neuraltrain"></p>
+
 NeuralTrain
 ===========
 
