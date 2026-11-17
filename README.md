@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/logos/neuroai-on-dark.svg">
-    <img src="docs/_static/logos/neuroai-on-light.svg" alt="neuroai" height="96">
-  </picture>
+  <img src="docs/_static/logos/neuroai-on-light.svg#gh-light-mode-only" alt="neuroai" height="96"><img src="docs/_static/logos/neuroai-on-dark.svg#gh-dark-mode-only" alt="neuroai" height="96">
 </p>
 
 <p align="center">
@@ -26,7 +23,7 @@ See the [full documentation](https://facebookresearch.github.io/neuroai/) for in
 
 ## Packages
 
-### <a href="https://facebookresearch.github.io/neuroai/neuralset/index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="neuralset-repo/assets/logo-on-dark.svg"><img src="neuralset-repo/assets/logo-on-light.svg" alt="NeuralSet" height="40"></picture></a>
+### <a href="https://facebookresearch.github.io/neuroai/neuralset/index.html"><img src="neuralset-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="NeuralSet" height="40"><img src="neuralset-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="NeuralSet" height="40"></a>
 
 Build your efficient Neuro AI data loader.
 
@@ -35,7 +32,7 @@ pip install neuralset
 ```
 
 
-### <a href="https://facebookresearch.github.io/neuroai/neuralfetch/index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="neuralfetch-repo/assets/logo-on-dark.svg"><img src="neuralfetch-repo/assets/logo-on-light.svg" alt="NeuralFetch" height="40"></picture></a>
+### <a href="https://facebookresearch.github.io/neuroai/neuralfetch/index.html"><img src="neuralfetch-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="NeuralFetch" height="40"><img src="neuralfetch-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="NeuralFetch" height="40"></a>
 
 Fetch curated Neuro AI datasets.
 
@@ -44,7 +41,7 @@ pip install neuralfetch
 ```
 
 
-### <a href="https://facebookresearch.github.io/neuroai/neuraltrain/index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="neuraltrain-repo/assets/logo-on-dark.svg"><img src="neuraltrain-repo/assets/logo-on-light.svg" alt="NeuralTrain" height="40"></picture></a>
+### <a href="https://facebookresearch.github.io/neuroai/neuraltrain/index.html"><img src="neuraltrain-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="NeuralTrain" height="40"><img src="neuraltrain-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="NeuralTrain" height="40"></a>
 
 Train Neuro AI models at scale.
 
@@ -53,7 +50,7 @@ pip install neuraltrain
 ```
 
 
-### <a href="https://facebookresearch.github.io/neuroai/neuralbench/index.html"><picture><source media="(prefers-color-scheme: dark)" srcset="neuralbench-repo/assets/logo-on-dark.svg"><img src="neuralbench-repo/assets/logo-on-light.svg" alt="NeuralBench" height="40"></picture></a>
+### <a href="https://facebookresearch.github.io/neuroai/neuralbench/index.html"><img src="neuralbench-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="NeuralBench" height="40"><img src="neuralbench-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="NeuralBench" height="40"></a>
 
 Unified benchmark for NeuroAI models.
 

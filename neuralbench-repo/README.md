@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralbench-repo/assets/logo-on-dark.svg">
-    <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralbench-repo/assets/logo-on-light.svg" alt="neuralbench" height="80">
-  </picture>
+  <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralbench-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="neuralbench" height="80"><img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralbench-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="neuralbench" height="80">
 </p>
 
 # NeuralBench: Unified benchmark for NeuroAI models
