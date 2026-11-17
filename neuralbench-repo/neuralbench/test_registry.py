@@ -179,6 +179,35 @@ def test_prepare_task_configs_meg_image_cov_ts_ridge_resolves() -> None:
     assert instance.cov_estimator == "oas"
 
 
+@pytest.mark.parametrize(("device", "task"), [("eeg", "motor_imagery"), ("meg", "image")])
+def test_simpleconv_time_agg_builds_with_its_own_head(device: str, task: str) -> None:
+    """SimpleConvTimeAgg has its own merger and head, so it gets no DownstreamWrapper.
+
+    A wrapper defaults to a linear probe, so the factory builds the model with
+    ``n_outputs=None``, which SimpleConvTimeAgg rejects.
+    """
+    from exca import ConfDict
+
+    from neuralbench.experiment_config import prepare_task_configs
+    from neuralbench.registry import DEFAULTS_DIR, load_default_config, load_yaml_config
+
+    configs = prepare_task_configs(
+        ConfDict(load_default_config(device)),
+        ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml")),
+        device,
+        task,
+        use_task_grid=False,
+        debug=False,
+        force=False,
+        prepare=False,
+        download=False,
+        models=["simpleconv_time_agg"],
+        datasets=None,
+    )
+    assert configs[0]["brain_model_config"]["name"] == "SimpleConvTimeAgg"
+    assert configs[0]["downstream_model_wrapper"] is None
+
+
 def test_collapse_relabels_meg_sklearn_row_as_handcrafted() -> None:
     df = pd.DataFrame(
         [
