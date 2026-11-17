@@ -4,7 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- `neuralbench`: `--cv {cross_subject,cross_session,within_session} --cv-folds N` evaluates on the folds of the MOABB splitter (`transforms.MoabbCVSplit`) instead of the task's split, one run per fold on the first grid seed; results carry a `fold` column and tables report the spread across folds.
+- `neuralset`: `CrossValidationSplit` materializes one fold of a cross-validation as the `split` column: leave-one-group-out or (stratified) k-fold over the values of `split_by`, optionally within groups of other columns (`within`), with validation drawn from the training values (#356).
+- `neuralbench`: `--cv {cross_subject,cross_session,within_session}` (`run_benchmark(cv=...)`) evaluates on the folds of MOABB's cross-subject, cross-session or within-session splitters instead of the task's split, as `CrossValidationSplit` presets: the folds are counted on each dataset's events when the configs are built, each runs once on the first grid seed, results carry a `fold` column and tables report the spread across folds (#356).
 
 ## [0.4.0] - 2026-10-10
 

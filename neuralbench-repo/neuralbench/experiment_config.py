@@ -10,6 +10,7 @@ This module transforms base YAML configs into concrete per-experiment
 configs ready for ``BenchmarkAggregator``.
 """
 
+import collections
 import logging
 import os
 import shutil
@@ -105,29 +106,51 @@ def _apply_prepare_overlay(config: ConfDict) -> None:
         config["wandb_config.name"] = "prepare"
 
 
-CV_SCHEMES = ("cross_subject", "cross_session", "within_session")
+#: ``--cv`` schemes, as :class:`~neuralset.events.transforms.CrossValidationSplit`
+#: parameters over the trigger events.  They give the folds of MOABB's
+#: cross-subject, cross-session and within-session splitters.
+CV_SCHEMES: dict[str, dict[str, tp.Any]] = {
+    "cross_subject": {"split_by": "subject"},
+    "cross_session": {"split_by": "session", "within": ["subject"]},
+    "within_session": {
+        "split_by": "_index",
+        "within": ["subject", "session"],
+        "n_folds": 5,
+    },
+}
 
 
-def _apply_cv_overlay(config: ConfDict, cv: str, cv_folds: int | None) -> None:
-    """Replace the task's split with a :class:`~neuralbench.transforms.MoabbCVSplit`.
+def _apply_cv_overlay(config: ConfDict, cv: str) -> int:
+    """Replace the task's split with the *cv* scheme; return its number of folds.
 
-    The validation carve-out keeps the task split's ratio and seed, and the
-    stratification label is the split's ``stratify_by``, else the target's field.
-    ``cv_folds=None`` skips the fold-count check.
+    The folds are counted on the study's events before the split, loaded as each
+    fold's run loads them, so every dataset gets its own fold axis.  Validation
+    keeps the task split's ratio and seed, and the within-session k-fold is
+    stratified by the split's ``stratify_by``, else by the target's field.
     """
+    import neuralset as ns
+    from neuralset.events import transforms as _transf
+
     split = config.get("data", {}).get("study", {}).get("split") or {}
     target = config.get("data", {}).get("target") or {}
-    config["data.study.split"] = {
-        "=replace=": True,
-        "name": "MoabbCVSplit",
-        "scheme": cv,
-        "fold": 0,  # swept by the grid's data.study.split.fold axis
-        "n_splits": cv_folds,
-        "trigger_event_type": config["data.trigger_event_type"],
-        "label_field": split.get("stratify_by") or target.get("event_field"),
+    params: dict[str, tp.Any] = {
+        "event_types": config["data.trigger_event_type"],
         "valid_split_ratio": split.get("valid_split_ratio", 0.2),
         "valid_random_state": split.get("valid_random_state", 33),
+        **CV_SCHEMES[cv],
     }
+    if "n_folds" in params:
+        params["stratify_by"] = split.get("stratify_by") or target.get("event_field")
+    config["data.study.split"] = {"=replace=": True, "name": "CrossValidationSplit", **params}
+    steps = config["data.study"]
+    names = list(steps)
+    before = collections.OrderedDict((k, steps[k]) for k in names[: names.index("split")])
+    events = ns.Chain(steps=before).run()
+    n_folds = _transf.CrossValidationSplit(**params).get_n_splits(events)
+    if not n_folds:
+        study = config["data.study.source.name"]
+        raise ValueError(f"--cv {cv} gives no fold on the events of {study}")
+    return n_folds
 
 
 def _download_dataset(config: ConfDict) -> None:
@@ -304,7 +327,7 @@ def _prepare_single_task_config(
     quiet: bool = False,
     retry: bool = False,
     max_neuro_hours_per_epoch: float | None = None,
-    cv: tuple[str, int] | None = None,
+    cv: str | None = None,
 ) -> list[ConfDict]:
     """Assemble experiment configs for a single task, applying mode overlays and grid expansion."""
     config["task_name"] = task_name
@@ -325,12 +348,13 @@ def _prepare_single_task_config(
         config["infra.mode"] = "retry"
     if prepare:
         _apply_prepare_overlay(config)
-    if cv is not None:
-        # debug and prepare runs see a subset of the subjects, hence fewer folds
-        _apply_cv_overlay(config, cv[0], None if debug or prepare else cv[1])
     if download:
         _download_dataset(config)
         return [config]
+    if cv is not None:
+        n_folds = _apply_cv_overlay(config, cv)
+        grid = grid.copy()
+        grid["data.study.split.fold"] = [0] if debug or prepare else list(range(n_folds))
 
     return _expand_grid(
         config, grid, device, task_name, use_task_grid, prepare, debug=debug, quiet=quiet
@@ -353,7 +377,7 @@ def prepare_task_configs(
     quiet: bool = False,
     retry: bool = False,
     max_neuro_hours_per_epoch: float | None = None,
-    cv: tuple[str, int] | None = None,
+    cv: str | None = None,
 ) -> list[ConfDict]:
     """Run a specific neuralbench task with given configuration."""
     if not quiet:
@@ -446,7 +470,6 @@ def build_experiment_configs(
     download: bool = False,
     quiet: bool = False,
     cv: str | None = None,
-    cv_folds: int | None = None,
 ) -> list[ConfDict]:
     """Assemble one experiment config per (task, dataset, space, model, grid point).
 
@@ -482,13 +505,11 @@ def build_experiment_configs(
         config["wandb_config"] = None
 
     grid_conf = ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml"))
-    if cv is not None and (cv_folds is None or cv_folds < 1):
-        raise ValueError(f"cv={cv!r} needs cv_folds >= 1, got {cv_folds!r}")
+    if cv is not None and cv not in CV_SCHEMES:
+        raise ValueError(f"cv must be one of {list(CV_SCHEMES)}, got {cv!r}")
     if prepare or debug or cv is not None:
         # under CV the folds are the replicates, so the reported spread is across folds
         grid_conf["seed"] = [grid_conf["seed"][0]]
-    if cv is not None and not (prepare or debug):
-        grid_conf["data.study.split.fold"] = list(range(tp.cast(int, cv_folds)))
 
     if checkpoint is not None:
         config["pretrained_weights_fname"] = checkpoint
@@ -570,7 +591,7 @@ def build_experiment_configs(
                     quiet=quiet,
                     retry=retry,
                     max_neuro_hours_per_epoch=max_neuro_hours_per_epoch,
-                    cv=None if cv is None else (cv, tp.cast(int, cv_folds)),
+                    cv=cv,
                 )
             )
     if tasks and not configs:

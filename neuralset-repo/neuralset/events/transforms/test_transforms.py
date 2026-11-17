@@ -1159,6 +1159,79 @@ def test_sklearn_split() -> None:
         _transf.SklearnSplit(test_split_ratio=0.2, stratify_by="label", **kw)(events)
 
 
+def _cv_events() -> pd.DataFrame:
+    """3 subjects x 2 sessions, each a recording then 4 trials labelled 0/1."""
+    rows: list[dict[str, tp.Any]] = []
+    for subject in "abc":
+        for session in "12":
+            tl = dict(subject=subject, session=session, timeline=subject + session)
+            rows.append(dict(type="Eeg", start=0.0, duration=10.0, **tl))
+            rows += [
+                dict(type="Stimulus", start=1.0 + t, duration=0.5, code=t % 2, **tl)
+                for t in range(4)
+            ]
+    return pd.DataFrame(rows)
+
+
+_CV_SCHEMES: dict[str, dict[str, tp.Any]] = {  # the --cv presets of neuralbench
+    "cross_subject": dict(split_by="subject"),
+    "cross_session": dict(split_by="session", within=["subject"]),
+    "within_session": dict(
+        split_by="_index", within=["subject", "session"], n_folds=2, stratify_by="code"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "scheme, n_splits",
+    [("cross_subject", 3), ("cross_session", 6), ("within_session", 12)],
+)
+def test_cross_validation_split(scheme: str, n_splits: int) -> None:
+    events = _cv_events()
+    kw: tp.Any = dict(event_types="Stimulus", **_CV_SCHEMES[scheme])
+    assert _transf.CrossValidationSplit(**kw).get_n_splits(events) == n_splits
+    held_out: list[int] = []
+    for fold in range(n_splits):
+        out = _transf.CrossValidationSplit(fold=fold, **kw)(events.copy())
+        trials = out[out.type == "Stimulus"].dropna(subset=["split"])
+        assert set(trials.split) == {"train", "val", "test"}
+        held_out += trials.index[trials.split == "test"].tolist()
+        # a cross-subject fold tests one subject; the others stay in one subject
+        assert trials[trials.split == "test"].subject.nunique() == 1
+        assert trials.subject.nunique() == (3 if scheme == "cross_subject" else 1)
+        recordings = out[out.type == "Eeg"]
+        if scheme == "within_session":  # the recording rows are no trial
+            assert recordings.split.isna().all()
+        else:  # they follow the split of their split_by value
+            assert set(recordings.split.dropna()) <= {"train", "val", "test"}
+    # the folds partition the trials: each one is tested exactly once
+    assert sorted(held_out) == events.index[events.type == "Stimulus"].tolist()
+    with pytest.raises(ValueError, match=f"fold {n_splits} out of the {n_splits} folds"):
+        _transf.CrossValidationSplit(fold=n_splits, **kw)(events)
+
+
+@pytest.mark.parametrize("scheme", ["cross_subject", "cross_session", "within_session"])
+def test_cross_validation_split_matches_moabb(scheme: str) -> None:
+    splitters = pytest.importorskip("moabb.evaluations.splitters")
+    events = _cv_events()
+    trials = events[events.type == "Stimulus"]
+    moabb = {
+        "cross_subject": splitters.CrossSubjectSplitter(),
+        "cross_session": splitters.CrossSessionSplitter(),
+        "within_session": splitters.WithinSessionSplitter(n_folds=2, random_state=33),
+    }[scheme]
+    expected = {
+        frozenset(test) for _, test in moabb.split(trials.code.to_numpy(), trials)
+    }
+    kw: tp.Any = dict(event_types="Stimulus", **_CV_SCHEMES[scheme])
+    n = _transf.CrossValidationSplit(**kw).get_n_splits(events)
+    folds = [_transf.CrossValidationSplit(fold=f, **kw)(events.copy()) for f in range(n)]
+    tested = {
+        frozenset(o.index[(o.split == "test") & (o.type == "Stimulus")]) for o in folds
+    }
+    assert tested == expected
+
+
 def test_no_circular_import_extractors() -> None:
     """Regression: extractors must load when neuralset.__init__ hasn't
     pre-imported events (the path submitit pickle workers take)."""

@@ -20,7 +20,6 @@ from .transforms import (
     AddSleepOnsetTargets,
     CropSleepRecordings,
     CropTimelines,
-    MoabbCVSplit,
     OffsetEvents,
     PredefinedSplit,
     ShuffleTrainingLabels,
@@ -834,46 +833,3 @@ def test_data_instantiation(tmp_path: Path) -> None:
         study={"name": "Test2023Meg", "path": tmp_path / "data"},
     )
     _ = Data(**common)
-
-
-def _cv_events() -> pd.DataFrame:
-    """3 subjects x 2 sessions, each an Eeg row then 4 Stimulus trials (code 0/1)."""
-    rows: list[dict[str, tp.Any]] = []
-    for subj, sess in [(a, b) for a in "012" for b in "01"]:
-        base = dict(subject=subj, session=sess, timeline=f"{subj}-{sess}")
-        rows.append(
-            dict(
-                type="Eeg",
-                start=0.0,
-                duration=10.0,
-                frequency=100.0,
-                filepath=":.fif",
-                **base,
-            )
-        )
-        rows += [
-            dict(type="Stimulus", start=1.0 + t, duration=0.5, code=t % 2, **base)
-            for t in range(4)
-        ]
-    return standardize_events(pd.DataFrame(rows))
-
-
-@pytest.mark.parametrize(
-    "scheme, n_splits",
-    [("cross_subject", 3), ("cross_session", 6), ("within_session", 12)],
-)
-def test_moabb_cv_split(scheme: tp.Any, n_splits: int) -> None:
-    kwargs = dict(
-        scheme=scheme, trigger_event_type="Stimulus", label_field="code", n_folds=2
-    )
-    for fold in (0, n_splits - 1):
-        out = MoabbCVSplit(fold=fold, n_splits=n_splits, **kwargs)(_cv_events())
-        # only trials are split; the Eeg rows interleaved with them are left alone
-        assert out.loc[out.type != "Stimulus", "split"].isna().all()
-        labelled = out.dropna(subset=["split"])
-        assert set(labelled.split) == {"train", "val", "test"}
-        assert labelled[labelled.split == "test"].subject.nunique() == 1
-        # cross_subject holds a subject out of all; the others stay within one subject
-        assert labelled.subject.nunique() == (3 if scheme == "cross_subject" else 1)
-    with pytest.raises(ValueError, match=f"--cv-folds {n_splits}"):
-        MoabbCVSplit(fold=0, n_splits=n_splits + 1, **kwargs)(_cv_events())

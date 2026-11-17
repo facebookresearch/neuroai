@@ -51,7 +51,6 @@ def run_benchmark(
     download: bool = False,
     plot_cached: bool = False,
     cv: str | None = None,
-    cv_folds: int | None = None,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -103,13 +102,12 @@ def run_benchmark(
         Generate plots and tables from cached results only, without
         running any new experiments.
     cv : str or None
-        Evaluate on MOABB cross-validation folds instead of the task's split:
-        ``"cross_subject"``, ``"cross_session"`` or ``"within_session"``.  Each
-        fold runs once, with the first grid seed, so tables report the spread
-        across folds.
-    cv_folds : int or None
-        Number of folds the scheme produces on the selected data, required with
-        *cv*.  A wrong count fails the run with the right one.
+        Evaluate on cross-validation folds instead of the task's split:
+        ``"cross_subject"``, ``"cross_session"`` or ``"within_session"``, the
+        folds of MOABB's splitters (see ``experiment_config.CV_SCHEMES``).  The
+        folds are counted on each dataset's events when the configs are built.
+        Each fold runs once, with the first grid seed, so tables report the
+        spread across folds.
 
     Returns
     -------
@@ -153,7 +151,6 @@ def run_benchmark(
         download=download,
         quiet=plot_cached,
         cv=cv,
-        cv_folds=cv_folds,
     )
 
     if download:
@@ -294,14 +291,11 @@ def run_benchmark_cli() -> None:
     )
     parser.add_argument(
         "--cv",
-        choices=CV_SCHEMES,
-        help="Evaluate on MOABB cross-validation folds instead of the task's split.",
-    )
-    parser.add_argument(
-        "--cv-folds",
-        type=int,
-        metavar="N",
-        help="Folds the --cv scheme produces; a wrong count fails with the right one.",
+        choices=list(CV_SCHEMES),
+        help=(
+            "Evaluate on the folds of a cross-validation scheme (those of MOABB's "
+            "splitters) instead of the task's split, one run per fold."
+        ),
     )
     parser.add_argument(
         "--dataset",
@@ -349,7 +343,6 @@ def run_benchmark_cli() -> None:
             download=args.download,
             plot_cached=args.plot_cached,
             cv=args.cv,
-            cv_folds=args.cv_folds,
         )
     except Exception:
         if not args.pdb:
