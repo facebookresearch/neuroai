@@ -75,6 +75,24 @@ def test_prepare_task_configs(dataset: str | None) -> None:
     assert source.infra is not None
 
 
+def test_config_overlay_wins_over_task_but_not_debug() -> None:
+    configs = prepare_task_configs(
+        ConfDict(load_default_config("eeg")),
+        ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml")),
+        "eeg",
+        "motor_imagery",
+        use_task_grid=False,
+        debug=True,
+        force=False,
+        prepare=False,
+        download=False,
+        models=[None],
+        config_overlay={"data.neuro.filter": [4.0, 40.0], "trainer_config.n_epochs": 300},
+    )
+    assert configs[0]["data.neuro.filter"] == [4.0, 40.0]
+    assert configs[0]["trainer_config.n_epochs"] == 2  # debug overlay still applies
+
+
 @pytest.mark.parametrize("cluster", [None, "auto", "slurm"])
 def test_cluster_config_wires_all_infra_clusters(
     patch_config: Callable[..., None], cluster: str | None

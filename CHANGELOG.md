@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `--config-overlay YAML` (`run_benchmark(config_overlay=...)`) merges config keys over every experiment after the task, model and dataset configs, so one file sweeps a setting such as `data.neuro.filter` across a benchmark; overridden values are cached apart.
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).
