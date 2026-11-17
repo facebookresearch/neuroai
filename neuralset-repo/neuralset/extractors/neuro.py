@@ -418,7 +418,7 @@ class MneRaw(BaseExtractor):
 
         if self.apply_hilbert:
             raw.load_data()
-            raw = raw.apply_hilbert(envelope=True)
+            raw = raw.apply_hilbert(picks="all", envelope=True)
 
         if self.frequency not in ("native", event.frequency):
             raw.load_data()
