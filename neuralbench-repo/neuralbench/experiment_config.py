@@ -141,7 +141,11 @@ def _apply_cv_overlay(config: ConfDict, cv: str) -> int:
     }
     if "n_folds" in params:
         params["stratify_by"] = split.get("stratify_by") or target.get("event_field")
-    config["data.study.split"] = {"=replace=": True, "name": "CrossValidationSplit", **params}
+    config["data.study.split"] = {
+        "=replace=": True,
+        "name": "CrossValidationSplit",
+        **params,
+    }
     steps = config["data.study"]
     names = list(steps)
     before = collections.OrderedDict((k, steps[k]) for k in names[: names.index("split")])
