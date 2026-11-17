@@ -11,6 +11,7 @@ import pandas as pd
 from mne_bids import BIDSPath
 
 from neuralfetch import download
+from neuralfetch.utils.montage import set_bipolar_montage
 from neuralset.events import study
 
 
@@ -39,6 +40,8 @@ class Dan2023Bids(study.Study):
           published on PhysioNet (doi: 10.13026/C2K01R).
         - Channel count varies across participants; 18 channels reflects the
           reference timeline (timeline_index 144).
+        - Channels are bipolar (double banana montage); each is positioned at its
+          first electrode in MNE's ``standard_1020`` montage (Fp1-F7 at Fp1).
     """
 
     aliases: tp.ClassVar[tuple[str, ...]] = ("CHB-MIT Scalp EEG Database", "CHB-MIT")
@@ -166,5 +169,5 @@ class Dan2023Bids(study.Study):
         mne.rename_channels(
             raw.info, mapping=lambda x: x.replace("FP", "Fp").replace("Z", "z")
         )
-
+        set_bipolar_montage(raw, "standard_1020")
         return raw
