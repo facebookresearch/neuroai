@@ -60,6 +60,7 @@ from .data import Data as Data  # noqa: F401
 from .model_factory import build_brain_model
 from .modules import DownstreamWrapper
 from .pl_module import BrainModule
+from .tuning import OptunaTrial
 from .utils import TrainerConfig, compute_class_weights_from_dataset
 
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +104,9 @@ class Experiment(BaseExperiment):
     # When True, raw per-window test predictions/targets are folded into the
     # cached ``run`` result (see ``WindowPredictionCollector``).
     save_test_predictions: bool = False
+    # Set by ``--optuna``: the trial this run reports its validation monitor to,
+    # so the study's pruner can stop it early
+    optuna_trial: OptunaTrial | None = None
 
     # Weights & Biases
     csv_config: CsvLoggerConfig | None = None
@@ -354,6 +358,13 @@ class Experiment(BaseExperiment):
                     callbacks.append(PlotRegressionScatter())
         else:
             callbacks.append(LearningRateMonitor(logging_interval="step"))
+            if self.optuna_trial is not None:
+                if (self.infra.gpus_per_node or 0) > 1:
+                    # optuna-integration prunes under DDP only with an RDB storage
+                    LOGGER.warning("Optuna pruning is off for multi-GPU runs")
+                else:
+                    monitor = self.trainer_config.monitor
+                    callbacks.append(self.optuna_trial.pruning_callback(monitor))
             callbacks.append(
                 EarlyStopping(
                     monitor=self.trainer_config.monitor,
@@ -520,13 +531,20 @@ class Experiment(BaseExperiment):
         training_time_s: float | None = None
         peak_gpu_memory_mb: float | None = None
         peak_cpu_memory_mb: float | None = None
+        best_val_score: float | None = None
 
         if not self.eval_only:
             if torch.cuda.is_available():
                 torch.cuda.reset_peak_memory_stats()
 
             t0 = time.perf_counter()
-            self.fit(trainer, loaders["train"], loaders["val"])
+            try:
+                self.fit(trainer, loaders["train"], loaders["val"])
+            except Exception as error:
+                if self.optuna_trial is None or not self.optuna_trial.pruned(error):
+                    raise
+                self._cleanup(trainer)
+                return {"optuna_pruned": True}  # cached as a pruned trial, not a failure
             training_time_s = time.perf_counter() - t0
 
             if torch.cuda.is_available():
@@ -551,6 +569,8 @@ class Experiment(BaseExperiment):
                 )
                 best_epoch = best_ckpt["epoch"]
                 LOGGER.info("Best epoch: %i", best_epoch)
+                score = trainer.checkpoint_callback.best_model_score
+                best_val_score = None if score is None else float(score)
                 for logger in [self._wandb_logger, self._csv_logger]:
                     if logger is not None:
                         logger.log_metrics({"best_epoch": best_epoch})
@@ -581,6 +601,10 @@ class Experiment(BaseExperiment):
                 "peak_cpu_memory_mb": peak_cpu_memory_mb,
             }
         )
+        if best_val_score is not None:
+            # the checkpointed epoch's monitor (e.g. val/bal_acc): what model
+            # selection, such as --optuna, ranks runs by instead of a test metric
+            test_results[self.trainer_config.monitor] = best_val_score
         return test_results
 
     # Subfolder (under ``infra.uid_folder()``) where ``WindowPredictionCollector``

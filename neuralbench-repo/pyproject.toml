@@ -45,8 +45,14 @@ dependencies = [
     wandb = [
         "wandb>=0.15.11",
     ]
+    optuna = [  # neuralbench --optuna
+        "optuna>=4.0",
+        "optuna-integration>=4.0",
+    ]
     dev = [
         # Test
+        "optuna>=4.0",
+        "optuna-integration>=4.0",
         "pytest>=4.3.0",
         "pytest-markdown-docs",
         "pytest-mock",
