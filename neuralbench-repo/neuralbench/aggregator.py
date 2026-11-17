@@ -117,7 +117,7 @@ class BenchmarkAggregator(ns.BaseModel):
     experiments: list["Experiment"]
     max_workers: int = 256
     # >1 (or "all") packs pending experiments into ceil(n / N) scheduler jobs
-    experiments_per_job: int | tp.Literal["all"] = 1
+    experiments_per_job: tp.Annotated[int, Field(ge=1)] | tp.Literal["all"] = 1
     collect_max_workers: int = 32
     debug: bool = False
 

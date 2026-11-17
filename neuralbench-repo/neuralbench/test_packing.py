@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import exca
+import pydantic
 import pytest
 from exca.steps import backends
 
@@ -91,14 +92,21 @@ def test_backend_config(tmp_path: Path) -> None:
     }
     assert "use_srun" not in cfg  # defaults are dropped
     backends.Backend.model_validate(cfg)  # builds a real backend
+    for cluster in ("auto", "local", "debug"):  # every TaskInfra.cluster value maps
+        ti = exca.TaskInfra(cluster=cluster, folder=tmp_path)
+        backends.Backend.model_validate(_backend_config(ti, tmp_path, max_jobs=2))
     with pytest.raises(ValueError, match="unsupported infra.cluster"):
         _backend_config(SimpleNamespace(cluster="k8s"), tmp_path, max_jobs=1)
 
 
-@pytest.mark.parametrize("experiments_per_job", [2, "all"])
+# "local" runs the packed jobs in subprocesses, through exca's LocalProcess backend
+@pytest.mark.parametrize(
+    "cluster, experiments_per_job", [(None, 2), (None, "all"), ("local", 2)]
+)
 def test_submit_packed_runs_caches_and_isolates_failures(
-    infra: tp.Any, experiments_per_job: int | tp.Literal["all"]
+    infra: tp.Any, cluster: str | None, experiments_per_job: int | tp.Literal["all"]
 ) -> None:
+    infra = {**infra, "cluster": cluster}
     read_only: tp.Any = {**infra, "mode": "read-only"}
     assert submit_packed([ValueExperiment(value=0, infra=read_only)]) == 0
     exps: list[BaseExperiment] = [ValueExperiment(value=i, infra=infra) for i in range(4)]
@@ -131,3 +139,19 @@ def test_submit_packed_caps_jobs_per_resource_request(
     assert submit_packed(exps, experiments_per_job=4) == 11
     # one sweep per resource request, ceil(n / 4) jobs each
     assert sorted(sweeps) == [(1, 1, 4), (10, 3, 1)]
+
+
+def test_aggregator_validates_experiments_per_job() -> None:
+    from .main import BenchmarkAggregator
+
+    def per_job(value: tp.Any) -> tp.Any:
+        agg = BenchmarkAggregator.model_validate(
+            {"experiments": [], "experiments_per_job": value}
+        )
+        return agg.experiments_per_job
+
+    # the CLI passes strings: pydantic coerces them, and rejects what is not >= 1
+    assert (per_job("4"), per_job("all")) == (4, "all")
+    for bad in ("0", "-1", "some"):
+        with pytest.raises(pydantic.ValidationError):
+            per_job(bad)

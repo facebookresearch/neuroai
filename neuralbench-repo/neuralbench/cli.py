@@ -177,16 +177,6 @@ def run_benchmark(
     return results
 
 
-def _experiments_per_job(value: str) -> int | str:
-    if value == "all":
-        return value
-    if not value.isdigit() or int(value) < 1:
-        raise argparse.ArgumentTypeError(
-            f"expected a positive integer or 'all', got {value!r}"
-        )
-    return int(value)
-
-
 def run_benchmark_cli() -> None:
     """CLI entry point for ``neuralbench``.
 
@@ -298,8 +288,7 @@ def run_benchmark_cli() -> None:
     )
     parser.add_argument(
         "--experiments-per-job",
-        type=_experiments_per_job,
-        default=1,
+        default=1,  # an int or "all", validated by BenchmarkAggregator
         metavar="N",
         help="Experiments per scheduler job, or 'all' for a single job (default: 1).",
     )

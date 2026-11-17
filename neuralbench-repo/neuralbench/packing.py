@@ -28,8 +28,14 @@ from neuraltrain.utils import BaseExperiment
 
 LOGGER = logging.getLogger(__name__)
 
-# TaskInfra.cluster -> steps backend class (the values neuralbench emits).
-_BACKENDS = {None: "Cached", "auto": "Auto", "slurm": "Slurm"}
+# TaskInfra.cluster -> steps backend class, for every value TaskInfra accepts.
+_BACKENDS = {
+    None: "Cached",
+    "auto": "Auto",
+    "local": "LocalProcess",
+    "slurm": "Slurm",
+    "debug": "SubmititDebug",
+}
 
 
 class _ExperimentStep(Step):
@@ -108,10 +114,6 @@ def submit_packed(
     0 when every runnable experiment is already cached.
     """
     pending = [e for e in experiments if _should_submit_experiment(e)]
-    if experiments_per_job != "all" and int(experiments_per_job) < 1:
-        raise ValueError(
-            f"experiments_per_job must be >= 1 or 'all', got {experiments_per_job}"
-        )
     # one sweep per resource request, so no experiment runs on another's resources
     groups: dict[str, list[BaseExperiment]] = {}
     for e in pending:
