@@ -227,7 +227,7 @@ def strided_windows(
     n_samples: int,
     context: int,
     stride: int,
-    mode: tp.Literal["bidirectional", "causal"] = "bidirectional",
+    causal: bool = False,
 ) -> list[tuple[int, int, int]]:
     """Overlapping windows over ``n_samples`` samples, and the samples each one keeps.
 
@@ -236,10 +236,10 @@ def strided_windows(
     others. The kept samples of the windows partition ``[0, n_samples)``, and
     depend on the model reading the windows:
 
-    - ``"bidirectional"``: two overlapping windows split their overlap in its
-      middle, so every kept sample has at least ``(context - stride) // 2``
+    - bidirectional (default): two overlapping windows split their overlap in
+      its middle, so every kept sample has at least ``(context - stride) // 2``
       samples of context on each side (fewer at the edges);
-    - ``"causal"``: each window keeps its samples after the end of the previous
+    - ``causal``: each window keeps its samples after the end of the previous
       window, so every kept sample has at least ``context - stride`` samples of
       past context (fewer at the start).
 
@@ -256,14 +256,12 @@ def strided_windows(
         return [(0, 0, n_samples)]
     n_windows = 1 + math.ceil((n_samples - context) / stride)
     starts = [min(i * stride, n_samples - context) for i in range(n_windows)]
-    if mode == "bidirectional":
+    if causal:
+        splits = [prev + context for prev in starts[:-1]]
+    else:
         splits = [
             (prev + context + start) // 2 for prev, start in zip(starts, starts[1:])
         ]
-    elif mode == "causal":
-        splits = [prev + context for prev in starts[:-1]]
-    else:
-        raise ValueError(f"mode must be 'bidirectional' or 'causal', got {mode!r}")
     bounds = [0, *splits, n_samples]
     return list(zip(starts, bounds[:-1], bounds[1:]))
 

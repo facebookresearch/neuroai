@@ -15,7 +15,7 @@ import scipy
 
 from neuralset.events import etypes
 
-from . import audio
+from . import audio, base
 
 
 def create_wav(
@@ -78,7 +78,7 @@ def test_context_windows(tmp_path: Path) -> None:
     # windows start on the 128-sample hop grid, with margins (1.5 s) wider than the
     # STFT window; the odd number of hops in the stride (125) puts the splits
     # between windows half-way between frames, where the rounding matters
-    feat = audio.MelSpectrum(context_duration=4.0, context_overlap=0.75)
+    feat = audio.MelSpectrum(context=base.ContextWindow(duration=4.0, overlap=0.75))
     windowed = feat(event, start=0, duration=10)
     np.testing.assert_allclose(windowed, full, atol=1e-5)
 

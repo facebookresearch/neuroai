@@ -18,10 +18,9 @@ from torch import nn
 from torch.nn import functional as F
 
 from neuralset import base as nsbase
-from neuralset import utils
 from neuralset.events import etypes
 
-from .base import BaseExtractor
+from .base import BaseExtractor, ContextWindow
 from .hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
@@ -32,16 +31,10 @@ class BaseAudio(BaseExtractor):
 
     Parameters
     ----------
-    context_duration : float or None, default=None
-        Duration (s) of the audio windows processed at once, to bound the memory
-        of the model on long events (instead of chunking them with ``ChunkEvents``).
-        Each event is still cached as a whole. None processes each event at once.
-    context_overlap : float, default=0.2
-        Fraction of ``context_duration`` shared by consecutive windows, in [0, 1)
-        (0: back-to-back windows). Each window only keeps the latents of its
-        central part, so every latent sees at least ``context_overlap / 2`` of a
-        window of audio on each side (less at the edges of the event), for
-        ``1 / (1 - context_overlap)`` times the computation.
+    context : ContextWindow, default=ContextWindow()
+        Windows of audio processed at once, to bound the memory of the model on
+        long events (instead of chunking them with ``ChunkEvents``). Each event is
+        still cached as a whole. By default, each event is processed at once.
 
     Note
     ----
@@ -61,16 +54,20 @@ class BaseAudio(BaseExtractor):
     # frequency derived from sampling rate of the produced extractor
     frequency: tp.Literal["native"] | float = "native"
     norm_audio: bool = True
-    context_duration: pydantic.PositiveFloat | None = None
-    context_overlap: tp.Annotated[float, pydantic.Field(ge=0, lt=1)] = 0.2
+    context: ContextWindow = ContextWindow()
 
     infra: MapInfra = MapInfra(
         timeout_min=25,
         gpus_per_node=1,
         cpus_per_task=8,
         min_samples_per_job=4096,
-        version="v7",
+        version="v8",
     )
+
+    @pydantic.field_validator("context", mode="before")
+    @classmethod
+    def _complete_context(cls, value: tp.Any) -> tp.Any:
+        return cls.model_fields["context"].default.complete(value)
 
     @property
     @abstractmethod
@@ -86,15 +83,11 @@ class BaseAudio(BaseExtractor):
 
     def _process_windows(self, wav: torch.Tensor) -> torch.Tensor:
         """``_process_wav`` on the windows of the wav, concatenated along time."""
-        if self.context_duration is None:
-            return self._process_wav(wav)
-        context = max(1, round(self.context_duration * self._input_frequency))
-        stride = max(1, round((1 - self.context_overlap) * context))
         parts = []
-        for start, keep_start, keep_stop in utils.strided_windows(
-            len(wav), context, stride
+        for start, stop, keep_start, keep_stop in self.context.windows(
+            len(wav), self._input_frequency
         ):
-            window = wav[start : start + context]
+            window = wav[start:stop]
             latents = self._process_wav(window)
             n_frames, n_samples = latents.shape[-1], len(window)
             # latent frames are assumed to evenly span the window; rounding half
@@ -104,7 +97,7 @@ class BaseAudio(BaseExtractor):
                 for sample in (keep_start, keep_stop)
             )
             parts.append(latents[..., first:last])
-        return torch.cat(parts, dim=-1)
+        return parts[0] if len(parts) == 1 else torch.cat(parts, dim=-1)
 
     def _preprocess_wav(self, wav: torch.Tensor) -> torch.Tensor:
         wav = torch.mean(wav, dim=1)  # stereo to mono
@@ -157,12 +150,12 @@ class BaseAudio(BaseExtractor):
                 latents = self._process_windows(wav)
             except torch.cuda.OutOfMemoryError as e:
                 msg = f"CUDA out of memory on a {event.duration:.0f} s event: "
-                if self.context_duration is None:
-                    msg += f"set {self.name}.context_duration (e.g. 30) to process "
+                if self.context.duration is None:
+                    msg += f"set {self.name}.context.duration (e.g. 30) to process "
                     msg += "long events in windows, instead of chunking them"
                 else:
-                    msg += f"lower {self.name}.context_duration "
-                    msg += f"(currently {self.context_duration} s)"
+                    msg += f"lower {self.name}.context.duration "
+                    msg += f"(currently {self.context.duration} s)"
                 raise torch.cuda.OutOfMemoryError(msg) from e
             if self.frequency == "native":
                 data = latents.numpy()
@@ -399,10 +392,9 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         Which internal representation to extract from the model:
         - ``'transformer'`` returns hidden states from transformer layers.
         - ``'convolution'`` returns convolutional feature maps.
-    context_duration : float or None, default=30.0
-        Windowing of long events (see ``BaseAudio``, with ``context_overlap``),
-        bounding the GPU memory of the attention (quadratic in the window
-        length). None processes each event at once.
+    context : ContextWindow, default=ContextWindow(duration=30.0)
+        Windowing of long events (see ``BaseAudio``), bounding the GPU memory of
+        the attention (quadratic in the window length).
     """
 
     model_name: str = "facebook/wav2vec2-large-xlsr-53"
@@ -411,7 +403,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     normalized: bool = True
     layer_type: tp.Literal["transformer", "convolution"] = "transformer"
-    context_duration: pydantic.PositiveFloat | None = 30.0
+    context: ContextWindow = ContextWindow(duration=30.0)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -570,17 +562,24 @@ class Whisper(HuggingFaceAudio):
     model_name : str
         The Hugging Face model identifier to load. Defaults to
         ``"openai/whisper-large-v3-turbo"``.
-    context_duration : float
+    context : ContextWindow
         The encoder reads 30 s of audio at once (shorter windows are padded,
-        and the latents of the padding dropped), so windows are at most 30 s.
+        and the latents of the padding dropped).
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
     dtype: tp.Literal["float32"] = "float32"
-    context_duration: tp.Annotated[float, pydantic.Field(gt=0, le=30)] = 30.0
+    context: ContextWindow = ContextWindow(duration=30.0)
     hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
         model_cls_name="WhisperModel",
     )
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        duration = self.context.duration
+        if duration is None or duration > 30:
+            msg = f"{self.name}.context.duration must be at most the 30 s read by the "
+            raise ValueError(msg + f"encoder, got {duration}")
 
     def load_model(self) -> torch.nn.Module:
         _model: torch.nn.Module = super().load_model().encoder  # type: ignore[assignment]

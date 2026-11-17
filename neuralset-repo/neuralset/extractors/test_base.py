@@ -736,3 +736,25 @@ def test_mixed_timelines() -> None:
     extractor = base.Pulse(frequency=1.0, aggregation="sum", event_types="Word")
     with pytest.raises(ValueError):
         extractor([event, event2], start=0, duration=2)
+
+
+@pytest.mark.parametrize("causal", [True, False])
+def test_context_window(causal: bool) -> None:
+    default = base.ContextWindow(duration=30.0, overlap=0.5, causal=causal)
+    window = base.ContextWindow(**default.complete({"min_context_duration": 6.0}))
+    raw = default.complete({"min_context_duration": "6", "causal": str(causal)})
+    assert base.ContextWindow.model_validate(raw) == window
+    assert window.overlap == pytest.approx(0.2 if causal else 0.4)
+    assert window.min_context == pytest.approx(6.0)
+    longer = base.ContextWindow(**default.complete({"duration": 60.0}))
+    assert longer == base.ContextWindow(duration=60.0, overlap=0.5, causal=causal)
+    completed = default.complete(base.ContextWindow(overlap=0.1))
+    assert completed == {"duration": 30.0, "overlap": 0.1, "causal": causal}
+    assert base.ContextWindow().windows(10, rate=1.0) == [(0, 10, 0, 10)]
+    window_input = {"duration": 30.0, "causal": causal, "min_context_duration": 6.0}
+    with pytest.raises(ValueError, match="Set only one"):
+        base.ContextWindow.model_validate(window_input | {"overlap": 0.5})
+    with pytest.raises(ValueError, match="must be in"):
+        base.ContextWindow.model_validate(window_input | {"min_context_duration": 30.0})
+    with pytest.raises(ValueError, match="requires duration and causal"):
+        base.ContextWindow.model_validate({"duration": 30.0, "min_context_duration": 6.0})
