@@ -201,6 +201,40 @@ class FmriTimedArray(TimedArray):
         return nibabel.Nifti1Image(data, affine)
 
 
+class RawTransform(pydantic.BaseModel):
+    """A function applied to the MNE ``Raw`` as ``name(raw, **params) -> raw``.
+
+    ``name`` is a dotted import path, resolved when the config is built.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    name: str
+    params: dict[str, tp.Any] = {}
+    # Hash of the function's source, part of the cache uid so editing the function
+    # re-runs the extraction. Recomputed on validation, whatever value is passed.
+    code_hash: str = ""
+    _fn: tp.Callable[..., tp.Any] = pydantic.PrivateAttr()
+
+    @pydantic.model_validator(mode="after")
+    def _resolve(self) -> "RawTransform":
+        self._fn = pydantic.TypeAdapter(pydantic.ImportString).validate_python(self.name)
+        try:
+            source = inspect.getsource(self._fn)
+        except (OSError, TypeError):
+            # builtins and C functions have no source; their name stands in, so
+            # upgrading such a library does not invalidate the cache
+            source = self.name
+        self.code_hash = hashlib.sha256(source.encode()).hexdigest()[:12]
+        return self
+
+    def __call__(self, raw: mne.io.Raw) -> mne.io.Raw:
+        out = self._fn(raw, **self.params)
+        if out is None:
+            raise TypeError(f"raw_preprocessing {self.name} returned None")
+        return out
+
+
 class MneRaw(BaseExtractor):
     """
     Feature extractor for raw MNE data files.
@@ -297,6 +331,12 @@ class MneRaw(BaseExtractor):
         Internal Active Shielding (MaxShield). Such recordings contain
         compensation signals that should normally be removed via SSS/tSSS
         (MaxFilter) before analysis. Does not affect the cache uid.
+    raw_preprocessing : list of RawTransform, default=[]
+        Functions applied in order to each loaded ``Raw``, before channel picking
+        and the steps above, e.g.
+        ``[{"name": "mne.preprocessing.compute_current_source_density"}]``.
+        Each function's own source code is part of the cache uid; edits to the
+        helpers it calls are not, so bump ``infra.version`` after those.
 
     """
 
@@ -326,6 +366,7 @@ class MneRaw(BaseExtractor):
     bipolar_ref: tuple[list[str], list[str]] | None = None
     channel_order: tp.Literal["unique", "original"] = "unique"
     allow_maxshield: bool = False
+    raw_preprocessing: list[RawTransform] = []
 
     _channels: dict[str, int] = {}
 
@@ -455,7 +496,12 @@ class MneRaw(BaseExtractor):
     )
     def _get_data(self, events: tp.Sequence[etypes.MneRaw]) -> tp.Iterator[MneTimedArray]:
         for event in events:
-            ta = self._preprocess_raw(event.read(), event)
+            raw = event.read()
+            if self.raw_preprocessing:
+                raw.load_data()
+            for transform in self.raw_preprocessing:
+                raw = transform(raw)
+            ta = self._preprocess_raw(raw, event)
             # not in _preprocess_raw, which subclasses override without super()
             if self.store_dtype == "float16":
                 ta.data = quantize.Float16StoredArray(ta.data)  # type: ignore[assignment]

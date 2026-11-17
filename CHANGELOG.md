@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralset`: `MneRaw.raw_preprocessing` applies functions, given by dotted import path and keyword `params`, to each loaded `Raw` before the extractor's own steps, e.g. a custom re-reference or `mne.preprocessing.compute_current_source_density`. Each function's source code is part of the cache uid, so editing it re-runs the extraction.
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

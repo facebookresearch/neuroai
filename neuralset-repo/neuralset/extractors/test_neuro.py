@@ -16,6 +16,7 @@ import mne
 import nibabel as nib
 import numpy as np
 import pandas as pd
+import pydantic
 import pytest
 import requests
 import sklearn
@@ -568,6 +569,48 @@ def test_eeg_filter_longer_than_recording(
     assert (ta.header["highpass"], ta.header["lowpass"]) == expected
 
 
+def _scale_raw(raw: mne.io.Raw, factor: float) -> mne.io.Raw:
+    raw._data *= factor
+    return raw
+
+
+def test_raw_preprocessing(tmp_path: Path) -> None:
+    info = mne.create_info(["Fz", "Cz"], sfreq=100.0, ch_types="eeg")
+    fif = tmp_path / "x-raw.fif"
+    mne.io.RawArray(np.random.default_rng(0).normal(size=(2, 300)), info).save(fif)
+    event = etypes.Eeg.from_dict(
+        dict(
+            start=0.0,
+            duration=3.0,
+            timeline="t",
+            filepath=str(fif),
+            type="Eeg",
+            subject="s",
+        )
+    )
+    step: tp.Any = {"name": f"{__name__}._scale_raw", "params": {"factor": 3.0}}
+    plain = ns.extractors.EegExtractor()
+    scaled = ns.extractors.EegExtractor(raw_preprocessing=[step])
+    ref = next(iter(plain._get_data([event]))).data
+    np.testing.assert_allclose(next(iter(scaled._get_data([event]))).data, 3 * ref)
+    # the function's source is in the cache uid, and a dumped config (which
+    # carries code_hash) validates back: exca clones extractors through dumps
+    assert scaled.raw_preprocessing[0].code_hash in scaled.infra.uid()
+    assert (
+        ns.extractors.EegExtractor(**scaled.model_dump()).infra.uid()
+        == scaled.infra.uid()
+    )
+    with pytest.raises(pydantic.ValidationError):
+        ns.extractors.EegExtractor(
+            raw_preprocessing=[tp.cast(tp.Any, {"name": "no.such.fn"})]
+        )
+    with pytest.raises(TypeError, match="returned None"):
+        bad = ns.extractors.EegExtractor(
+            raw_preprocessing=[tp.cast(tp.Any, {"name": "builtins.print"})]
+        )
+        next(iter(bad._get_data([event])))
+
+
 @pytest.mark.parametrize(
     "start,tmin,tmax",
     [
@@ -858,6 +901,7 @@ def test_base_meg(tmp_path: Path) -> None:
         "apply_sss",
         "compensation_grade",
         "whitening",
+        "raw_preprocessing",
     }
 
 
