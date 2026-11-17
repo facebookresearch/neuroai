@@ -65,7 +65,7 @@
       <!-- Exca -->
        <div class="package-card-wrapper">
          <a href="https://facebookresearch.github.io/exca/" class="package-card" target="_blank">
-           <div class="package-card-icon"><i class="fas fa-cog"></i></div>
+           <div class="package-card-icon"><img src="https://raw.githubusercontent.com/facebookresearch/exca/main/docs/_static/exca.png" alt="exca"></div>
            <div class="package-card-name">Exca</div>
            <div class="package-card-tagline">Caching & remote compute infrastructure.</div>
          </a>
