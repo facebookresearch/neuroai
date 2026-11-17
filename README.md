@@ -62,7 +62,7 @@ pip install neuralbench
 
 ## Related projects
 
-- <a href="https://facebookresearch.github.io/exca/"><img src="https://raw.githubusercontent.com/facebookresearch/exca/main/docs/_static/exca.png" alt="exca" height="48" align="absmiddle"></a> — Execution & caching framework powering neuroai's backbone
+- **[exca](https://facebookresearch.github.io/exca/)** — Execution & caching framework powering neuroai's backbone
 
 ---
 
