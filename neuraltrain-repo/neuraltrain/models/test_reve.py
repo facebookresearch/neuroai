@@ -10,7 +10,7 @@ import braindecode.models
 import pytest
 import torch
 
-from .common import INVALID_POS_VALUE, resolve_with_anode_fallback
+from .common import INVALID_POS_VALUE, remap_chs_info, resolve_with_anode_fallback
 from .reve import NtReve, _ReveWrapper
 
 BANK_CH_NAMES = ["Fp1", "Fp2", "C3", "C4", "O1", "O2", "Fz", "Cz"]
@@ -114,19 +114,18 @@ def test_wrapper_prefers_the_bank_it_was_built_with(channel_indices, n_chans):
 
 
 # ---------------------------------------------------------------------------
-# NtReve._remap_chs_info
+# remap_chs_info (shared helper in neuraltrain.models.common)
 # ---------------------------------------------------------------------------
 
 
 def test_remap_chs_info():
     """No-op without mapping; applies mapping when provided."""
-    cfg_plain = NtReve()
     chs = [{"ch_name": "C3"}, {"ch_name": "C4"}]
-    assert cfg_plain._remap_chs_info(chs) is chs
+    assert remap_chs_info(chs, None) is chs
 
-    cfg_mapped = NtReve(channel_mapping={"EEG 001": "Fp1", "EEG 002": "Fp2"})
-    result = cfg_mapped._remap_chs_info(
-        [{"ch_name": "EEG 001"}, {"ch_name": "EEG 002"}, {"ch_name": "Cz"}]
+    result = remap_chs_info(
+        [{"ch_name": "EEG 001"}, {"ch_name": "EEG 002"}, {"ch_name": "Cz"}],
+        {"EEG 001": "Fp1", "EEG 002": "Fp2"},
     )
     assert [ch["ch_name"] for ch in result] == ["Fp1", "Fp2", "Cz"]
 

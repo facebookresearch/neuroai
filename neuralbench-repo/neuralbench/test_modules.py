@@ -166,14 +166,74 @@ class _TokenModel3D(nn.Module):
         return self.lin(x).reshape(x.shape[0], *self.shape)
 
 
-def test_mean_aggregation_passes_pooled_output_through():
+class _PooledModel(nn.Module):
+    """Returns a pooled per-sample embedding ``(B, emb)``, like BIOT."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x)
+
+
+# aggregation -> expected probe in_features, as a function of (n_tokens, emb)
+_AGG_EXPECTED_IN = {
+    "mean": lambda n_tokens, emb: emb,
+    "first": lambda n_tokens, emb: emb,
+    "flatten": lambda n_tokens, emb: n_tokens * emb,
+    2: lambda n_tokens, emb: 2 * emb,
+    4: lambda n_tokens, emb: 4 * emb,
+}
+
+
+@pytest.mark.parametrize("aggregation", list(_AGG_EXPECTED_IN))
+def test_aggregation_2d_output(aggregation):
+    B, F, P, E, Fp = 8, 10, 6, 5, 3
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _TokenModel2D(F, P, E), dummy, Fp
+    )
+    assert wrapped.probe.in_features == _AGG_EXPECTED_IN[aggregation](P, E)
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "flatten"])
+def test_aggregation_3d_output(aggregation):
+    B, F, C, P, E, Fp = 8, 10, 3, 4, 5, 3
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _TokenModel3D(F, C, P, E), dummy, Fp
+    )
+    assert wrapped.probe.in_features == _AGG_EXPECTED_IN[aggregation](C * P, E)
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["first", 2])
+def test_aggregation_rejects_3d_output(aggregation):
+    with pytest.raises(ValueError, match="needs a 2-D"):
+        DownstreamWrapper(aggregation=aggregation).build(
+            _TokenModel3D(10, 3, 4, 5), {"x": torch.randn(8, 10)}, 3
+        )
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "flatten", None])
+def test_aggregation_pooled_output_is_passthrough(aggregation):
     B, F, E, Fp = 8, 10, 5, 3
-    dummy_batch = {"input": torch.randn(B, F)}
-    wrapped = DownstreamWrapper(aggregation="mean").build(
-        nn.Linear(F, E), dummy_batch, Fp
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _PooledModel(F, E), dummy, Fp
     )
     assert wrapped.probe.in_features == E
-    assert wrapped(**dummy_batch).shape == (B, Fp)
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["first", 2])
+def test_aggregation_pooled_output_rejects_token_reduction(aggregation):
+    with pytest.raises(ValueError, match="already pooled"):
+        DownstreamWrapper(aggregation=aggregation).build(
+            _PooledModel(10, 5), {"x": torch.randn(8, 10)}, 3
+        )
 
 
 @pytest.mark.parametrize("ndim", [2, 3])
