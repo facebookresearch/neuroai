@@ -1641,7 +1641,8 @@ class MaskProjector(BaseFmriProjector):
                     atlas = datasets.fetch_atlas_harvard_oxford(
                         f"sub-maxprob-thr50-{self.resolution}mm"
                     )
-                excluded = ["Cortex", "White", "Stem", "Background"]
+                # CSF (lateral ventricles) is not subcortical grey matter
+                excluded = ["Cortex", "White", "Stem", "Background", "Ventricle"]
                 selected_indices = [
                     i
                     for i, label in enumerate(atlas.labels)

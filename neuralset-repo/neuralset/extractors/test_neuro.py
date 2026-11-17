@@ -2174,6 +2174,27 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
         feat.prepare(events)
 
 
+def test_mask_projector_subcortical_excludes_ventricles(monkeypatch: tp.Any) -> None:
+    from nilearn import datasets
+
+    labels = [
+        "Background",
+        "Left Cerebral White Matter",
+        "Left Cerebral Cortex ",
+        "Left Lateral Ventricle",
+        "Left Thalamus",
+        "Brain-Stem",
+        "Right Lateral Ventricle",
+        "Right Putamen",
+    ]
+    maps = nib.Nifti1Image(np.arange(8, dtype=float).reshape(2, 2, 2), np.eye(4))
+    atlas = SimpleNamespace(labels=labels, maps=maps)
+    monkeypatch.setattr(datasets, "fetch_atlas_harvard_oxford", lambda *_: atlas)
+    mask = ns.extractors.neuro.MaskProjector(mask="subcortical").get_mask().get_fdata()
+    kept = sorted(labels[int(v)] for v in np.unique(mask) if v)
+    assert kept == ["Left Thalamus", "Right Putamen"]
+
+
 def test_fmri_smoothing(test_data_path: Path) -> None:
     study = ns.Study(
         name="Test2023Fmri",
