@@ -146,6 +146,20 @@ def test_quantile_abs_scaler_zero_channel() -> None:
     assert not torch.any(torch.isinf(x_out))
 
 
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16, torch.float64], ids=str)
+@pytest.mark.parametrize("scaler", ["RobustScaler", "QuantileAbsScaler"])
+def test_quantile_scalers_keep_the_input_dtype(
+    scaler: tp.Literal["RobustScaler", "QuantileAbsScaler"], dtype: torch.dtype
+) -> None:
+    # torch.quantile takes float32 and float64 only; mixed precision feeds bf16/fp16
+    x = torch.randn(2, 3, 50).to(dtype)
+    preproc = OnTheFlyPreprocessor(scaler=scaler, scale_dim=-1).build()
+    x_out, _ = preproc(x)
+    assert x_out.dtype == dtype
+    expected, _ = preproc(x.float())
+    torch.testing.assert_close(x_out.float(), expected, rtol=0.02, atol=0.02)
+
+
 def test_minmax_scaler() -> None:
     """MinMaxScaler rescales each channel to [-1, 1] along the time dim."""
     x = torch.randn(2, 3, 50)

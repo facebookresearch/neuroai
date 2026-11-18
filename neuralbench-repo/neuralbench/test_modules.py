@@ -11,6 +11,7 @@ head, probe_layer capture, preprocessor / channel-adapter wiring, dict-output
 routing, LoRA injection) and ``ChannelProjection`` (identity / bipolar inits).
 """
 
+import copy
 import functools
 
 import pytest
@@ -50,6 +51,14 @@ def test_downstream_wrapper_probe_layer():
     # Probe is sized from layer "0"'s output (16), not the final layer (4).
     assert wrapped.probe.in_features == 16
     assert wrapped(**dummy_batch).shape == (B, Fp)
+
+
+def test_downstream_wrapper_probe_layer_survives_deepcopy():
+    # ResetPerStream deep-copies the model at each evaluation stream
+    model = nn.Sequential(nn.Linear(10, 16), nn.Linear(16, 4))
+    batch = {"input": torch.randn(8, 10)}
+    wrapped = DownstreamWrapper(probe_layer="0").build(model, batch, 3)
+    torch.testing.assert_close(copy.deepcopy(wrapped)(**batch), wrapped(**batch))
 
 
 def test_downstream_wrapper_probe_layer_invalid():
@@ -248,6 +257,19 @@ def test_attention_probe_is_trainable_on_frozen_backbone(ndim):
     assert not any(p.requires_grad for p in wrapped.wrapped_model.parameters())
     assert probe_params and all(p.requires_grad for p in probe_params)
     assert wrapped(**dummy).shape == (B, Fp)
+
+
+def test_frozen_backbone_runs_in_eval_mode():
+    # the head is fitted on fixed features: no dropout, no BatchNorm updates
+    backbone = nn.Sequential(nn.Linear(4, 8), nn.BatchNorm1d(8), nn.Dropout())
+    batch = {"input": torch.randn(8, 4)}
+    wrapped = DownstreamWrapper(layers_to_unfreeze=[""]).build(backbone, batch, 2)
+    running_mean = backbone[1].running_mean.clone()
+    wrapped(**batch)  # Lightning >= 2.2 keeps the mode the build left
+    wrapped.train()  # earlier versions call train() when fitting starts
+    wrapped(**batch)
+    assert wrapped.probe.training and not any(m.training for m in backbone.modules())
+    torch.testing.assert_close(backbone[1].running_mean, running_mean)
 
 
 def test_attention_probe_requires_no_aggregation():

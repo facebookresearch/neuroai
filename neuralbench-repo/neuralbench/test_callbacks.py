@@ -51,10 +51,12 @@ def test_unfreeze_at_epoch() -> None:
     callback.on_fit_start(trainer, wrapper)  # type: ignore[arg-type]
     callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
     assert not backbone.weight.requires_grad
+    assert not backbone.training, "a frozen backbone runs in eval mode"
     trainer.current_epoch = 1
     callback.on_train_epoch_start(trainer, wrapper)  # type: ignore[arg-type]
     assert backbone.weight.requires_grad
     assert not backbone.bias.requires_grad
+    assert backbone.training, "unfreezing puts the backbone back in train mode"
 
 
 def test_reset_per_stream_in_lightning():

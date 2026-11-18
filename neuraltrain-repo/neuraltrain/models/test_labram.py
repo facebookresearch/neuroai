@@ -4,6 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import copy
+
 import pytest
 import torch
 
@@ -45,10 +47,12 @@ class _RecordingModel(torch.nn.Module):
         self.temporal_embedding = torch.nn.Parameter(torch.zeros(1, 16, 4))
         self.last_ch_names: list[str] | None = None
         self.last_x_shape: tuple[int, ...] | None = None
+        self.last_n_time_slots: int | None = None
 
     def forward(self, x, ch_names=None, **kwargs):
         self.last_ch_names = ch_names
         self.last_x_shape = tuple(x.shape)
+        self.last_n_time_slots = self.temporal_embedding.shape[1]
         return x.mean(dim=(1, 2), keepdim=False).unsqueeze(-1)
 
 
@@ -190,7 +194,41 @@ def test_wrapper_serves_any_window_length(n_times: int, n_patches: int):
 
     assert inner.last_x_shape == (1, len(CH_NAMES), n_patches * PATCH_SIZE)
     assert inner.patch_embed[0].n_patchs == n_patches
-    assert inner.temporal_embedding.shape[1] == n_patches + 1
+    assert inner.last_n_time_slots == n_patches + 1
+
+
+def _tiny_labram(names: list[str]) -> torch.nn.Module:
+    return NtLabram(
+        kwargs=dict(embed_dim=32, num_layers=1, num_heads=2, patch_size=PATCH_SIZE)
+    ).build(
+        n_spatial_locations=len(names),
+        n_temporal_samples=200,
+        n_outputs=2,
+        chs_info=[{"ch_name": n} for n in names],
+    )
+
+
+@requires_labram_channel_order
+def test_wrapper_deepcopies_after_a_training_step():
+    # ResetPerStream deep-copies the trained model at each evaluation stream
+    model = _tiny_labram(CH_NAMES)
+    x, pos = torch.randn(2, len(CH_NAMES), 200), torch.rand(2, len(CH_NAMES), 3)
+    model(x, pos).sum().backward()
+    clone = copy.deepcopy(model)
+    clone.load_state_dict(model.state_dict())  # braindecode reads temporal_embedding
+    with torch.no_grad():
+        torch.testing.assert_close(clone.eval()(x, pos), model.eval()(x, pos))
+
+
+@requires_labram_channel_order
+def test_wrapper_compiles_without_graph_breaks():
+    # channels resolve once on the host, so no call syncs on the device
+    names = [*CH_NAMES, "E5"]  # E5 is dropped
+    model = _tiny_labram(names).eval()
+    x, pos = torch.randn(2, len(names), 200), torch.rand(2, len(names), 3)
+    compiled = torch.compile(model, backend="eager", fullgraph=True)
+    with torch.no_grad():
+        torch.testing.assert_close(compiled(x, pos), model(x, pos))
 
 
 # ---------------------------------------------------------------------------

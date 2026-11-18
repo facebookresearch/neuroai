@@ -257,3 +257,12 @@ def test_check_model_probes_the_shapes_the_run_will_use() -> None:
     rows = check_model(AdaptiveFm(), "eeg", "cvep", dataset="all")
     assert set(rows["n_temporal_samples"]) == {480, 240, 120}
     assert set(rows["status"]) == {"ok"}
+
+
+@pytest.mark.parametrize(
+    "device, task", [("fmri", "image"), ("eeg", "_sleep_onset_stream")]
+)
+def test_check_model_skips_a_native_sampling_rate(device: str, task: str) -> None:
+    # "native" keeps each recording's own rate, so the window has no fixed width
+    rows = check_model(AdaptiveFm(), device, task)
+    assert rows["status"].tolist() == ["skipped: no fixed window or sampling rate"]

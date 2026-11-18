@@ -14,6 +14,7 @@ pretrained model (``ChannelProjection``, ``DownstreamWrapper``) and the
 runtime wrapper they produce (``DownstreamWrapperModel``).
 """
 
+import functools
 import inspect
 import logging
 import typing as tp
@@ -531,7 +532,9 @@ class DownstreamWrapper(pydantic.BaseModel):
     layers_to_unfreeze : list[str] | tp.Literal["last"] | None, optional
         List of layer name patterns to unfreeze (set requires_grad=True), while freezing all
         others. Cannot be used together with layers_to_freeze. If "last", unfreezes the last
-        layer (nn.Module) of the model. Default is None.
+        layer (nn.Module) of the model. A model left with nothing to train (e.g. ``[""]``)
+        runs in eval mode: no dropout, and its BatchNorm statistics stay fixed. Default is
+        None.
     strict_matching : bool, optional
         If True, when freezing/unfreezing layers, only the first part of the layer name
         (before the first dot) must match exactly. If False, any part of the layer name
@@ -758,6 +761,9 @@ class DownstreamWrapper(pydantic.BaseModel):
             ):
                 LOGGER.warning("lora_dropout is not applied to BEiT-style qkv adapters.")
 
+        # puts a frozen backbone in eval mode; Lightning >= 2.2 keeps it when fitting
+        wrapper_model.train()
+
         # Sanity check (wrapper handles preprocessing internally)
         wrapper_output = wrapper_model(**dummy_batch)
         assert wrapper_output.shape[-1] == n_outputs
@@ -798,6 +804,12 @@ class DownstreamWrapper(pydantic.BaseModel):
                     f"{tuple(capture.shape)}."
                 )
         return capture.movedim(batch_dim, 0), batch_dim
+
+
+def _keep_last_output(
+    buffer: list[torch.Tensor], module: nn.Module, args: tp.Any, output: torch.Tensor
+) -> None:
+    buffer[:] = [output]
 
 
 class DownstreamWrapperModel(nn.Module):
@@ -857,8 +869,8 @@ class DownstreamWrapperModel(nn.Module):
         # The hook lives on ``self.wrapped_model`` (a submodule of ``self``), so
         # a strong closure over ``self`` would form a self -> wrapped_model ->
         # submodule -> hook -> self reference cycle that keeps this wrapper (and
-        # its captured GPU activations) alive past its useful life. A weakref
-        # lets the hook no-op once the wrapper is collected, and
+        # its captured GPU activations) alive past its useful life. The hook
+        # holds only the buffer, which ``copy.deepcopy`` rebinds to the copy, and
         # ``weakref.finalize`` deterministically detaches the hook on GC so a
         # shared backbone doesn't accumulate stale hooks across CV folds.
         # Single-slot buffer (overwrite, not append): keeps only the last fire
@@ -869,16 +881,11 @@ class DownstreamWrapperModel(nn.Module):
         # the aggregation semantics match the non-probe path.
         self._probe_batch_dim = probe_batch_dim
         if probe_layer is not None:
-            self_ref = weakref.ref(self)
-
-            def _capture(_m, _i, out, _ref=self_ref):
-                s = _ref()
-                if s is not None:
-                    s._probed_activation[:] = [out]
-
             self._probe_handle = self.wrapped_model.get_submodule(
                 probe_layer
-            ).register_forward_hook(_capture)
+            ).register_forward_hook(
+                functools.partial(_keep_last_output, self._probed_activation)
+            )
             weakref.finalize(self, self._probe_handle.remove)
 
     def _apply_freeze(
@@ -925,6 +932,18 @@ class DownstreamWrapperModel(nn.Module):
         """Freeze or unfreeze the parameters the freeze pattern froze, and only those."""
         for param in self._pattern_frozen:
             param.requires_grad = not frozen
+        self.train(self.training)
+
+    def train(self, mode: bool = True) -> tp.Self:
+        """Set the training mode, keeping a backbone with nothing to train in eval.
+
+        A frozen backbone (probing, or LP-FT before it unfreezes) then runs no
+        dropout and leaves its BatchNorm statistics as they are.
+        """
+        super().train(mode)
+        if mode and not any(p.requires_grad for p in self.wrapped_model.parameters()):
+            self.wrapped_model.eval()
+        return self
 
     def _build_aggregation(
         self,
