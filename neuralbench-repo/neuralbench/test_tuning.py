@@ -51,6 +51,29 @@ def test_tune_batches_resumes_and_tells_states(tmp_path: Path, mode: str) -> Non
     assert study.user_attrs["uid"] != uid
 
 
+def test_tune_sets_the_onecycle_max_lr_to_the_sampled_lr(tmp_path: Path) -> None:
+    seen: list[ConfDict] = []
+
+    def run_batch(configs: list[ConfDict]) -> list[dict[str, tp.Any] | None]:
+        seen.extend(configs)
+        return [{"val/score": 1.0} for _ in configs]
+
+    optim = {
+        "optimizer": {"lr": 1e-4},
+        "scheduler": {"name": "OneCycleLR", "kwargs": {"max_lr": 1e-4}},
+    }
+    monitor = {"monitor": "val/score", "mode": "max"}
+    config = ConfDict(
+        {"task_name": "t", "trainer_config": monitor, "lightning_optimizer_config": optim}
+    )
+    key = "lightning_optimizer_config.optimizer.lr"
+    tune(
+        [config], {key: {"low": 1e-5, "high": 1e-2, "log": True}}, run_batch, 2, tmp_path
+    )
+    max_lr = "lightning_optimizer_config.scheduler.kwargs.max_lr"
+    assert all(c[max_lr] == c[key] != 1e-4 for c in seen)
+
+
 class _Module(pl.LightningModule):
     def __init__(self) -> None:
         super().__init__()

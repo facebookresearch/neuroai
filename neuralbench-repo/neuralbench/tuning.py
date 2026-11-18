@@ -175,6 +175,14 @@ def tune(
         for study, config, journal, trial in asked:
             trial_config = config.copy()
             trial_config.update(trial.params)
+            # OneCycleLR drives the learning rate from its max_lr, ignoring the
+            # optimizer's lr: a sampled lr has to set it too
+            scheduler = trial_config.get("lightning_optimizer_config", {}).get(
+                "scheduler"
+            )
+            lr = trial.params.get("lightning_optimizer_config.optimizer.lr")
+            if lr is not None and scheduler and scheduler.get("name") == "OneCycleLR":
+                trial_config["lightning_optimizer_config.scheduler.kwargs.max_lr"] = lr
             trial_config["optuna_trial"] = OptunaTrial(
                 storage=journal,
                 study_name=study.study_name,
