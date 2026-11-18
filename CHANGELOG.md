@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralfetch`: `Alvarez2022Haaglanden` reads its recordings from `download/hmc-sleep-staging/1.1/recordings/`, where its PhysioNet download writes them, so a fresh download is found (move a copy kept in `download/recordings/`), and types its chin EMG and ECG channels `emg` and `ecg`: 4 EEG channels instead of 6, so its `sleep_stage`, `sleep_onset` and `_sleep_onset_stream` variants are not comparable with earlier runs (#XXXX).
+- `neuralfetch`: `Levy2026NoninvasiveMeg` and `Levy2026NoninvasiveEeg` download only their own modality (`MEG/`, ~268 GB, or `EEG/`, ~13 GB) rather than both for each class (#XXXX).
+- `neuralfetch`: `Lopez2017Tuab`, `Harati2015Tuev`, `VonWeltin2017Tusl` and `Shah2018Tusz` skip files such as `.htaccess` next to the folders in `edf/`, which raised `NotADirectoryError` (#XXXX).
+- `neuralfetch`: `Albrecht2019Increased` and `Hollenstein2018Zuco` return volts: they passed EEGLAB's microvolts to MNE as volts, 1e6 times too large, so `eeg schizophrenia_diagnosis` and `eeg sentence` scores of models without a `scaler` are not comparable with earlier runs (#XXXX).
+- `neuralfetch`: `Zyma2019Electroencephalograms` types `A2-A1`, the ear-to-ear reference derivation, `misc`: 19 EEG channels instead of 20, so `eeg mental_arithmetic` scores are not comparable with earlier runs (#XXXX).
+- `neuralfetch`: MOABB studies hand out a copy of the recordings they keep in memory, which in-place preprocessing changed for every later read in the same process (#XXXX).
+- `neuralfetch`: the version bumps of these four studies rebuild their cached timelines; extractor outputs cached before this fix are keyed by recording, not by study version, and are reused as is (#XXXX).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

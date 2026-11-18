@@ -432,6 +432,21 @@ def test_nemar(tmp_path: Path, version: str | None, overwrite: bool) -> None:
     assert f"_{version}_" in obj.get_success_file().name
 
 
+@pytest.mark.parametrize("modality", ["Meg", "Eeg"])
+def test_levy2026_downloads_its_modality_only(tmp_path: Path, modality: str) -> None:
+    """The Hugging Face repo holds MEG/ (~268 GB) and EEG/ (~13 GB) side by side."""
+    from neuralfetch.studies import levy2026noninvasive
+
+    study = getattr(levy2026noninvasive, f"Levy2026Noninvasive{modality}")(path=tmp_path)
+    with (
+        patch.dict(sys.modules, {"huggingface_hub": (hub := MagicMock())}),
+        patch.object(download.Huggingface, "_check_requirements"),
+    ):
+        study._download()
+    kwargs = hub.snapshot_download.call_args.kwargs
+    assert kwargs["allow_patterns"] == [f"{modality.upper()}/*"]
+
+
 @pytest.mark.parametrize("study_name", ["Allen2022Massive", "Allen2022MassiveRaw"])
 def test_nsd_data_access_agreement(tmp_path: Path, study_name: str) -> None:
     """NSD consent flow: env-var gate, T&C display, user info collection, marker persistence.

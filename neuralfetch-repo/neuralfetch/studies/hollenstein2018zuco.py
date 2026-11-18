@@ -99,6 +99,10 @@ class Hollenstein2018Zuco(study.Study):
     # 13: control sentence offset
     url: tp.ClassVar[str] = "https://osf.io/q3zws/"
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
+
     def _download(self, overwrite: bool = False) -> None:
         with download.success_writer(self.path / "download_all") as already_done:
             if already_done and not overwrite:
@@ -211,7 +215,7 @@ class Hollenstein2018Zuco(study.Study):
         """Load EEG data from .mat file."""
         eeg_file = self._get_filename("eeg_file", timeline)
         eeg = sio.loadmat(eeg_file, simplify_cells=True)["EEG"]
-        eeg_data = eeg["data"]
+        eeg_data = eeg["data"] * 1e-6  # EEGLAB stores EEG.data in uV
         ch_names = [ch["labels"] for ch in eeg["chanlocs"]]
         info = mne.create_info(ch_names, eeg["srate"], "eeg")
         raw = mne.io.RawArray(eeg_data, info)

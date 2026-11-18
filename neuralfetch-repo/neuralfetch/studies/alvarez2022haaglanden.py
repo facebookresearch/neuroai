@@ -21,12 +21,12 @@ class Alvarez2022Haaglanden(study.Study):
     """Haaglanden Medisch Centrum Sleep Staging Database (HMC-Sleep-Staging): EEG recordings during whole-night polysomnographic sleep monitoring.
 
     A collection of 151 whole-night polysomnographic sleep recordings collected at the Haaglanden
-    Medisch Centrum sleep center in The Netherlands. Each recording includes 6-channel EEG with
+    Medisch Centrum sleep center in The Netherlands. Each recording includes 4-channel EEG with
     sleep stage annotations (W, N1, N2, N3, R). The population consists of clinical sleep center
     patients (85 male, 66 female, mean age 53.9 ± 15.4).
 
     Experimental Design:
-        - EEG recordings (6-channel, 256 Hz)
+        - EEG recordings (4-channel, 256 Hz)
         - 151 participants (clinical sleep center patients)
         - 1 session per participant (whole-night recording)
         - Paradigm: whole-night sleep staging with annotated sleep stages (W, N1, N2, N3, R)
@@ -59,9 +59,13 @@ class Alvarez2022Haaglanden(study.Study):
         num_subjects=151,
         event_types_in_query={"Eeg", "SleepStage", "CategoricalEvent"},
         num_events_in_query=103,
-        data_shape=(6, 6566400),
+        data_shape=(4, 6566400),
         frequency=256,
     )
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
 
     def _download(self, overwrite: bool = False) -> None:
         self.path.mkdir(exist_ok=True, parents=True)
@@ -90,7 +94,8 @@ class Alvarez2022Haaglanden(study.Study):
             "EOG E2-M2": "EOG2",
         }
         raw.rename_channels(rename_map)
-        raw.set_channel_types({"EOG1": "eog", "EOG2": "eog"})
+        # EDF carries no channel types: MNE reads every channel as EEG
+        raw.set_channel_types({"EOG1": "eog", "EOG2": "eog", "EMG": "emg", "ECG": "ecg"})
 
         montage = mne.channels.make_standard_montage("standard_1005")
         raw.set_montage(montage, on_missing="ignore")
@@ -104,7 +109,7 @@ class Alvarez2022Haaglanden(study.Study):
             yield dict(subject=sub_id)
 
     def _load_timeline_events(self, timeline: dict[str, tp.Any]) -> pd.DataFrame:
-        sub_dir = self.path / "download" / "recordings"
+        sub_dir = self.path / "download" / "hmc-sleep-staging" / "1.1" / "recordings"
         fname_events = sub_dir / f"{timeline['subject']}_sleepscoring.edf"
         annots_df = mne.read_annotations(fname_events).to_data_frame(time_format=None)
         annots_df.rename(columns={"onset": "start"}, inplace=True)
@@ -153,7 +158,7 @@ class Alvarez2022Haaglanden(study.Study):
         return eeg_events
 
     def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.BaseRaw:
-        sub_dir = self.path / "download" / "recordings"
+        sub_dir = self.path / "download" / "hmc-sleep-staging" / "1.1" / "recordings"
         fname_eeg = sub_dir / f"{timeline['subject']}.edf"
 
         raw = mne.io.read_raw_edf(fname_eeg)

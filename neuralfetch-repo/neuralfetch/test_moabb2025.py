@@ -10,10 +10,13 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import mne
+import numpy as np
+import pandas as pd
 from exca.steps import backends
 
 from neuralfetch.studies import moabb2025
-from neuralfetch.studies.moabb2025 import Tangermann2012Review
+from neuralfetch.studies.moabb2025 import Romani2025Brainform, Tangermann2012Review
 
 
 def test_get_cached_moabb_data_lru(tmp_path: Path) -> None:
@@ -49,6 +52,39 @@ def test_get_cached_moabb_data_lru(tmp_path: Path) -> None:
         assert moabb2025._get_cached_moabb_data.cache_info().hits == 1
 
     assert moabb2025._get_cached_moabb_data.cache_info().maxsize == 2
+    moabb2025._get_cached_moabb_data.cache_clear()
+
+
+def test_load_raw_does_not_hand_out_the_cached_raw(tmp_path: Path) -> None:
+    """Preprocessing a loaded raw in place must not change the next load."""
+    raw = mne.io.RawArray(np.ones((2, 100)), mne.create_info(["C3", "C4"], 100.0, "eeg"))
+    tangermann = Tangermann2012Review(path=tmp_path)
+    (tangermann.path / "download").mkdir()
+    romani = Romani2025Brainform(path=tmp_path)
+    eeg_dir = romani._bids_root() / "sub-P01" / "ses-1" / "eeg"  # noqa: SLF001
+    eeg_dir.mkdir(parents=True)
+    (eeg_dir / "sub-P01_ses-1_task-ERP_eeg.edf").touch()
+    events = pd.DataFrame({"onset": [0.5], "duration": [0.1], "value": [1]})
+    events.to_csv(eeg_dir / "sub-P01_ses-1_task-ERP_events.tsv", sep="\t", index=False)
+    modules = ["moabb", "moabb.datasets", "moabb.datasets.base"]
+    moabb2025._get_cached_moabb_data.cache_clear()
+    with (
+        patch.dict(moabb2025._moabb_data_cache, clear=True),
+        patch.dict(sys.modules, {name: MagicMock() for name in modules}),
+        patch.object(moabb2025, "temp_mne_data"),
+        patch.object(moabb2025, "find_dataset_in_moabb") as mock_find,
+        patch.object(mne.io, "read_raw_edf", lambda *a, **k: raw.copy()),
+    ):
+        mock_find.return_value.get_data.return_value = {1: {"0": {"0": raw}}}
+        for study, timeline in [
+            (tangermann, {"subject": 1, "session": "0", "run": "0"}),
+            (romani, {"subject": 0, "session": "1", "run": "1calibration"}),
+        ]:
+            first = study._load_raw(timeline)  # noqa: SLF001
+            first.pick(["C3"])._data[:] = 0.0  # in place, as MneRaw preprocessing does
+            second = study._load_raw(timeline)  # noqa: SLF001
+            assert second.ch_names == ["C3", "C4"]
+            assert np.all(second.get_data() == 1.0)
     moabb2025._get_cached_moabb_data.cache_clear()
 
 

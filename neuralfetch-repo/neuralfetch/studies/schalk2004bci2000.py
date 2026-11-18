@@ -255,7 +255,9 @@ class Schalk2004Bci2000(study.Study):
                     "T2": "imagery_bilateral_feet",
                 }
         else:
-            ValueError(f"Invalid input for variable. Got run={run}, expected R[00-12].")
+            raise ValueError(
+                f"Invalid input for variable. Got run={run}, expected R01-R14."
+            )
 
         motor_df["start"] = annots.onset
         motor_df["duration"] = annots.duration

@@ -94,7 +94,7 @@ The following additional polysomnography datasets can also be used with this
 task. Both expose annotated sleep stages, so ``AddSleepOnsetTargets`` derives
 the N2-onset target the same way as on Sleep-EDF.
 
-* ``Alvarez2022Haaglanden`` (HMC-Sleep-Staging) -- 151 whole-night PSG recordings (6-channel EEG, 256 Hz) from clinical sleep-center patients [Alvarez2022]_.
+* ``Alvarez2022Haaglanden`` (HMC-Sleep-Staging) -- 151 whole-night PSG recordings (4-channel EEG, 256 Hz) from clinical sleep-center patients [Alvarez2022]_.
 * ``Ghassemi2018You`` (PhysioNet/CinC Challenge 2018) -- clinical PSG recordings; only the labeled training split (N=994) is used [Ghassemi2018]_.
 
 To run with an alternate dataset:
