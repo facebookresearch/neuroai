@@ -245,6 +245,7 @@ class SklearnBaseline(BaseFitOnceModelConfig):
                 target_info=target_info,
                 ts_metric=ts_metric,
                 frequency=frequency,
+                n_times=X.shape[-1],
             ),
         )
         output_dim = self._compute_output_dim(y_norm, target_info)
@@ -275,13 +276,15 @@ class SklearnBaseline(BaseFitOnceModelConfig):
         target_info: dict[str, tp.Any],
         ts_metric: str,
         frequency: float | None = None,
+        n_times: int | None = None,
     ) -> Pipeline:
         """Build (but do not fit) the sklearn pipeline for this baseline.
 
         ``ts_metric`` is supplied by :meth:`_fit_with_fallback`; leaves that
         have no :class:`TangentSpace` step should simply ignore it.  ``frequency``
-        is the dataset sampling rate (``None`` when unresolved); only spectral
-        leaves (e.g. :class:`CoSpectraLogLR`) consume it.
+        is the dataset sampling rate (``None`` when unresolved) and ``n_times``
+        the trial length in samples; only spectral leaves (e.g.
+        :class:`CoSpectraLogLR`) consume them.
         """
         raise NotImplementedError
 
@@ -542,6 +545,7 @@ class XdawnTsLR(SklearnClassifier):
         target_info: dict[str, tp.Any],
         ts_metric: str,
         frequency: float | None = None,
+        n_times: int | None = None,
     ) -> Pipeline:
         n_classes = int(target_info["n_classes"])
         if self.xdawn_target_class == -1:
@@ -583,6 +587,7 @@ class CovTsLR(SklearnClassifier):
         target_info: dict[str, tp.Any],
         ts_metric: str,
         frequency: float | None = None,
+        n_times: int | None = None,
     ) -> Pipeline:
         return make_pipeline(
             *self._cov_ts_steps(ts_metric),
@@ -652,7 +657,8 @@ class CoSpectraLogLR(SklearnClassifier):
     window
         Welch-style FFT window length in samples; rounded up to the next
         power of two by pyriemann.  The resulting frequency resolution is
-        ``frequency / next_pow2(window)`` Hz.
+        ``frequency / next_pow2(window)`` Hz.  Capped at the largest power of
+        two that fits the trials.
     overlap
         Fractional overlap between consecutive Welch windows (0--1).
     fmin, fmax
@@ -674,6 +680,7 @@ class CoSpectraLogLR(SklearnClassifier):
         target_info: dict[str, tp.Any],
         ts_metric: str,
         frequency: float | None = None,
+        n_times: int | None = None,
     ) -> Pipeline:
         # ``ts_metric`` is irrelevant here (no TangentSpace step); the
         # PD-fallback loop will never trigger because CoSpectra + log1p
@@ -681,9 +688,15 @@ class CoSpectraLogLR(SklearnClassifier):
         del ts_metric
         # Data-derived sampling rate takes precedence over the config value.
         fs = self.frequency if frequency is None else frequency
+        # A window longer than the trial fits no Welch segment and yields all-NaN
+        # co-spectra; pyriemann rounds it up to a power of two, so cap it at the
+        # largest power of two that fits.
+        window = self.window
+        if n_times is not None:
+            window = min(window, 2 ** int(np.log2(n_times)))
         return make_pipeline(
             CoSpectra(
-                window=self.window,
+                window=window,
                 overlap=self.overlap,
                 fmin=self.fmin,
                 fmax=self.fmax,
@@ -751,6 +764,7 @@ class CovTsRidge(SklearnRegressor):
         target_info: dict[str, tp.Any],
         ts_metric: str,
         frequency: float | None = None,
+        n_times: int | None = None,
     ) -> Pipeline:
         return make_pipeline(
             *self._cov_ts_steps(ts_metric),
@@ -1009,7 +1023,12 @@ class DummyPredictor(BaseFitOnceModelConfig):
             probs = (y_train > 0).float().mean(dim=0)
             return DummyPredictorModel(probs=probs, random_state=self.random_state)
         if mode == "mean":
-            out = y_train.mean(dim=0)
+            if y_train.ndim == 3:
+                # dense (N, C, T) targets: BrainModule scores a time-major (T, C)
+                # prediction and masks NaN (unlabelled) frames
+                out = y_train.nanmean(dim=0).T
+            else:
+                out = y_train.mean(dim=0)
             return DummyPredictorModel(out=out.float())
         raise ValueError(f"Unsupported mode: {mode}")
 
@@ -1096,7 +1115,8 @@ class DummyPredictorModel(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if not self._stratified:
-            return self.out.repeat(X.shape[0], 1)
+            # one copy per sample, (B, *out.shape); a 0-d out still gives (B, 1)
+            return self.out.repeat(X.shape[0], *[1] * max(self.out.ndim, 1))
         probs = self.probs.expand(X.shape[0], -1)
         generator = self._get_generator(probs.device)
         return torch.bernoulli(probs, generator=generator)

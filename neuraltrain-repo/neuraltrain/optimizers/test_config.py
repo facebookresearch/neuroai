@@ -67,7 +67,6 @@ def test_lightning_optimizer_config(scheduler_name) -> None:
             name="CosineAnnealingLR",
             kwargs={
                 "eta_min": 1e-5,
-                "T_max": 10,  # Overwritten by scheduler_build_kwargs
                 "last_epoch": -1,
             },
         )

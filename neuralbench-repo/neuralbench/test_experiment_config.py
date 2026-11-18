@@ -5,9 +5,11 @@
 # LICENSE file in the root directory of this source tree.
 
 import functools
+import itertools
 import typing as tp
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import torch
 from exca import ConfDict
@@ -33,6 +35,8 @@ from neuralbench.registry import (
     _resolve_task_dir,
     load_yaml_config,
 )
+from neuralbench.transforms import PredefinedSplit
+from neuralset.events.utils import query_with_index
 from neuraltrain.optimizers.base import LightningOptimizer
 
 
@@ -150,6 +154,35 @@ def test_replaced_study_drops_default_study_query(
     source = merge_task_config("eeg", "word", "plugin2026")["data.study.source"]
     assert "query" not in source, f"default study's query leaked: {source['query']!r}"
     assert {"path", "infra"} <= set(source)
+
+
+@pytest.mark.parametrize(
+    ("task", "dataset", "sessions", "runs"),
+    [
+        ("p3", "hoffmann2008", "0123", "012345"),
+        ("motor_imagery", "zhou2016", "012", "01"),
+        ("motor_imagery", "wei2022a", "0", ["0finaltrain", "1finaltest"]),
+    ],
+)
+def test_debug_query_keeps_the_held_out_split(
+    task: str, dataset: str, sessions: tp.Sequence[str], runs: tp.Sequence[str]
+) -> None:
+    """``--debug`` subsets the study before it is split, so the subset must keep
+    some of the session or run that the dataset variant holds out for test."""
+    config = merge_task_config("eeg", task, dataset)
+    trials = list(itertools.product("abc", sessions, runs, range(5)))
+    events = pd.DataFrame(trials, columns=["subject", "session", "run", "start"])
+    events = events.assign(
+        type="Stimulus",
+        start=events.start.astype(float),
+        duration=1.0,
+        timeline=events.subject + "/" + events.session + "/" + events.run,
+    )
+    query = registry.DEBUG_STUDY_QUERIES[config["data.study.source.name"]]
+    assert query is not None
+    split = PredefinedSplit(**config["data.study.split"])
+    events = split._run(query_with_index(events, query))
+    assert set(events.split) == {"train", "val", "test"}
 
 
 def test_eeg_image_reports_competition_topk() -> None:

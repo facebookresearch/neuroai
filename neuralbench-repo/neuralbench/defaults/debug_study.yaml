@@ -90,7 +90,7 @@ GrosseWentrup2009Beamforming: "subject_index < 5"
 Guger2009How: "subject_index < 5 & subject_timeline_index == 0"
 Haufe2011Eeg: "subject_index < 5"
 Hinss2021Open: "subject_index < 5"
-Hoffmann2008Efficient: "subject_index < 5 & subject_timeline_index == 0"
+Hoffmann2008Efficient: "subject_index == 0 & run == '0'"  # every session: test is session 3
 Hubner2017Learning: "subject_index < 5 & subject_timeline_index == 0"
 Hubner2016Eeg: "subject_index < 5 & subject_timeline_index == 0"
 Jao2023Eeg: "subject_index < 5"
@@ -147,6 +147,6 @@ Treder2011Gaze: "subject_index < 5 & subject_timeline_index == 0"
 Treder2014Decoding: "subject_index < 5"
 VanVeen2019Building: "subject_index < 5"
 Wang2017Benchmark: "subject_index < 5"
-Wei2022BeetlA: "subject_timeline_index == 0"
+Wei2022BeetlA: "subject_index == 0"  # both runs: test is run 1finaltest
 Wei2022BeetlB: null
-Zhou2016Fully: "subject_timeline_index == 0"
+Zhou2016Fully: "subject_index == 0"  # every session: test is session 2
