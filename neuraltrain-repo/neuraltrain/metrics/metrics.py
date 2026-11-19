@@ -242,7 +242,7 @@ class Rank(torchmetrics.Metric):
         x = x.float()
         y = y.float()
         if norm_kind is None:
-            eq, inv_norms = "b", torch.ones(x.shape[0])
+            eq, inv_norms = "b", torch.ones(x.shape[0], device=x.device)
         elif norm_kind == "x":
             eq, inv_norms = "b", 1 / (eps + x.norm(dim=(1), p=2))
         elif norm_kind == "y":
