@@ -50,6 +50,7 @@ from .neuro import (
     MaskProjector,
     MegExtractor,
     MneRaw,
+    RawTransform,
     SpikesExtractor,
     SurfaceProjector,
 )
