@@ -383,8 +383,10 @@ class BaseDownload(_Module):
 
     Subclasses must implement :meth:`_download`.  The public :meth:`download`
     method wraps ``_download`` with idempotency checks via a *success file*:
-    once a dataset has been downloaded successfully, subsequent calls are
-    no-ops unless ``overwrite=True`` is passed.
+    subsequent calls with the same include/exclude selection are no-ops unless
+    ``overwrite=True`` is passed. Changed selections reuse existing files via
+    the backend's normal download behavior. Old markers without selection
+    information are rechecked unless the backend guarantees a full download.
 
     Selective downloading is unified across backends via the ``include`` and
     ``exclude`` glob fields (dataset-relative POSIX globs). ``include`` empty
@@ -414,6 +416,7 @@ class BaseDownload(_Module):
     include: list[str] = []
     exclude: list[str] = []
 
+    _accept_legacy_success: tp.ClassVar[bool] = False
     _dl_dir: Path = pydantic.PrivateAttr()
 
     def _selects(self, relpath: PathLike | str) -> bool:
@@ -454,13 +457,26 @@ class BaseDownload(_Module):
 
     @tp.final
     def download(self, overwrite: bool = False) -> None:
-        if self.get_success_file().exists() and not overwrite:
-            return
+        success_file = self.get_success_file()
+        selection = json.dumps(
+            {"exclude": sorted(set(self.exclude)), "include": sorted(set(self.include))}
+        )
+        if not overwrite and success_file.exists():
+            marker = success_file.read_text()
+            legacy_complete = (
+                marker == "success"
+                and self._accept_legacy_success
+                and not self.include
+                and not self.exclude
+            )
+            if marker == selection or legacy_complete:
+                return
+        success_file.unlink(missing_ok=True)
         self._check_requirements()
         print(f"Downloading {Path(self.dset_dir).name} to {self._dl_dir}...")
 
         self._download(overwrite=overwrite)
-        self.get_success_file().write_text("success")
+        success_file.write_text(selection)
         print("Done!")
 
     @abstractmethod
@@ -644,7 +660,9 @@ class Datalad(BaseDownload):
     Clones a git-annex repository into ``download/<repo_name>/`` and fetches
     its content with the ``datalad`` Python API. Selective downloading uses the
     inherited ``include``/``exclude`` globs; with no filters the whole dataset
-    is fetched. A password-free SSH key is required for git operations.
+    is fetched recursively. Subdataset metadata is installed before filtering,
+    so even unselected subdatasets may be cloned, but their annexed content is
+    not fetched. Authentication follows the repository URL's transport.
 
     Parameters
     ----------
@@ -657,7 +675,7 @@ class Datalad(BaseDownload):
         :class:`BaseDownload`.
     """
 
-    requirements: tp.ClassVar[tuple[str, ...]] = ("datalad", "datalad-installer")
+    requirements: tp.ClassVar[tuple[str, ...]] = ("datalad>=1.8", "datalad-installer")
     # url of the datalad repo to clone
     repo_url: str
     # number of threads used for the datalad operations
@@ -672,36 +690,32 @@ class Datalad(BaseDownload):
             repo_name = repo_name[:-4]
         return repo_name
 
-    def _selected_paths(self, repo_root: Path) -> list[str]:
-        """Resolve include/exclude into concrete paths for ``datalad get``.
-
-        With no filters, returns ``["."]`` (fetch the whole dataset). Otherwise
-        walk the cloned working tree -- ``datalad clone`` populates the
-        directory structure and git-annex pointer files even before content is
-        fetched -- and return the files passing :meth:`_selects`. Broken annex
-        pointer symlinks (content not yet fetched) are treated as files.
-        """
+    def _selected_paths(self, dataset: tp.Any) -> list[str]:
+        """Select tracked files after subdataset metadata has been installed."""
         if not self.include and not self.exclude:
             return ["."]
+        repo_root = Path(dataset.path)
         selected: list[str] = []
-        for path in sorted(repo_root.rglob("*")):
-            if path.is_dir():  # real directories only; broken symlinks are files
+        for record in dataset.status(
+            recursive=True,
+            untracked="no",
+            return_type="generator",
+            result_renderer="disabled",
+        ):
+            if record["type"] not in {"file", "symlink"}:
                 continue
+            path = Path(record["path"])
             rel = path.relative_to(repo_root)
-            if rel.parts and rel.parts[0] in {".git", ".datalad"}:
-                continue
-            if self._selects(rel.as_posix()):
+            if ".datalad" not in rel.parts and self._selects(rel.as_posix()):
                 selected.append(str(path))
-        return selected
+        return sorted(selected)
 
     def _download(self, overwrite: bool = False) -> None:
-        """Clone the repo and fetch the selected content via ``datalad.api``.
+        """Clone the repository, discover subdatasets, and fetch selected content.
 
-        ``datalad get`` is idempotent and self-repairing, so ``overwrite`` needs
-        no special handling: re-running fetches any missing/broken content.
-        Requires a password-free git SSH key. If ``datalad`` is not installed
-        the import raises here (and ``_check_requirements`` earlier), so no
-        success marker is written over an empty folder.
+        DataLad reuses available annex content and retrieves missing files,
+        including when ``overwrite=True``. Transfer failures propagate to the
+        caller, so a failed download cannot be marked successful.
         """
         import datalad.api as dlad
 
@@ -709,10 +723,14 @@ class Datalad(BaseDownload):
         repo_root = self._dl_dir / self.repo_name
         dataset = dlad.clone(source=self.repo_url, path=repo_root)
 
-        paths = self._selected_paths(repo_root)
-        logging.debug("datalad get %d path(s) under %s", len(paths), repo_root)
-        dataset.get(paths, jobs=self.threads)
-        logging.info("Downloaded dataset in %s", repo_root)
+        dataset.get(".", recursive=True, get_data=False, jobs=self.threads)
+        paths = self._selected_paths(dataset)
+        if not paths:
+            logger.warning("No files matched the selection under %s", repo_root)
+            return
+        logger.debug("datalad get %d path(s) under %s", len(paths), repo_root)
+        dataset.get(paths, recursive=True, jobs=self.threads, data="anything")
+        logger.info("Downloaded dataset in %s", repo_root)
 
 
 class Gin(Datalad):
@@ -892,6 +910,9 @@ class Donders(BaseDownload):
     parent : str
         Parent collection path (default: ``"dccn"``).
     """
+
+    # Full-collection markers remain valid; repeating the directory move is unsafe.
+    _accept_legacy_success: tp.ClassVar[bool] = True
 
     parent: str = "dccn"
     study_id: str
@@ -1490,15 +1511,13 @@ class Openneuro(BaseDownload):
     def _download(self, overwrite: bool = False) -> None:
         import openneuro as on
 
-        # openneuro-py re-verifies the size/hash of every file already on disk
-        # on each run and repairs any mismatch IN PLACE. That in-place mutation
-        # is only wanted for a forced re-download: on a plain resume
-        # (overwrite=False) we must never touch files that are already present.
-        # So once the target holds data, skip the download entirely; only let
-        # openneuro-py write for a fresh (empty) target or when overwrite forces
-        # a re-verify/repair.
+        # Rechecking a nonempty target can modify existing files in place.
         if not overwrite and self._has_local_data():
-            return
+            raise RuntimeError(
+                "Openneuro cannot safely resume or change a selection in a nonempty "
+                "download directory without rechecking existing files. Use a new "
+                "dset_dir, or overwrite=True only if you intend to recheck those files."
+            )
 
         on.download(
             dataset=self.study,
