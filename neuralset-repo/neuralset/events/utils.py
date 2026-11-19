@@ -7,8 +7,10 @@
 """Event utilities: extraction, validation, and BIDS entity constants."""
 
 import inspect
+import io
 import logging
 import re
+import tokenize
 import typing as tp
 import warnings
 from collections import defaultdict
@@ -183,9 +185,8 @@ def expand_bids_fmri(
 def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
     """Execute a pandas query with auto-generated index columns.
 
-    Recognises ``<col>_index`` and ``<col1>_<col2>_index`` tokens in the
-    query string and materialises them as temporary columns before executing
-    the query. Temporary columns are dropped from the result.
+    Recognises ``<col>_index`` and ``<col1>_<col2>_index`` names in the
+    query and resolves them as virtual columns, absent from the result.
 
     Example::
 
@@ -198,13 +199,15 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
         # Keep only the first timeline per subject
         query_with_index(df, "subject_timeline_index < 1")
     """
-    out = df.copy()
-    temp_cols: list[str] = []
+    index_columns: dict[str, pd.Series] = {}
     columns = set(df.columns)
 
-    for token in re.findall(r"\b(\w+_index)\b", query):
-        if token in temp_cols:
-            continue
+    names = {
+        tok.string
+        for tok in tokenize.generate_tokens(io.StringIO(query).readline)
+        if tok.type == tokenize.NAME
+    }
+    for token in sorted(name for name in names if re.fullmatch(r"\w+_index", name)):
         if token in columns:
             raise ValueError(
                 f"Ambiguous index token {token!r}: a column with that name "
@@ -212,8 +215,7 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
             )
         prefix = token.rsplit("_index", 1)[0]
         if prefix in columns:
-            out.loc[:, token] = out.groupby(prefix, sort=False).ngroup()
-            temp_cols.append(token)
+            index_columns[token] = df.groupby(prefix, sort=False).ngroup()
         else:
             matched = False
             for col in sorted(columns, key=len, reverse=True):
@@ -221,10 +223,9 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
                     continue
                 remainder = prefix[len(col) + 1 :]
                 if remainder in columns:
-                    out.loc[:, token] = out.groupby(col, sort=False)[remainder].transform(
-                        lambda x: pd.factorize(x)[0]
-                    )
-                    temp_cols.append(token)
+                    index_columns[token] = df.groupby(col, sort=False)[
+                        remainder
+                    ].transform(lambda x: pd.factorize(x)[0])
                     matched = True
                     break
             if not matched:
@@ -233,10 +234,7 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
                     "no matching columns found in the dataframe"
                 )
 
-    result = out.query(query, engine="python")
-    if temp_cols:
-        result = result.drop(columns=temp_cols)
-    return result
+    return df.query(query, engine="python", resolvers=[index_columns])
 
 
 def _propagate_bids(df: pd.DataFrame) -> pd.DataFrame:
