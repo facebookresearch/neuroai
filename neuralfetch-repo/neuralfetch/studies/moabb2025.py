@@ -62,6 +62,7 @@ import pandas as pd
 from exca.steps import backends
 from scipy.io import loadmat
 
+import neuralset as ns
 from neuralfetch.download import temp_mne_data
 from neuralset.events import study as studies
 from neuralset.events.study import STUDY_PATHS
@@ -159,13 +160,6 @@ class _BaseMoabb(studies.Study):
         # It will transform /path -> /path/StudyName
         super().model_post_init(log__)
 
-        # Force inline timeline loading for MOABB datasets: some (e.g. ERP CORE)
-        # load via mne_bids which uses file locks that exhaust NFS NLM limits
-        # when too many workers run in parallel (ENOLCK).  Timeline events are
-        # cached on disk by exca, so sequential loading only costs on first run.
-        if isinstance(self.timelines.infra, backends.ProcessPool):
-            self.timelines.infra = self.timelines.infra.derive("Cached")
-
         # Now insert 'moabb' before the study name
         # self.path is now /path/StudyName, we want /path/moabb/StudyName
         study_name = self.__class__.__name__
@@ -184,6 +178,13 @@ class _BaseMoabb(studies.Study):
             # Update the STUDY_PATHS registry with the corrected path
             STUDY_PATHS[self.__class__.__name__] = self.path
             logger.debug("Updated MOABB path to: %s", self.path)
+
+    def _body(self) -> ns.Step:
+        body = super()._body()
+        # inline: parallel mne_bids file locks exhaust NFS NLM limits (ENOLCK)
+        if isinstance(body.infra, backends.ProcessPool):
+            return body.model_copy(update={"infra": body.infra.derive("Cached")})
+        return body
 
     @classmethod
     def _get_dataset(cls) -> type[MoabbBaseDataset]:

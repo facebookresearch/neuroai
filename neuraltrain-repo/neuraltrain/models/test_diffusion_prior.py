@@ -25,6 +25,7 @@ def test_diffusion_prior(
     timesteps: int,
     cond_drop_prob: float,
 ) -> None:
+    pytest.importorskip("dalle2_pytorch")
     batch_size, num_in_tokens, num_out_tokens, dim = 1, 257, 128, 768
     out_emb = torch.randn(batch_size, num_out_tokens, dim)
     in_emb = torch.randn(batch_size, num_in_tokens, dim)

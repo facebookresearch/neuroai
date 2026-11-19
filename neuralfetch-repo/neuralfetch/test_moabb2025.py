@@ -58,4 +58,4 @@ def test_basemoabb_disables_processpool(tmp_path: Path) -> None:
         path=tmp_path,
         timelines={"infra": {"backend": "ProcessPool"}},  # type: ignore[arg-type]
     )
-    assert isinstance(study.timelines.infra, backends.Cached)
+    assert isinstance(study._body().infra, backends.Cached)
