@@ -28,6 +28,7 @@ from neuralbench.registry import (
     ALL_TASKS,
     ALL_UNVALIDATED_TASKS,
     _format_datasets_epilog,
+    load_yaml_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    overrides: tp.Mapping[str, tp.Any] | None = None,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -100,6 +102,12 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+    overrides : mapping or None
+        Dotted-key or nested config overrides, e.g.
+        ``{"data.neuro.filter": [4.0, 40.0]}``, applied last to every experiment
+        (after the debug and prepare overlays), as in
+        :func:`~neuralbench.evaluate_model`.  Overridden values change the cache
+        keys, so the runs are cached apart.
 
     Returns
     -------
@@ -142,6 +150,7 @@ def run_benchmark(
         prepare=prepare,
         download=download,
         quiet=plot_cached,
+        overrides=overrides,
     )
 
     if download:
@@ -281,6 +290,14 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--overrides",
+        metavar="YAML",
+        help=(
+            "YAML file of dotted-key or nested config overrides applied last to every "
+            "experiment, e.g. 'data.neuro.filter: [4.0, 40.0]'."
+        ),
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -325,6 +342,9 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            overrides=None
+            if args.overrides is None
+            else load_yaml_config(args.overrides),
         )
     except Exception:
         if not args.pdb:
