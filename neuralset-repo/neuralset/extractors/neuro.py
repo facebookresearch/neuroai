@@ -116,6 +116,10 @@ class MneTimedArray(TimedArray):
             # comma-sep: 0.18ms init vs 0.73ms for JSON list
             "ch_names": ",".join(raw.ch_names),
             "ch_types": ",".join(raw.get_channel_types()),
+            # e.g. tells OPM magnetometers apart, which MNE topomaps rely on
+            "ch_coil_types": ",".join(
+                str(int(ch["coil_type"])) for ch in raw.info["chs"]
+            ),
             "ch_locs": ch_locs,
             # stored even when None, to tell apart caches written before this key
             "dev_head_t": None if dev_head_t is None else np.array(dev_head_t["trans"]),
@@ -143,16 +147,21 @@ class MneTimedArray(TimedArray):
     def to_info(self) -> mne.Info:
         """Reconstruct an ``mne.Info`` from the stored header.
 
-        Includes ch_names, ch_types, sfreq, channel locations, ``dev_head_t``
-        and highpass/lowpass. Rich fields (bads, projs, filter history, …) are
-        not preserved.
+        Includes ch_names, ch_types, coil types, sfreq, channel locations,
+        ``dev_head_t`` and highpass/lowpass. Rich fields (bads, projs, filter
+        history, …) are not preserved. Caches written before coil types were
+        stored keep ``mne.create_info``'s default coil per channel type.
         """
         info = mne.create_info(
             self.ch_names, sfreq=float(self.frequency), ch_types=self.ch_types
         )
         ch_locs: np.ndarray = self.header["ch_locs"]
+        coil_types = self.header.get("ch_coil_types")
+        coils = coil_types.split(",") if coil_types else None
         for i, ch in enumerate(info["chs"]):
             ch["loc"][:] = ch_locs[i]
+            if coils is not None:
+                ch["coil_type"] = int(coils[i])
         with info._unlock():
             info["highpass"] = self.header["highpass"]
             info["lowpass"] = self.header["lowpass"]
