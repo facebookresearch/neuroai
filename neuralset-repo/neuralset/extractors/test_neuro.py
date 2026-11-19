@@ -1219,6 +1219,25 @@ def test_mne_timed_array_roundtrip() -> None:
     _assert_raw_equal(ta.to_native(), raw_in)
 
 
+def test_mne_timed_array_keeps_coil_types() -> None:
+    """OPM coil types survive the header, so MNE still recognises OPM sensors;
+    headers written before coil types were stored fall back to the defaults."""
+    from neuralset.extractors.neuro import MneTimedArray
+
+    opm = mne.io.constants.FIFF.FIFFV_COIL_QUSPIN_ZFOPM_MAG2
+    info = mne.create_info(["X1", "Y1", "Z1"], sfreq=100.0, ch_types="mag")
+    with info._unlock():
+        for ch in info["chs"]:
+            ch["coil_type"] = opm
+    raw = mne.io.RawArray(np.zeros((3, 10)), info, verbose=False)
+    ta = MneTimedArray.from_native(raw)
+    assert [ch["coil_type"] for ch in ta.to_info()["chs"]] == [opm] * 3
+
+    del ta.header["ch_coil_types"]  # as in an older cache
+    default = mne.create_info(["X1"], sfreq=100.0, ch_types="mag")["chs"][0]["coil_type"]
+    assert [ch["coil_type"] for ch in ta.to_info()["chs"]] == [default] * 3
+
+
 def test_mne_timed_array_cache_roundtrip(tmp_path: Path) -> None:
     """MneTimedArray must survive DumpContext serialization as MneTimedArray,
     not be downgraded to a plain TimedArray (which lacks ch_names etc.).
@@ -1262,6 +1281,7 @@ def test_mne_timed_array_cache_roundtrip(tmp_path: Path) -> None:
             content:
                 ch_names: "EEG 001,EEG 002"
                 ch_types: "eeg,eeg"
+                ch_coil_types: "1,1"
                 highpass: 0.0
                 lowpass: 64.0
                 ch_locs:
