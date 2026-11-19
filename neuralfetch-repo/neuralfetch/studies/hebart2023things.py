@@ -182,7 +182,9 @@ class Hebart2023ThingsMeg(_Hebart2023Things):
 
     def _download(self, overwrite: bool = False) -> None:
         super()._download(overwrite=overwrite)  # Download shared THINGS-images database
-        download.Openneuro("ds004212", self.path).download(overwrite=overwrite)  # type: ignore
+        download.Openneuro(study="ds004212", dset_dir=self.path).download(
+            overwrite=overwrite
+        )
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:
         """Returns a generator of all recordings"""
