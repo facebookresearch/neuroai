@@ -8,8 +8,10 @@ import ast
 import collections
 import importlib.util
 import inspect
+import io
 import logging
 import pprint
+import tokenize
 import typing as tp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -91,15 +93,19 @@ def validate_query(query: str) -> str:
         query is defined far from its execution site).
     """
     try:
-        ast.parse(query, mode="eval")
-    except SyntaxError as exc:
-        raise ValueError(f"Query '{query}' is not valid: {exc}") from exc
-    if "@" in query:
+        tokens = list(tokenize.generate_tokens(io.StringIO(query).readline))
+    except (SyntaxError, tokenize.TokenError):  # reported by ast.parse below
+        tokens = []
+    if any(tok.exact_type == tokenize.AT for tok in tokens):
         raise ValueError(
             f"Query '{query}' uses '@' to reference local variables. "
             "This is not supported because the query may be evaluated in a "
             "different scope from where it was defined."
         )
+    try:
+        ast.parse(query, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Query '{query}' is not valid: {exc}") from exc
     return query
 
 
@@ -197,6 +203,10 @@ class _Module(BaseModel):
             if breqs is not cls.requirements:
                 reqs = breqs + reqs
         cls.requirements = reqs
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: tp.Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
         # check for _exclude_from_cls_uid override as attribute as it gets ignored
         exc_tag = "_exclude_from_cls_uid"
         if exc_tag in getattr(cls, "__private_attributes__", {}):

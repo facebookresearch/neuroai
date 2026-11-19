@@ -150,9 +150,16 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
         )
 
     def _exclude_from_cache_uid(self) -> list[str]:
-        return extractor_base.BaseStatic._exclude_from_cache_uid(
+        excluded = extractor_base.BaseStatic._exclude_from_cache_uid(
             self
         ) + hf.HuggingFaceMixin._exclude_from_cache_uid(self)
+        event_types = (
+            (self.event_types,) if isinstance(self.event_types, str) else self.event_types
+        )
+        if "Video" not in event_types:
+            # frequency only sets the frame sampling of videos
+            excluded.append("frequency")
+        return excluded
 
     def _iter_image_latents(
         self, events: tp.Sequence[etypes.Image], aggregate_layers: bool

@@ -33,7 +33,6 @@ jobs:
       neuraltrain: ${{ steps.filter.outputs.neuraltrain }}
       ssl_example: ${{ steps.filter.outputs.ssl_example }}
       neuralbench: ${{ steps.filter.outputs.neuralbench }}
-      docs: ${{ steps.filter.outputs.docs }}
       any: ${{ steps.filter.outputs.neuralset == 'true' || steps.filter.outputs.neuralfetch == 'true' || steps.filter.outputs.neuraltrain == 'true' || steps.filter.outputs.neuralbench == 'true' }}
     steps:
       - uses: actions/checkout@v4
@@ -58,8 +57,6 @@ jobs:
               - 'neuralset-repo/**'
               - 'neuraltrain-repo/**'
               - 'neuralbench-repo/**'
-            docs:
-              - 'docs/**'
 
   # ── Lint (lightweight runner — no torch env) ────────────────
   # Formatting and linting (ruff) don't need the full env.
@@ -229,37 +226,3 @@ jobs:
           source .venv/bin/activate
           cd neuralbench-repo
           mypy neuralbench
-
-  # ── Job 4: build documentation ──────────────────────────────
-  build-docs:
-    name: Build documentation
-    needs: changes
-    # Always run on main; on other branches only if docs/ changed
-    if: github.ref == 'refs/heads/main' || needs.changes.outputs.docs == 'true'
-    # Require 8-core machines (Github Actions Larger Runners) to have more than 14GB disk space
-    runs-on: 8-core-ubuntu  # ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-python-env
-
-      - name: Install Sphinx extras
-        run: |
-          source .venv/bin/activate
-          pip install sphinx furo myst_parser sphinx_rtd_theme sphinx-copybutton sphinx-design sphinx-gallery
-
-      - name: Sphinx build
-        run: |
-          source .venv/bin/activate
-          make -C docs html
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        # Only deploy from main branch
-        if: github.ref == 'refs/heads/main'
-        with:
-          publish_branch: gh-pages
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
-          force_orphan: true

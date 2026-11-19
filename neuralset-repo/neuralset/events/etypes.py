@@ -121,7 +121,8 @@ class Event(_Module):
         kwargs: dict[str, tp.Any] = {}
         extra = {}
         for k, v in row.items():
-            if pd.isna(v):
+            # pd.isna is elementwise on sequences (e.g. ndarray cells from parquet)
+            if not isinstance(v, (list, tuple, np.ndarray)) and pd.isna(v):
                 continue
             if k in fs:
                 kwargs[k] = v
@@ -975,7 +976,7 @@ class Ecg(MneRaw):
     """Electrocardiography (ECG) recording event.
 
     For a dedicated cardiac recording. When the lead is an auxiliary channel of
-    an EEG/PSG recording, the study emits its usual event instead, and
+    an EEG/PSG or iEEG recording, the study emits its usual event instead, and
     :class:`~neuralset.extractors.EcgExtractor` reads the lead out of that.
     """
 

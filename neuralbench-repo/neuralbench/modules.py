@@ -60,7 +60,7 @@ class LoraConfig(pydantic.BaseModel):
         )
 
 
-# TODO: delete through route_bypassed_qkv_lora once braindecode > 1.8.1 (braindecode#1194)
+# TODO: delete through route_bypassed_qkv_lora once the braindecode floor is > 1.8.1 (braindecode#1194)
 class _AddDelta(nn.Module):
     def __init__(self, delta: torch.Tensor) -> None:
         super().__init__()
@@ -109,8 +109,15 @@ def route_bypassed_qkv_lora(model: nn.Module) -> int:
 
     BEiT-style attention (LaBraM, EEG-DINO) reads ``qkv.weight`` through
     ``F.linear`` and never calls ``qkv``; each forward sees ``W + delta`` instead.
+    No-op on braindecode > 1.8.1, whose LaBraM calls ``self.qkv(x)`` so peft
+    already applies the delta (patching would apply it twice).
     """
+    import braindecode
+    from packaging.version import Version
     from peft.tuners.lora import Linear as LoraLinear
+
+    if Version(braindecode.__version__) > Version("1.8.1"):
+        return 0
 
     patched = 0
     for attn in model.modules():
@@ -162,6 +169,20 @@ class ConcatGroupedMean(nn.Module):
                 for xi in torch.tensor_split(x, self.n_splits, dim=self.dim)
             ],
             dim=self.dim,
+        )
+
+
+def _require_rank(
+    aggregation: str | int,
+    output_size: torch.Size,
+    allowed: tuple[int, ...],
+) -> None:
+    """Raise if *aggregation* cannot act on a per-sample output of this rank."""
+    if len(output_size) not in allowed:
+        expected = " or ".join(f"{rank}-D" for rank in allowed)
+        raise ValueError(
+            f"aggregation={aggregation!r} needs a {expected} per-sample brain "
+            f"model output, got {tuple(output_size)}."
         )
 
 
@@ -496,6 +517,11 @@ class DownstreamWrapper(pydantic.BaseModel):
         channels to a fixed number of target channels.  Supply a ``ChannelMerger``
         for position-based spatial attention, or a ``ChannelProjection`` for a
         simple Conv1d(kernel_size=1) linear mixing.  Default is None.
+    preprocess_after_adapter : bool, optional
+        If True, ``on_the_fly_preprocessor`` runs on the channel adapter's output
+        instead of its input, e.g. when the model expects scaling of the derived
+        channels (BIOT's bipolar montage).  Requires both to be set.
+        Default is False.
     model_output_key : str | int | None, optional
         Key or index to extract from model output dictionary. If None, assumes the model returns a
         tensor directly. Default is None.
@@ -560,6 +586,7 @@ class DownstreamWrapper(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
     on_the_fly_preprocessor: OnTheFlyPreprocessor | None = None
     channel_adapter_config: ChannelMerger | ChannelProjection | None = None
+    preprocess_after_adapter: bool = False
     model_output_key: str | int | None = None
     layers_to_freeze: list[str] | None = None
     layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None
@@ -587,6 +614,15 @@ class DownstreamWrapper(pydantic.BaseModel):
         if self.layers_to_freeze is not None and self.layers_to_unfreeze is not None:
             raise ValueError(
                 "Only one of layers_to_freeze and layers_to_unfreeze can be specified at once."
+            )
+
+        if self.preprocess_after_adapter and (
+            self.on_the_fly_preprocessor is None or self.channel_adapter_config is None
+        ):
+            raise ValueError(
+                "preprocess_after_adapter=True requires both on_the_fly_preprocessor "
+                f"and channel_adapter_config; got {self.on_the_fly_preprocessor!r} and "
+                f"{self.channel_adapter_config!r}."
             )
 
         if self.probe_layer is not None and self.model_output_key is not None:
@@ -681,6 +717,7 @@ class DownstreamWrapper(pydantic.BaseModel):
             preprocessor=preprocessor,
             channel_adapter=channel_adapter,
             adapter_needs_positions=adapter_needs_positions,
+            preprocess_after_adapter=self.preprocess_after_adapter,
             model_output_key=self.model_output_key,
             wrapper_n_outputs=n_outputs,
             layers_to_freeze=self.layers_to_freeze,
@@ -767,7 +804,8 @@ class DownstreamWrapperModel(nn.Module):
     """Wrapper for downstream evaluation of pretrained models.
 
     Handles the full pipeline: optional preprocessing -> channel adapter ->
-    model -> output key selection -> aggregation -> probe.
+    model -> output key selection -> aggregation -> probe (preprocessing
+    follows the adapter when ``preprocess_after_adapter``).
     """
 
     def reset_state(self) -> None:
@@ -784,6 +822,7 @@ class DownstreamWrapperModel(nn.Module):
         preprocessor: nn.Module | None = None,
         channel_adapter: nn.Module | None = None,
         adapter_needs_positions: bool = False,
+        preprocess_after_adapter: bool = False,
         layers_to_freeze: list[str] | None = None,
         layers_to_unfreeze: list[str] | tp.Literal["last"] | None = None,
         strict_matching: bool = True,
@@ -799,6 +838,7 @@ class DownstreamWrapperModel(nn.Module):
         self.preprocessor = preprocessor
         self.channel_adapter = channel_adapter
         self._adapter_needs_positions = adapter_needs_positions
+        self._preprocess_after_adapter = preprocess_after_adapter
         self.wrapped_model = model
         self.model_output_key = model_output_key
 
@@ -899,29 +939,40 @@ class DownstreamWrapperModel(nn.Module):
         elif aggregation == "flatten":
             self.aggregation = nn.Flatten(start_dim=1)
             return brain_model_output_size.numel()
-        elif aggregation == "first":
-            assert len(brain_model_output_size) == 2
+
+        # rank-1 output is an already-pooled embedding (e.g. BIOT): "mean" is a no-op
+        if len(brain_model_output_size) == 1:
+            if aggregation == "mean":
+                self.aggregation = nn.Identity()
+                return brain_model_output_size.numel()
+            raise ValueError(
+                f"aggregation={aggregation!r} needs a token axis to reduce, but "
+                f"the brain model output is already pooled (per-sample shape "
+                f"{tuple(brain_model_output_size)}). Use 'mean', 'flatten' or "
+                f"null for pooled-embedding models."
+            )
+
+        if aggregation == "first":
+            _require_rank(aggregation, brain_model_output_size, (2,))
             self.aggregation = IndexSelect(dim=1, index=torch.LongTensor([0]))
             return brain_model_output_size[1]
         elif aggregation == "mean":
-            dim: int | tuple[int, ...] = 1
-            if len(brain_model_output_size) == 2:  # (n_patches, emb_dim)
-                dim = 1
-            elif len(brain_model_output_size) == 3:  # (n_chans, n_patches, emb_dim)
-                dim = (1, 2)
-            else:
-                raise ValueError(
-                    f"aggregation='mean' requires model output of 3D or 4D "
-                    f"(got brain_model_output_size={brain_model_output_size})"
-                )
+            _require_rank(aggregation, brain_model_output_size, (2, 3))
+            # (n_patches, emb_dim) or (n_chans, n_patches, emb_dim)
+            dim: int | tuple[int, ...] = (
+                1 if len(brain_model_output_size) == 2 else (1, 2)
+            )
             self.aggregation = Mean(dim=dim)
             return brain_model_output_size[-1]
         elif isinstance(aggregation, int):
-            assert len(brain_model_output_size) == 2
+            _require_rank(aggregation, brain_model_output_size, (2,))
             self.aggregation = ConcatGroupedMean(dim=1, n_splits=aggregation)
             return aggregation * brain_model_output_size[1]
         else:
-            raise NotImplementedError()
+            raise ValueError(
+                f"unsupported aggregation={aggregation!r}; expected 'flatten', "
+                f"'mean', 'first', an int number of splits, or null."
+            )
 
     def _build_probe(
         self,
@@ -949,33 +1000,43 @@ class DownstreamWrapperModel(nn.Module):
                 output_size=n_outputs,
             )
 
-    def forward(self, *args, return_embedding: bool = False, **kwargs) -> torch.Tensor:
-        if self.preprocessor is not None:
-            if args:
-                x, *rest_args = args
-                x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
-                args = (x, *rest_args)
-            else:
-                input_key = next(iter(kwargs))
-                x = kwargs[input_key]
-                x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
-                kwargs = {**kwargs, input_key: x}
-            if ch_pos is not None and "channel_positions" in kwargs:
-                kwargs["channel_positions"] = ch_pos
-
-        if self.channel_adapter is not None:
+    def _preprocess(self, args: tuple, kwargs: dict) -> tuple[tuple, dict]:
+        assert self.preprocessor is not None
+        if args:
+            x, *rest_args = args
+            x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
+            args = (x, *rest_args)
+        else:
             input_key = next(iter(kwargs))
             x = kwargs[input_key]
-            if self._adapter_needs_positions:
-                subject_ids = kwargs.get(
-                    "subject_ids",
-                    torch.zeros(x.shape[0], dtype=torch.long, device=x.device),
-                )
-                ch_pos = kwargs.get("channel_positions")
-                x = self.channel_adapter(x, subject_ids, ch_pos)
-            else:
-                x = self.channel_adapter(x)
+            x, ch_pos = self.preprocessor(x, kwargs.get("channel_positions"))
             kwargs = {**kwargs, input_key: x}
+        if ch_pos is not None and "channel_positions" in kwargs:
+            kwargs["channel_positions"] = ch_pos
+        return args, kwargs
+
+    def _adapt_channels(self, kwargs: dict) -> dict:
+        assert self.channel_adapter is not None
+        input_key = next(iter(kwargs))
+        x = kwargs[input_key]
+        if self._adapter_needs_positions:
+            subject_ids = kwargs.get(
+                "subject_ids",
+                torch.zeros(x.shape[0], dtype=torch.long, device=x.device),
+            )
+            ch_pos = kwargs.get("channel_positions")
+            x = self.channel_adapter(x, subject_ids, ch_pos)
+        else:
+            x = self.channel_adapter(x)
+        return {**kwargs, input_key: x}
+
+    def forward(self, *args, return_embedding: bool = False, **kwargs) -> torch.Tensor:
+        if self.preprocessor is not None and not self._preprocess_after_adapter:
+            args, kwargs = self._preprocess(args, kwargs)
+        if self.channel_adapter is not None:
+            kwargs = self._adapt_channels(kwargs)
+        if self.preprocessor is not None and self._preprocess_after_adapter:
+            args, kwargs = self._preprocess(args, kwargs)
 
         if not self._inner_accepts_var_kwargs:
             kwargs = {k: v for k, v in kwargs.items() if k in self._inner_param_names}

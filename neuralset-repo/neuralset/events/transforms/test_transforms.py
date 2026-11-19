@@ -533,15 +533,12 @@ def test_ensure_texts_encloses_words() -> None:
 @pytest.mark.skipif("CI" in os.environ, reason="DL punctuation model not in CI")
 def test_ensure_texts_fullstop() -> None:
     _, df = _make_test_events()
+    df["text"] = df.text.str.rstrip(".")  # else restoration has nothing to add
     df = ns.events.standardize_events(df)
-    try:
-        result = _transf.EnsureTexts(punctuation="fullstop")(df)
-    except TypeError as e:
-        if "grouped_entities" in str(e):
-            pytest.skip("deepmultilingualpunctuation incompatible with transformers")
-        raise
+    result = _transf.EnsureTexts(punctuation="fullstop")(df)
     text_row = result[result.type == "Text"].iloc[0]
     assert text_row.text != " ".join(df[df.type == "Word"].text)
+    assert "." in text_row.text
 
 
 @pytest.mark.parametrize("use_extra", [False, True])
@@ -613,6 +610,7 @@ def test_query_events_invalid():
         "timeline_index < 3",
         "subject == 'subject1' and timeline_index < 2",
         "type in ['Word', 'Audio']",
+        "text == '@'",
     ],
 )
 def test_check_query_valid(query: str) -> None:
@@ -634,7 +632,7 @@ def test_check_query_invalid_syntax(query: str) -> None:
 
 
 def test_check_query_rejects_at_variable() -> None:
-    with pytest.raises(ValueError, match="@"):
+    with pytest.raises(ValueError, match="uses '@'"):
         ns.base.validate_query("index == @my_var")
 
 
@@ -664,6 +662,7 @@ def _make_index_test_events() -> pd.DataFrame:
         ("subject_timeline_index < 1", 6, {"s1", "s2", "s3"}, 3),
         ("subject_index < 2 and subject_timeline_index == 0", 4, {"s1", "s2"}, 2),
         ("subject == 's1'", 4, {"s1"}, 2),
+        ("subject == 's1' or text == 'x_index'", 4, {"s1"}, 2),
     ],
 )
 def test_query_events_index_columns(

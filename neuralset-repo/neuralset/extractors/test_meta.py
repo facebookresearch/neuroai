@@ -141,6 +141,8 @@ def test_aggregated_extractor_accepts_temporal_static_extractors() -> None:
     )
 
     assert aggregated.frequency == 100.0
+    names = aggregated.event_types
+    assert names == tuple(sorted(names)), "set order would make the uid vary by process"
 
 
 def test_extractor_pca(tmp_path: Path) -> None:

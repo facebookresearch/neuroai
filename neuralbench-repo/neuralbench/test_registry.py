@@ -21,6 +21,7 @@ these tests guard the end-to-end wiring:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -39,6 +40,17 @@ from neuralbench.registry import (
     _resolve_dataset_stem,
     _task_aware_baseline,
 )
+
+
+def test_include_resolves_within_a_package(tmp_path: Path) -> None:
+    rel_path = "models/channel_mappings/standard_1020.json"
+    config_path = tmp_path / "model.yaml"
+    config_path.write_text(f"mapping: !include neuralbench:{rel_path}\n")
+    config = registry.load_yaml_config(config_path)
+    assert config is not None
+    assert config["mapping"] == json.loads(
+        (Path(registry.__file__).parent / rel_path).read_text("utf8")
+    )
 
 
 def test_space_is_rejected_on_a_task_without_spaces() -> None:
@@ -165,6 +177,35 @@ def test_prepare_task_configs_meg_image_cov_ts_ridge_resolves() -> None:
     assert model_config["name"] == "CovTsRidge"
     instance = CovTsRidge(**{k: v for k, v in model_config.items() if k != "name"})
     assert instance.cov_estimator == "oas"
+
+
+@pytest.mark.parametrize(("device", "task"), [("eeg", "motor_imagery"), ("meg", "image")])
+def test_simpleconv_time_agg_builds_with_its_own_head(device: str, task: str) -> None:
+    """SimpleConvTimeAgg has its own merger and head, so it gets no DownstreamWrapper.
+
+    A wrapper defaults to a linear probe, so the factory builds the model with
+    ``n_outputs=None``, which SimpleConvTimeAgg rejects.
+    """
+    from exca import ConfDict
+
+    from neuralbench.experiment_config import prepare_task_configs
+    from neuralbench.registry import DEFAULTS_DIR, load_default_config, load_yaml_config
+
+    configs = prepare_task_configs(
+        ConfDict(load_default_config(device)),
+        ConfDict(load_yaml_config(DEFAULTS_DIR / "grid.yaml")),
+        device,
+        task,
+        use_task_grid=False,
+        debug=False,
+        force=False,
+        prepare=False,
+        download=False,
+        models=["simpleconv_time_agg"],
+        datasets=None,
+    )
+    assert configs[0]["brain_model_config"]["name"] == "SimpleConvTimeAgg"
+    assert configs[0]["downstream_model_wrapper"] is None
 
 
 def test_collapse_relabels_meg_sklearn_row_as_handcrafted() -> None:

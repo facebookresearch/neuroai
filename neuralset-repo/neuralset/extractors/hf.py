@@ -115,8 +115,9 @@ class HuggingFaceMixin(base.BaseModel):
         plus extra model and processor kwargs.
     device: {"auto", "cpu", "cuda", "accelerate"}, default="auto"
         Device strategy for model placement. ``"auto"`` resolves to CUDA when
-        available, otherwise CPU. ``"accelerate"`` forwards
-        ``device_map="auto"`` to HuggingFace Accelerate.
+        available, otherwise CPU, when the model is loaded (i.e. on the worker
+        running the extraction, not where the extractor is built).
+        ``"accelerate"`` forwards ``device_map="auto"`` to HuggingFace Accelerate.
     dtype: {"auto", "float16", "float32", "float64", "bfloat16"} | None, default=None
         Optional dtype forwarded to ``from_pretrained`` as ``torch_dtype``.
         If ``None``, Transformers chooses its default dtype.
@@ -128,6 +129,7 @@ class HuggingFaceMixin(base.BaseModel):
         - "all": keep all layers
         - a float between 0 and 1 (or list of): the relative depth of the layer(s) to use,
         where 0 stands for the first layer and 1 for the last layer.
+        Selects the nearest hidden state, including the embedding output.
     cache_n_layers: None, int
         if provided, n equidistributed layers will be cached
         If None, only cache the output of the layers specified by `layers`.
@@ -135,7 +137,8 @@ class HuggingFaceMixin(base.BaseModel):
         How to aggregate the layers (first dimension of the tensor of activations).
         Can be "mean", "sum", "group_mean" or None (in which case we keep the original dimension).
         "group_mean" will average the layers by groups defined by the layers parameter,
-        e.g. if layers=[0, 0.5, 1] and there are 10 layers, the layers will be grouped as [0:5], [5:10].
+        e.g. with layers=[0, 0.5, 1] and 10 hidden states,
+        the groups are [0:4] and [4:10].
     token_aggregation: str
         How to aggregate the tokens (second dimension of the tensor of activations).
         Can be "first", "last", "mean", "sum", "max", "cat", or None (in which case we
@@ -176,8 +179,6 @@ class HuggingFaceMixin(base.BaseModel):
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
         name = self.__class__.__name__
-        if self.device == "auto":
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.layers != "all":
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             if not all(isinstance(layer, float) and 0 <= layer <= 1 for layer in layers):
@@ -229,6 +230,13 @@ class HuggingFaceMixin(base.BaseModel):
             self._model = self.load_model()
         return self._model
 
+    def _torch_device(self) -> str:
+        # must stay lazy: extractors are often built on a CPU node, then
+        # pickled to GPU workers
+        if self.device in ("auto", "accelerate"):
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return self.device
+
     @property
     def model_device(self) -> torch.device:
         parameter = next(self.model.parameters(), None)
@@ -273,7 +281,7 @@ class HuggingFaceMixin(base.BaseModel):
                 )
                 raise RuntimeError(msg) from e
             if self.device != "accelerate":
-                model.to(self.device)
+                model.to(self._torch_device())
         else:
             config_kwargs: dict[str, tp.Any] = {
                 "output_hidden_states": True,
@@ -292,11 +300,7 @@ class HuggingFaceMixin(base.BaseModel):
             model = constructor(config, **(hf_config.model_kwargs or {}))
             if isinstance(self.dtype, str) and self.dtype != "auto":
                 model.to(dtype=getattr(torch, self.dtype))
-            if self.device == "accelerate":
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                model.to(device)
-            else:
-                model.to(self.device)
+            model.to(self._torch_device())
         model.eval()
         return model
 
@@ -327,7 +331,7 @@ class HuggingFaceMixin(base.BaseModel):
         else:
             layers = self.layers if isinstance(self.layers, list) else [self.layers]
             layer_indices = np.unique(
-                [int(i * (n_model_layers - 1)) for i in layers]
+                [round(i * (n_model_layers - 1)) for i in layers]
             ).tolist()  # type: ignore
         if len(layer_indices) == 1:
             if self.layer_aggregation is None:

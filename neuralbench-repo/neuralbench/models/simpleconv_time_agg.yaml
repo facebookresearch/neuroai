@@ -4,6 +4,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+# The model has its own ChannelMerger and output head, so no DownstreamWrapper on any
+# device: a wrapper here would default to a linear probe and build the model without
+# n_outputs
+downstream_model_wrapper: null
 brain_model_config:
   name: SimpleConvTimeAgg
   hidden: 320

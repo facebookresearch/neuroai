@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import pickle
 import typing as tp
 from pathlib import Path
 
@@ -166,6 +167,11 @@ def test_fill_slice(start: float, duration: float, expected: list[float]) -> Non
     event = etypes.Image(start=0, duration=1, timeline="stuff", filepath=__file__)
     out = feat(event, start=start, duration=duration)[0]
     np.testing.assert_array_almost_equal(out, expected)
+
+
+def test_event_types_sorted() -> None:
+    feat = Time(event_types=("Text", "Image", "Text"))
+    assert feat.event_types == ("Image", "Text")
 
 
 def test_fill_small_event() -> None:
@@ -355,6 +361,19 @@ def test_huggingface_model_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     hf.HuggingFaceMixin(model_name="gpt2")
     with pytest.raises(RepositoryNotFoundError):
         hf.HuggingFaceMixin(model_name="not_a_model")
+
+
+def test_huggingface_auto_device_resolved_on_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("huggingface_hub.snapshot_download", lambda **kw: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    built_on_cpu_node = hf.HuggingFaceMixin(model_name="gpt2")
+    on_gpu_worker = pickle.loads(pickle.dumps(built_on_cpu_node))
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert on_gpu_worker.device == "auto"
+    assert on_gpu_worker._torch_device() == "cuda"
+    assert hf.HuggingFaceMixin(model_name="gpt2", device="cpu")._torch_device() == "cpu"
 
 
 def test_huggingface_config_resolves_class_defaults() -> None:
@@ -717,3 +736,25 @@ def test_mixed_timelines() -> None:
     extractor = base.Pulse(frequency=1.0, aggregation="sum", event_types="Word")
     with pytest.raises(ValueError):
         extractor([event, event2], start=0, duration=2)
+
+
+@pytest.mark.parametrize("causal", [True, False])
+def test_context_window(causal: bool) -> None:
+    default = base.ContextWindow(duration=30.0, overlap=0.5, causal=causal)
+    window = base.ContextWindow(**default.complete({"min_context_duration": 6.0}))
+    raw = default.complete({"min_context_duration": "6", "causal": str(causal)})
+    assert base.ContextWindow.model_validate(raw) == window
+    assert window.overlap == pytest.approx(0.2 if causal else 0.4)
+    assert window.min_context == pytest.approx(6.0)
+    longer = base.ContextWindow(**default.complete({"duration": 60.0}))
+    assert longer == base.ContextWindow(duration=60.0, overlap=0.5, causal=causal)
+    completed = default.complete(base.ContextWindow(overlap=0.1))
+    assert completed == {"duration": 30.0, "overlap": 0.1, "causal": causal}
+    assert base.ContextWindow().windows(10, rate=1.0) == [(0, 10, 0, 10)]
+    window_input = {"duration": 30.0, "causal": causal, "min_context_duration": 6.0}
+    with pytest.raises(ValueError, match="Set only one"):
+        base.ContextWindow.model_validate(window_input | {"overlap": 0.5})
+    with pytest.raises(ValueError, match="must be in"):
+        base.ContextWindow.model_validate(window_input | {"min_context_duration": 30.0})
+    with pytest.raises(ValueError, match="requires duration and causal"):
+        base.ContextWindow.model_validate({"duration": 30.0, "min_context_duration": 6.0})

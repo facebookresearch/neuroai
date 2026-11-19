@@ -89,7 +89,6 @@ def test_image(tmp_path: Path) -> None:
         "token_aggregation",
         "layers",
         "layer_aggregation",
-        "frequency",
         "pretrained",
         "dtype",
         "cache_n_layers",

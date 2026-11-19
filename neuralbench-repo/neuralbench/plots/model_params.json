@@ -1,6 +1,6 @@
 {
   "ShallowFBCSPNet": 36320,
-  "Deep4Net": 146025,
+  "Deep4Net": 145900,
   "EEGNet": 1456,
   "BDTCN": 26974,
   "EEGConformer": 277440,

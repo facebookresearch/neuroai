@@ -30,7 +30,7 @@ from neuralset.base import TimedArray
 from neuralset.events import etypes, test_etypes
 from neuralset.events.utils import extract_events
 from neuralset.extractors import neuro
-from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, _overlap
+from neuralset.extractors.neuro import FmriTimedArray, MneTimedArray, Whitening, _overlap
 
 
 @pytest.mark.parametrize("cls", (ns.extractors.MegExtractor, ns.extractors.FmriExtractor))
@@ -528,6 +528,31 @@ def test_ecg_extractor_reads_and_filters_lead_in_eeg_recording(tmp_path: Path) -
     )
 
 
+def test_emg_extractor_takes_the_envelope_of_emg_channels(tmp_path: Path) -> None:
+    sfreq = 1000.0
+    times = np.arange(0, 4, 1 / sfreq)
+    burst = (times >= 2.0) * 1e-3 * np.sin(2 * np.pi * 100.0 * times)
+    info = mne.create_info(["deltoid"], sfreq=sfreq, ch_types="emg")
+    fif = tmp_path / "emg-raw.fif"
+    mne.io.RawArray(burst[None], info).save(fif)
+    event = etypes.Emg.from_dict(
+        dict(
+            start=0.0,
+            duration=4.0,
+            timeline="foo",
+            filepath=str(fif),
+            type="Emg",
+            subject="janedoe",
+        )
+    )
+    extractor = ns.extractors.EmgExtractor(apply_hilbert=True, scaler=None)
+    envelope = next(iter(extractor._get_data([event]))).data[0]
+    # emg is outside MNE's 'data' picks, which apply_hilbert defaults to
+    assert envelope.min() >= 0.0
+    assert envelope[2500:3500].mean() == pytest.approx(1e-3, rel=0.05)
+    assert envelope[500:1500].max() < 1e-5
+
+
 @pytest.mark.parametrize(
     "filtr,culprits,expected",
     [
@@ -855,6 +880,9 @@ def test_base_meg(tmp_path: Path) -> None:
         "infra",  # for version
         "fill_non_finite",
         "store_dtype",
+        "apply_sss",
+        "compensation_grade",
+        "whitening",
     }
 
 
@@ -907,8 +935,50 @@ def test_epoch_correct(apply_proj: bool) -> None:
     np.testing.assert_almost_equal(meg / data[:, :, :-1], np.ones(meg.shape), decimal=3)
 
 
+@pytest.mark.parametrize("duration,stop", ((0.001, 0), (0.01, 1)))
+def test_meg_whitening_short_duration(duration: float, stop: int) -> None:
+    raw = mne.io.RawArray(
+        np.ones((2, 10)), mne.create_info(["MEG 0111", "MEG 0121"], 100.0, "mag")
+    )
+    event = tp.cast(etypes.MneRaw, SimpleNamespace(frequency=100.0))
+    extractor = ns.extractors.MegExtractor(whitening=Whitening(duration=duration))
+    with pytest.raises(
+        ValueError,
+        match=f"whitening.duration={duration}s gives {stop} samples at 100.0 Hz; need at least 2",
+    ):
+        extractor._preprocess_raw(raw, event)
+
+
+@pytest.mark.parametrize("duration,stop", (("all", 1000), (5.0, 500)))
+def test_meg_whitening(duration: tp.Literal["all"] | float, stop: int) -> None:
+    rng = np.random.default_rng(0)
+    data = rng.normal(size=(4, 1000)) + 3 * rng.normal(size=(1, 1000))  # a shared field
+    names = [f"MEG 01{k}1" for k in range(1, 5)]
+    raw = mne.io.RawArray(data, mne.create_info(names, 100.0, "mag"))
+    event = tp.cast(etypes.MneRaw, SimpleNamespace(frequency=100.0))
+    whitening = Whitening(shrinkage=1e-6, duration=duration)
+    extractor = ns.extractors.MegExtractor(whitening=whitening)
+    out = extractor._preprocess_raw(raw, event).data
+    np.testing.assert_allclose(np.cov(out[:, :stop]), np.eye(4), atol=1e-4)
+
+
+def test_proj_before_scaling() -> None:
+    names = ["MEG 0111", "MEG 0121"]
+    # sensors of different sizes, so that scaling before projecting changes the result
+    data = np.random.default_rng(0).normal(size=(2, 100)) * [[1.0], [5.0]]
+    raw = mne.io.RawArray(data, mne.create_info(names, sfreq=100.0, ch_types="mag"))
+    proj = dict(nrow=1, ncol=2, row_names=None, col_names=names, data=np.ones((1, 2)))
+    raw.add_proj(mne.Projection(data=proj))  # removes the signal common to both sensors
+    projected = raw.copy().apply_proj().get_data()
+    expected = sklearn.preprocessing.StandardScaler().fit_transform(projected.T).T
+    extractor = ns.extractors.MegExtractor(apply_proj=True, scaler="StandardScaler")
+    fake_event = SimpleNamespace(frequency=100.0)
+    out = extractor._preprocess_raw(raw, fake_event).data  # type: ignore[arg-type]
+    np.testing.assert_allclose(out, expected, atol=1e-6)
+
+
 @pytest.mark.parametrize("n_spatial_dims", [3])
-@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("normalize", ["min_max", "center_and_scale", None])
 @pytest.mark.parametrize(
     "factor",
     [
@@ -917,7 +987,7 @@ def test_epoch_correct(apply_proj: bool) -> None:
     ],
 )
 def test_channel_positions_meg(
-    test_data_path: Path, n_spatial_dims, normalize: bool, factor: float
+    test_data_path: Path, n_spatial_dims, normalize: tp.Any, factor: float
 ) -> None:
     # Create and prepare Meg extractors
     meg = ns.extractors.MegExtractor(offset=1, picks="all")
@@ -949,7 +1019,7 @@ def test_channel_positions_meg(
 
 
 @pytest.mark.parametrize("n_spatial_dims", [2, 3])
-@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("normalize", ["min_max", "center_and_scale", None])
 def test_channel_positions_eeg(test_data_path: Path, n_spatial_dims, normalize) -> None:
     eeg = ns.extractors.EegExtractor()
     events = ns.Study(
@@ -1024,7 +1094,7 @@ def test_channel_positions_original_order_across_channel_sets() -> None:
         neuro=eeg,
         layout_or_montage_name=None,
         n_spatial_dims=3,
-        normalize=False,
+        normalize=None,
     )
 
     positions = positions_extractor._compute_positions(ta)
@@ -1100,7 +1170,7 @@ def test_channel_positions_ieeg(test_data_path: Path) -> None:
         event_types="Ieeg",
         layout_or_montage_name=None,
         n_spatial_dims=3,
-        normalize=False,
+        normalize=None,
     )
     ch_pos.prepare(events)
 
@@ -1198,6 +1268,7 @@ def test_mne_timed_array_cache_roundtrip(tmp_path: Path) -> None:
                     shape: [2, 12]
                     dtype: float64
                     "#type": MemmapArray
+                dev_head_t: null
     """
     )
     assert entry == expected, f"Structure mismatch:\n{json.dumps(entry, indent=2)}"
@@ -1321,7 +1392,7 @@ def test_channel_positions_head_frame(montage_name: str) -> None:
         neuro=eeg,
         layout_or_montage_name=montage_name,
         n_spatial_dims=3,
-        normalize=False,
+        normalize=None,
     )
     pos_named = named._get_montage_positions(ta)
 
@@ -1329,7 +1400,7 @@ def test_channel_positions_head_frame(montage_name: str) -> None:
         neuro=eeg,
         layout_or_montage_name=None,
         n_spatial_dims=3,
-        normalize=False,
+        normalize=None,
     )
     pos_fallback = fallback._get_montage_positions(ta)
 
@@ -1342,6 +1413,77 @@ def test_channel_positions_head_frame(montage_name: str) -> None:
             atol=1e-10,
             err_msg=f"Head-frame mismatch for {name} with montage {montage_name}",
         )
+
+
+def _meg_timed_array(dev_head_t: np.ndarray | None) -> tuple[MneTimedArray, np.ndarray]:
+    """Two MEG sensors with a full loc, and a misc channel of unknown position."""
+    ch_types = ["mag", "grad", "misc"]
+    info = mne.create_info(["MEG 0111", "MEG 0112", "MISC 001"], 100.0, ch_types)
+    locs = np.random.RandomState(0).randn(3, 12) * 0.05
+    locs[2] = 0.0
+    for ch, loc in zip(info["chs"], locs):
+        ch["loc"][:] = loc
+    if dev_head_t is not None:
+        info["dev_head_t"] = mne.transforms.Transform("meg", "head", dev_head_t)
+    raw = mne.io.RawArray(np.zeros((3, 10)), info, verbose=False)
+    return MneTimedArray.from_native(raw), locs
+
+
+def test_meg_channel_positions(tmp_path: Path) -> None:
+    """Sensor features follow dev_head_t in the head frame, and dev_head_t survives caching."""
+    from exca.cachedict import DumpContext
+
+    trans = mne.transforms.rotation(x=0.3, y=-0.2, z=0.4) @ mne.transforms.translation(
+        x=0.004, y=0.017, z=0.051
+    )
+    ta, locs = _meg_timed_array(trans)
+    ctx = DumpContext(tmp_path)
+    with ctx:
+        dumped = ctx.dump_entry("meg", ta)
+    ta = ctx.load(dumped["content"])
+    np.testing.assert_allclose(ta.to_info()["dev_head_t"]["trans"], trans)
+
+    from mne._fiff.tag import (  # type: ignore[import-untyped]
+        _coil_trans_to_loc,
+        _loc_to_coil_trans,
+    )
+
+    head_locs = locs.copy()
+    for i in range(2):
+        head_locs[i] = _coil_trans_to_loc(trans @ _loc_to_coil_trans(locs[i]))
+    frames: dict[tp.Literal["device", "head"], np.ndarray] = {
+        "device": locs,
+        "head": head_locs,
+    }
+    for coord_frame, expected in frames.items():
+        kwargs: dict[str, tp.Any] = dict(
+            neuro=ns.extractors.MegExtractor(), normalize=None, coord_frame=coord_frame
+        )
+        positions = ns.extractors.ChannelPositions(n_spatial_dims=3, **kwargs)
+        np.testing.assert_allclose(
+            positions._compute_positions(ta)[:2], expected[:2, :3], rtol=1e-6
+        )
+
+
+def test_channel_positions_without_dev_head_t(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without dev_head_t, sensors stay in the device frame; caches predating it raise."""
+    monkeypatch.setattr("neuralset.utils.ISSUED_WARNINGS", set())
+    ta, _ = _meg_timed_array(None)
+    neuro = ns.extractors.MegExtractor()
+    device = ns.extractors.ChannelPositions(
+        neuro=neuro, n_spatial_dims=3, coord_frame="device"
+    )
+    head = ns.extractors.ChannelPositions(neuro=neuro, n_spatial_dims=3)
+    expected = device._compute_positions(ta)
+    with pytest.warns(UserWarning, match="without dev_head_t"):
+        torch.testing.assert_close(head._compute_positions(ta), expected)
+
+    del ta.header["dev_head_t"]
+    torch.testing.assert_close(device._compute_positions(ta), expected)
+    with pytest.raises(ValueError, match="no dev_head_t"):
+        head._compute_positions(ta)
 
 
 def test_meg_borders(test_data_path: Path, tmp_path: Path) -> None:
@@ -1409,6 +1551,29 @@ def test_scaled_meg(
     assert torch.allclose(scaled_X1, scaled_X2, atol=1e-12)
 
 
+def test_scaler_stats_in_header(test_data_path: Path, tmp_path: Path) -> None:
+    events = ns.Study(name="Test2023Meg", path=test_data_path, query="timeline_index<1")
+    event = etypes.Meg.from_dict(events.run().query('type=="Meg"').iloc[0])
+    tas = {}
+    for scaler in (None, "RobustScaler"):
+        infra: tp.Any = {"folder": tmp_path / str(scaler), "cluster": None}
+        extractor = ns.extractors.MegExtractor(
+            frequency=100.0, scaler=scaler, infra=infra
+        )
+        next(extractor._get_data([event]))  # writes the cache
+        tas[scaler] = next(extractor._get_data([event]))  # reads it back
+    assert tas[None].header["scaler_scale"] is None
+    assert tas[None].header["scaler_center"] is None
+    header = tas["RobustScaler"].header
+    scale = np.asarray(header["scaler_scale"])[:, None]
+    center = np.asarray(header["scaler_center"])[:, None]
+    unscaled = np.asarray(tas["RobustScaler"].data) * scale + center
+    expected = np.asarray(tas[None].data)
+    np.testing.assert_allclose(
+        unscaled, expected, rtol=1e-4, atol=np.abs(expected).max() * 1e-5
+    )
+
+
 def test_first_samp() -> None:
     events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
     meg_event = ns.events.Event.from_dict(events.loc[events.type == "Meg"].iloc[0])
@@ -1417,6 +1582,62 @@ def test_first_samp() -> None:
     extractor = ns.extractors.MegExtractor(frequency=150)
     assert not extractor(meg_event, 41, 1).norm()
     assert extractor(meg_event, 43, 1).norm()
+
+
+def test_meg_apply_sss() -> None:
+    assert "apply_sss" not in ns.extractors.MegExtractor().infra.uid()
+    events = ns.Study(name="Mne2013Sample", path=ns.CACHE_FOLDER).run()
+    meg_event = etypes.Meg.from_dict(events.loc[events.type == "Meg"].iloc[0])
+    extractor = ns.extractors.MegExtractor(apply_sss=True, picks=("mag", "grad"))
+    raw = meg_event.read().crop(0, 20).load_data()
+    assert extractor._needs_sss(raw)
+    data = extractor._preprocess_raw(raw, meg_event).data
+    sv = np.linalg.svd(data - data.mean(1, keepdims=True), compute_uv=False)
+    assert (sv > sv[0] * 1e-6).sum() < 100 < data.shape[0]
+    filtered = mne.io.RawArray(data, raw.copy().pick(("mag", "grad")).info)
+    assert not extractor._needs_sss(filtered)
+
+
+def test_meg_compensation_grade(tmp_path: Path) -> None:
+    # CTF-like recording stored at grade 0, with a grade-3 compensation matrix
+    rng = np.random.default_rng(0)
+    n_meg, n_ref, sfreq = 4, 2, 100.0
+    names = [f"M{i}" for i in range(n_meg)] + [f"R{i}" for i in range(n_ref)]
+    info = mne.create_info(names, sfreq, ["mag"] * n_meg + ["ref_meg"] * n_ref)
+    weights = rng.normal(size=(n_meg, n_ref))
+    with info._unlock():
+        for ch in info["chs"]:
+            ch["coil_type"] = (
+                mne.io.constants.FIFF.FIFFV_COIL_CTF_GRAD
+                if ch["kind"] == mne.io.constants.FIFF.FIFFV_MEG_CH
+                else mne.io.constants.FIFF.FIFFV_COIL_CTF_REF_GRAD
+            )
+        comp_data = dict(nrow=n_meg, ncol=n_ref, data=weights)
+        comp_data.update(row_names=names[:n_meg], col_names=names[n_meg:])
+        info["comps"] = [
+            dict(
+                ctfkind=3,
+                kind=3,
+                save_calibrated=False,
+                rowcals=np.ones(n_meg),
+                colcals=np.ones(n_ref),
+                data=comp_data,
+            )
+        ]
+    data = rng.normal(size=(n_meg + n_ref, 1000))
+    fname = tmp_path / "ctf_raw.fif"
+    mne.io.RawArray(data, info).save(fname)
+    event = tp.cast(etypes.MneRaw, SimpleNamespace(frequency=sfreq))
+
+    def preprocess(**kwargs: tp.Any) -> np.ndarray:
+        extractor = ns.extractors.MegExtractor(picks=("mag", "grad"), **kwargs)
+        # not preloaded: picks would drop a lazily applied compensation
+        raw = mne.io.read_raw_fif(fname, verbose=False)
+        return extractor._preprocess_raw(raw, event).data
+
+    compensated = data[:n_meg] - weights @ data[n_meg:]
+    np.testing.assert_allclose(preprocess(compensation_grade=3), compensated, rtol=1e-4)
+    np.testing.assert_allclose(preprocess(), data[:n_meg], rtol=1e-4)
 
 
 def test_fast_event() -> None:
@@ -1705,6 +1926,28 @@ def test_ieeg(test_data_path: Path) -> None:
     assert preproc_data.shape == (24, sfreq * duration)
 
 
+def test_ieeg_default_picks_dbs(tmp_path: Path) -> None:
+    info = mne.create_info(["L1-L2", "R1-R2", "ACC"], 100.0, ["dbs", "dbs", "misc"])
+    fif = tmp_path / "dbs_raw.fif"
+    mne.io.RawArray(np.zeros((3, 500)), info).save(fif)
+    event = dict(
+        type="Ieeg", start=0.0, duration=5.0, timeline="t", filepath=str(fif), subject="s"
+    )
+    data = ns.extractors.IeegExtractor(frequency=100.0, baseline=None)(event, 0.0, 5.0)
+    assert data.shape == (2, 500), "DBS-lead LFP must be picked by default"
+
+
+def test_ecg_from_ieeg_event(tmp_path: Path) -> None:
+    info = mne.create_info(["A1", "A2", "EKG"], 100.0, ["seeg", "seeg", "ecg"])
+    fif = tmp_path / "ieeg_raw.fif"
+    mne.io.RawArray(np.zeros((3, 500)), info).save(fif)
+    event = dict(
+        type="Ieeg", start=0.0, duration=5.0, timeline="t", filepath=str(fif), subject="s"
+    )
+    ecg = ns.extractors.EcgExtractor(event_types="Ieeg", frequency=100.0, baseline=None)
+    assert ecg(event, 0.0, 5.0).shape == (1, 500), "ECG lead of an iEEG recording"
+
+
 def test_bipolar_ieeg(tmp_path: Path) -> None:
     expected = "Bipolar reference can only be applied on seeg signals"
     with pytest.raises(ValueError, match=expected):
@@ -1954,6 +2197,27 @@ def test_fmri_space_selection(tmp_path: Path) -> None:
     feat = ns.extractors.FmriExtractor(query='space == "nonexistent"')
     with pytest.raises(ValueError, match="Available spaces:.*available preprocs:"):
         feat.prepare(events)
+
+
+def test_mask_projector_subcortical_excludes_ventricles(monkeypatch: tp.Any) -> None:
+    from nilearn import datasets
+
+    labels = [
+        "Background",
+        "Left Cerebral White Matter",
+        "Left Cerebral Cortex ",
+        "Left Lateral Ventricle",
+        "Left Thalamus",
+        "Brain-Stem",
+        "Right Lateral Ventricle",
+        "Right Putamen",
+    ]
+    maps = nib.Nifti1Image(np.arange(8, dtype=float).reshape(2, 2, 2), np.eye(4))
+    atlas = SimpleNamespace(labels=labels, maps=maps)
+    monkeypatch.setattr(datasets, "fetch_atlas_harvard_oxford", lambda *_: atlas)
+    mask = ns.extractors.neuro.MaskProjector(mask="subcortical").get_mask().get_fdata()
+    kept = sorted(labels[int(v)] for v in np.unique(mask) if v)
+    assert kept == ["Left Thalamus", "Right Putamen"]
 
 
 def test_fmri_smoothing(test_data_path: Path) -> None:

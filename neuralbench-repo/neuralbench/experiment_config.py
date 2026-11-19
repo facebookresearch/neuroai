@@ -103,10 +103,6 @@ def _apply_prepare_overlay(config: ConfDict) -> None:
     config["infra.gpus_per_node"] = 1
     config["infra.tasks_per_node"] = 1
     config["infra.slurm_use_srun"] = False
-    config["data.neuro.infra.min_samples_per_job"] = 8
-    target_cfg = config.get("data", {}).get("target", {})
-    if isinstance(target_cfg, dict) and "infra" in target_cfg:
-        config["data.target.infra.min_samples_per_job"] = 8
     if "trainer_config" in config:
         config["trainer_config"] = {
             "n_epochs": 1,

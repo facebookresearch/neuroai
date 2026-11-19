@@ -27,6 +27,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from neuralset.events import etypes
 from neuraltrain.metrics.utils import agg_per_group, agg_retrieval_preds
 
 from .modules import DownstreamWrapperModel
@@ -157,12 +158,29 @@ class TestFullRetrievalMetrics(Callback):
 
     Requires the pl.LightningModule object this callback is attached to to define a
     torch.ModuleDict named `retrieval_metrics` containing the metrics to evaluate.
+
+    ``retrieval_item`` names what one candidate of the retrieval set is:
+
+    - ``"trigger"``: whatever the trigger is labelled with, its text or its
+      filepath. Repeats of a label collapse into one candidate carrying the
+      mean of their targets, which is what a word-level or image-level
+      retrieval score is built on.
+    - ``"window"``: the file a continuous trigger (``Audio``, ``Video``)
+      plays, paired with the window's time within that file (the trigger's
+      ``offset`` plus the window's delay from the trigger), rounded to
+      ``window_decimals`` decimals of a second. Only windows that saw the
+      same moment of the same stimulus collapse, e.g. two subjects watching
+      one scene. For a single event spanning the whole recording,
+      ``"trigger"`` averages targets that differ, and the candidate it yields
+      is a centroid rather than anything the model could have decoded.
     """
 
     def __init__(
         self,
         event_type: tp.Literal["Word", "Image"] = "Word",
         event_field: tp.Literal["text", "category"] = "text",
+        retrieval_item: tp.Literal["trigger", "window"] = "trigger",
+        window_decimals: int = 0,
         retrieval_set_sizes: tuple = (None, 250),
         save_outputs: bool = False,
         logger: tp.Any = None,
@@ -170,6 +188,8 @@ class TestFullRetrievalMetrics(Callback):
     ):
         self.event_type = event_type
         self.event_field = event_field
+        self.retrieval_item = retrieval_item
+        self.window_decimals = window_decimals
         self.retrieval_set_sizes = retrieval_set_sizes
         self.save_outputs = save_outputs
         self.logger = logger
@@ -301,6 +321,21 @@ class TestFullRetrievalMetrics(Callback):
                 full["filepath"].append(trigger.filepath)
             else:
                 pass
+            if self.retrieval_item == "window":
+                full["window"].append(self._window_key(segment))
+
+    def _window_key(self, segment: tp.Any) -> str:
+        """Return the window's ``"<filepath>@<seconds within file>s"``."""
+        trigger = segment.trigger
+        if not isinstance(trigger, etypes.BaseSplittableEvent):
+            raise ValueError(
+                f"retrieval_item='window' needs a continuous trigger (Audio, Video) "
+                f"to place a window within its file, got a {type(trigger).__name__} "
+                f"at {trigger.start:.3f} s; use retrieval_item='trigger'"
+            )
+        time = round(trigger.offset + segment.start - trigger.start, self.window_decimals)
+        time += 0.0  # -0.0 -> 0.0
+        return f"{trigger.filepath}@{time:.{max(self.window_decimals, 0)}f}s"
 
     def _compute_metrics(
         self,
@@ -320,10 +355,20 @@ class TestFullRetrievalMetrics(Callback):
             y_true = torch.cat(full["y_true"], dim=0)
 
             subjects_pred = full["subject"]
-            if "text" in full.keys():
+            if self.retrieval_item == "window":
+                groups_pred = full["window"]
+            elif "text" in full.keys():
                 groups_pred = full["text"]
             else:
                 groups_pred = full["filepath"]
+            if len(set(groups_pred)) < 2:
+                raise ValueError(
+                    f"{step_name}: the retrieval set holds "
+                    f"{len(set(groups_pred))} candidate(s) over {len(groups_pred)} "
+                    f"windows, so there is nothing to rank against and every "
+                    f"metric comes out NaN; for an Audio or Video trigger, set "
+                    f"retrieval_item='window' to rank the windows themselves"
+                )
 
             for retrieval_set_size in self.retrieval_set_sizes:
                 out = self._get_test_full_metrics(

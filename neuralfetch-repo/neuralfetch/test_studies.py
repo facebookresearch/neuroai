@@ -9,6 +9,7 @@
 import importlib.util
 import inspect
 import sys
+import typing as tp
 from pathlib import Path
 
 import numpy as np
@@ -69,7 +70,7 @@ def test_all_download_backends_accept_overwrite() -> None:
     used with the two-tier overwrite semantics.
     """
 
-    def _all_subclasses(cls: type) -> set[type]:
+    def _all_subclasses(cls: type[tp.Any]) -> set[type[tp.Any]]:
         subs = set(cls.__subclasses__())
         for sub in list(subs):
             subs |= _all_subclasses(sub)

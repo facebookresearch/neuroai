@@ -20,7 +20,7 @@ from torch.nn import functional as F
 from neuralset import base as nsbase
 from neuralset.events import etypes
 
-from .base import BaseExtractor
+from .base import BaseExtractor, ContextWindow
 from .hf import HuggingFaceConfig, HuggingFaceMixin
 
 # pylint: disable=import-outside-toplevel
@@ -29,11 +29,21 @@ from .hf import HuggingFaceConfig, HuggingFaceMixin
 class BaseAudio(BaseExtractor):
     """Audio extractor
 
+    Parameters
+    ----------
+    context : ContextWindow, default=ContextWindow()
+        Windows of audio processed at once, to bound the memory of the model on
+        long events (instead of chunking them with ``ChunkEvents``). Each event is
+        still cached as a whole. By default, each event is processed at once.
+
     Note
     ----
     Default frequency is derived from event duration and computed latent dimension
     after the first call. Note that this can be slightly off due to sampling, so you
     should provide the frequency yourself if you want consistency.
+    Below the frame rate of the latents, each output sample is the average of the
+    latent frames overlapping its ``1 / frequency`` seconds (``area`` interpolation,
+    instead of the nearest frame, which aliases); above it, frames are repeated.
     """
 
     event_types: str | tuple[str, ...] = "Audio"
@@ -44,14 +54,20 @@ class BaseAudio(BaseExtractor):
     # frequency derived from sampling rate of the produced extractor
     frequency: tp.Literal["native"] | float = "native"
     norm_audio: bool = True
+    context: ContextWindow = ContextWindow()
 
     infra: MapInfra = MapInfra(
         timeout_min=25,
         gpus_per_node=1,
         cpus_per_task=8,
         min_samples_per_job=4096,
-        version="v5",
+        version="v8",
     )
+
+    @pydantic.field_validator("context", mode="before")
+    @classmethod
+    def _complete_context(cls, value: tp.Any) -> tp.Any:
+        return cls.model_fields["context"].default.complete(value)
 
     @property
     @abstractmethod
@@ -65,6 +81,24 @@ class BaseAudio(BaseExtractor):
     def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
+    def _process_windows(self, wav: torch.Tensor) -> torch.Tensor:
+        """``_process_wav`` on the windows of the wav, concatenated along time."""
+        parts = []
+        for start, stop, keep_start, keep_stop in self.context.windows(
+            len(wav), self._input_frequency
+        ):
+            window = wav[start:stop]
+            latents = self._process_wav(window)
+            n_frames, n_samples = latents.shape[-1], len(window)
+            # latent frames are assumed to evenly span the window; rounding half
+            # up (unlike round) is consistent across windows on the frame grid
+            first, last = (
+                (2 * (sample - start) * n_frames + n_samples) // (2 * n_samples)
+                for sample in (keep_start, keep_stop)
+            )
+            parts.append(latents[..., first:last])
+        return parts[0] if len(parts) == 1 else torch.cat(parts, dim=-1)
+
     def _preprocess_wav(self, wav: torch.Tensor) -> torch.Tensor:
         wav = torch.mean(wav, dim=1)  # stereo to mono
         if self.norm_audio:
@@ -74,10 +108,8 @@ class BaseAudio(BaseExtractor):
     def _resample_wav(
         self, wav: torch.Tensor, old_frequency: float, new_frequency: float
     ) -> torch.Tensor:
-        for freq in (old_frequency, new_frequency):
-            if not float(freq).is_integer():
-                raise ValueError(f"Frequencies need to be integers, got {freq}")
-        old_frequency, new_frequency = int(old_frequency), int(new_frequency)
+        # drift-corrected rates (e.g. MEG-SCANS, 44078.8 Hz): rounding stretches by < 1e-5
+        old_frequency, new_frequency = round(old_frequency), round(new_frequency)
         import julius  # noqa
 
         wav = julius.resample.ResampleFrac(
@@ -100,16 +132,31 @@ class BaseAudio(BaseExtractor):
                 wav = event.read()
                 sfreq = event.frequency
             elif isinstance(event, etypes.Video):
-                audio = event.read().audio
-                wav = torch.tensor(audio.to_soundarray(), dtype=torch.float32)
-                sfreq = audio.fps
+                clip = event.read()
+                audio = clip.audio
+                if audio is None:  # silent video
+                    sfreq = self._input_frequency
+                    wav = torch.zeros(int(round(clip.duration * sfreq)), 1)
+                else:
+                    wav = torch.tensor(audio.to_soundarray(), dtype=torch.float32)
+                    sfreq = audio.fps
             else:
                 raise ValueError(
                     f"Unsupported event type for Audio extractor: {type(event)}"
                 )
             wav = self._resample_wav(wav, sfreq, self._input_frequency)
             wav = self._preprocess_wav(wav)
-            latents = self._process_wav(wav)
+            try:
+                latents = self._process_windows(wav)
+            except torch.cuda.OutOfMemoryError as e:
+                msg = f"CUDA out of memory on a {event.duration:.0f} s event: "
+                if self.context.duration is None:
+                    msg += f"set {self.name}.context.duration (e.g. 30) to process "
+                    msg += "long events in windows, instead of chunking them"
+                else:
+                    msg += f"lower {self.name}.context.duration "
+                    msg += f"(currently {self.context.duration} s)"
+                raise torch.cuda.OutOfMemoryError(msg) from e
             if self.frequency == "native":
                 data = latents.numpy()
                 freq: float = data.shape[-1] / event.duration
@@ -117,10 +164,11 @@ class BaseAudio(BaseExtractor):
                 freq = float(self.frequency)
                 timepoints = nsbase.Frequency(freq).to_ind(event.duration)
                 if abs(timepoints - latents.shape[-1]) > 0:
+                    mode = "area" if timepoints < latents.shape[-1] else "nearest"
                     if len(latents.shape) == 2:  # d, t
-                        latents = F.interpolate(latents[None], timepoints)[0]
+                        latents = F.interpolate(latents[None], timepoints, mode=mode)[0]
                     else:  # n_layers, d, t
-                        latents = F.interpolate(latents, timepoints)
+                        latents = F.interpolate(latents, timepoints, mode=mode)
                 data = latents.numpy()
             yield nsbase.TimedArray(
                 data=data,
@@ -344,6 +392,9 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
         Which internal representation to extract from the model:
         - ``'transformer'`` returns hidden states from transformer layers.
         - ``'convolution'`` returns convolutional feature maps.
+    context : ContextWindow, default=ContextWindow(duration=30.0)
+        Windowing of long events (see ``BaseAudio``), bounding the GPU memory of
+        the attention (quadratic in the window length).
     """
 
     model_name: str = "facebook/wav2vec2-large-xlsr-53"
@@ -352,6 +403,7 @@ class HuggingFaceAudio(BaseAudio, HuggingFaceMixin):
 
     normalized: bool = True
     layer_type: tp.Literal["transformer", "convolution"] = "transformer"
+    context: ContextWindow = ContextWindow(duration=30.0)
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -510,15 +562,33 @@ class Whisper(HuggingFaceAudio):
     model_name : str
         The Hugging Face model identifier to load. Defaults to
         ``"openai/whisper-large-v3-turbo"``.
+    context : ContextWindow
+        The encoder reads 30 s of audio at once (shorter windows are padded,
+        and the latents of the padding dropped).
     """
 
     model_name: str = "openai/whisper-large-v3-turbo"
     dtype: tp.Literal["float32"] = "float32"
+    context: ContextWindow = ContextWindow(duration=30.0)
     hf_config: HuggingFaceAudioConfig = HuggingFaceAudioConfig(
         model_cls_name="WhisperModel",
     )
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        duration = self.context.duration
+        if duration is None or duration > 30:
+            msg = f"{self.name}.context.duration must be at most the 30 s read by the "
+            raise ValueError(msg + f"encoder, got {duration}")
 
     def load_model(self) -> torch.nn.Module:
         _model: torch.nn.Module = super().load_model().encoder  # type: ignore[assignment]
         _model.eval()
         return _model
+
+    def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
+        n_samples = self.feature_extractor.n_samples  # padded input length
+        if len(wav) > n_samples:
+            raise ValueError(f"Whisper windows must be <= {n_samples} samples")
+        latents = super()._process_wav(wav)
+        return latents[..., : round(latents.shape[-1] * len(wav) / n_samples)]

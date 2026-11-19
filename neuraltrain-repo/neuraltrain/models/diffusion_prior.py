@@ -11,6 +11,7 @@ Diffusion prior used in MindEye (https://github.com/MedARC-AI/fMRI-reconstructio
 import logging
 import random
 import typing as tp
+import warnings
 
 import torch
 from torch import nn
@@ -21,8 +22,12 @@ from .base import BaseModelConfig
 logger = logging.getLogger(__name__)
 
 try:
-    import dalle2_pytorch.dalle2_pytorch as dalle2_modules
-    from dalle2_pytorch import DiffusionPrior as DalleDiffusionPrior
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "`torch.jit.script` is deprecated", FutureWarning
+        )
+        import dalle2_pytorch.dalle2_pytorch as dalle2_modules
+        from dalle2_pytorch import DiffusionPrior as DalleDiffusionPrior
 
     class PriorNetwork(nn.Module):  # type : ignore
         def __init__(

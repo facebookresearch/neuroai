@@ -13,10 +13,9 @@ import numpy as np
 import pandas as pd
 import pydantic
 import torch
-from exca.base import DEFAULT_CHECK_SKIPS
 
 import neuralset as ns
-from neuralset import base
+from neuralset import base, utils
 from neuralset.base import Frequency as Frequency
 from neuralset.base import TimedArray as TimedArray
 from neuralset.events import Event, EventTypesHelper, etypes
@@ -49,7 +48,8 @@ class BaseExtractor(base.NamedModel, base._Module):
     event_types : str or tuple of str
         Event type name(s) this extractor operates on (e.g. ``"Audio"`` or
         ``("Image", "Text")``).  Must be set as a class-level default in
-        every concrete subclass.
+        every concrete subclass.  Tuples are sorted and deduplicated so that
+        their order does not change the cache uid.
     aggregation : str
         Strategy for combining values when multiple matching events fall
         inside the same segment:
@@ -141,6 +141,14 @@ class BaseExtractor(base.NamedModel, base._Module):
         type_helper = EventTypesHelper(event_types)
         for etype in type_helper.classes:
             cls.requirements = cls.requirements + etype.requirements
+
+    @pydantic.field_validator("event_types", mode="after")
+    @classmethod
+    def _sort_event_types(cls, event_types: tp.Any) -> tp.Any:
+        # a set would not do: exca dumps it as a list in (randomized) hash order
+        if isinstance(event_types, tuple):
+            return tuple(sorted(set(event_types)))
+        return event_types
 
     def _is_static(self) -> bool:
         # no time axis in the data; may depend on the config (override)
@@ -442,16 +450,6 @@ class BaseStatic(BaseExtractor):
             yield ta
 
 
-# pylint: disable=unused-argument
-def _skip_new_event_types(key, val, prev):
-    if "event_types" in key and not prev:
-        return True
-    return False
-
-
-DEFAULT_CHECK_SKIPS.append(_skip_new_event_types)
-
-
 class Pulse(BaseStatic):
     """Constant-one extractor — returns a single 1.0 scalar for every event.
 
@@ -711,3 +709,132 @@ class EventDetector(BaseExtractor):
             duration=duration,
             frequency=self.frequency,
         )
+
+
+_FLOAT, _BOOL = pydantic.TypeAdapter(float), pydantic.TypeAdapter(bool)
+
+
+class ContextWindow(base.BaseModel):
+    """Windows in which an extractor embeds long events: windows of ``duration``
+    seconds start every ``stride = (1 - overlap) * duration`` seconds, and the last
+    one ends at the event end (:func:`neuralset.utils.strided_windows`). The latents
+    kept from the windows (``#``) cover the event once, the others (``.``) are only
+    context::
+
+        causal=True: each window keeps its latents after the previous window
+        |##############################
+        |                    ..........####################
+        |                                        ..........####################
+        |<---------- duration -------->
+        |<----- stride -----><-overlap>
+
+        causal=False: each window keeps its central latents
+        |#########################.....
+        |                    .....####################.....
+        |                                        .....#########################
+
+    Every kept latent thus sees at least ``min_context`` seconds of context (fewer
+    at the edges of the event): ``overlap * duration`` of past if ``causal``, else
+    ``overlap * duration / 2`` on each side, up to the rounding of the stride to
+    the samples, tokens or words of the extractor.
+
+    Parameters
+    ----------
+    duration :
+        Duration (s) of the windows. None embeds each event at once.
+    overlap :
+        Fraction of ``duration`` shared by consecutive windows, in [0, 1)
+        (0: back-to-back windows), for ``1 / (1 - overlap)`` times the computation.
+    causal :
+        Windows keep their latents after the end of the previous window (for causal
+        models), instead of their central latents (for bidirectional ones).
+    min_context_duration :
+        Input only, exclusive with ``overlap``: ``min_context`` (s), converted to
+        ``overlap``.
+
+    Note
+    ----
+    In an extractor, the fields missing from a ``context`` input keep the values of
+    the extractor's default (see :meth:`complete`).
+    """
+
+    duration: pydantic.PositiveFloat | None = None
+    overlap: tp.Annotated[float, pydantic.Field(ge=0, lt=1)] = 0.5
+    causal: bool = False
+    # input-only alternatives to overlap -> window size they are expressed in
+    _MIN_CONTEXT: tp.ClassVar[dict[str, str]] = {"min_context_duration": "duration"}
+
+    @staticmethod
+    def _context_share(causal: bool) -> float:
+        return 1.0 if causal else 0.5  # all the overlap in the past, or half per side
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _min_context_to_overlap(cls, data: tp.Any) -> tp.Any:
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        given = {k: data.pop(k) for k in cls._MIN_CONTEXT if k in data}
+        given = {k: v for k, v in given.items() if v is not None}
+        if not given:
+            return data
+        if len(given) > 1 or data.get("overlap") is not None:
+            options = ", ".join(["overlap", *cls._MIN_CONTEXT])
+            msg = f"Set only one of {options}, got overlap={data.get('overlap')} "
+            raise ValueError(msg + f"and {given} (overlap=None to unset a preset's)")
+        ((name, min_context),) = given.items()
+        size_name = cls._MIN_CONTEXT[name]
+        size, causal = data.get(size_name), data.get("causal")
+        if size is None or causal is None:  # extractors complete them from defaults
+            raise ValueError(f"{name}={min_context} requires {size_name} and causal")
+        # raw inputs (e.g. causal="false"), coerced as by their fields
+        size, min_context = (_FLOAT.validate_python(v) for v in (size, min_context))
+        causal = _BOOL.validate_python(causal)
+        max_context = size * cls._context_share(causal)
+        if not 0 <= min_context < max_context:
+            msg = f"{name}={min_context} must be in [0, {max_context}) with "
+            raise ValueError(msg + f"{size_name}={size} and causal={causal}")
+        data["overlap"] = min_context / max_context
+        return data
+
+    @property
+    def _size(self) -> float | None:
+        return self.duration
+
+    @property
+    def min_context(self) -> float | None:
+        """Context every kept latent sees at least, in the unit of the window size
+        (see the class docstring). None if events are embedded at once."""
+        if self._size is None:
+            return None
+        return self.overlap * self._size * self._context_share(self.causal)
+
+    def complete(self, value: tp.Any) -> tp.Any:
+        """``value`` (a ContextWindow or its dict) with the fields it does not set
+        taken from this window. Setting one of the window sizes (e.g. ``duration``)
+        unsets the others, and so does setting one of ``overlap`` and
+        ``min_context_*``. Extractors apply it to their ``context`` input."""
+        if isinstance(value, ContextWindow):
+            value = value.model_dump(include=value.model_fields_set)
+        if not isinstance(value, dict):
+            return value
+        defaults = self.model_dump()
+        for group in (set(self._MIN_CONTEXT.values()), {"overlap", *self._MIN_CONTEXT}):
+            if group & value.keys():
+                defaults = {k: v for k, v in defaults.items() if k not in group}
+        return defaults | value
+
+    def windows(self, n_samples: int, rate: float) -> list[tuple[int, int, int, int]]:
+        """(start, stop, keep_start, keep_stop) sample indices of the windows over
+        ``n_samples`` samples at ``rate`` samples per unit of the window size (e.g.
+        per second): a single window if the size is None."""
+        if self._size is None:
+            return [(0, n_samples, 0, n_samples)]
+        context = max(1, round(self._size * rate))
+        stride = max(1, round((1 - self.overlap) * context))
+        return [
+            (start, min(start + context, n_samples), keep_start, keep_stop)
+            for start, keep_start, keep_stop in utils.strided_windows(
+                n_samples, context, stride, causal=self.causal
+            )
+        ]

@@ -4,36 +4,16 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-"""Neuraltrain custom configuration for REVE.
-
-Includes the following adaptations over the raw braindecode REVE model:
-
-* **Channel name remapping** -- an explicit ``channel_mapping`` dict maps
-  dataset channel names to names recognised by REVE's position bank.
-  Channels whose names already appear in the bank need no entry.
-* **Per-batch channel positions** -- the wrapper takes the dataset's
-  ``channel_positions`` as REVE's ``pos`` for any montage the build could not
-  resolve from the position bank, so one instance serves montages it was not
-  built for.
-* **Pretrained loading** -- REVE's ``__init__`` requires ``n_times`` and
-  ``n_outputs`` to build its ``final_layer``, but
-  :class:`BaseBrainDecodeModel.build` blocks ``n_times`` for pretrained
-  models.  ``NtReve.build()`` calls ``from_pretrained`` directly.
-* **Encoder-only support** -- when ``n_outputs`` is not provided (i.e. when
-  a ``DownstreamWrapperModel`` handles the classification head), the wrapper
-  calls ``forward(return_output=True)`` and extracts the final transformer
-  layer's output, bypassing REVE's ``final_layer`` entirely.
-"""
+"""Neuraltrain wrapper for REVE (El Ouahidi et al., NeurIPS 2025)."""
 
 import logging
-import re
 import typing as tp
 
 import torch
 import torch.nn as nn
 
 from .base import BaseBrainDecodeModel, RequiredBuildField
-from .common import INVALID_POS_VALUE, resolve_with_anode_fallback
+from .common import INVALID_POS_VALUE, remap_chs_info, resolve_with_anode_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -107,20 +87,19 @@ class _ReveWrapper(nn.Module):
 
 
 class NtReve(BaseBrainDecodeModel):
-    """Config for the braindecode REVE model with channel-mapping support.
+    """Config for the braindecode REVE model.
 
-    Extends :class:`BaseBrainDecodeModel` with REVE-specific logic:
+    Extends :class:`BaseBrainDecodeModel` with:
 
-    1. **Channel remapping** -- an explicit ``channel_mapping`` dict maps
-       dataset channel names to REVE position-bank names.  Channels whose
-       names already appear in the bank (case-insensitively) need no entry.
-    2. **Pretrained loading** -- bypasses the base-class restriction on
-       ``n_times`` for pretrained models, since REVE needs it to size its
-       ``final_layer``.
-    3. **Encoder-only output** -- when ``n_outputs`` is ``None`` (downstream
-       wrapper handles the head), the model is wrapped to call
-       ``forward(return_output=True)`` and return the final transformer
-       layer output, bypassing REVE's ``final_layer``.
+    1. **Channel handling** -- channels are placed by name in REVE's position
+       bank (case-insensitively, after ``channel_mapping``, falling back to
+       the anode of bipolar names) and the others are dropped.  For a montage
+       the build could not place, the batch's ``channel_positions`` become
+       REVE's ``pos``, so one instance serves montages it was not built for.
+    2. **Pretrained loading** -- forwards ``n_times`` on the pretrained path,
+       since REVE needs it to size its ``final_layer``.
+    3. **Encoder-only output** -- when ``n_outputs`` is ``None``, returns the
+       final transformer layer output, bypassing ``final_layer``.
 
     Parameters
     ----------
@@ -134,34 +113,6 @@ class NtReve(BaseBrainDecodeModel):
     _MODEL_CLASS_PATH: tp.ClassVar[str] = "braindecode.models.REVE"
     required_fields: tp.ClassVar[list[RequiredBuildField]] = ["ch_names", "n_times"]
     channel_mapping: dict[str, str] | None = None
-
-    def _remap_chs_info(
-        self,
-        chs_info: list[dict[str, tp.Any]],
-    ) -> list[dict[str, tp.Any]]:
-        """Apply ``channel_mapping`` to *chs_info*, returning a new list.
-
-        MEG sensor names are also tried in either spelling of the mapping:
-        Neuromag / KIT whatever the separator (``MEG0113``, ``MEG-0113`` ->
-        ``MEG 0113`` or ``MEG0113``) and CTF without the serial suffix
-        (``MLC11-4504`` -> ``MLC11``). Other names must match exactly.
-        """
-        if not self.channel_mapping:
-            return chs_info
-        mapping = self.channel_mapping
-
-        def remap(name: str) -> str:
-            candidates = [name]
-            if neuromag := re.fullmatch(r"MEG[ -]?(\d+)", name):
-                candidates += [f"MEG {neuromag.group(1)}", f"MEG{neuromag.group(1)}"]
-            elif ctf := re.fullmatch(r"(M[LRZ][FCTPO]\d{2})-\d+", name):
-                candidates.append(ctf.group(1))
-            for candidate in candidates:
-                if candidate in mapping:
-                    return mapping[candidate]
-            return name
-
-        return [{**ch, "ch_name": remap(ch["ch_name"])} for ch in chs_info]
 
     @staticmethod
     def _bank_lookup(bank: tp.Any) -> tp.Callable[[str], torch.Tensor | None]:
@@ -191,7 +142,7 @@ class NtReve(BaseBrainDecodeModel):
         frequency: float | None = None,
     ) -> nn.Module:
         if chs_info is not None:
-            chs_info = self._remap_chs_info(chs_info)
+            chs_info = remap_chs_info(chs_info, self.channel_mapping)
 
         # Spatial size the model receives (already the adapter target when a
         # channel adapter is present).  Reduced below if some channels cannot

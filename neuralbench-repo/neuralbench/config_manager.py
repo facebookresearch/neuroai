@@ -8,7 +8,6 @@ import getpass
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from warnings import warn
@@ -40,12 +39,14 @@ def prompt_user_for_path(
 
 
 def _make_dirs(config: dict[str, Any]) -> list[Path]:
-    """Create the configured directories, returning those that now exist."""
+    """Create the configured directories, returning those that did not exist."""
     created = []
     for key in ("CACHE_DIR", "SAVE_DIR", "DATA_DIR"):
         if config.get(key) is None:
             continue
         path = Path(str(config[key]))
+        if path.is_dir():
+            continue
         try:
             path.mkdir(parents=True, exist_ok=True)
         except OSError as error:
@@ -111,6 +112,8 @@ def setup_config(config_path: Path | None = None) -> dict[str, Any]:
     # SLURM defaults (can be overridden later in config.json)
     config["SLURM_PARTITION"] = ""
     config["SLURM_CONSTRAINT"] = ""
+    config["SLURM_ACCOUNT"] = ""
+    config["SLURM_QOS"] = ""
     config["N_CPUS"] = 10
 
     # Execution cluster: "auto" (SLURM if available, else local), null/None
@@ -159,27 +162,6 @@ def setup_config(config_path: Path | None = None) -> dict[str, Any]:
     return config
 
 
-def _default_config() -> dict[str, Any]:
-    """Return a minimal config with temporary paths for non-interactive use."""
-    base = Path(tempfile.gettempdir()) / "neuralbench"
-    username = getpass.getuser()
-    config = {
-        "USER": username,
-        "ENTITY_NAME": username,
-        "PROJECT_NAME": "neuralbench",
-        "CACHE_DIR": str(base / "cache"),
-        "SAVE_DIR": str(base / "save"),
-        "DATA_DIR": str(base / "data"),
-        "WANDB_HOST": "",
-        "SLURM_PARTITION": "",
-        "SLURM_CONSTRAINT": "",
-        "N_CPUS": 10,
-        "CLUSTER": "auto",
-    }
-    _make_dirs(config)
-    return config
-
-
 def load_config(config_path: Path | None = None) -> dict[str, Any]:
     """
     Load neuralbench configuration.
@@ -204,16 +186,13 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
 
     if not config_path.exists():
         if not _is_interactive():
-            config = _default_config()
-            print(
-                f"No configuration file at {config_path}, and stdin is not a "
-                "terminal so the setup prompt is skipped: datasets, caches and "
-                f"results go under {Path(config['DATA_DIR']).parent}. Run "
-                "neuralbench from a terminal, or point NEURALBENCH_CONFIG at a "
-                "config file, to choose your own paths.",
-                file=sys.stderr,
+            raise FileNotFoundError(
+                f"No neuralbench config at {config_path}, and stdin is not a "
+                "terminal, so the setup prompt cannot run. Run neuralbench once "
+                "from a terminal, or write a config file and point "
+                "NEURALBENCH_CONFIG at it: https://facebookresearch.github.io/"
+                "neuroai/neuralbench/install.html#first-run-configuration"
             )
-            return config
         return setup_config(config_path)
 
     with config_path.open() as f:
@@ -245,6 +224,8 @@ if TYPE_CHECKING:
     WANDB_HOST: str
     SLURM_PARTITION: str
     SLURM_CONSTRAINT: str
+    SLURM_ACCOUNT: str | None
+    SLURM_QOS: str | None
     N_CPUS: int
     CLUSTER: str | None
 
@@ -252,7 +233,8 @@ if TYPE_CHECKING:
 def _initialize_module_vars() -> None:
     """Initialize module-level variables from config."""
     global USER, ENTITY_NAME, PROJECT_NAME, DATA_DIR, CACHE_DIR, SAVE_DIR
-    global WANDB_HOST, SLURM_PARTITION, SLURM_CONSTRAINT, N_CPUS, CLUSTER
+    global WANDB_HOST, SLURM_PARTITION, SLURM_CONSTRAINT, SLURM_ACCOUNT, SLURM_QOS
+    global N_CPUS, CLUSTER
     config = get_config()
     USER = config["USER"]
     ENTITY_NAME = config["ENTITY_NAME"]
@@ -263,6 +245,11 @@ def _initialize_module_vars() -> None:
     WANDB_HOST = config.get("WANDB_HOST", "")
     SLURM_PARTITION = config.get("SLURM_PARTITION", "")
     SLURM_CONSTRAINT = config.get("SLURM_CONSTRAINT", "")
+    # exca forwards "" to sbatch as an explicit empty option; None leaves Slurm's
+    # per-user default. SBATCH_ACCOUNT/SBATCH_QOS cannot replace these: submitit
+    # strips SBATCH_* variables before calling sbatch.
+    SLURM_ACCOUNT = config.get("SLURM_ACCOUNT") or None
+    SLURM_QOS = config.get("SLURM_QOS") or None
     N_CPUS = config.get("N_CPUS", 10)
     CLUSTER = config.get("CLUSTER", "auto")
 
@@ -281,6 +268,8 @@ _LAZY_CONFIG_KEYS = {
     "WANDB_HOST",
     "SLURM_PARTITION",
     "SLURM_CONSTRAINT",
+    "SLURM_ACCOUNT",
+    "SLURM_QOS",
     "N_CPUS",
     "CLUSTER",
 }

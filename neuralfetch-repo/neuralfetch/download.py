@@ -461,8 +461,7 @@ class BaseDownload(_Module):
 
         self._download(overwrite=overwrite)
         self.get_success_file().write_text("success")
-        print("Done! Consider running giving read/write permissions to everyone:")
-        print(f"chmod -R 777 {self._dl_dir}")  # we should do this on FAIR cluster
+        print("Done!")
 
     @abstractmethod
     def _download(self, overwrite: bool = False) -> None:
@@ -1009,9 +1008,13 @@ class Dryad(BaseDownload):
         if not all_versions:
             raise RuntimeError(f"No versions found for DOI {self.doi}")
         latest = all_versions[-1]
-        files_href = latest["_links"]["stash:files"]["href"]
-        files_resp = self._api_get(files_href)
-        return files_resp.get("_embedded", {}).get("stash:files", [])
+        files: list[dict[str, tp.Any]] = []
+        href: str | None = latest["_links"]["stash:files"]["href"]
+        while href is not None:  # paginated, 20 files per page
+            page = self._api_get(href)
+            files += page.get("_embedded", {}).get("stash:files", [])
+            href = page.get("_links", {}).get("next", {}).get("href")
+        return files
 
     def _download(self, overwrite: bool = False) -> None:
         from urllib.parse import quote

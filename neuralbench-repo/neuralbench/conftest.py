@@ -6,14 +6,41 @@
 
 """Shared pytest fixtures for neuralbench tests."""
 
+import json
 import typing as tp
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 from . import config_manager
 from .data import Data
+
+
+def _install_config(
+    monkeypatch: pytest.MonkeyPatch, config: dict[str, tp.Any] | None
+) -> None:
+    monkeypatch.setattr(config_manager, "_config", config)
+    for key in config_manager._LAZY_CONFIG_KEYS:
+        monkeypatch.delattr(config_manager, key, raising=False)
+    monkeypatch.setattr(config_manager, "_initialized", False)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def neuralbench_config(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Point ``NEURALBENCH_CONFIG`` at a throwaway config for the whole session."""
+    root = tmp_path_factory.mktemp("neuralbench")
+    config: dict[str, str] = {
+        key: "neuralbench" for key in ("USER", "ENTITY_NAME", "PROJECT_NAME")
+    }
+    for name in ("data", "cache", "save"):
+        config[f"{name.upper()}_DIR"] = str(root / name)
+    path = root / "config.json"
+    path.write_text(json.dumps(config))
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("NEURALBENCH_CONFIG", str(path))
+        _install_config(monkeypatch, None)
+        yield
 
 
 @pytest.fixture
@@ -26,12 +53,7 @@ def patch_config(monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
     """
 
     def _apply(**overrides: tp.Any) -> None:
-        base = config_manager._default_config()
-        base.update(overrides)
-        monkeypatch.setattr(config_manager, "_config", base)
-        for key in config_manager._LAZY_CONFIG_KEYS:
-            monkeypatch.delattr(config_manager, key, raising=False)
-        monkeypatch.setattr(config_manager, "_initialized", False)
+        _install_config(monkeypatch, config_manager.load_config() | overrides)
 
     return _apply
 

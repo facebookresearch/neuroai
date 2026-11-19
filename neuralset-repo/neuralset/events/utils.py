@@ -7,8 +7,10 @@
 """Event utilities: extraction, validation, and BIDS entity constants."""
 
 import inspect
+import io
 import logging
 import re
+import tokenize
 import typing as tp
 import warnings
 from collections import defaultdict
@@ -183,9 +185,8 @@ def expand_bids_fmri(
 def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
     """Execute a pandas query with auto-generated index columns.
 
-    Recognises ``<col>_index`` and ``<col1>_<col2>_index`` tokens in the
-    query string and materialises them as temporary columns before executing
-    the query. Temporary columns are dropped from the result.
+    Recognises ``<col>_index`` and ``<col1>_<col2>_index`` names in the
+    query and resolves them as virtual columns, absent from the result.
 
     Example::
 
@@ -198,13 +199,15 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
         # Keep only the first timeline per subject
         query_with_index(df, "subject_timeline_index < 1")
     """
-    out = df.copy()
-    temp_cols: list[str] = []
+    index_columns: dict[str, pd.Series] = {}
     columns = set(df.columns)
 
-    for token in re.findall(r"\b(\w+_index)\b", query):
-        if token in temp_cols:
-            continue
+    names = {
+        tok.string
+        for tok in tokenize.generate_tokens(io.StringIO(query).readline)
+        if tok.type == tokenize.NAME
+    }
+    for token in sorted(name for name in names if re.fullmatch(r"\w+_index", name)):
         if token in columns:
             raise ValueError(
                 f"Ambiguous index token {token!r}: a column with that name "
@@ -212,8 +215,7 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
             )
         prefix = token.rsplit("_index", 1)[0]
         if prefix in columns:
-            out.loc[:, token] = out.groupby(prefix, sort=False).ngroup()
-            temp_cols.append(token)
+            index_columns[token] = df.groupby(prefix, sort=False).ngroup()
         else:
             matched = False
             for col in sorted(columns, key=len, reverse=True):
@@ -221,10 +223,9 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
                     continue
                 remainder = prefix[len(col) + 1 :]
                 if remainder in columns:
-                    out.loc[:, token] = out.groupby(col, sort=False)[remainder].transform(
-                        lambda x: pd.factorize(x)[0]
-                    )
-                    temp_cols.append(token)
+                    index_columns[token] = df.groupby(col, sort=False)[
+                        remainder
+                    ].transform(lambda x: pd.factorize(x)[0])
                     matched = True
                     break
             if not matched:
@@ -233,10 +234,7 @@ def query_with_index(df: pd.DataFrame, query: str) -> pd.DataFrame:
                     "no matching columns found in the dataframe"
                 )
 
-    result = out.query(query, engine="python")
-    if temp_cols:
-        result = result.drop(columns=temp_cols)
-    return result
+    return df.query(query, engine="python", resolvers=[index_columns])
 
 
 def _propagate_bids(df: pd.DataFrame) -> pd.DataFrame:
@@ -320,7 +318,7 @@ def standardize_events(
         model (``from_dict`` → ``to_dict``). This fills missing fields
         with defaults, validates types, and coerces values. This is
         **significantly slower** than the rest of the normalization
-        (~10 s on 100k rows vs ~60 ms) and is only needed the first time
+        (~2-4 s on 100k rows vs ~60 ms) and is only needed the first time
         raw events are ingested. Pass ``False`` when the data has already
         been through ``auto_fill`` (e.g. post-concat re-normalization,
         transform wrapper, cache load).
@@ -347,8 +345,10 @@ def standardize_events(
     if not all(isinstance(typ, str) for typ in types):
         raise ValueError(msg)
     if auto_fill:
-        validated = events.apply(_coerce_event, axis=1)
-        df = pd.DataFrame(validated.tolist(), index=events.index)
+        lower = {x.lower() for x in Event._CLASSES}
+        columns = list(events.columns)
+        records = [dict(zip(columns, row)) for row in events.to_numpy()]
+        df = pd.DataFrame([_coerce_event(r, lower) for r in records], index=events.index)
         null = df.loc[df.duration <= 0, :]
         if not null.empty:
             types = null["type"].unique()
@@ -390,18 +390,15 @@ def standardize_events(
     return df
 
 
-def _coerce_event(event: pd.Series) -> dict[str, tp.Any]:
+def _coerce_event(event: dict[str, tp.Any], lower: set[str]) -> dict[str, tp.Any]:
     """Coerce a single event row through its pydantic Event model.
 
     Instantiates the Event subclass for this row's ``type``, which validates
     fields and fills defaults, then converts back to a dict.
     """
-    from . import etypes
-
     event_type = event["type"]
-    lower = {x.lower() for x in etypes.Event._CLASSES}
-    if event_type in etypes.Event._CLASSES:
-        event_class = etypes.Event._CLASSES[event_type]
+    event_class = Event._CLASSES.get(event_type)
+    if event_class is not None:
         event_obj = event_class.from_dict(event).to_dict()
         event_dict = {**event, **event_obj}
     elif event_type in lower:

@@ -13,10 +13,12 @@ import pytest
 from . import config_manager
 
 
-def test_default_config_includes_cluster() -> None:
-    """The non-interactive default config exposes CLUSTER='auto'."""
-    config = config_manager._default_config()
-    assert config["CLUSTER"] == "auto"
+def test_load_config_without_a_file_fails_when_not_interactive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(config_manager, "_is_interactive", lambda: False)
+    with pytest.raises(FileNotFoundError, match="NEURALBENCH_CONFIG"):
+        config_manager.load_config(tmp_path / "config.json")
 
 
 def test_load_config_creates_the_configured_dirs(tmp_path: Path) -> None:
@@ -27,6 +29,12 @@ def test_load_config_creates_the_configured_dirs(tmp_path: Path) -> None:
     )
     config_manager.load_config(config_path)
     assert all((tmp_path / name).is_dir() for name in names)
+
+
+def test_make_dirs_returns_only_new_dirs(tmp_path: Path) -> None:
+    (tmp_path / "save").mkdir()
+    config = {"SAVE_DIR": str(tmp_path / "save"), "DATA_DIR": str(tmp_path / "data")}
+    assert config_manager._make_dirs(config) == [tmp_path / "data"]
 
 
 def test_load_config_warns_rather_than_fails_on_an_uncreatable_dir(
@@ -54,3 +62,21 @@ def test_cluster_resolves_to_configured_value(
     """A non-null CLUSTER value is surfaced verbatim."""
     patch_config(CLUSTER="slurm")
     assert config_manager.CLUSTER == "slurm"
+
+
+@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+def test_slurm_account_and_qos_resolve_to_configured_value(
+    patch_config: Callable[..., None], key: str
+) -> None:
+    patch_config(**{key: "my_value"})
+    assert getattr(config_manager, key) == "my_value"
+
+
+@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+@pytest.mark.parametrize("value", ["", None])
+def test_slurm_account_and_qos_unset_resolve_to_none(
+    patch_config: Callable[..., None], key: str, value: str | None
+) -> None:
+    """Empty or null values leave SLURM's per-user default instead of ``--qos=``."""
+    patch_config(**{key: value})
+    assert getattr(config_manager, key) is None

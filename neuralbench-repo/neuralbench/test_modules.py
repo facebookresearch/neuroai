@@ -166,6 +166,76 @@ class _TokenModel3D(nn.Module):
         return self.lin(x).reshape(x.shape[0], *self.shape)
 
 
+class _PooledModel(nn.Module):
+    """Returns a pooled per-sample embedding ``(B, emb)``, like BIOT."""
+
+    def __init__(self, n_in: int, emb: int):
+        super().__init__()
+        self.lin = nn.Linear(n_in, emb)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(x)
+
+
+# aggregation -> expected probe in_features, as a function of (n_tokens, emb)
+_AGG_EXPECTED_IN = {
+    "mean": lambda n_tokens, emb: emb,
+    "first": lambda n_tokens, emb: emb,
+    "flatten": lambda n_tokens, emb: n_tokens * emb,
+    2: lambda n_tokens, emb: 2 * emb,
+    4: lambda n_tokens, emb: 4 * emb,
+}
+
+
+@pytest.mark.parametrize("aggregation", list(_AGG_EXPECTED_IN))
+def test_aggregation_2d_output(aggregation):
+    B, F, P, E, Fp = 8, 10, 6, 5, 3
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _TokenModel2D(F, P, E), dummy, Fp
+    )
+    assert wrapped.probe.in_features == _AGG_EXPECTED_IN[aggregation](P, E)
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "flatten"])
+def test_aggregation_3d_output(aggregation):
+    B, F, C, P, E, Fp = 8, 10, 3, 4, 5, 3
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _TokenModel3D(F, C, P, E), dummy, Fp
+    )
+    assert wrapped.probe.in_features == _AGG_EXPECTED_IN[aggregation](C * P, E)
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["first", 2])
+def test_aggregation_rejects_3d_output(aggregation):
+    with pytest.raises(ValueError, match="needs a 2-D"):
+        DownstreamWrapper(aggregation=aggregation).build(
+            _TokenModel3D(10, 3, 4, 5), {"x": torch.randn(8, 10)}, 3
+        )
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "flatten", None])
+def test_aggregation_pooled_output_is_passthrough(aggregation):
+    B, F, E, Fp = 8, 10, 5, 3
+    dummy = {"x": torch.randn(B, F)}
+    wrapped = DownstreamWrapper(aggregation=aggregation).build(
+        _PooledModel(F, E), dummy, Fp
+    )
+    assert wrapped.probe.in_features == E
+    assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize("aggregation", ["first", 2])
+def test_aggregation_pooled_output_rejects_token_reduction(aggregation):
+    with pytest.raises(ValueError, match="already pooled"):
+        DownstreamWrapper(aggregation=aggregation).build(
+            _PooledModel(10, 5), {"x": torch.randn(8, 10)}, 3
+        )
+
+
 @pytest.mark.parametrize("ndim", [2, 3])
 def test_attention_probe_is_trainable_on_frozen_backbone(ndim):
     B, F, C, P, E, Fp = 8, 10, 3, 4, 5, 3
@@ -239,6 +309,23 @@ def test_downstream_wrapper_with_preprocessor():
     )
     out_no_preproc = no_preproc(**{"input": raw_input.clone()})
     assert not torch.allclose(out, out_no_preproc), "preprocessor did not alter output"
+
+
+@pytest.mark.parametrize("after", [False, True])
+def test_downstream_wrapper_preprocess_after_adapter(after: bool):
+    B, C_in, T, C_target = 4, 8, 100, 3
+    dummy_batch = {"input": torch.randn(B, C_in, T)}
+    wrapped = DownstreamWrapper(
+        on_the_fly_preprocessor=OnTheFlyPreprocessor(
+            scaler="StandardScaler", scale_dim=-1
+        ),
+        channel_adapter_config=ChannelProjection(n_target_channels=C_target),
+        preprocess_after_adapter=after,
+        aggregation=None,
+        probe_config=None,
+    ).build(nn.Identity(), dummy_batch, T)
+    std = wrapped(**dummy_batch).std(dim=-1)
+    assert torch.allclose(std, torch.ones_like(std)) == after
 
 
 def test_downstream_wrapper_with_channel_merger():
@@ -725,3 +812,27 @@ def test_downstream_wrapper_lora_yaml_targets_reach_eval_output(
             assert not torch.allclose(out, ref), f"LoRA on {target} is inert"
             ref = out
     assert torch.backends.mha.get_fastpath_enabled(), "fast path must stay on globally"
+
+
+def test_downstream_wrapper_labram_qkv_lora_applied_once():
+    # Unmerged attention must match peft's merged weights: the delta lands exactly once.
+    # Compared at the attention output; layer scale shrinks the gap at the model output.
+    torch.manual_seed(0)
+    batch = {"x": torch.randn(2, 128, 200)}
+    backbone = Labram(n_chans=128, n_times=200, n_outputs=2)
+    wrapped = _lora_wrapper(targets=["qkv"], aggregation="flatten").build(
+        backbone, batch, 3
+    )
+    attn = next(m for m in wrapped.wrapped_model.modules() if hasattr(m, "q_bias"))
+    outs: list[torch.Tensor] = []
+    attn.register_forward_hook(lambda m, args, out: outs.append(out))
+    wrapped.eval()
+    with torch.no_grad():
+        for n, p in _lora_params(wrapped).items():
+            if ".lora_B" in n:
+                p.copy_(torch.randn_like(p))
+        wrapped(**batch)
+        wrapped.wrapped_model.merge_adapter()
+        wrapped(**batch)
+    unmerged, merged = outs
+    torch.testing.assert_close(unmerged, merged)

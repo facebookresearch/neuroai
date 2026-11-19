@@ -48,6 +48,15 @@ def test_clip_loss(norm_kind, temperature, symmetric, larger_retrieval_set):
         assert not out.isnan()
 
 
+def test_clip_scores_stay_float32_under_autocast():
+    loss = ClipLoss(norm_kind="xy")
+    estimate, candidate = torch.randn(8, 12).bfloat16(), torch.randn(8, 12)
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        scores = loss.get_scores(estimate, candidate)
+    assert scores.dtype == torch.float32
+    torch.testing.assert_close(scores, loss.get_scores(estimate.float(), candidate))
+
+
 @pytest.mark.parametrize("norm_kind", ["x", "y", "xy"])
 @pytest.mark.parametrize("temperature", [False, True])
 @pytest.mark.parametrize("bias", [False, True])

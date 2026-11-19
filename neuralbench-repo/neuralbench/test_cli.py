@@ -88,6 +88,22 @@ def test_cluster_config_wires_all_infra_clusters(
     assert raw["data"]["target"]["infra"]["cluster"] == cluster
 
 
+@pytest.mark.parametrize(("account", "qos"), [("my_account", "my_qos"), ("", "")])
+def test_slurm_account_and_qos_wire_training_infra_only(
+    patch_config: Callable[..., None], account: str, qos: str
+) -> None:
+    """SLURM_ACCOUNT/SLURM_QOS reach the training infra (empty means None); the
+    feature-extraction cache infras keep Slurm's default account and QoS."""
+    patch_config(SLURM_ACCOUNT=account, SLURM_QOS=qos)
+    raw = load_yaml_config(DEFAULTS_DIR / "config.yaml")
+    assert raw is not None
+    assert raw["infra"]["slurm_account"] == (account or None)
+    assert raw["infra"]["slurm_qos"] == (qos or None)
+    for infra in (raw["data"]["neuro"]["infra"], raw["data"]["target"]["infra"]):
+        assert "slurm_account" not in infra
+        assert "slurm_qos" not in infra
+
+
 @pytest.mark.parametrize("cluster", [None, "slurm"])
 def test_task_configs_do_not_override_infra_cluster(
     patch_config: Callable[..., None], cluster: str | None

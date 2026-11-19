@@ -8,6 +8,7 @@ import contextlib
 import dataclasses
 import functools
 import itertools
+import math
 import os
 import re
 import typing as tp
@@ -222,6 +223,49 @@ def approx_match_samples(
     return tuple(np.array(s.matches) for s in seqs)  # type: ignore
 
 
+def strided_windows(
+    n_samples: int,
+    context: int,
+    stride: int,
+    causal: bool = False,
+) -> list[tuple[int, int, int]]:
+    """Overlapping windows over ``n_samples`` samples, and the samples each one keeps.
+
+    Windows of ``context`` samples start every ``stride`` samples, and the last
+    one is shifted to end at ``n_samples``, so that it is never shorter than the
+    others. The kept samples of the windows partition ``[0, n_samples)``, and
+    depend on the model reading the windows:
+
+    - bidirectional (default): two overlapping windows split their overlap in
+      its middle, so every kept sample has at least ``(context - stride) // 2``
+      samples of context on each side (fewer at the edges);
+    - ``causal``: each window keeps its samples after the end of the previous
+      window, so every kept sample has at least ``context - stride`` samples of
+      past context (fewer at the start).
+
+    Returns
+    -------
+    list of (window_start, keep_start, keep_stop)
+        First sample of each window and the range of samples it keeps, all in
+        absolute indices. A single ``(0, 0, n_samples)`` window if
+        ``n_samples <= context``.
+    """
+    if not 1 <= stride <= context:
+        raise ValueError(f"stride must be in [1, context={context}], got {stride}")
+    if n_samples <= context:
+        return [(0, 0, n_samples)]
+    n_windows = 1 + math.ceil((n_samples - context) / stride)
+    starts = [min(i * stride, n_samples - context) for i in range(n_windows)]
+    if causal:
+        splits = [prev + context for prev in starts[:-1]]
+    else:
+        splits = [
+            (prev + context + start) // 2 for prev, start in zip(starts, starts[1:])
+        ]
+    bounds = [0, *splits, n_samples]
+    return list(zip(starts, bounds[:-1], bounds[1:]))
+
+
 def get_bids_filepath(
     root_path: str | Path,
     *,  # force to use keyword args to avoid bugs
@@ -360,6 +404,16 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
     """Returns a cached version of a spacy model based on either model name or language
     (defaults to using the language large version of the model)
     """
+    return _get_model(spacy_model_name(model=model, language=language))
+
+
+def spacy_model_name(*, model: str = "", language: str = "") -> str:
+    """Resolve the spacy model name for an explicit *model* or a *language*.
+
+    *language* may be a name or an ISO 639-1 code (case-insensitive); it maps to
+    the language's large model.  Raises ``ValueError`` for an unsupported
+    language, without loading or installing anything.
+    """
     if language and model:
         msg = f"Language and model cannot be specified at the same time, got {language=} and {model=}"
         raise ValueError(msg)
@@ -377,6 +431,7 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             "de": "german",
             "it": "italian",
             "pt": "portuguese",
+            "el": "greek",
         }
         language = _iso_to_lang.get(language.lower(), language.lower())
         # Large ("_lg") models are used because only they ship static word
@@ -392,21 +447,36 @@ def get_spacy_model(*, model: str = "", language: str = "") -> tp.Any:
             german="de_core_news_lg",
             italian="it_core_news_lg",
             portuguese="pt_core_news_lg",
+            greek="el_core_news_lg",
         )
         if language not in defaults:
             raise ValueError(f"Language {language!r} not available: {defaults}")
         model = defaults[language]
-    return _get_model(model)
+    return model
 
 
-@functools.lru_cache(maxsize=3)
-def _get_model(model: str) -> tp.Any:
+def install_spacy_model(model: str) -> None:
+    """Install the spacy *model* package if it is not installed yet.
+
+    Call this once in the submitting process before fanning work out to
+    cluster workers that share its environment: otherwise every worker that
+    misses the model pip-installs it concurrently into the same site-packages,
+    and those racing installs fail (e.g. ``Stale file handle`` on a network
+    filesystem).
+    """
     import spacy
 
     if not spacy.util.is_package(model):
         import spacy.cli
 
         spacy.cli.download(model)  # type: ignore
+
+
+@functools.lru_cache(maxsize=3)
+def _get_model(model: str) -> tp.Any:
+    import spacy
+
+    install_spacy_model(model)
     nlp = spacy.load(model)
     return nlp
 
