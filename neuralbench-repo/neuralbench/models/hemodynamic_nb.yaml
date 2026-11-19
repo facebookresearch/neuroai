@@ -1,0 +1,12 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Classical fNIRS baseline: per-channel mean + slope, Gaussian naive Bayes.
+brain_model_name: hemodynamic_nb
+eval_only: true
+brain_model_config:
+  =replace=: true
+  name: HemodynamicNB

@@ -122,7 +122,7 @@ class ModelEntry:
 
     name: str
     family: Literal["classic", "foundation"]
-    device: Literal["eeg", "fmri", "emg"]
+    device: Literal["eeg", "fmri", "emg", "fnirs"]
     bibtex: str | None = None
     year: int | None = None
     config_name: str | None = None
@@ -394,6 +394,23 @@ _PT_REVE = frozenset(
 )
 
 
+def _fnirs_entry(
+    name: str,
+    family: Literal["classic", "foundation"],
+    year: int,
+    architecture: str,
+) -> ModelEntry:
+    return ModelEntry(
+        name=name,
+        family=family,
+        device="fnirs",
+        year=year,
+        config_name=name,
+        cli_name=name.lower(),
+        architecture=architecture,
+    )
+
+
 # ---------------------------------------------------------------------------
 # The registry
 #
@@ -643,6 +660,20 @@ MODELS: list[ModelEntry] = [
         builder=_build_reve,
         backbone_subtract=("final_layer",),
     ),
+    # fNIRS models (braindecode); no fNIRS checkpoint is hosted, so the three
+    # foundation architectures are trained from scratch like the classic ones.
+    _fnirs_entry("FNIRSNet", "classic", 2023, "Convolutional"),
+    _fnirs_entry("FNIRST", "classic", 2022, "Transformer"),
+    _fnirs_entry("FNIRSPreT", "classic", 2022, "Transformer"),
+    _fnirs_entry("FNIRS4D", "classic", 2025, "State-space"),
+    _fnirs_entry("FNIRSCNN1D", "classic", 2017, "Convolutional"),
+    _fnirs_entry("FNIRSStatNet", "classic", 2016, "MLP"),
+    _fnirs_entry("FNIRSLSTM", "classic", 2020, "Recurrent"),
+    _fnirs_entry("FNIRSMLP", "classic", 2023, "MLP"),
+    _fnirs_entry("FNIRSGCN", "classic", 2023, "Graph"),
+    _fnirs_entry("GeoNIRS", "foundation", 2026, "Transformer"),
+    _fnirs_entry("MtReNIRS", "foundation", 2026, "Transformer"),
+    _fnirs_entry("JungMAE", "foundation", 2025, "Transformer"),
 ]
 
 

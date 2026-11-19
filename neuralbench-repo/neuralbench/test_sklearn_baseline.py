@@ -14,22 +14,36 @@ import pydantic
 import pytest
 import torch
 from pytest_mock import MockerFixture
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegressionCV, RidgeCV
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 from neuraltrain.models.base import BaseModelConfig
 
 from .baselines import (
+    HRFGLMLR,
     CoSpectraLogLR,
     CovTsLR,
     CovTsRidge,
     FitOnceBuildContext,
+    HemodynamicGBDT,
+    HemodynamicKNN,
+    HemodynamicNB,
+    HemodynamicRF,
+    MeanSlopeLDA,
     SklearnBaseline,
     SklearnBaselineModel,
     SklearnClassifier,
+    StatisticalRBFSVM,
     XdawnTsLR,
+    _hemodynamic_features,
+    _HemodynamicClassifier,
     _UpperTriLog1p,
 )
 
@@ -72,11 +86,21 @@ def _ctx(X: np.ndarray, y: np.ndarray) -> FitOnceBuildContext:
     )
 
 
+_FNIRS_LEAVES: list[type[SklearnClassifier]] = [
+    MeanSlopeLDA,
+    StatisticalRBFSVM,
+    HRFGLMLR,
+    HemodynamicKNN,
+    HemodynamicRF,
+    HemodynamicGBDT,
+    HemodynamicNB,
+]
 _ALL_LEAVES: list[type[SklearnBaseline]] = [
     XdawnTsLR,
     CovTsLR,
     CoSpectraLogLR,
     CovTsRidge,
+    *_FNIRS_LEAVES,
 ]
 
 
@@ -186,6 +210,7 @@ def _unwrap_head(pipe: Pipeline) -> object:
         (CoSpectraLogLR, "classifier", 3),
         (CovTsRidge, "regressor", 1),
         (CovTsRidge, "regressor", 3),
+        *((cls, "classifier", 3) for cls in _FNIRS_LEAVES),
     ],
 )
 def test_leaf_fit_forward(cls: type[SklearnBaseline], kind: str, out_dim: int) -> None:
@@ -226,6 +251,13 @@ def test_build_from_context_injects_fit_data() -> None:
         (CovTsLR, LogisticRegressionCV),
         (CoSpectraLogLR, LogisticRegressionCV),
         (CovTsRidge, RidgeCV),
+        (MeanSlopeLDA, LinearDiscriminantAnalysis),
+        (StatisticalRBFSVM, SVC),
+        (HRFGLMLR, LogisticRegressionCV),
+        (HemodynamicKNN, KNeighborsClassifier),
+        (HemodynamicRF, RandomForestClassifier),
+        (HemodynamicGBDT, HistGradientBoostingClassifier),
+        (HemodynamicNB, GaussianNB),
     ],
 )
 def test_pipeline_includes_standard_scaler_and_cv_head(
@@ -473,3 +505,54 @@ def test_leaf_rejects_unknown_fields() -> None:
     """``extra='forbid'`` rejects YAML keys that belong to a sibling leaf."""
     with pytest.raises(pydantic.ValidationError):
         CovTsLR(xdawn_nfilter=4)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("cls", _FNIRS_LEAVES)
+def test_fnirs_classical_baselines_recover_hemodynamic_ramp(
+    cls: type[_HemodynamicClassifier],
+) -> None:
+    """Classical fNIRS baselines recover class-specific hemodynamic slopes/HRFs."""
+    n_fit, n_test, n_classes = 90, 45, 3
+    t = np.linspace(-1.0, 1.0, _T, dtype=np.float32)
+
+    def _make_fnirs(n: int, seed_offset: int) -> tuple[np.ndarray, np.ndarray]:
+        r = np.random.default_rng(_SEED + seed_offset)
+        X = (0.3 * r.standard_normal((n, _C, _T))).astype(np.float32)
+        y = np.arange(n, dtype=np.int64) % n_classes
+        r.shuffle(y)
+        for k in range(n_classes):
+            # Distinct channel-pair mean + linear hemodynamic ramp per class
+            X[y == k, k, :] += 1.2 + 1.5 * t
+            X[y == k, (k + 3) % _C, :] -= 0.8 * t
+        return X, y
+
+    X_fit, y_fit = _make_fnirs(n_fit, 10)
+    X_test, y_test = _make_fnirs(n_test, 20)
+
+    model = cls(n_windows=2).build(**_fit_kwargs(X_fit, y_fit))
+    probs = model(torch.from_numpy(X_test)).numpy()
+    assert probs.shape == (n_test, n_classes)
+    assert np.allclose(probs.sum(axis=-1), 1.0, atol=1e-5)
+    acc = float((probs.argmax(axis=-1) == y_test).mean())
+    assert acc > 0.85, f"{cls.__name__} accuracy {acc:.2f} <= 0.85 on synthetic fNIRS"
+
+
+def test_hemodynamic_features_shapes_and_finite_handling() -> None:
+    """``_hemodynamic_features`` emits expected dimensions and handles NaN samples."""
+    rng = np.random.default_rng(_SEED)
+    X = rng.standard_normal((10, 6, 60)).astype(np.float64)
+    X[0, 2, :15] = np.nan
+
+    f_ms = _hemodynamic_features(X, mode="mean_slope", n_windows=2)
+    assert f_ms.shape == (10, 6 * 2 * 2)
+    assert np.isfinite(f_ms).all()
+
+    f_11 = _hemodynamic_features(X, mode="full_11")
+    assert f_11.shape == (10, 6 * 11)
+    assert np.isfinite(f_11).all()
+    # Channel 2 of sample 0 has 45/60 = 0.75 valid fraction (11th feature of channel 2)
+    assert np.isclose(f_11[0, 2 * 11 + 10], 0.75)
+
+    f_glm = _hemodynamic_features(X, mode="hrf_glm", frequency=10.0)
+    assert f_glm.shape == (10, 6 * 4)
+    assert np.isfinite(f_glm).all()
