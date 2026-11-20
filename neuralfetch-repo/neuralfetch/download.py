@@ -210,8 +210,6 @@ def download_file(
 
     permissions_supported = hasattr(os, "O_NOFOLLOW") and hasattr(os, "fchmod")
     destination = Path(destination)
-    if permissions_supported and destination.is_symlink():
-        raise ValueError("Download destination must not be a symlink")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     logger.debug(f"Downloading {url} to {destination}")
@@ -225,6 +223,8 @@ def download_file(
 
     def tracked_download(url: str, output_file: tp.Any, pooch: tp.Any) -> None:
         nonlocal transferred, downloaded_identity
+        if destination.is_symlink():
+            raise ValueError("Download destination must not be a symlink")
         downloader(url, output_file, pooch)
         info = os.stat(output_file, follow_symlinks=False)
         downloaded_identity = (info.st_dev, info.st_ino)
@@ -238,7 +238,8 @@ def download_file(
         downloader=tracked_download if permissions_supported else downloader,
     )
     if transferred:
-        assert downloaded_identity is not None
+        if downloaded_identity is None:
+            raise RuntimeError("Downloaded file identity was not recorded")
         _apply_download_permissions(Path(result), downloaded_identity)
 
     logger.debug(f"Download complete: {destination}")

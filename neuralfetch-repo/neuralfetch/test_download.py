@@ -955,6 +955,25 @@ def test_download_cache_update_and_failure(tmp_path, fake_http_transfer, failure
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+def test_download_cached_symlink_unchanged(tmp_path, fake_http_transfer):
+    target = tmp_path / "private"
+    target.write_bytes(b"private")
+    target.chmod(0o600)
+    dest = tmp_path / "cached-link"
+    dest.symlink_to(target)
+    checksum = "sha256:" + hashlib.sha256(b"private").hexdigest()
+
+    download.download_file("https://example.com/data", dest, file_hash=checksum)
+
+    assert dest.is_symlink()
+    assert dest.resolve() == target
+    assert target.read_bytes() == b"private"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert fake_http_transfer["modes"] == []
+    assert not list(tmp_path.glob(".neuralfetch-permissions-*"))
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 @pytest.mark.parametrize("replacement", ["symlink", "regular"])
 def test_download_replaced_output_refused(
     tmp_path, fake_http_transfer, monkeypatch, replacement
@@ -981,7 +1000,12 @@ def test_download_replaced_output_refused(
         monkeypatch.setattr(pooch, "retrieve", swapped)
         error = "replaced"
     with pytest.raises(ValueError, match=error):
-        download.download_file("https://example.com/data", dest)
+        download.download_file(
+            "https://example.com/data",
+            dest,
+            file_hash="sha256:"
+            + hashlib.sha256(fake_http_transfer["payload"]).hexdigest(),
+        )
     assert stat.S_IMODE(private.stat().st_mode) == 0o600
     assert dest.read_bytes() == b"private"
     assert stat.S_IMODE(dest.stat().st_mode) == 0o600

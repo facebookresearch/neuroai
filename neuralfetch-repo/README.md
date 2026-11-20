@@ -33,8 +33,9 @@ separate operation.
 
 The implementation uses an empty, randomly named sibling permission probe; it
 does not read/change the process umask or copy the downloaded payload. Permission
-failures are raised before a success marker is written. Platforms without POSIX
-permission support retain Pooch's behavior. This policy does not apply to
+failures are raised before a success marker is written; the verified file is
+left private and any later permission correction is a separate operation.
+Platforms without POSIX permission support retain Pooch's behavior. This policy does not apply to
 backends using other clients, such as S3 or NEMAR.
 
 ## Citation
