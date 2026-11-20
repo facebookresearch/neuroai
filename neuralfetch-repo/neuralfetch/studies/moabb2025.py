@@ -51,6 +51,7 @@ import inspect
 import logging
 import os
 import re
+import types
 import typing as tp
 from collections import OrderedDict
 from functools import lru_cache
@@ -97,6 +98,45 @@ def _get_cached_moabb_data(
     return data
 
 
+def _copy_castillos2023_labels() -> None:
+    """Keep MOABB <= 1.7.2 from shifting Castillos2023's event codes in place.
+
+    ``labels = epochs.events[..., -1]`` is a view, so ``labels -= labels.min()``
+    moves the epochs' codes to 0-3, which MNE >= 1.13 rejects in ``get_data``.
+    Fixed upstream by moabb#1279. Here the ``castillos2023`` module alone sees an
+    ``mne`` whose ``Epochs`` events copy on slicing; no other module is affected.
+    """
+    import moabb
+    from moabb.datasets import castillos2023
+    from packaging.version import Version
+
+    if Version(moabb.__version__) > Version("1.7.2"):
+        return
+    if isinstance(castillos2023.mne, _MneCopyingEpochEvents):
+        return
+    castillos2023.mne = _MneCopyingEpochEvents("mne")
+
+
+class _CopyOnSlice(np.ndarray):
+    def __getitem__(self, key: tp.Any) -> tp.Any:
+        return np.array(super().__getitem__(key))
+
+
+class _CopyingEventsEpochs(mne.Epochs):  # type: ignore[misc]
+    def __init__(self, *args: tp.Any, **kwargs: tp.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.events = self.events.view(_CopyOnSlice)  # type: ignore[has-type]
+
+
+class _MneCopyingEpochEvents(types.ModuleType):
+    """``mne``, with ``Epochs`` whose events copy on slicing."""
+
+    Epochs = _CopyingEventsEpochs
+
+    def __getattr__(self, name: str) -> tp.Any:
+        return getattr(mne, name)
+
+
 def find_dataset_in_moabb(
     dataset_name: str,
     dataset_kwargs: dict[str, tp.Any] | None = None,
@@ -110,13 +150,11 @@ def find_dataset_in_moabb(
             kwargs = dict(dataset_kwargs or {})
             init_params = inspect.signature(dataset_cls.__init__).parameters
             if "accept" in init_params and "accept" not in kwargs:
-                if not accept:
-                    raise RuntimeError(
-                        f"Dataset '{dataset_name}' requires accepting a licence "
-                        f"agreement before downloading. Set the environment "
-                        f"variable MOABB_ACCEPT_LICENCE=1 to accept."
-                    )
-                kwargs["accept"] = True
+                # MOABB only checks it before downloading: data already on disk loads
+                # either way. Set MOABB_ACCEPT_LICENCE=1 to accept the licence.
+                kwargs["accept"] = accept
+            if dataset_name.startswith("Castillos"):
+                _copy_castillos2023_labels()
             return dataset_cls(**kwargs)
 
     raise ValueError(f"MOABB dataset not found: {dataset_name}")
