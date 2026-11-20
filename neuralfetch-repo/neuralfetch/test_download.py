@@ -873,10 +873,8 @@ def test_datalad_missing_binary_raises_no_marker(tmp_path: Path) -> None:
 
 @pytest.fixture
 def fake_http_transfer(monkeypatch):
-    """Use real Pooch retrieval/checksums with an offline transfer."""
     import pooch
 
-    monkeypatch.delenv("NEURALFETCH_DOWNLOAD_FILE_MODE", raising=False)
     state = {"payload": b"downloaded", "fail": False, "modes": []}
 
     def transfer(url, output_file, pooch):
@@ -891,178 +889,151 @@ def fake_http_transfer(monkeypatch):
     return state
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-@pytest.mark.parametrize("mode", [None, 0o660, 0o664])
-def test_download_file_final_mode(tmp_path, fake_http_transfer, mode):
-    dest = tmp_path / "data.json"
-    payload = fake_http_transfer["payload"]
-    download.download_file(
-        "https://example.com/data",
-        dest,
-        file_hash="sha256:" + hashlib.sha256(payload).hexdigest(),
-        file_mode=mode,
-    )
-    assert dest.read_bytes() == payload
-    assert stat.S_IMODE(dest.stat().st_mode) == (0o600 if mode is None else mode)
-    assert fake_http_transfer["modes"] == [0o600]
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-def test_download_file_cache_and_update_policy(tmp_path, fake_http_transfer):
-    dest = tmp_path / "data.json"
-    dest.write_bytes(b"old")
-    dest.chmod(0o640)
-    download.download_file(
-        "https://example.com/data",
-        dest,
-        file_hash="sha256:" + hashlib.sha256(b"old").hexdigest(),
-        file_mode=0o664,
-    )
-    assert fake_http_transfer["modes"] == []
-    assert stat.S_IMODE(dest.stat().st_mode) == 0o640
-    download.download_file(
-        "https://example.com/data",
-        dest,
-        file_hash="sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest(),
-        file_mode=0o660,
-    )
-    assert dest.read_bytes() == fake_http_transfer["payload"]
-    assert stat.S_IMODE(dest.stat().st_mode) == 0o660
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-@pytest.mark.parametrize("failure", ["http", "checksum"])
-def test_download_file_failure_preserves_existing(tmp_path, fake_http_transfer, failure):
-    dest = tmp_path / "data.json"
-    dest.write_bytes(b"original")
-    dest.chmod(0o640)
-    fake_http_transfer["fail"] = failure == "http"
-    with pytest.raises(RuntimeError if failure == "http" else ValueError):
-        download.download_file(
-            "https://example.com/data",
-            dest,
-            file_hash="sha256:" + hashlib.sha256(b"expected").hexdigest(),
-            file_mode=0o664,
-        )
-    assert dest.read_bytes() == b"original"
-    assert stat.S_IMODE(dest.stat().st_mode) == 0o640
-    assert fake_http_transfer["modes"] == [0o600]
-
-
-@pytest.mark.parametrize("mode", [-1, 0o1000, 0o4660, True, "0660"])
-def test_download_file_invalid_mode_before_io(tmp_path, mode):
-    with patch("pooch.retrieve") as retrieve, pytest.raises(ValueError):
-        download.download_file(
-            "https://example.com/data", tmp_path / "missing/data", file_mode=mode
-        )
-    retrieve.assert_not_called()
-    assert not (tmp_path / "missing").exists()
-    with pytest.raises(ValueError):
-        download.Zenodo(
-            study="test", record_id="1", dset_dir=tmp_path / "zenodo", file_mode=mode
-        )
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-def test_download_file_symlink_mode_refused(tmp_path, fake_http_transfer):
-    target = tmp_path / "private"
-    target.write_bytes(b"private")
-    target.chmod(0o600)
-    dest = tmp_path / "link"
-    dest.symlink_to(target)
-    with pytest.raises(ValueError, match="symlink"):
-        download.download_file("https://example.com/data", dest, file_mode=0o664)
-    assert target.read_bytes() == b"private"
-    assert stat.S_IMODE(target.stat().st_mode) == 0o600
-    assert fake_http_transfer["modes"] == []
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 @pytest.mark.parametrize(
-    "env_mode,explicit,expected",
-    [("0660", None, 0o660), ("0o660", None, 0o660), ("0660", 0o664, 0o664)],
+    "mask,expected", [(0o002, 0o664), (0o007, 0o660), (0o077, 0o600), (0o022, 0o644)]
 )
-def test_download_file_env_policy(
-    tmp_path, fake_http_transfer, monkeypatch, env_mode, explicit, expected
-):
-    monkeypatch.setenv("NEURALFETCH_DOWNLOAD_FILE_MODE", env_mode)
-    dest = tmp_path / "data"
-    checksum = "sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest()
-    download.download_file(
-        "https://example.com/data", dest, file_hash=checksum, file_mode=explicit
+def test_download_inherited_umask_subprocess(tmp_path, mask, expected):
+    import subprocess
+
+    code = """
+import hashlib, os, stat, sys
+from pathlib import Path
+import pooch
+from neuralfetch import download
+mask, expected = int(sys.argv[2]), int(sys.argv[3])
+os.umask(mask)
+path = Path(sys.argv[1]) / 'data'
+def transfer(url, output_file, pooch):
+    assert stat.S_IMODE(os.stat(output_file).st_mode) == 0o600
+    Path(output_file).write_bytes(b'downloaded')
+pooch.HTTPDownloader = lambda **kwargs: transfer
+original_umask = os.umask
+def forbid_umask(*args):
+    raise AssertionError('Production must not read or change process umask')
+os.umask = forbid_umask
+download.download_file('https://example.com/data', path, file_hash='sha256:' + hashlib.sha256(b'downloaded').hexdigest())
+os.umask = original_umask
+assert os.umask(mask) == mask
+assert stat.S_IMODE(path.stat().st_mode) == expected
+assert path.read_bytes() == b'downloaded'
+assert not list(path.parent.glob('.neuralfetch-permissions-*'))
+"""
+    subprocess.run(
+        [sys.executable, "-c", code, str(tmp_path), str(mask), str(expected)],
+        check=True,
+        capture_output=True,
+        text=True,
     )
-    assert stat.S_IMODE(dest.stat().st_mode) == expected
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+@pytest.mark.parametrize("failure", [None, "http", "checksum"])
+def test_download_cache_update_and_failure(tmp_path, fake_http_transfer, failure):
+    dest = tmp_path / "data"
+    dest.write_bytes(b"old")
     dest.chmod(0o600)
-    download.download_file("https://example.com/data", dest, file_hash=checksum)
+    old_hash = "sha256:" + hashlib.sha256(b"old").hexdigest()
+    download.download_file("https://example.com/data", dest, file_hash=old_hash)
+    assert fake_http_transfer["modes"] == []
     assert stat.S_IMODE(dest.stat().st_mode) == 0o600
-    assert fake_http_transfer["modes"] == [0o600]
+    fake_http_transfer["fail"] = failure == "http"
+    payload = b"incorrect" if failure == "checksum" else fake_http_transfer["payload"]
+    checksum = "sha256:" + hashlib.sha256(payload).hexdigest()
+    if failure:
+        with pytest.raises(RuntimeError if failure == "http" else ValueError):
+            download.download_file("https://example.com/data", dest, file_hash=checksum)
+        assert dest.read_bytes() == b"old"
+        assert stat.S_IMODE(dest.stat().st_mode) == 0o600
+    else:
+        reference = tmp_path / "normal"
+        reference.write_bytes(b"")
+        download.download_file("https://example.com/data", dest, file_hash=checksum)
+        assert dest.read_bytes() == fake_http_transfer["payload"]
+        assert stat.S_IMODE(dest.stat().st_mode) == stat.S_IMODE(reference.stat().st_mode)
+    assert not list(tmp_path.glob(".neuralfetch-permissions-*"))
 
 
-@pytest.mark.parametrize("value", ["", "bad", "0668", "0o4660", "-1"])
-def test_download_file_invalid_env_before_io(tmp_path, monkeypatch, value):
-    monkeypatch.setenv("NEURALFETCH_DOWNLOAD_FILE_MODE", value)
-    with patch("pooch.retrieve") as retrieve, pytest.raises(ValueError):
-        download.download_file("https://example.com/data", tmp_path / "missing/data")
-    retrieve.assert_not_called()
-    assert not (tmp_path / "missing").exists()
-    assert download._resolve_file_mode(0o600) == 0o600
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+@pytest.mark.parametrize("replacement", ["symlink", "regular"])
+def test_download_replaced_output_refused(
+    tmp_path, fake_http_transfer, monkeypatch, replacement
+):
+    import pooch
+
+    dest = tmp_path / "data"
+    private = tmp_path / "private"
+    private.write_bytes(b"private")
+    private.chmod(0o600)
+    if replacement == "symlink":
+        dest.symlink_to(private)
+        error = "symlink"
+    else:
+        retrieve = pooch.retrieve
+
+        def swapped(*args, **kwargs):
+            result = retrieve(*args, **kwargs)
+            Path(result).rename(tmp_path / "verified-backup")
+            Path(result).write_bytes(b"private")
+            Path(result).chmod(0o600)
+            return result
+
+        monkeypatch.setattr(pooch, "retrieve", swapped)
+        error = "replaced"
+    with pytest.raises(ValueError, match=error):
+        download.download_file("https://example.com/data", dest)
+    assert stat.S_IMODE(private.stat().st_mode) == 0o600
+    assert dest.read_bytes() == b"private"
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o600
+    assert not list(tmp_path.glob(".neuralfetch-permissions-*"))
 
 
-def test_zenodo_forwards_file_mode(tmp_path):
-    obj = download.Zenodo(study="test", record_id="1", dset_dir=tmp_path, file_mode=0o660)
-    with (
-        patch.object(
-            obj,
-            "_fetch_file_metadata",
-            return_value={"info.json": "md5:info", "archive.zip": "md5:archive"},
-        ),
-        patch.object(download, "download_file") as retrieve,
-        patch.object(download, "extract_zip"),
-    ):
-        obj._download()
-    assert retrieve.call_count == 2
-    assert all(call.kwargs["file_mode"] == 0o660 for call in retrieve.call_args_list)
-    assert {call.kwargs["file_hash"] for call in retrieve.call_args_list} == {
-        "md5:info",
-        "md5:archive",
-    }
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-def test_zenodo_permission_failure_no_success_marker(tmp_path, fake_http_transfer):
-    obj = download.Zenodo(study="test", record_id="1", dset_dir=tmp_path, file_mode=0o660)
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+@pytest.mark.parametrize("failure", ["probe", "chmod"])
+def test_zenodo_permission_failure_and_probe_cleanup(
+    tmp_path, fake_http_transfer, monkeypatch, failure
+):
+    obj = download.Zenodo(study="test", record_id="1", dset_dir=tmp_path)
     checksum = "sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest()
+    if failure == "probe":
+        original_open = os.open
+
+        def failed_probe(path, flags, *args, **kwargs):
+            if Path(path).name.startswith(".neuralfetch-permissions-"):
+                raise PermissionError("probe failed")
+            return original_open(path, flags, *args, **kwargs)
+
+        monkeypatch.setattr(os, "open", failed_probe)
+    else:
+        monkeypatch.setattr(
+            os,
+            "fchmod",
+            lambda *args: (_ for _ in ()).throw(PermissionError("chmod failed")),
+        )
     with (
         patch.object(obj, "_fetch_file_metadata", return_value={"info.json": checksum}),
         patch.object(obj, "_check_requirements"),
-        patch.object(
-            download.os, "fchmod", side_effect=PermissionError("permission denied")
-        ),
         pytest.raises(PermissionError),
     ):
         obj.download()
     assert not obj.get_success_file().exists()
+    assert not list(obj._dl_dir.glob(".neuralfetch-permissions-*"))
+    assert stat.S_IMODE((obj._dl_dir / "info.json").stat().st_mode) == 0o600
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
-def test_download_file_replaced_output_not_chmodded(
+def test_download_without_posix_permission_support(
     tmp_path, fake_http_transfer, monkeypatch
 ):
-    import pooch
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    dest = tmp_path / "data"
+    download.download_file("https://example.com/data", dest)
+    assert dest.read_bytes() == fake_http_transfer["payload"]
+    assert fake_http_transfer["modes"] == [0o600]
+    assert not list(tmp_path.glob(".neuralfetch-permissions-*"))
 
-    retrieve = pooch.retrieve
 
-    def replace_after_verification(*args, **kwargs):
-        result = retrieve(*args, **kwargs)
-        path = Path(result)
-        path.rename(path.with_name("verified-backup"))
-        path.write_bytes(b"private substitute")
-        path.chmod(0o600)
-        return result
+def test_download_api_has_no_permission_options():
+    import inspect
 
-    monkeypatch.setattr(pooch, "retrieve", replace_after_verification)
-    dest = tmp_path / "data.json"
-    with pytest.raises(ValueError, match="replaced"):
-        download.download_file("https://example.com/data", dest, file_mode=0o664)
-    assert dest.read_bytes() == b"private substitute"
-    assert stat.S_IMODE(dest.stat().st_mode) == 0o600
+    assert "file_mode" not in inspect.signature(download.download_file).parameters
+    assert "file_mode" not in download.Zenodo.model_fields

@@ -14,26 +14,28 @@ pip install neuralfetch
 
 ## Download permissions
 
-Downloads made through `download_file`, including Zenodo files, keep Pooch's
-private file mode by default. To opt into group-readable/writable completed
-files on POSIX systems:
+Downloads made through `download_file`, including Zenodo files, honor inherited
+creation permissions on POSIX systems after the transfer and any requested
+checksum verification succeed. For group-readable/writable files and directories:
 
 ```bash
 umask 002
-NEURALFETCH_DOWNLOAD_FILE_MODE=0660 neuralfetch download MyStudy
+neuralfetch download MyStudy
 ```
 
-The umask controls normally created directories and extracted zip members;
-`NEURALFETCH_DOWNLOAD_FILE_MODE` sets exact permissions on newly transferred
-files only after the transfer and any requested checksum verification succeed.
-Use `0664` only when other users should also have read access. Cache hits keep
-existing permissions; failed transfers and incomplete temporary files are
-unchanged. This setting does not apply to
-backends using other clients, such as S3 or NEMAR.
+The file mode follows the process umask and destination directory policy, as for
+normal file creation: `002` gives `664`, `007` gives `660`, and `077` gives `600`
+when no default ACL changes the result. Directories and extracted zip members
+retain their normal creation behavior. Incomplete download payloads remain
+private until verification; cache hits and failed transfers do not change
+existing files. Correcting permissions of previously downloaded files is a
+separate operation.
 
-Python callers can override the environment with `download_file(...,
-file_mode=0o660)` or `Zenodo(..., file_mode=0o660)`. Permission errors are raised
-and do not produce a download success marker.
+The implementation uses an empty, randomly named sibling permission probe; it
+does not read/change the process umask or copy the downloaded payload. Permission
+failures are raised before a success marker is written. Platforms without POSIX
+permission support retain Pooch's behavior. This policy does not apply to
+backends using other clients, such as S3 or NEMAR.
 
 ## Citation
 
