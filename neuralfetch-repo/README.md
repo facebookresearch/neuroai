@@ -12,6 +12,29 @@ Download backends and data-fetching utilities for neuroimaging datasets.
 pip install neuralfetch
 ```
 
+## Download permissions
+
+Downloads made through `download_file`, including Zenodo files, keep Pooch's
+private file mode by default. To opt into group-readable/writable completed
+files on POSIX systems:
+
+```bash
+umask 002
+NEURALFETCH_DOWNLOAD_FILE_MODE=0660 neuralfetch download MyStudy
+```
+
+The umask controls normally created directories and extracted zip members;
+`NEURALFETCH_DOWNLOAD_FILE_MODE` sets exact permissions on newly transferred
+files only after the transfer and any requested checksum verification succeed.
+Use `0664` only when other users should also have read access. Cache hits keep
+existing permissions; failed transfers and incomplete temporary files are
+unchanged. This setting does not apply to
+backends using other clients, such as S3 or NEMAR.
+
+Python callers can override the environment with `download_file(...,
+file_mode=0o660)` or `Zenodo(..., file_mode=0o660)`. Permission errors are raised
+and do not produce a download success marker.
+
 ## Citation
 
 ```bibtex

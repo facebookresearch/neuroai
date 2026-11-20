@@ -6,7 +6,9 @@
 
 """Offline tests for download backends — no network access required."""
 
+import hashlib
 import os
+import stat
 import sys
 import types
 import typing as tp
@@ -867,3 +869,200 @@ def test_datalad_missing_binary_raises_no_marker(tmp_path: Path) -> None:
             obj.download()
     assert not obj.get_success_file().exists()
     assert list(obj._dl_dir.iterdir()) == []
+
+
+@pytest.fixture
+def fake_http_transfer(monkeypatch):
+    """Use real Pooch retrieval/checksums with an offline transfer."""
+    import pooch
+
+    monkeypatch.delenv("NEURALFETCH_DOWNLOAD_FILE_MODE", raising=False)
+    state = {"payload": b"downloaded", "fail": False, "modes": []}
+
+    def transfer(url, output_file, pooch):
+        path = Path(output_file)
+        state["modes"].append(stat.S_IMODE(path.stat().st_mode))
+        assert state["modes"][-1] == 0o600
+        path.write_bytes(state["payload"])
+        if state["fail"]:
+            raise RuntimeError("HTTP transfer failed")
+
+    monkeypatch.setattr(pooch, "HTTPDownloader", lambda **kwargs: transfer)
+    return state
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+@pytest.mark.parametrize("mode", [None, 0o660, 0o664])
+def test_download_file_final_mode(tmp_path, fake_http_transfer, mode):
+    dest = tmp_path / "data.json"
+    payload = fake_http_transfer["payload"]
+    download.download_file(
+        "https://example.com/data",
+        dest,
+        file_hash="sha256:" + hashlib.sha256(payload).hexdigest(),
+        file_mode=mode,
+    )
+    assert dest.read_bytes() == payload
+    assert stat.S_IMODE(dest.stat().st_mode) == (0o600 if mode is None else mode)
+    assert fake_http_transfer["modes"] == [0o600]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+def test_download_file_cache_and_update_policy(tmp_path, fake_http_transfer):
+    dest = tmp_path / "data.json"
+    dest.write_bytes(b"old")
+    dest.chmod(0o640)
+    download.download_file(
+        "https://example.com/data",
+        dest,
+        file_hash="sha256:" + hashlib.sha256(b"old").hexdigest(),
+        file_mode=0o664,
+    )
+    assert fake_http_transfer["modes"] == []
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o640
+    download.download_file(
+        "https://example.com/data",
+        dest,
+        file_hash="sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest(),
+        file_mode=0o660,
+    )
+    assert dest.read_bytes() == fake_http_transfer["payload"]
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o660
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+@pytest.mark.parametrize("failure", ["http", "checksum"])
+def test_download_file_failure_preserves_existing(tmp_path, fake_http_transfer, failure):
+    dest = tmp_path / "data.json"
+    dest.write_bytes(b"original")
+    dest.chmod(0o640)
+    fake_http_transfer["fail"] = failure == "http"
+    with pytest.raises(RuntimeError if failure == "http" else ValueError):
+        download.download_file(
+            "https://example.com/data",
+            dest,
+            file_hash="sha256:" + hashlib.sha256(b"expected").hexdigest(),
+            file_mode=0o664,
+        )
+    assert dest.read_bytes() == b"original"
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o640
+    assert fake_http_transfer["modes"] == [0o600]
+
+
+@pytest.mark.parametrize("mode", [-1, 0o1000, 0o4660, True, "0660"])
+def test_download_file_invalid_mode_before_io(tmp_path, mode):
+    with patch("pooch.retrieve") as retrieve, pytest.raises(ValueError):
+        download.download_file(
+            "https://example.com/data", tmp_path / "missing/data", file_mode=mode
+        )
+    retrieve.assert_not_called()
+    assert not (tmp_path / "missing").exists()
+    with pytest.raises(ValueError):
+        download.Zenodo(
+            study="test", record_id="1", dset_dir=tmp_path / "zenodo", file_mode=mode
+        )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+def test_download_file_symlink_mode_refused(tmp_path, fake_http_transfer):
+    target = tmp_path / "private"
+    target.write_bytes(b"private")
+    target.chmod(0o600)
+    dest = tmp_path / "link"
+    dest.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        download.download_file("https://example.com/data", dest, file_mode=0o664)
+    assert target.read_bytes() == b"private"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert fake_http_transfer["modes"] == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+@pytest.mark.parametrize(
+    "env_mode,explicit,expected",
+    [("0660", None, 0o660), ("0o660", None, 0o660), ("0660", 0o664, 0o664)],
+)
+def test_download_file_env_policy(
+    tmp_path, fake_http_transfer, monkeypatch, env_mode, explicit, expected
+):
+    monkeypatch.setenv("NEURALFETCH_DOWNLOAD_FILE_MODE", env_mode)
+    dest = tmp_path / "data"
+    checksum = "sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest()
+    download.download_file(
+        "https://example.com/data", dest, file_hash=checksum, file_mode=explicit
+    )
+    assert stat.S_IMODE(dest.stat().st_mode) == expected
+    dest.chmod(0o600)
+    download.download_file("https://example.com/data", dest, file_hash=checksum)
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o600
+    assert fake_http_transfer["modes"] == [0o600]
+
+
+@pytest.mark.parametrize("value", ["", "bad", "0668", "0o4660", "-1"])
+def test_download_file_invalid_env_before_io(tmp_path, monkeypatch, value):
+    monkeypatch.setenv("NEURALFETCH_DOWNLOAD_FILE_MODE", value)
+    with patch("pooch.retrieve") as retrieve, pytest.raises(ValueError):
+        download.download_file("https://example.com/data", tmp_path / "missing/data")
+    retrieve.assert_not_called()
+    assert not (tmp_path / "missing").exists()
+    assert download._resolve_file_mode(0o600) == 0o600
+
+
+def test_zenodo_forwards_file_mode(tmp_path):
+    obj = download.Zenodo(study="test", record_id="1", dset_dir=tmp_path, file_mode=0o660)
+    with (
+        patch.object(
+            obj,
+            "_fetch_file_metadata",
+            return_value={"info.json": "md5:info", "archive.zip": "md5:archive"},
+        ),
+        patch.object(download, "download_file") as retrieve,
+        patch.object(download, "extract_zip"),
+    ):
+        obj._download()
+    assert retrieve.call_count == 2
+    assert all(call.kwargs["file_mode"] == 0o660 for call in retrieve.call_args_list)
+    assert {call.kwargs["file_hash"] for call in retrieve.call_args_list} == {
+        "md5:info",
+        "md5:archive",
+    }
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+def test_zenodo_permission_failure_no_success_marker(tmp_path, fake_http_transfer):
+    obj = download.Zenodo(study="test", record_id="1", dset_dir=tmp_path, file_mode=0o660)
+    checksum = "sha256:" + hashlib.sha256(fake_http_transfer["payload"]).hexdigest()
+    with (
+        patch.object(obj, "_fetch_file_metadata", return_value={"info.json": checksum}),
+        patch.object(obj, "_check_requirements"),
+        patch.object(
+            download.os, "fchmod", side_effect=PermissionError("permission denied")
+        ),
+        pytest.raises(PermissionError),
+    ):
+        obj.download()
+    assert not obj.get_success_file().exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX file permissions")
+def test_download_file_replaced_output_not_chmodded(
+    tmp_path, fake_http_transfer, monkeypatch
+):
+    import pooch
+
+    retrieve = pooch.retrieve
+
+    def replace_after_verification(*args, **kwargs):
+        result = retrieve(*args, **kwargs)
+        path = Path(result)
+        path.rename(path.with_name("verified-backup"))
+        path.write_bytes(b"private substitute")
+        path.chmod(0o600)
+        return result
+
+    monkeypatch.setattr(pooch, "retrieve", replace_after_verification)
+    dest = tmp_path / "data.json"
+    with pytest.raises(ValueError, match="replaced"):
+        download.download_file("https://example.com/data", dest, file_mode=0o664)
+    assert dest.read_bytes() == b"private substitute"
+    assert stat.S_IMODE(dest.stat().st_mode) == 0o600

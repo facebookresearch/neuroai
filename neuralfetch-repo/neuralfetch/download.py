@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import typing as tp
@@ -147,12 +148,28 @@ def temp_mne_data(path: Path, *, clear_dataset_configs: bool = False):
                 os.environ[k] = v
 
 
+def _resolve_file_mode(file_mode: int | None) -> int | None:
+    if file_mode is None:
+        value = os.environ.get("NEURALFETCH_DOWNLOAD_FILE_MODE")
+        if value is not None:
+            digits = value.removeprefix("0o")
+            if not digits or any(char not in "01234567" for char in digits):
+                raise ValueError("NEURALFETCH_DOWNLOAD_FILE_MODE must be an octal mode")
+            file_mode = int(digits, 8)
+    if file_mode is not None and (
+        type(file_mode) is not int or not 0 <= file_mode <= 0o777
+    ):
+        raise ValueError("file_mode must be permission bits between 0 and 0o777")
+    return file_mode
+
+
 def download_file(
     url: str,
     destination: PathLike,
     headers: dict[str, str] | None = None,
     show_progress: bool = True,
     file_hash: str | None = None,
+    file_mode: int | None = None,
 ) -> None:
     """Download file from URL with optional progress reporting and custom headers.
 
@@ -170,10 +187,27 @@ def download_file(
         Expected checksum of the downloaded file in the format ``"algorithm:hexdigest"``
         (e.g. ``"md5:abc123"`` or ``"sha256:def456"``). When provided, pooch verifies
         the file after download and raises an error on mismatch.
+    file_mode : int, optional
+        POSIX permission bits (0 through 0o777) for a successfully transferred
+        file, applied after the transfer and any requested checksum verification.
+        None uses the optional
+        NEURALFETCH_DOWNLOAD_FILE_MODE octal environment setting; when unset,
+        Pooch's permissions are preserved. Cached files and failed transfers are
+        never chmodded. Explicit modes override the umask; incomplete temporary
+        files stay private.
     """
     import pooch
 
+    file_mode = _resolve_file_mode(file_mode)
+    if file_mode is not None:
+        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "fchmod"):
+            raise NotImplementedError(
+                "file_mode requires POSIX no-follow file descriptors"
+            )
+
     destination = Path(destination)
+    if file_mode is not None and destination.is_symlink():
+        raise ValueError("file_mode cannot be applied to a symlink destination")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     logger.debug(f"Downloading {url} to {destination}")
@@ -182,13 +216,36 @@ def download_file(
         headers=headers or {},
         progressbar=show_progress,
     )
-    pooch.retrieve(
+    transferred = False
+    downloaded_identity: tuple[int, int] | None = None
+
+    def tracked_download(url: str, output_file: tp.Any, pooch: tp.Any) -> None:
+        nonlocal transferred, downloaded_identity
+        downloader(url, output_file, pooch)
+        info = os.stat(output_file, follow_symlinks=False)
+        downloaded_identity = (info.st_dev, info.st_ino)
+        transferred = True
+
+    result = pooch.retrieve(
         url=url,
         known_hash=file_hash,
         fname=destination.name,
         path=destination.parent,
-        downloader=downloader,
+        downloader=downloader if file_mode is None else tracked_download,
     )
+    if file_mode is not None and transferred:
+        fd = os.open(result, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("Downloaded output must be a regular file")
+            if (info.st_dev, info.st_ino) != downloaded_identity:
+                raise ValueError(
+                    "Downloaded output was replaced before applying file_mode"
+                )
+            os.fchmod(fd, file_mode)
+        finally:
+            os.close(fd)
 
     logger.debug(f"Download complete: {destination}")
 
@@ -1668,9 +1725,16 @@ class Zenodo(BaseDownload):
     record_id : str
         Zenodo record ID (numeric string, e.g. ``"1234567"``).  Found in
         the record URL: ``https://zenodo.org/records/<record_id>``.
+    file_mode : int, optional
+        POSIX mode for newly transferred files, including downloaded archives.
+        None follows NEURALFETCH_DOWNLOAD_FILE_MODE when set. Cached files are
+        unchanged. Extracted zip members follow the usual umask.
     """
 
     record_id: str
+    file_mode: tp.Annotated[int, pydantic.Field(strict=True, ge=0, le=0o777)] | None = (
+        None
+    )
 
     def _fetch_file_metadata(self) -> dict[str, str]:
         """Fetch file metadata from Zenodo API to get filenames and checksums automatically.
@@ -1732,6 +1796,7 @@ class Zenodo(BaseDownload):
                 tmp,
                 show_progress=True,
                 file_hash=file_hash,
+                file_mode=self.file_mode,
             )
             extract_zip(tmp, destination=dest, remove_after=True, strip_root=True)
 
@@ -1744,4 +1809,5 @@ class Zenodo(BaseDownload):
                 dest,
                 show_progress=True,
                 file_hash=file_hash,
+                file_mode=self.file_mode,
             )
