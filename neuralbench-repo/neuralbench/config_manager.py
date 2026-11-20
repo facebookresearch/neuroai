@@ -114,6 +114,9 @@ def setup_config(config_path: Path | None = None) -> dict[str, Any]:
     config["SLURM_CONSTRAINT"] = ""
     config["SLURM_ACCOUNT"] = ""
     config["SLURM_QOS"] = ""
+    config["SLURM_EXTRACTOR_QOS"] = ""
+    config["SLURM_CPU_PARTITION"] = ""
+    config["SLURM_CPU_QOS"] = ""
     config["N_CPUS"] = 10
 
     # Execution cluster: "auto" (SLURM if available, else local), null/None
@@ -226,6 +229,9 @@ if TYPE_CHECKING:
     SLURM_CONSTRAINT: str
     SLURM_ACCOUNT: str | None
     SLURM_QOS: str | None
+    SLURM_EXTRACTOR_QOS: str | None
+    SLURM_CPU_PARTITION: str
+    SLURM_CPU_QOS: str | None
     N_CPUS: int
     CLUSTER: str | None
 
@@ -234,6 +240,7 @@ def _initialize_module_vars() -> None:
     """Initialize module-level variables from config."""
     global USER, ENTITY_NAME, PROJECT_NAME, DATA_DIR, CACHE_DIR, SAVE_DIR
     global WANDB_HOST, SLURM_PARTITION, SLURM_CONSTRAINT, SLURM_ACCOUNT, SLURM_QOS
+    global SLURM_EXTRACTOR_QOS, SLURM_CPU_PARTITION, SLURM_CPU_QOS
     global N_CPUS, CLUSTER
     config = get_config()
     USER = config["USER"]
@@ -250,6 +257,9 @@ def _initialize_module_vars() -> None:
     # strips SBATCH_* variables before calling sbatch.
     SLURM_ACCOUNT = config.get("SLURM_ACCOUNT") or None
     SLURM_QOS = config.get("SLURM_QOS") or None
+    SLURM_EXTRACTOR_QOS = config.get("SLURM_EXTRACTOR_QOS") or None
+    SLURM_CPU_PARTITION = config.get("SLURM_CPU_PARTITION") or SLURM_PARTITION
+    SLURM_CPU_QOS = config.get("SLURM_CPU_QOS") or None
     N_CPUS = config.get("N_CPUS", 10)
     CLUSTER = config.get("CLUSTER", "auto")
 
@@ -270,6 +280,9 @@ _LAZY_CONFIG_KEYS = {
     "SLURM_CONSTRAINT",
     "SLURM_ACCOUNT",
     "SLURM_QOS",
+    "SLURM_EXTRACTOR_QOS",
+    "SLURM_CPU_PARTITION",
+    "SLURM_CPU_QOS",
     "N_CPUS",
     "CLUSTER",
 }

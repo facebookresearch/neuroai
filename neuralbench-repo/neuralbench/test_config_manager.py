@@ -64,7 +64,15 @@ def test_cluster_resolves_to_configured_value(
     assert config_manager.CLUSTER == "slurm"
 
 
-@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+_ACCOUNT_AND_QOS_KEYS = [
+    "SLURM_ACCOUNT",
+    "SLURM_QOS",
+    "SLURM_EXTRACTOR_QOS",
+    "SLURM_CPU_QOS",
+]
+
+
+@pytest.mark.parametrize("key", _ACCOUNT_AND_QOS_KEYS)
 def test_slurm_account_and_qos_resolve_to_configured_value(
     patch_config: Callable[..., None], key: str
 ) -> None:
@@ -72,7 +80,7 @@ def test_slurm_account_and_qos_resolve_to_configured_value(
     assert getattr(config_manager, key) == "my_value"
 
 
-@pytest.mark.parametrize("key", ["SLURM_ACCOUNT", "SLURM_QOS"])
+@pytest.mark.parametrize("key", _ACCOUNT_AND_QOS_KEYS)
 @pytest.mark.parametrize("value", ["", None])
 def test_slurm_account_and_qos_unset_resolve_to_none(
     patch_config: Callable[..., None], key: str, value: str | None
@@ -80,3 +88,11 @@ def test_slurm_account_and_qos_unset_resolve_to_none(
     """Empty or null values leave SLURM's per-user default instead of ``--qos=``."""
     patch_config(**{key: value})
     assert getattr(config_manager, key) is None
+
+
+@pytest.mark.parametrize(("cpu_partition", "expected"), [("cpu", "cpu"), ("", "gpu")])
+def test_slurm_cpu_partition_falls_back_to_slurm_partition(
+    patch_config: Callable[..., None], cpu_partition: str, expected: str
+) -> None:
+    patch_config(SLURM_PARTITION="gpu", SLURM_CPU_PARTITION=cpu_partition)
+    assert config_manager.SLURM_CPU_PARTITION == expected

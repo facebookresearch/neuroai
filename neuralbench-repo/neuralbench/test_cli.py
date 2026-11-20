@@ -89,19 +89,47 @@ def test_cluster_config_wires_all_infra_clusters(
 
 
 @pytest.mark.parametrize(("account", "qos"), [("my_account", "my_qos"), ("", "")])
-def test_slurm_account_and_qos_wire_training_infra_only(
+def test_slurm_account_and_qos_wire_training_infra(
     patch_config: Callable[..., None], account: str, qos: str
 ) -> None:
-    """SLURM_ACCOUNT/SLURM_QOS reach the training infra (empty means None); the
-    feature-extraction cache infras keep Slurm's default account and QoS."""
+    """SLURM_ACCOUNT/SLURM_QOS reach the training infra (empty means None)."""
     patch_config(SLURM_ACCOUNT=account, SLURM_QOS=qos)
     raw = load_yaml_config(DEFAULTS_DIR / "config.yaml")
     assert raw is not None
     assert raw["infra"]["slurm_account"] == (account or None)
     assert raw["infra"]["slurm_qos"] == (qos or None)
-    for infra in (raw["data"]["neuro"]["infra"], raw["data"]["target"]["infra"]):
-        assert "slurm_account" not in infra
-        assert "slurm_qos" not in infra
+
+
+def test_task_extractor_infras_get_account_and_matching_qos(
+    patch_config: Callable[..., None],
+) -> None:
+    patch_config(
+        SLURM_ACCOUNT="acct",
+        SLURM_EXTRACTOR_QOS="gpu_q",
+        SLURM_CPU_PARTITION="cpu",
+        SLURM_CPU_QOS="cpu_q",
+    )
+    for device, tasks in ALL_DATASETS.items():
+        for task_name in tasks:
+            config = ConfDict(load_default_config(device))
+            task_cfg = load_yaml_config(
+                _resolve_task_dir(device, task_name) / "config.yaml"
+            )
+            if task_cfg is not None:
+                config.update(task_cfg)
+            infra_keys = {
+                key[: key.index(".infra.") + len(".infra")]
+                for key in config.flat()
+                if key.startswith(("data.neuro.", "data.target.")) and ".infra." in key
+            }
+            for infra_key in infra_keys:
+                infra = config[infra_key]
+                where = f"{device}/{task_name}: {infra_key}"
+                assert infra.get("slurm_account") == "acct", where
+                assert infra.get("slurm_qos") in ("gpu_q", "cpu_q"), where
+                if infra["slurm_qos"] == "cpu_q":
+                    assert not infra.get("gpus_per_node"), f"{where}: GPU on CPU QoS"
+                    assert infra.get("slurm_partition") == "cpu", where
 
 
 @pytest.mark.parametrize("cluster", [None, "slurm"])

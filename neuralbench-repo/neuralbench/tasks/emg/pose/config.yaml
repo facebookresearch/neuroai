@@ -56,6 +56,8 @@ data:
       folder: !!python/name:neuralbench.config_manager.CACHE_DIR
       keep_in_ram: false
       slurm_partition: !!python/name:neuralbench.config_manager.SLURM_PARTITION
+      slurm_account: !!python/name:neuralbench.config_manager.SLURM_ACCOUNT
+      slurm_qos: !!python/name:neuralbench.config_manager.SLURM_EXTRACTOR_QOS
       timeout_min: 180
       gpus_per_node: 1
       cpus_per_task: 10
