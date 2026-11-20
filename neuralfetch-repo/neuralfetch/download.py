@@ -10,10 +10,12 @@ import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import typing as tp
 import urllib.request
+import uuid
 import zipfile
 from abc import abstractmethod
 from pathlib import Path, PurePosixPath
@@ -147,6 +149,33 @@ def temp_mne_data(path: Path, *, clear_dataset_configs: bool = False):
                 os.environ[k] = v
 
 
+def _apply_download_permissions(path: Path, identity: tuple[int, int]) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("Downloaded output must be a regular file")
+        if (info.st_dev, info.st_ino) != identity:
+            raise ValueError("Downloaded output was replaced before applying permissions")
+        probe = path.with_name(f".neuralfetch-permissions-{uuid.uuid4().hex}")
+        probe_fd = os.open(
+            probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666
+        )
+        try:
+            mode = stat.S_IMODE(os.fstat(probe_fd).st_mode) & 0o777
+        finally:
+            os.close(probe_fd)
+            try:
+                probe.unlink()
+            except OSError:
+                logger.warning(
+                    "Could not remove permission probe %s", probe, exc_info=True
+                )
+        os.fchmod(fd, mode)
+    finally:
+        os.close(fd)
+
+
 def download_file(
     url: str,
     destination: PathLike,
@@ -170,9 +199,16 @@ def download_file(
         Expected checksum of the downloaded file in the format ``"algorithm:hexdigest"``
         (e.g. ``"md5:abc123"`` or ``"sha256:def456"``). When provided, pooch verifies
         the file after download and raises an error on mismatch.
+    On POSIX systems, newly transferred files receive normal creation permissions
+    from the inherited umask and destination directory policy after the transfer
+    and any requested checksum verification succeed. Incomplete temporary files
+    remain private; cached files and failed transfers are unchanged. Other
+    platforms retain Pooch's permission behavior.
+
     """
     import pooch
 
+    permissions_supported = hasattr(os, "O_NOFOLLOW") and hasattr(os, "fchmod")
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -182,13 +218,29 @@ def download_file(
         headers=headers or {},
         progressbar=show_progress,
     )
-    pooch.retrieve(
+    transferred = False
+    downloaded_identity: tuple[int, int] | None = None
+
+    def tracked_download(url: str, output_file: tp.Any, pooch: tp.Any) -> None:
+        nonlocal transferred, downloaded_identity
+        if destination.is_symlink():
+            raise ValueError("Download destination must not be a symlink")
+        downloader(url, output_file, pooch)
+        info = os.stat(output_file, follow_symlinks=False)
+        downloaded_identity = (info.st_dev, info.st_ino)
+        transferred = True
+
+    result = pooch.retrieve(
         url=url,
         known_hash=file_hash,
         fname=destination.name,
         path=destination.parent,
-        downloader=downloader,
+        downloader=tracked_download if permissions_supported else downloader,
     )
+    if transferred:
+        if downloaded_identity is None:
+            raise RuntimeError("Downloaded file identity was not recorded")
+        _apply_download_permissions(Path(result), downloaded_identity)
 
     logger.debug(f"Download complete: {destination}")
 

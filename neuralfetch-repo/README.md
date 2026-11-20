@@ -12,6 +12,32 @@ Download backends and data-fetching utilities for neuroimaging datasets.
 pip install neuralfetch
 ```
 
+## Download permissions
+
+Downloads made through `download_file`, including Zenodo files, honor inherited
+creation permissions on POSIX systems after the transfer and any requested
+checksum verification succeed. For group-readable/writable files and directories:
+
+```bash
+umask 002
+neuralfetch download MyStudy
+```
+
+The file mode follows the process umask and destination directory policy, as for
+normal file creation: `002` gives `664`, `007` gives `660`, and `077` gives `600`
+when no default ACL changes the result. Directories and extracted zip members
+retain their normal creation behavior. Incomplete download payloads remain
+private until verification; cache hits and failed transfers do not change
+existing files. Correcting permissions of previously downloaded files is a
+separate operation.
+
+The implementation uses an empty, randomly named sibling permission probe; it
+does not read/change the process umask or copy the downloaded payload. Permission
+failures are raised before a success marker is written; the verified file is
+left private and any later permission correction is a separate operation.
+Platforms without POSIX permission support retain Pooch's behavior. This policy does not apply to
+backends using other clients, such as S3 or NEMAR.
+
 ## Citation
 
 ```bibtex
