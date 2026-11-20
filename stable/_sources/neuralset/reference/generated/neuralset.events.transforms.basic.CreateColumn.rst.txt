@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.basic.CreateColumn
+==============================================
+
+.. currentmodule:: neuralset.events.transforms.basic
+
+.. autopydantic_model:: CreateColumn
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

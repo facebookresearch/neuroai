@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.text.SpacyEmbedding
+========================================
+
+.. currentmodule:: neuralset.extractors.text
+
+.. autopydantic_model:: SpacyEmbedding
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

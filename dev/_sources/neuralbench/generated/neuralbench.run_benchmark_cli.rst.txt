@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.run\_benchmark\_cli
+===============================
+
+.. currentmodule:: neuralbench
+
+.. autofunction:: run_benchmark_cli
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
