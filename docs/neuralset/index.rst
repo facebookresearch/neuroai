@@ -1,3 +1,7 @@
+.. raw:: html
+
+   <p class="landing-logo-hero"><img class="only-light" src="../_static/logos/neuralset-on-light.svg" alt="neuralset"><img class="only-dark" src="../_static/logos/neuralset-on-dark.svg" alt="neuralset"></p>
+
 NeuralSet
 =========
 

@@ -11,8 +11,7 @@
 .. raw:: html
 
    <div class="hero-welcome-banner">
-     <i class="fas fa-brain banner-brain-icon"></i>
-     <span class="banner-text">neuroai</span>
+     <img class="only-light banner-logo" src="_static/logos/neuroai-on-light.svg" alt="neuroai"><img class="only-dark banner-logo" src="_static/logos/neuroai-on-dark.svg" alt="neuroai">
    </div>
 
    <div class="hero-section-root">
@@ -28,7 +27,7 @@
        <!-- NeuralSet (highlighted as recommended starting point) -->
        <div class="package-card-wrapper">
          <a href="neuralset/index.html" class="package-card package-card--highlight">
-           <div class="package-card-icon"><i class="fas fa-database"></i></div>
+           <div class="package-card-icon"><img class="only-light" src="_static/logos/neuralset-mark-on-light.svg" alt="neuralset"><img class="only-dark" src="_static/logos/neuralset-mark-on-dark.svg" alt="neuralset"></div>
            <div class="package-card-name">NeuralSet</div>
            <div class="package-card-tagline">Turn neural and stim data into AI-ready tensors.</div>
          </a>
@@ -38,7 +37,7 @@
        <!-- Neuralfetch -->
        <div class="package-card-wrapper">
         <a href="neuralfetch/index.html" class="package-card">
-          <div class="package-card-icon"><i class="fas fa-download"></i></div>
+          <div class="package-card-icon"><img class="only-light" src="_static/logos/neuralfetch-mark-on-light.svg" alt="neuralfetch"><img class="only-dark" src="_static/logos/neuralfetch-mark-on-dark.svg" alt="neuralfetch"></div>
           <div class="package-card-name">NeuralFetch</div>
            <div class="package-card-tagline">Fetch curated Neuro-AI datasets.</div>
          </a>
@@ -48,7 +47,7 @@
       <!-- Neuraltrain -->
       <div class="package-card-wrapper">
         <a href="neuraltrain/index.html" class="package-card">
-          <div class="package-card-icon"><i class="fas fa-dumbbell"></i></div>
+          <div class="package-card-icon"><img class="only-light" src="_static/logos/neuraltrain-mark-on-light.svg" alt="neuraltrain"><img class="only-dark" src="_static/logos/neuraltrain-mark-on-dark.svg" alt="neuraltrain"></div>
           <div class="package-card-name">NeuralTrain</div>
           <div class="package-card-tagline">Deep learning for Neuro-AI.</div>
         </a>
@@ -57,7 +56,7 @@
       <!-- Neuralbench -->
       <div class="package-card-wrapper">
         <a href="neuralbench/index.html" class="package-card">
-          <div class="package-card-icon"><i class="fas fa-flask"></i></div>
+          <div class="package-card-icon"><img class="only-light" src="_static/logos/neuralbench-mark-on-light.svg" alt="neuralbench"><img class="only-dark" src="_static/logos/neuralbench-mark-on-dark.svg" alt="neuralbench"></div>
           <div class="package-card-name">NeuralBench</div>
           <div class="package-card-tagline">Unified benchmark for brain foundation models.</div>
         </a>
@@ -66,7 +65,7 @@
       <!-- Exca -->
        <div class="package-card-wrapper">
          <a href="https://facebookresearch.github.io/exca/" class="package-card" target="_blank">
-           <div class="package-card-icon"><i class="fas fa-cog"></i></div>
+           <div class="package-card-icon"><img src="https://raw.githubusercontent.com/facebookresearch/exca/main/docs/_static/exca.png" alt="exca"></div>
            <div class="package-card-name">Exca</div>
            <div class="package-card-tagline">Caching & remote compute infrastructure.</div>
          </a>

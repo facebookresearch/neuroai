@@ -5,7 +5,7 @@
 
 .. raw:: html
 
-   <p class="landing-badge landing-badge--hero"><i class="fas fa-flask"></i><span>NeuralBench</span></p>
+   <p class="landing-logo-hero"><img class="only-light" src="../_static/logos/neuralbench-on-light.svg" alt="neuralbench"><img class="only-dark" src="../_static/logos/neuralbench-on-dark.svg" alt="neuralbench"></p>
 
 NeuralBench
 ===========

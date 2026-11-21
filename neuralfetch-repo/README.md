@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralfetch-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="neuralfetch" height="80"><img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralfetch-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="neuralfetch" height="80">
+</p>
+
 # neuralfetch
 
 Download backends and data-fetching utilities for neuroimaging datasets.

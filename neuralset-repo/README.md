@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralset-repo/assets/logo-on-light.svg#gh-light-mode-only" alt="neuralset" height="80"><img src="https://raw.githubusercontent.com/facebookresearch/neuroai/main/neuralset-repo/assets/logo-on-dark.svg#gh-dark-mode-only" alt="neuralset" height="80">
+</p>
+
 # neuralset
 
 A Python toolkit for building neuroimaging data pipelines — from raw data
