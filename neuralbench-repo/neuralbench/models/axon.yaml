@@ -1,0 +1,39 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Preprocessing matches AXON pretraining: 200 Hz, notch 50/60 Hz, band-pass
+# 0.5-99.5 Hz, per-channel z-score, clip at 15 sigma.  The model also z-scores
+# each channel within each window internally.
+data:
+  neuro:
+    frequency: 200.0
+    filter:
+      - 0.5
+      - 99.5
+    notch_filter:
+      - 50.0
+      - 60.0
+    baseline: null
+    scaler: StandardScaler
+    scale_factor: null
+    clamp: 15
+brain_model_config:
+  =replace=: true
+  name: NtAxon
+  from_pretrained_name: MannasAI/axon-eeg
+  # Same renames as REVE (e.g. Neuromag "EEG 0xx" -> 10-20 names); AXON then
+  # places each channel at its standard_1005 position.
+  channel_mapping: !include channel_mappings/reve.json
+downstream_model_wrapper:
+  model_output_key: null
+  aggregation: mean
+  probe_config: linear
+
+# Paper config (Jain et al. 2026, arXiv:2609.08788): linear probe on the pooled
+# 512-d embedding, or fine-tuning with the encoder at 0.1x the head's learning
+# rate after 3 head-only epochs.  Here: mean over (channels, patches) + linear
+# head, full fine-tuning with the benchmark's default trainer, as for the
+# other foundation models.

@@ -138,6 +138,14 @@ Use ``models.EEGNet(kwargs={...})`` — see :doc:`../install` for an example.
    FmriLinear
    FmriLinearModel
 
+.. currentmodule:: neuraltrain.models.axon
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   NtAxon
+
 .. currentmodule:: neuraltrain.models.reve
 
 .. autosummary::
