@@ -1,0 +1,13 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Search space of `neuralbench --optuna`. A task's search_space.yaml replaces
+# the keys it declares. Keys are dotted config paths; a list is a categorical
+# choice, {low, high, log, step} a range (int when both bounds are ints). With the
+# default OneCycleLR scheduler, the sampled lr also sets its max_lr.
+lightning_optimizer_config.optimizer.lr: {low: 1.0e-5, high: 1.0e-2, log: true}
+lightning_optimizer_config.optimizer.kwargs.weight_decay: {low: 1.0e-6, high: 1.0e-1, log: true}
+data.batch_size: [32, 64, 128]

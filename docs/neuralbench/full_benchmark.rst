@@ -204,6 +204,30 @@ all dataset variants for a task:
    neuralbench eeg motor_imagery --dataset all      # Run on all 18 motor imagery datasets
    neuralbench eeg p3 --dataset all                 # Run on all 24 P300 datasets
 
+Hyperparameter search
+---------------------
+
+``--optuna N`` replaces the grid with ``N`` `Optuna <https://optuna.org>`_ (TPE)
+trials per task, model and dataset (``pip install optuna``):
+
+.. code-block:: bash
+
+   neuralbench eeg motor_imagery -m eegnet --optuna 30 --optuna-batch 6
+
+Each trial is an ordinary experiment on the first seed: rounds of
+``--optuna-batch`` trials are submitted, parallelised and cached like the rest of
+the benchmark.  Trials are ranked by the best validation score of the task's
+``trainer_config.monitor``, never by a test metric.  Every epoch, each run reports
+that score to its trial through optuna-integration's
+``PyTorchLightningPruningCallback`` (``pip install optuna-integration``), and a
+median pruner stops runs that fall below the completed trials (single-GPU runs).
+Studies are stored as journal files in ``<SAVE_DIR>/optuna``, so re-running the
+command resumes them; ``optuna-dashboard`` can browse them.  The search space is
+``defaults/search_space.yaml``, whose keys a task's ``search_space.yaml``
+replaces: a list is a categorical choice, ``{low, high, log}`` a range.  The best
+parameters are logged as YAML, ready for ``--config-overlay``; tuned scores are
+not comparable with the suite's.
+
 Visualizing results
 --------------------
 

@@ -165,6 +165,9 @@ def test_only_rank_zero_deletes_the_checkpoint(tmp_path, global_rank: int) -> No
     assert checkpoint.exists() == (global_rank != 0), (
         "a non-zero rank must leave the checkpoint for rank zero to test with"
     )
+    # a run stopped before its first checkpoint (e.g. pruned) has none to delete
+    trainer.checkpoint_callback.best_model_path = ""
+    experiment._cleanup(tp.cast(tp.Any, trainer))
 
 
 def _make_experiment_with_capturing_build(

@@ -18,6 +18,7 @@ import os
 import sys
 import traceback
 import typing as tp
+from pathlib import Path
 
 from neuralbench.experiment_config import build_experiment_configs
 from neuralbench.plots._constants import DEFAULT_EVAL_MODE
@@ -50,6 +51,8 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    optuna_trials: int | None = None,
+    optuna_batch: int = 1,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -100,6 +103,14 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+    optuna_trials : int or None
+        Instead of the grid, run this many Optuna trials per (task, model,
+        dataset, space), on the first seed, over ``defaults/search_space.yaml``
+        and the task's ``search_space.yaml``.  Trials maximise (or minimise, per
+        ``trainer_config.mode``) the validation ``trainer_config.monitor``; the
+        best parameters are logged.  Tuned scores are not suite results.
+    optuna_batch : int
+        Trials submitted together per round with *optuna_trials*.
 
     Returns
     -------
@@ -151,6 +162,55 @@ def run_benchmark(
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     from neuralbench.main import BenchmarkAggregator
+
+    if optuna_trials is not None:
+        if grid or prepare or plot_cached:
+            raise ValueError(
+                "optuna_trials cannot be combined with grid, prepare or plot_cached"
+            )
+        if optuna_trials < 1 or optuna_batch < 1:
+            raise ValueError(
+                f"optuna_trials and optuna_batch must be >= 1, got "
+                f"{optuna_trials} and {optuna_batch}"
+            )
+        from neuralbench.tuning import load_search_space, tune
+
+        def run_batch(trial_configs: list[tp.Any]) -> list[dict[str, tp.Any] | None]:
+            agg = BenchmarkAggregator(
+                experiments=trial_configs, debug=debug, device=device
+            )
+            agg.prepare()
+            results: list[dict[str, tp.Any] | None] = []
+            for experiment in agg.experiments:
+                try:
+                    results.append(experiment.run())
+                except Exception:  # a failed trial must not end the search
+                    logger.exception("Optuna trial failed")
+                    results.append(None)
+            return results
+
+        if any((c.get("infra.gpus_per_node") or 0) > 1 for c in configs):
+            # optuna-integration prunes multi-GPU (DDP) runs only with an RDB storage
+            logger.warning(
+                "Optuna pruning is off for the multi-GPU runs of this selection"
+            )
+        first_seed = configs[0]["seed"]
+        for task_name in dict.fromkeys(c["task_name"] for c in configs):
+            task_configs = [
+                c
+                for c in configs
+                if c["task_name"] == task_name and c["seed"] == first_seed
+            ]
+            search_space = load_search_space(device, task_name)
+            tune(
+                task_configs,
+                search_space,
+                run_batch,
+                optuna_trials,
+                storage_dir=Path(task_configs[0]["infra.folder"]) / "optuna",
+                batch_size=optuna_batch,
+            )
+        return []
 
     agg = BenchmarkAggregator(
         # ConfDicts, which the pydantic model coerces into Experiment instances.
@@ -281,6 +341,22 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--optuna",
+        type=int,
+        metavar="N_TRIALS",
+        help=(
+            "Tune with N_TRIALS Optuna trials per task/model/dataset instead of the "
+            "grid, on the validation monitor (pip install optuna)."
+        ),
+    )
+    parser.add_argument(
+        "--optuna-batch",
+        type=int,
+        default=1,
+        metavar="K",
+        help="Optuna trials submitted together per round (default: 1).",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -325,6 +401,8 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            optuna_trials=args.optuna,
+            optuna_batch=args.optuna_batch,
         )
     except Exception:
         if not args.pdb:
