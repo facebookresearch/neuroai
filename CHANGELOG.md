@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `--experiments-per-job N` (or `all`; `BenchmarkAggregator.experiments_per_job`) packs pending experiments into `ceil(n / N)` scheduler jobs through `exca.steps.Parallel`, one sweep per resource request, on any `infra.cluster`; each experiment still caches on its own, so unpacked re-runs reuse the results, and a failed one does not stop its job (#360).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

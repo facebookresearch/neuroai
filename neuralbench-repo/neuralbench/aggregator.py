@@ -116,6 +116,8 @@ class BenchmarkAggregator(ns.BaseModel):
 
     experiments: list["Experiment"]
     max_workers: int = 256
+    # >1 (or "all") packs pending experiments into ceil(n / N) scheduler jobs
+    experiments_per_job: tp.Annotated[int, Field(ge=1)] | tp.Literal["all"] = 1
     collect_max_workers: int = 32
     debug: bool = False
 
@@ -169,6 +171,13 @@ class BenchmarkAggregator(ns.BaseModel):
         if self.debug:
             for experiment in self.experiments:
                 experiment.run()
+        elif self.experiments_per_job != 1:
+            from .packing import submit_packed
+
+            n = submit_packed(self.experiments, self.experiments_per_job)
+            LOGGER.info(
+                "Packed %d experiment(s), %s per job", n, self.experiments_per_job
+            )
         else:
             tmp = self.experiments[0].infra.clone_obj()
             with tmp.infra.job_array(max_workers=self.max_workers) as tasks:

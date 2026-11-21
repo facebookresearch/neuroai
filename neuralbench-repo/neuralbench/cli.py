@@ -50,6 +50,7 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    experiments_per_job: int | tp.Literal["all"] = 1,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -100,6 +101,10 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+    experiments_per_job : int or "all"
+        Experiments run one after the other in each scheduler job, so a large
+        grid needs fewer jobs; ``"all"`` packs every pending experiment into one.
+        Each experiment still caches on its own.
 
     Returns
     -------
@@ -157,6 +162,7 @@ def run_benchmark(
         experiments=configs,  # type: ignore[arg-type]
         debug=debug,
         device=device,
+        experiments_per_job=experiments_per_job,
         eval_mode=DEFAULT_EVAL_MODE if downstream_wrapper is None else None,
     )
 
@@ -281,6 +287,12 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--experiments-per-job",
+        default=1,  # an int or "all", validated by BenchmarkAggregator
+        metavar="N",
+        help="Experiments per scheduler job, or 'all' for a single job (default: 1).",
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -325,6 +337,7 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            experiments_per_job=args.experiments_per_job,
         )
     except Exception:
         if not args.pdb:
