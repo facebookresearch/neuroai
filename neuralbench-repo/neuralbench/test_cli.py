@@ -8,6 +8,7 @@ import shutil
 import typing as tp
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 import torch
@@ -184,6 +185,7 @@ def _capture_assembled_experiments(
     class _FakeAggregator:
         def __init__(self, experiments: list[ConfDict], **_: tp.Any) -> None:
             captured["experiments"] = experiments
+            self.experiments: list[tp.Any] = []
 
         def prepare(self) -> None:
             pass
@@ -213,6 +215,24 @@ def test_run_benchmark_keeps_wandb_when_host_set(
     wandb_cfg = experiments[0].get("wandb_config")
     assert wandb_cfg is not None
     assert wandb_cfg["host"] == host
+
+
+def test_run_benchmark_raises_when_local_runs_fail(
+    monkeypatch: pytest.MonkeyPatch, patch_config: Callable[..., None], tmp_path: Path
+) -> None:
+    """CLUSTER: null runs each experiment in an exca LocalJob, which keeps the
+    exception instead of raising it; all runs go ahead, then run_benchmark raises."""
+    patch_config(CLUSTER=None, SAVE_DIR=str(tmp_path))
+    seeds: list[int] = []
+
+    def _fail(self: tp.Any) -> None:
+        seeds.append(self.seed)
+        raise ValueError("no data")
+
+    monkeypatch.setattr("neuralbench.main.Experiment.setup_run", _fail)
+    with pytest.raises(RuntimeError, match="3 of 3 experiment"):
+        run_benchmark("eeg", "motor_imagery")
+    assert seeds == [33, 34, 35]
 
 
 def test_warn_slurm_partition_suppressed_when_cluster_local(

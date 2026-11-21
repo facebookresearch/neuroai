@@ -107,6 +107,12 @@ def run_benchmark(
         One result dict per experiment, with ``plot_cached=True`` only.  Every
         other mode launches experiments and returns an empty list, the results
         being written to the results folder.
+
+    Raises
+    ------
+    RuntimeError
+        If experiments run in-process (``CLUSTER: null``) and any of them
+        failed, once all of them have run.
     """
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("numexpr").setLevel(logging.WARNING)
@@ -162,6 +168,18 @@ def run_benchmark(
 
     if not plot_cached:
         agg.prepare()
+        # With CLUSTER: null, exca runs each experiment in-process in a LocalJob,
+        # which stores the exception (and logs it on status()) instead of raising.
+        failed = [
+            str(exp.infra.uid_folder())
+            for exp in agg.experiments
+            if exp.infra.cluster is None and exp.infra.status() == "failed"
+        ]
+        if failed:
+            raise RuntimeError(
+                f"{len(failed)} of {len(agg.experiments)} experiment(s) failed, see "
+                "the tracebacks logged above (--retry reruns them):\n" + "\n".join(failed)
+            )
 
     results = []
     if plot_cached:
@@ -206,7 +224,7 @@ def run_benchmark_cli() -> None:
         "-d",
         "--debug",
         action="store_true",
-        help="Run in debug mode (locally and smaller config, with infra.mode='force').",
+        help="Run in debug mode (locally and smaller config).",
     )
     parser.add_argument(
         "--max-neuro-hours-per-epoch",

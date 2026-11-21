@@ -55,6 +55,19 @@ def test_dummy_predictor_reg():
     assert torch.allclose(y_pred, expected)
 
 
+def test_dummy_predictor_reg_dense():
+    # Dense (N, C, T) targets, e.g. emg/pose joint angles: BrainModule scores a
+    # time-major (B, T, C) prediction and masks NaN (unlabelled) frames
+    y_train = torch.randn(8, 20, 50)
+    y_train[0, 3, 7] = torch.nan
+
+    predictor = DummyPredictor().build(load_targets=lambda: y_train)
+    y_pred = predictor(torch.randn(4, 16, 50))
+
+    assert y_pred.shape == (4, 50, 20)
+    assert torch.allclose(y_pred[2], y_train.nanmean(dim=0).T)
+
+
 def test_dummy_predictor_most_frequent_multilabel():
     # Multi-label classification: each sample can have multiple active classes
     # Format: binary indicators where 1 = class is active, 0 = class is inactive

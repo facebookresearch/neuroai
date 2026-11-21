@@ -234,6 +234,19 @@ def test_rank_half_bin():
     assert out == 0.5
 
 
+def test_rank_nan_prediction_gets_middle_candidate_rank():
+    # 10 queries over 4 candidates: a NaN prediction ranks in the middle of the
+    # candidates (4 // 2), not at half the query count (10 // 2, past the last one)
+    y_true = torch.eye(4)
+    y_pred = y_true[torch.arange(10) % 4]
+    y_pred[0] = torch.nan
+    y_pred_labels, y_true_labels = [i % 4 for i in range(10)], list(range(4))
+
+    ranks = metrics.Rank()._compute_ranks(y_pred, y_true, y_pred_labels, y_true_labels)
+
+    assert ranks.tolist() == [2.0] + [0.0] * 9
+
+
 @pytest.mark.parametrize("reduction", ["mean", "median"])
 def test_inverse_normalized_rank(reduction):
     F = 8
