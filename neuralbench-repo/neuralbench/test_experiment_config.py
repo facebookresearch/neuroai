@@ -33,6 +33,11 @@ from neuralbench.registry import (
     _resolve_task_dir,
     load_yaml_config,
 )
+from neuraltrain.models.bendr import (
+    BENDR_N_EEG_CHANNELS,
+    NtBendr,
+    _BendrAllTokensWrapper,
+)
 from neuraltrain.optimizers.base import LightningOptimizer
 
 
@@ -157,6 +162,24 @@ def test_eeg_image_reports_competition_topk() -> None:
     names = {m["log_name"] for m in metrics}
     expected = {"top5_acc_subject-agg", "top1_acc_subject-agg"}
     assert expected <= names, "Track 1 docs point to these Top-k metrics"
+
+
+def test_bendr_reads_microvolts() -> None:
+    # NtBendr divides each window's range by its 4861 uV pretraining range, so
+    # volts would pin the relative-amplitude channel at -1 whatever the window
+    configs = build_experiment_configs("eeg", "motor_imagery", model="bendr", quiet=True)
+    tiny = dict(
+        encoder_h=32, contextualizer_hidden=64, transformer_layers=1, transformer_heads=2
+    )
+    model = NtBendr(kwargs=tiny).build(
+        n_spatial_locations=BENDR_N_EEG_CHANNELS, n_temporal_samples=256, n_outputs=1
+    )
+    assert isinstance(model, _BendrAllTokensWrapper)
+    volts = torch.zeros(2, BENDR_N_EEG_CHANNELS, 256)
+    volts[:, 0, 0] = torch.tensor([486.1e-6, 972.2e-6])  # a tenth, a fifth of it
+    scaled = volts * (configs[0]["data.neuro.scale_factor"] or 1.0)
+    amplitude = model._prepare_input(scaled)[:, -1, 0]
+    torch.testing.assert_close(amplitude, torch.tensor([-0.8, -0.6]))
 
 
 @pytest.mark.parametrize("preset", list(ALL_DOWNSTREAM_WRAPPERS))

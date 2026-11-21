@@ -11,7 +11,7 @@ data:
     notch_filter: null
     baseline: null
     scaler: null  # NtBendr min-max scales each window
-    scale_factor: null
+    scale_factor: 1.0e+6  # V -> uV, the unit of NtBendr's amplitude_range
     clamp: null
 brain_model_config:
   =replace=: true

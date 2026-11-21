@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `bendr` feeds the model microvolts (`scale_factor: 1.0e+6`) rather than the volts `mne` returns: `NtBendr` divides each window's range by its 4,861 µV pretraining range, so at volt scale its relative-amplitude channel was constant. BENDR scores are not comparable with earlier runs and its experiment UIDs change; the prepared EEG cache is reused as is (#364).
+- `neuraltrain`: LaBraM no longer leaves its sliced temporal embedding on the braindecode model after a call; after a training step that non-leaf tensor made `copy.deepcopy` raise, which `ResetPerStream` does at each evaluation stream, so LaBraM failed on `_motor_imagery_stream` and `_sleep_onset_stream` (#364).
+- `neuraltrain`: LaBraM resolves its channel selection once per montage and keeps the index on the input's device, rather than syncing the device with the host on every forward, so the wrapper compiles with `torch.compile(fullgraph=True)` (#364).
+- `neuralbench`: a `DownstreamWrapper` backbone with nothing to train (the linear and attentive probes, and LP-FT until `unfreeze_at_epoch`) runs in eval mode, so the head is fitted without the backbone's dropout and without updating its BatchNorm statistics. Freezing only set `requires_grad`, and the backbone trained in train mode. Every frozen-probe score changes and is not comparable with earlier runs, and as the experiment UIDs do not change, cached runs need `--force`; fine-tuning and LoRA are unchanged (#364).
+- `neuralbench`: a `DownstreamWrapper(probe_layer=...)` model can be deep-copied, as `ResetPerStream` does; the copy's hook wrote into the original's buffer, so the copy raised "probe_layer hook did not fire" (#364).
+- `neuralbench`: `check_model` skips a task whose sampling rate is `native` (`fmri image`, `eeg _sleep_onset_stream`) rather than raising a `TypeError` (#364).
+- `neuraltrain`: the `RobustScaler` and `QuantileAbsScaler` of `OnTheFlyPreprocessor` take bf16 and fp16 inputs, as mixed precision feeds them, and `RobustScaler` float64 ones: the quantiles are computed in at least float32 and the output keeps the input dtype (#364).
+- `neuraltrain`: `ClipLoss(norm_kind=None)`, and `DistributedClipLoss` and `SigLipLoss` with it, builds its unit norms on the input's device rather than the CPU, which raised a device mismatch on GPU and MPS (#364).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

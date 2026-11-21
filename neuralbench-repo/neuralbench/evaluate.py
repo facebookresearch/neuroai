@@ -247,7 +247,8 @@ def check_model(
             flat.update(flat_overrides)
             frequency = flat.get("data.neuro.frequency")
             duration = flat.get("data.duration")
-            if frequency and duration:
+            # "native" keeps each recording's own rate: no fixed width to probe
+            if isinstance(frequency, (int, float)) and duration:
                 windows.add(round(duration * frequency))
         if not windows:
             rows.append(

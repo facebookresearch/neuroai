@@ -193,9 +193,12 @@ class _LabramChannelWrapper(nn.Module):
         self._resolve(self._union_ch_names)
 
     def _resolve(self, ch_names: list[str]) -> tuple[list[str], torch.Tensor]:
+        """LaBraM names of the known channels of *ch_names*, and their index."""
         key = tuple(ch_names)
         if key not in self._resolved:
-            self._resolved[key] = _resolve_channels(ch_names, self.channel_mapping)
+            labram_names, known = _resolve_channels(ch_names, self.channel_mapping)
+            index = known.nonzero(as_tuple=True)[0]
+            self._resolved[key] = ([labram_names[i] for i in index.tolist()], index)
         return self._resolved[key]
 
     def _temporal_embedding(self, n_patches: int) -> torch.Tensor:
@@ -233,31 +236,37 @@ class _LabramChannelWrapper(nn.Module):
             wrapper was built with.  Pass it whenever the incoming montage
             differs -- LaBraM cannot name an electrode from its coordinates.
         """
-        labram_names, known = self._resolve(
-            ch_names if ch_names is not None else self._union_ch_names
-        )
-        if len(labram_names) != x.shape[1]:
+        if ch_names is None:
+            ch_names = self._union_ch_names
+        if len(ch_names) != x.shape[1]:
             raise ValueError(
-                f"Got {len(labram_names)} channel name(s) for {x.shape[1]} input "
+                f"Got {len(ch_names)} channel name(s) for {x.shape[1]} input "
                 "channels. LaBraM selects its channel embedding by name, so a "
                 "montage other than the one built with must be passed as "
                 "'ch_names' at forward time."
             )
-
-        common = known.to(x.device)
-        names = [labram_names[i] for i in common.nonzero(as_tuple=True)[0].tolist()]
+        names, index = self._resolve(ch_names)
+        if index.device != x.device:
+            # moved once: a host index would be copied, with a sync, on every call
+            index = index.to(x.device)
+            self._resolved[tuple(ch_names)] = (names, index)
 
         pad_right, truncate_right = compute_temporal_adjustment(
             x.shape[2], self.patch_size
         )
-        x_valid = apply_temporal_adjustment(x[:, common, :], pad_right, truncate_right)
+        x_valid = apply_temporal_adjustment(x[:, index, :], pad_right, truncate_right)
 
         n_patches = x_valid.shape[2] // self.patch_size
         self.model.patch_embed[0].n_patchs = n_patches  # type: ignore[index,union-attr]
         if self.temporal_embedding is not None:
             self.model.temporal_embedding = self._temporal_embedding(n_patches)
-
-        return self.model(x_valid, ch_names=names, return_all_tokens=True)
+        try:
+            return self.model(x_valid, ch_names=names, return_all_tokens=True)
+        finally:
+            if self.temporal_embedding is not None:
+                # left on the module after a training step, the slice is a
+                # non-leaf tensor, which copy.deepcopy refuses
+                self.model.temporal_embedding = None  # type: ignore[assignment]
 
 
 class NtLabram(BaseBrainDecodeModel):

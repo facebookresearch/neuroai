@@ -128,11 +128,13 @@ class OnTheFlyPreprocessorModel(nn.Module):
         if isinstance(self.scaler, float):
             x_out = x_out * self.scaler
         elif self.scaler == "RobustScaler":
-            stats = x_out.quantile(
-                torch.tensor([0.25, 0.5, 0.75], device=x_out.device),
+            # torch.quantile takes float32 and float64 only
+            x_q = x_out.to(torch.promote_types(x_out.dtype, torch.float32))
+            stats = x_q.quantile(
+                torch.tensor([0.25, 0.5, 0.75], device=x_q.device, dtype=x_q.dtype),
                 dim=self.scale_dim,  # type: ignore
                 keepdim=True,
-            )
+            ).to(x_out.dtype)
             loc, iqr = stats[1], stats[2] - stats[0]
             iqr[iqr == 0.0] = 1.0  # Avoid division by zero
             x_out = (x_out - loc) / iqr
@@ -143,11 +145,11 @@ class OnTheFlyPreprocessorModel(nn.Module):
             x_out = x_out / std
         elif self.scaler == "QuantileAbsScaler":
             q = torch.quantile(
-                x_out.abs(),
+                x_out.abs().to(torch.promote_types(x_out.dtype, torch.float32)),
                 self.scaler_quantile,
                 dim=self.scale_dim,  # type: ignore
                 keepdim=True,
-            )
+            ).to(x_out.dtype)
             q[q == 0.0] = 1.0
             x_out = x_out / q
         elif self.scaler == "MinMaxScaler":
