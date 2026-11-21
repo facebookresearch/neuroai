@@ -6,6 +6,7 @@
 
 import hashlib
 import logging
+import math
 import typing as tp
 from collections import Counter
 
@@ -14,7 +15,7 @@ import pandas as pd
 import pydantic
 import torch
 import torch.nn.functional as F
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, StratifiedKFold, train_test_split
 
 from neuralset import base, extractors
 
@@ -278,6 +279,153 @@ class SklearnSplit(EventsTransform):
             **{k: "test" for k in events.loc[inds_test, self.split_by].unique()},
         }
         events["split"] = events[self.split_by].map(split_mapping)
+        return events
+
+
+class CrossValidationSplit(EventsTransform):
+    """Materialize one fold of a cross-validation as the ``split`` column.
+
+    The folds partition the values of ``split_by``: with ``n_folds=None`` each
+    fold holds out one value (leave-one-group-out, e.g. one subject), otherwise
+    the values form a k-fold, stratified by ``stratify_by`` if set.  With
+    ``within``, the cross-validation runs separately inside each group of these
+    columns (e.g. ``["subject"]`` for within-subject folds), groups with a single
+    value are skipped, and the folds are numbered group after group.  The fold's
+    held-out values become ``test``, the other values of its group ``train``,
+    from which ``val`` is drawn; events outside its group get no split.
+
+    Parameters
+    ----------
+    fold : int
+        Index of the fold, in ``[0, get_n_splits(events))``.
+    split_by : str
+        Column whose values the folds partition.  ``"_index"`` splits single
+        events, as in :class:`SklearnSplit`.
+    n_folds : int or None
+        Number of folds per group; ``None`` holds out one value per fold.
+    within : list of str
+        Columns whose groups are cross-validated separately.
+    event_types : str or list of str or None
+        Types of the events the folds are drawn from (e.g. the trials); other
+        events follow the split of their ``split_by`` value.  ``None`` uses all.
+    stratify_by : str or None
+        Column to stratify the k-fold by, with one value per ``split_by`` value.
+    random_state : int
+        Random state of the k-fold shuffling.
+    valid_split_ratio : float
+        Ratio of the fold's group drawn for validation, as in :class:`SklearnSplit`
+        (rounded up, as ``train_test_split``): that many of its values, taken from
+        the training ones, or, when the fold trains on a single value, that many of
+        its events, taken from that value's.
+    valid_random_state : int
+        Random state for the validation draw.
+    """
+
+    fold: int = pydantic.Field(0, ge=0)
+    split_by: str = "subject"
+    n_folds: int | None = pydantic.Field(None, ge=2)
+    within: list[str] = []
+    event_types: str | list[str] | None = None
+    stratify_by: str | None = None
+    random_state: int = 33
+    valid_split_ratio: float = pydantic.Field(
+        0.2, strict=True, gt=0.0, lt=1.0, allow_inf_nan=False
+    )
+    valid_random_state: int = 33
+
+    def get_n_splits(self, events: pd.DataFrame) -> int:
+        """Number of folds the events give, which bounds ``fold``."""
+        return len(self._folds(self._with_index(events)))
+
+    def _with_index(self, events: pd.DataFrame) -> pd.DataFrame:
+        if self.split_by == "_index" and "_index" not in events.columns:
+            events = (
+                events.copy().reset_index(drop=False).rename(columns={"index": "_index"})
+            )
+        return events
+
+    def _drawn(self, events: pd.DataFrame) -> pd.Series:
+        """Mask of the events the folds are drawn from."""
+        if self.event_types is None:
+            return pd.Series(True, index=events.index)
+        types = (
+            [self.event_types] if isinstance(self.event_types, str) else self.event_types
+        )
+        return events["type"].isin(types)
+
+    def _folds(
+        self, events: pd.DataFrame
+    ) -> list[tuple[tuple[tp.Any, ...], np.ndarray, np.ndarray]]:
+        """``(group, test values, train values)`` of each fold, in order."""
+        rows = events[self._drawn(events)]
+        columns = [self.split_by, *self.within]
+        if self.stratify_by is not None:
+            columns.append(self.stratify_by)
+        missing = sorted(set(columns) - set(rows.columns))
+        if missing:
+            raise ValueError(f"CrossValidationSplit: no column {missing} in the events")
+        rows = rows.dropna(subset=[self.split_by, *self.within])
+        groups = rows.groupby(self.within, sort=True) if self.within else [((), rows)]
+        folds = []
+        for key, group in groups:
+            values = np.sort(group[self.split_by].unique())
+            if len(values) < 2:
+                continue  # nothing to hold out, e.g. a subject with one session
+            labels = None
+            if self.n_folds is None:
+                cv: KFold | StratifiedKFold = KFold(n_splits=len(values))
+            elif self.stratify_by is None:
+                cv = KFold(self.n_folds, shuffle=True, random_state=self.random_state)
+            else:
+                pairs = group[[self.split_by, self.stratify_by]].drop_duplicates()
+                if pairs[self.split_by].duplicated().any():
+                    raise ValueError(
+                        "Stratified folds require one stratify_by value per split_by value."
+                    )
+                labels = pairs.set_index(self.split_by).loc[values, self.stratify_by]
+                cv = StratifiedKFold(
+                    self.n_folds, shuffle=True, random_state=self.random_state
+                )
+            for train, test in cv.split(values, labels):
+                folds.append((tuple(key), values[test], values[train]))
+        return folds
+
+    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
+        events = self._with_index(events)
+        folds = self._folds(events)
+        if self.fold >= len(folds):
+            raise ValueError(
+                f"CrossValidationSplit: fold {self.fold} out of the {len(folds)} "
+                "folds of these events"
+            )
+        key, test, train = folds[self.fold]
+        in_group = pd.Series(True, index=events.index)
+        for column, value in zip(self.within, key):
+            in_group &= events[column] == value
+        values = events[self.split_by]
+        if len(train) >= 2:
+            pool: tp.Any = train
+            n_val = math.ceil(self.valid_split_ratio * (len(train) + len(test)))
+        else:  # a single training value: draw validation events from it
+            drawn = in_group & self._drawn(events)
+            pool = events.index[drawn & values.isin(train)]
+            n_val = math.ceil(self.valid_split_ratio * int(drawn.sum()))
+        if n_val >= len(pool):
+            raise ValueError(
+                f"CrossValidationSplit: valid_split_ratio={self.valid_split_ratio} leaves "
+                f"no training data in fold {self.fold}"
+            )
+        _, val = train_test_split(
+            pool, test_size=n_val, random_state=self.valid_random_state
+        )
+        if len(train) >= 2:
+            is_val = in_group & values.isin(val)
+        else:
+            is_val = pd.Series(events.index.isin(val), index=events.index)
+        events["split"] = None
+        events.loc[in_group & values.isin(train), "split"] = "train"
+        events.loc[is_val, "split"] = "val"
+        events.loc[in_group & values.isin(test), "split"] = "test"
         return events
 
 

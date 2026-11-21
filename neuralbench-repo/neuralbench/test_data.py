@@ -281,3 +281,17 @@ def test_get_default_dataloaders_rejects_unknown_inputs(
 ) -> None:
     with pytest.raises(ValueError, match="Unknown"):
         get_default_dataloaders("eeg", task, dataset=dataset)
+
+
+def test_cross_validation_folds_hold_out_each_subject(
+    build_data: Callable[..., tp.Any], test2024eeg_path: tp.Any
+) -> None:
+    source = {"name": "Test2024Eeg", "path": test2024eeg_path}
+    tested: list[str] = []
+    for fold in range(3):
+        split = {"name": "CrossValidationSplit", "fold": fold, "event_types": "Word"}
+        loaders = build_data(seed=0, study={"source": source, "split": split}).prepare()
+        subjects = {name: set(loaders[name].dataset.triggers.subject) for name in loaders}
+        assert len(subjects["test"]) == 1 and not subjects["test"] & subjects["train"]
+        tested += subjects["test"]
+    assert len(set(tested)) == 3

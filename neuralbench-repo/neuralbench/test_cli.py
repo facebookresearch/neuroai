@@ -15,6 +15,7 @@ from exca import ConfDict
 
 import neuralset as ns
 
+from . import experiment_config
 from . import transforms as _transforms  # noqa: F401  — registers Step subclasses
 from .cli import run_benchmark
 from .experiment_config import (
@@ -176,7 +177,7 @@ def test_prepare_overlay_respects_cluster(
 
 
 def _capture_assembled_experiments(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, **kwargs: tp.Any
 ) -> list[ConfDict]:
     """Run ``run_benchmark`` with a stubbed aggregator, returning assembled configs."""
     captured: dict[str, tp.Any] = {}
@@ -189,8 +190,43 @@ def _capture_assembled_experiments(
             pass
 
     monkeypatch.setattr("neuralbench.main.BenchmarkAggregator", _FakeAggregator)
-    run_benchmark("eeg", "motor_imagery")
+    run_benchmark("eeg", "motor_imagery", **kwargs)
     return captured["experiments"]
+
+
+@pytest.mark.parametrize("debug, folds", [(False, [0, 1, 2]), (True, [0])])
+def test_run_benchmark_cv_sweeps_each_datasets_folds_on_one_seed(
+    monkeypatch: pytest.MonkeyPatch,
+    patch_config: Callable[..., None],
+    debug: bool,
+    folds: list[int],
+) -> None:
+    # counting the folds loads the study's events, tested on real ones below
+    monkeypatch.setattr(experiment_config, "_apply_cv_overlay", lambda config, cv: 3)
+    patch_config(WANDB_HOST="", SLURM_PARTITION="dummy")
+    exps = _capture_assembled_experiments(monkeypatch, cv="cross_subject", debug=debug)
+    assert [e["data.study.split.fold"] for e in exps] == folds
+    assert {e["seed"] for e in exps} == {33}
+
+
+def test_cv_overlay_counts_the_folds_on_the_events(test2024eeg_path: tp.Any) -> None:
+    def config() -> ConfDict:
+        source = {"name": "Test2024Eeg", "path": str(test2024eeg_path)}
+        split = {"name": "SklearnSplit", "valid_split_ratio": 0.1}
+        study = {"source": source, "split": split}
+        return ConfDict({"data": {"trigger_event_type": "Word", "study": study}})
+
+    cross_subject = config()
+    assert experiment_config._apply_cv_overlay(cross_subject, "cross_subject") == 3
+    split = cross_subject["data.study.split"]
+    assert split["name"] == "CrossValidationSplit" and "test_split_ratio" not in split
+    assert (split["split_by"], split["event_types"], split["valid_split_ratio"]) == (
+        "subject",
+        "Word",
+        0.1,
+    )
+    with pytest.raises(ValueError, match="--cv cross_session gives no fold"):
+        experiment_config._apply_cv_overlay(config(), "cross_session")  # one session each
 
 
 def test_run_benchmark_disables_wandb_when_host_blank(

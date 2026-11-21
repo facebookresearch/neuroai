@@ -59,6 +59,7 @@ Events Transforms
 
    TextPreprocessor
    SklearnSplit
+   CrossValidationSplit
    SimilaritySplit
    PredefinedSplit
    CropSleepRecordings

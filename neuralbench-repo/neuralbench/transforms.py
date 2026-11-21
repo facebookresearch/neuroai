@@ -78,6 +78,7 @@ class TextPreprocessor(_transf.EventsTransform):
 
 
 SklearnSplit = _transf.SklearnSplit
+CrossValidationSplit = _transf.CrossValidationSplit
 
 
 class SimilaritySplit(_transf.EventsTransform):

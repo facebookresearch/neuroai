@@ -107,6 +107,7 @@ Transforms
    AssignSentenceSplit
    AssignWordSplitAndContext
    SklearnSplit
+   CrossValidationSplit
 
 .. currentmodule:: neuralset.events.transforms.audio
 

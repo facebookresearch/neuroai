@@ -199,6 +199,11 @@ class BenchmarkAggregator(ns.BaseModel):
         out["model_variant"] = _experiment_variant(experiment)
         out["loss"] = {"name": type(experiment.loss).__name__}
         out["seed"] = experiment.seed
+        out["fold"] = None  # set by --cv
+        if isinstance(study, ns.Chain) and isinstance(study.steps, dict):
+            split = study.steps.get("split")
+            if isinstance(split, ns.events.transforms.CrossValidationSplit):
+                out["fold"] = split.fold
         out["eval_mode"] = _infer_eval_mode(experiment)
         return out, task, model, "completed"
 

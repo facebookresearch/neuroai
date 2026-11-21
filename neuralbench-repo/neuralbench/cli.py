@@ -19,7 +19,7 @@ import sys
 import traceback
 import typing as tp
 
-from neuralbench.experiment_config import build_experiment_configs
+from neuralbench.experiment_config import CV_SCHEMES, build_experiment_configs
 from neuralbench.plots._constants import DEFAULT_EVAL_MODE
 from neuralbench.registry import (
     ALL_DEVICES,
@@ -50,6 +50,7 @@ def run_benchmark(
     prepare: bool = False,
     download: bool = False,
     plot_cached: bool = False,
+    cv: str | None = None,
 ) -> list[dict[str, tp.Any]]:
     """Run one or more NeuralBench experiments from Python.
 
@@ -100,6 +101,13 @@ def run_benchmark(
     plot_cached : bool
         Generate plots and tables from cached results only, without
         running any new experiments.
+    cv : str or None
+        Evaluate on cross-validation folds instead of the task's split:
+        ``"cross_subject"``, ``"cross_session"`` or ``"within_session"``, the
+        folds of MOABB's splitters (see ``experiment_config.CV_SCHEMES``).  The
+        folds are counted on each dataset's events when the configs are built.
+        Each fold runs once, with the first grid seed, so tables report the
+        spread across folds.
 
     Returns
     -------
@@ -142,6 +150,7 @@ def run_benchmark(
         prepare=prepare,
         download=download,
         quiet=plot_cached,
+        cv=cv,
     )
 
     if download:
@@ -281,6 +290,14 @@ def run_benchmark_cli() -> None:
         help="Plot from cached results only, without running any experiments.",
     )
     parser.add_argument(
+        "--cv",
+        choices=list(CV_SCHEMES),
+        help=(
+            "Evaluate on the folds of a cross-validation scheme (those of MOABB's "
+            "splitters) instead of the task's split, one run per fold."
+        ),
+    )
+    parser.add_argument(
         "--dataset",
         type=str,
         default=None,
@@ -325,6 +342,7 @@ def run_benchmark_cli() -> None:
             prepare=args.prepare,
             download=args.download,
             plot_cached=args.plot_cached,
+            cv=args.cv,
         )
     except Exception:
         if not args.pdb:

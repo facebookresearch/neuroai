@@ -126,7 +126,14 @@ def _check_no_collisions(df: pd.DataFrame) -> None:
     """
     key = [
         c
-        for c in ("model_name", "task_name", "dataset_name", "metric_name", "seed")
+        for c in (
+            "model_name",
+            "task_name",
+            "dataset_name",
+            "metric_name",
+            "seed",
+            "fold",
+        )
         if c in df.columns
     ]
     dup = df.duplicated(subset=key, keep=False)
