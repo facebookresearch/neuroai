@@ -145,6 +145,8 @@ class _Levy2026Noninvasive(study.Study):
             study="SpanishBCBL",
             org="bcbl190626",
             dset_dir=self.path,
+            # one modality per class: the repo holds MEG/ (~268 GB) and EEG/ (~13 GB)
+            include=[f"{self._neuro_type.upper()}/*"],
         ).download(overwrite=overwrite)
 
     def iter_timelines(self) -> tp.Iterator[dict[str, tp.Any]]:

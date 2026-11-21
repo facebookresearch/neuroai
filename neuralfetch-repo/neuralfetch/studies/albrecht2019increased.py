@@ -76,6 +76,10 @@ class Albrecht2019Increased(study.Study):
         frequency=1000,
     )
 
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
+
     def _download(self, overwrite: bool = False) -> None:
         # https://predict.cs.unm.edu/downloads.php d004
         # Unable to use original dataset on PRED+ct.
@@ -163,7 +167,7 @@ class Albrecht2019Increased(study.Study):
         mat = loadmat(
             basename.with_suffix(".mat"), simplify_cells=True, variable_names=["EEG"]
         )["EEG"]
-        data = mat["data"]
+        data = mat["data"] * 1e-6  # EEGLAB stores EEG.data in uV
         sfreq = mat["srate"]
         info = mne.create_info(
             ch_names=list(chs_df["labels"]), sfreq=sfreq, ch_types="eeg"

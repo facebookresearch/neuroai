@@ -28,7 +28,7 @@ class Zyma2019Electroencephalograms(study.Study):
     group, and number of subtractions performed.
 
     Experimental Design:
-        - EEG recordings (20-channel, 500 Hz, Neurocom)
+        - EEG recordings (19-channel, 500 Hz, Neurocom)
         - 36 participants
         - 2 runs per participant
             * Run 1: resting-state baseline
@@ -74,12 +74,16 @@ class Zyma2019Electroencephalograms(study.Study):
         num_subjects=36,
         num_events_in_query=1,
         event_types_in_query={"Eeg"},
-        data_shape=(20, 91000),
+        data_shape=(19, 91000),
         frequency=500.0,
     )
     requirements: tp.ClassVar[tuple[str, ...]] = ("boto3", "botocore")
     _PHYSIONET_STUDY: tp.ClassVar[str] = "eegmat"
     _PHYSIONET_VERSION: tp.ClassVar[str] = "1.0.0"
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        self.version = "v2"
 
     def _download(self, overwrite: bool = False) -> None:
         physionet = download.Physionet(
@@ -130,9 +134,13 @@ class Zyma2019Electroencephalograms(study.Study):
     def _load_raw(self, timeline: dict[str, tp.Any]) -> mne.io.RawArray:
         # Neurocom monopolar EEG 23-channel system (Ukraine, XAI-MEDICA)
         raw = mne.io.read_raw_edf(self._get_eeg_filename(timeline))
-        ch_types = {ch: ch.split(" ")[0].lower() for ch in raw.ch_names}
+        # "EEG A2-A1" is the ear-to-ear derivation of the linked-ear reference
+        ch_types = {
+            ch: "misc" if ch == "EEG A2-A1" else ch.split(" ")[0].lower()
+            for ch in raw.ch_names
+        }
         ch_names = {ch: ch.split(" ")[1] for ch in raw.ch_names}
-        raw.set_channel_types(ch_types)
+        raw.set_channel_types(ch_types, on_unit_change="ignore")
         raw.rename_channels(ch_names)
         montage = mne.channels.make_standard_montage("standard_1020")
         raw.set_montage(montage, on_missing="ignore")

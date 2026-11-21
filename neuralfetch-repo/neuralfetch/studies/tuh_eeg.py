@@ -323,6 +323,8 @@ class Lopez2017Tuab(_BaseTuhEeg):
             raise RuntimeError(f"Folder should exist: {folder}")
 
         for split_dir in sorted(folder.iterdir()):
+            if not split_dir.is_dir():
+                continue
             split = split_dir.name
             for label_dir in sorted(split_dir.iterdir()):
                 label = label_dir.name
@@ -571,6 +573,8 @@ class Harati2015Tuev(_BaseTuhEeg):
         """Returns a generator of all recordings"""
         folder = self.path / "edf"
         for split_dir in sorted(folder.iterdir()):
+            if not split_dir.is_dir():
+                continue
             split = split_dir.name
             for sub_dir in sorted(split_dir.iterdir()):
                 for file_path in sorted(sub_dir.rglob("*.edf")):
@@ -741,6 +745,8 @@ class VonWeltin2017Tusl(_BaseTuhEeg):
         """Returns a generator of all recordings."""
         folder = self.path / "edf"
         for sub_dir in sorted(folder.iterdir()):
+            if not sub_dir.is_dir():
+                continue
             for sess_dir in sorted(sub_dir.iterdir()):
                 date = sess_dir.stem[5:]
                 for file_path in sorted(sess_dir.rglob("*.edf")):
@@ -798,6 +804,8 @@ class Shah2018Tusz(_BaseTuhEeg):
         """Returns a generator of all recordings"""
         folder = self.path / "edf"
         for split_dir in sorted(folder.iterdir()):
+            if not split_dir.is_dir():
+                continue
             split = split_dir.name
             for sub_dir in sorted(split_dir.iterdir()):
                 for sess_dir in sorted(sub_dir.iterdir()):

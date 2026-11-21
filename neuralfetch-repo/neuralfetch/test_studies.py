@@ -12,6 +12,7 @@ import sys
 import typing as tp
 from pathlib import Path
 
+import mne
 import numpy as np
 import pytest
 import requests
@@ -125,6 +126,54 @@ def test_physionet_study_download_root(tmp_path: Path) -> None:
     assert study._get_eeg_filename(  # noqa: SLF001
         {"subject": "Subject01", "run": "1"}
     ) == (expected_root / "Subject01_1.edf")
+
+
+_EEGMAT_SCALP = "Fp1 Fp2 F3 F4 F7 F8 T3 T4 C3 C4 T5 T6 P3 P4 O1 O2 Fz Cz Pz".split()
+
+
+@pytest.mark.parametrize(
+    "name,timeline,edf,labels,types",
+    [
+        (
+            "Alvarez2022Haaglanden",
+            {"subject": "SN001"},
+            "download/hmc-sleep-staging/1.1/recordings/SN001.edf",
+            ["EEG F4-M1", "EEG C4-M1", "EEG O2-M1", "EEG C3-M2", "EMG chin"]
+            + ["EOG E1-M2", "EOG E2-M2", "ECG"],
+            4 * ["eeg"] + ["emg", "eog", "eog", "ecg"],
+        ),
+        (
+            "Zyma2019Electroencephalograms",
+            {"subject": "Subject00", "run": "1"},
+            "download/eegmat/1.0.0/Subject00_1.edf",
+            [f"EEG {ch}" for ch in _EEGMAT_SCALP] + ["EEG A2-A1", "ECG ECG"],
+            19 * ["eeg"] + ["misc", "ecg"],
+        ),
+    ],
+)
+def test_physionet_edf_channel_types(
+    name: str,
+    timeline: dict[str, tp.Any],
+    edf: str,
+    labels: list[str],
+    types: list[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The EDF is read where download.Physionet writes it, and only scalp
+    channels are typed EEG (MNE reads every EDF channel as EEG)."""
+    study: tp.Any = ns.Study.catalog()[name](path=tmp_path)
+    read: list[Path] = []
+
+    def read_raw_edf(fname: Path, **kwargs: tp.Any) -> mne.io.RawArray:
+        read.append(Path(fname))
+        info = mne.create_info(labels, 256.0, "eeg")
+        return mne.io.RawArray(np.zeros((len(labels), 10)), info)
+
+    monkeypatch.setattr(mne.io, "read_raw_edf", read_raw_edf)
+    raw = study._load_raw(timeline)  # noqa: SLF001
+    assert read == [study.path / edf]
+    assert raw.get_channel_types() == types
 
 
 @pytest.mark.parametrize("name", INFO_STUDIES)
@@ -299,3 +348,44 @@ def test_brennan2019_timeline_count(tmp_path: Path) -> None:
     subjects = {t["subject"] for t in timelines}
     no_proc = {"S28", "S29", "S31", "S33", "S46", "S47", "S49"}
     assert subjects.isdisjoint(no_proc)
+
+
+def test_eeglab_struct_samples_in_volts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """EEGLAB stores EEG.data in uV; MNE's EEGLAB reader scales it by 1e-6."""
+    from neuralfetch.studies import albrecht2019increased, hollenstein2018zuco
+
+    names = ["E1", "E2", "E3"]  # GSN-HydroCel-128 sites
+    data_uv = np.random.default_rng(0).normal(scale=50.0, size=(3, 100))
+    eeg = {"data": data_uv, "srate": 500.0, "chanlocs": [{"labels": n} for n in names]}
+    monkeypatch.setattr(albrecht2019increased, "loadmat", lambda *a, **k: {"EEG": eeg})
+    monkeypatch.setattr("scipy.io.loadmat", lambda *a, **k: {"EEG": eeg})
+    albrecht = albrecht2019increased.Albrecht2019Increased(path=tmp_path)
+    (albrecht.path / "download").mkdir(parents=True)
+    ced = albrecht.path / "download" / "MMN_ElectrodeCoords_MA2.ced"
+    ced.write_text("labels\n" + "\n".join(names))
+    hollenstein = hollenstein2018zuco.Hollenstein2018Zuco(path=tmp_path)
+    for raw in (
+        albrecht._load_raw({"subject": "CC_EEG_s101_P"}),  # noqa: SLF001
+        hollenstein._load_raw({"task": "task1-SR", "subject": "ZAB", "run": "SR1"}),  # noqa: SLF001
+    ):
+        np.testing.assert_allclose(raw.get_data(), data_uv * 1e-6)
+
+
+@pytest.mark.parametrize(
+    "name,edf",
+    [
+        ("Lopez2017Tuab", "train/normal/01_tcp_ar/aaaaaaav_s001_t000.edf"),
+        ("Harati2015Tuev", "train/aaaaaaar/aaaaaaar_00000001.edf"),
+        ("VonWeltin2017Tusl", "aaaaaaju/s005_2010/01_tcp_ar/aaaaaaju_s005_t000.edf"),
+        ("Shah2018Tusz", "train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf"),
+    ],
+)
+def test_tuh_skips_files_in_edf_folder(name: str, edf: str, tmp_path: Path) -> None:
+    """A file next to the TUH split/subject folders (e.g. an rsync'd .htaccess)."""
+    study = ns.Study.catalog()[name](path=tmp_path)
+    (study.path / "edf" / edf).parent.mkdir(parents=True)
+    (study.path / "edf" / edf).touch()
+    (study.path / "edf" / ".htaccess").touch()
+    assert len(list(study.iter_timelines())) == 1

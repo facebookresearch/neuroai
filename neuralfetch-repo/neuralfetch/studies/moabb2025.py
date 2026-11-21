@@ -382,7 +382,8 @@ class _BaseMoabb(studies.Study):
         data = _get_cached_moabb_data(self.aliases[0], dl_path, subject, kw)
         sessions = data[subject]
         runs = self._dict_get(sessions, tl["session"])
-        return self._dict_get(runs, tl["run"])
+        # copy: callers preprocess the raw in place, which would alter the cached one
+        return self._dict_get(runs, tl["run"]).copy()
 
 
 # ============================================================================
@@ -2969,7 +2970,7 @@ class Romani2025Brainform(_BaseMoabb):
         cache_key = (str(bids), tl["subject"], ses)
         if cache_key in _moabb_data_cache:
             _moabb_data_cache.move_to_end(cache_key)
-            return _moabb_data_cache[cache_key]
+            return _moabb_data_cache[cache_key].copy()
 
         eeg_dir = bids / f"sub-{label}" / f"ses-{ses}" / "eeg"
         prefix = f"sub-{label}_ses-{ses}_task-ERP"
@@ -3036,7 +3037,7 @@ class Romani2025Brainform(_BaseMoabb):
         while len(_moabb_data_cache) > _MOABB_CACHE_MAXSIZE:
             _moabb_data_cache.popitem(last=False)
 
-        return raw
+        return raw.copy()
 
 
 class Schaeff2012Exploring(_BaseMoabb):
