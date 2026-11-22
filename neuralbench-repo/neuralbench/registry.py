@@ -438,12 +438,14 @@ DEVICE_CLASSIC_MODELS: dict[str, list[str]] = {
     "meg": CLASSIC_MODELS,
     "fmri": _cli_names(family="classic", device="fmri"),
     "emg": _cli_names(family="classic", device="emg"),
+    "fnirs": _cli_names(family="classic", device="fnirs"),
     "ecg": [m for m in CLASSIC_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 DEVICE_FM_MODELS: dict[str, list[str]] = {
     "eeg": FM_MODELS,
     "meg": FM_MODELS,
     "fmri": _cli_names(family="foundation", device="fmri"),
+    "fnirs": _cli_names(family="foundation", device="fnirs"),
     "ecg": [m for m in FM_MODELS if m not in ECG_INCOMPATIBLE_MODELS],
 }
 # Per-device classical baseline lists.
@@ -464,10 +466,23 @@ DEVICE_FM_MODELS: dict[str, list[str]] = {
 #   head on log-variance -- degenerate but well-defined, and they are what the
 #   published ECG numbers were measured against.  Xdawn is dropped because its
 #   spatial filtering has no meaning on a single channel.
+# - fNIRS uses the hemodynamic feature baselines.  They are not in
+#   ``SKLEARN_BASELINE_MODELS``, so every fNIRS task runs all seven.
 DEVICE_BASELINE_MODELS: dict[str, list[str]] = {
     "eeg": BASELINE_MODELS,
     "meg": ["chance", "dummy", "xdawn_ts_lr", "cov_ts_lr", "cov_ts_ridge"],
     "fmri": ["chance", "dummy"],
+    "fnirs": [
+        "chance",
+        "dummy",
+        "mean_slope_lda",
+        "statistical_rbf_svm",
+        "hrf_glm_lr",
+        "hemodynamic_knn",
+        "hemodynamic_rf",
+        "hemodynamic_gbdt",
+        "hemodynamic_nb",
+    ],
     "ecg": ["chance", "dummy", "cov_ts_lr", "cov_ts_ridge"],
 }
 

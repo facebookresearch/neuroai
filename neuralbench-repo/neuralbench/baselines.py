@@ -39,6 +39,11 @@ Supported pipelines
     Continuous-target regression baseline (e.g. age prediction); handles both
     univariate and multi-output targets via sklearn's native multi-output
     Ridge.
+fNIRS hemodynamic baselines
+    ``_hemodynamic_features -> StandardScaler -> head`` on per-channel mean and
+    slope (``MeanSlopeLDA``, ``HemodynamicNB``), 11 summary statistics
+    (``StatisticalRBFSVM``, ``HemodynamicKNN``, ``HemodynamicRF``,
+    ``HemodynamicGBDT``) or canonical HRF GLM betas (``HRFGLMLR``).
 
 The ``StandardScaler`` step puts all tangent-space features on a common scale
 so the linear head's regularization penalty is not dominated by the most
@@ -54,6 +59,7 @@ materializers on :class:`FitOnceBuildContext`) and returns an eval-only
 
 import dataclasses
 import logging
+import math
 import typing as tp
 
 import numpy as np
@@ -61,10 +67,15 @@ import torch
 from pyriemann.estimation import CoSpectra, Covariances, Shrinkage, XdawnCovariances
 from pyriemann.tangentspace import TangentSpace
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegressionCV, RidgeCV
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline, make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
+from sklearn.svm import SVC
 from torch import nn
 
 from neuraltrain.models.base import BaseBrainModelConfig, BrainModelBuildContext
@@ -693,6 +704,193 @@ class CoSpectraLogLR(SklearnClassifier):
             StandardScaler(),
             self._build_lr_head(is_multilabel=target_info["is_multilabel"]),
         )
+
+
+# ----------------------------------------------------------------------
+# Classical fNIRS hemodynamic baselines
+# ----------------------------------------------------------------------
+_FeatureMode = tp.Literal["mean_slope", "full_11", "hrf_glm"]
+
+
+def _hrf_design_pinv(n_times: int, fs: float) -> np.ndarray:
+    """Pseudo-inverse ``(2, T)`` of a canonical double-gamma HRF and its derivative."""
+    t = np.arange(n_times, dtype=np.float64) / fs
+    g1 = np.power(t, 5.0) * np.exp(-t) / math.factorial(5)
+    g2 = np.power(t, 15.0) * np.exp(-t) / math.factorial(15)
+    hrf = g1 - g2 / 6.0
+    peak = float(np.max(np.abs(hrf)))
+    hrf = hrf / (peak if peak > 1e-12 else 1.0)
+    dhrf = np.gradient(hrf) if n_times > 1 else np.zeros_like(hrf)
+    peak = float(np.max(np.abs(dhrf)))
+    dhrf = dhrf / (peak if peak > 1e-12 else 1.0)
+    tau = np.linspace(-1.0, 1.0, n_times, dtype=np.float64)
+    design = np.stack([hrf, dhrf, np.ones_like(tau), tau], axis=-1)  # (T, 4)
+    return np.linalg.pinv(design)[:2]
+
+
+def _window_features(seg: np.ndarray, mode: _FeatureMode, frequency: float) -> np.ndarray:
+    """Features of one ``(N, C, T)`` window; non-finite samples are ignored."""
+    finite = np.isfinite(seg)
+    counts = np.maximum(finite.sum(axis=-1, keepdims=True), 1)
+    n_valid = counts[..., 0]  # (N, C)
+    safe = np.where(finite, seg, 0.0)
+    mean = safe.sum(axis=-1, keepdims=True) / counts  # (N, C, 1)
+    centered = np.where(finite, seg - mean, 0.0)
+    # OLS slope over the valid samples, on time rescaled to [-1, 1]
+    tau = np.linspace(-1.0, 1.0, seg.shape[-1], dtype=np.float64)
+    t_mean = np.where(finite, tau, 0.0).sum(axis=-1, keepdims=True) / counts
+    t_zero = np.where(finite, tau - t_mean, 0.0)
+    denom = (t_zero * t_zero).sum(axis=-1)
+    ok = denom > 1e-12
+    slope = np.where(ok, (t_zero * centered).sum(axis=-1) / np.where(ok, denom, 1.0), 0.0)
+    if mode == "mean_slope":
+        feats = [mean[..., 0], slope]
+    elif mode == "hrf_glm":
+        betas = np.einsum("nct,kt->nck", safe, _hrf_design_pinv(seg.shape[-1], frequency))
+        feats = [betas[..., 0], betas[..., 1], mean[..., 0], slope]
+    else:
+        std = np.sqrt((centered * centered).sum(axis=-1) / n_valid)
+        z = np.where(finite, centered / np.where(std > 1e-8, std, 1.0)[..., None], 0.0)
+        rms = np.sqrt((safe * safe).sum(axis=-1) / n_valid)
+        skew = np.where(std > 1e-8, (z**3).sum(axis=-1) / n_valid, 0.0)
+        kurt = np.where(std > 1e-8, (z**4).sum(axis=-1) / n_valid - 3.0, 0.0)
+        filled = np.where(finite, seg, mean)  # order statistics: NaN -> channel mean
+        q25, median, q75 = np.percentile(filled, [25.0, 50.0, 75.0], axis=-1)
+        feats = [mean[..., 0], std, filled.min(-1), filled.max(-1), median, q75 - q25]
+        feats += [rms, slope, skew, kurt, finite.mean(axis=-1)]
+    out = np.stack(feats, axis=-1).reshape(len(seg), -1)  # (N, C * n_features)
+    return (
+        out if mode != "full_11" else np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+    )
+
+
+def _hemodynamic_features(
+    X: np.ndarray, mode: _FeatureMode, n_windows: int = 1, frequency: float = 10.0
+) -> np.ndarray:
+    """Per-channel fNIRS features of ``(N, C, T)`` trials on ``n_windows`` sub-windows.
+
+    ``"mean_slope"``: mean and OLS slope (Naseer & Hong, 2015). ``"full_11"``:
+    mean, std, min, max, median, iqr, rms, slope, skew, kurtosis, finite fraction
+    (GeoNIRS). ``"hrf_glm"``: betas of a canonical double-gamma HRF and its
+    derivative with constant and linear drift (Glover, 1999), mean and slope.
+    """
+    X = np.asarray(X, dtype=np.float64)
+    segs = np.array_split(X, max(1, min(int(n_windows), X.shape[-1])), axis=-1)
+    return np.concatenate([_window_features(s, mode, frequency) for s in segs], axis=-1)
+
+
+class _HemodynamicClassifier(SklearnClassifier):
+    """``_hemodynamic_features -> StandardScaler -> head`` (fNIRS baselines).
+
+    Parameters
+    ----------
+    n_windows
+        Number of equal temporal sub-windows the features are computed on.
+    """
+
+    n_windows: int = 1
+
+    _features: tp.ClassVar[_FeatureMode] = "full_11"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        raise NotImplementedError
+
+    def _build_pipeline(
+        self,
+        *,
+        y: np.ndarray,
+        target_info: dict[str, tp.Any],
+        ts_metric: str,
+        frequency: float | None = None,
+    ) -> Pipeline:
+        head = self._head(y)
+        fs = 10.0 if frequency is None else frequency  # HRF time axis fallback
+        kw_args = dict(mode=self._features, n_windows=self.n_windows, frequency=fs)
+        return make_pipeline(
+            FunctionTransformer(_hemodynamic_features, kw_args=kw_args),
+            StandardScaler(),
+            OneVsRestClassifier(head) if target_info["is_multilabel"] else head,
+        )
+
+
+class MeanSlopeLDA(_HemodynamicClassifier):
+    """Mean + slope features, shrinkage LDA (Naseer & Hong, 2015; Shin et al., 2017)."""
+
+    lda_shrinkage: str | float | None = "auto"
+
+    _features: tp.ClassVar[_FeatureMode] = "mean_slope"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return LinearDiscriminantAnalysis(solver="lsqr", shrinkage=self.lda_shrinkage)
+
+
+class StatisticalRBFSVM(_HemodynamicClassifier):
+    """11 statistics, class-balanced RBF SVC (GeoNIRS; MtReNIRS ``Stat-SVM``)."""
+
+    svm_C: float = 1.0
+    svm_gamma: str | float = "scale"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return SVC(
+            C=self.svm_C,
+            gamma=self.svm_gamma,
+            probability=True,
+            class_weight="balanced",
+            random_state=self.random_state,
+        )
+
+
+class HRFGLMLR(_HemodynamicClassifier):
+    """Canonical HRF GLM betas, LogisticRegressionCV (Glover, 1999; Pinti et al., 2020)."""
+
+    _features: tp.ClassVar[_FeatureMode] = "hrf_glm"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return self._build_lr_head(is_multilabel=False)
+
+
+class HemodynamicKNN(_HemodynamicClassifier):
+    """11 statistics, k-nearest neighbours."""
+
+    n_neighbors: int = 5
+    weights: str = "distance"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        k = max(1, min(self.n_neighbors, len(y)))
+        return KNeighborsClassifier(n_neighbors=k, weights=self.weights)
+
+
+class HemodynamicRF(_HemodynamicClassifier):
+    """11 statistics, class-balanced random forest."""
+
+    n_estimators: int = 200
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return RandomForestClassifier(
+            self.n_estimators, class_weight="balanced", random_state=self.random_state
+        )
+
+
+class HemodynamicGBDT(_HemodynamicClassifier):
+    """11 statistics, class-balanced histogram gradient boosting."""
+
+    max_iter: int = 100
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return HistGradientBoostingClassifier(
+            max_iter=self.max_iter,
+            class_weight="balanced",
+            random_state=self.random_state,
+        )
+
+
+class HemodynamicNB(_HemodynamicClassifier):
+    """Mean + slope features, Gaussian naive Bayes."""
+
+    _features: tp.ClassVar[_FeatureMode] = "mean_slope"
+
+    def _head(self, y: np.ndarray) -> tp.Any:
+        return GaussianNB()
 
 
 # ----------------------------------------------------------------------
