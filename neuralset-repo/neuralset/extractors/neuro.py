@@ -210,6 +210,47 @@ class FmriTimedArray(TimedArray):
         return nibabel.Nifti1Image(data, affine)
 
 
+class RawTransform(base.BaseModel):
+    """A function applied to a loaded MNE ``Raw``, as ``name(raw, **params) -> raw``.
+
+    Parameters
+    ----------
+    name : str
+        Dotted import path of a module-level function (e.g.
+        ``"mne.preprocessing.compute_current_source_density"``), resolved when
+        the config is built.  To apply a ``Raw`` method, wrap it in a function.
+    params : dict, default={}
+        Keyword arguments passed to the function.
+    code_hash : str
+        Hash of the function's source code, recomputed on validation whatever
+        value is passed.  It is part of the extractor's cache uid, so editing
+        the function re-runs the extraction; editing the helpers it calls does
+        not, so bump the extractor's ``infra.version`` after those.  Functions
+        without Python source (builtins, C extensions) hash their ``name``.
+    """
+
+    name: str
+    params: dict[str, tp.Any] = {}
+    code_hash: str = ""
+    _fn: tp.Callable[..., tp.Any] = pydantic.PrivateAttr()
+
+    @pydantic.model_validator(mode="after")
+    def _resolve(self) -> "RawTransform":
+        self._fn = pydantic.TypeAdapter(pydantic.ImportString).validate_python(self.name)
+        try:
+            source = inspect.getsource(self._fn)
+        except (OSError, TypeError):  # no Python source: see code_hash
+            source = self.name
+        self.code_hash = hashlib.sha256(source.encode()).hexdigest()[:12]
+        return self
+
+    def __call__(self, raw: mne.io.Raw) -> mne.io.Raw:
+        out = self._fn(raw, **self.params)
+        if out is None:
+            raise TypeError(f"raw_preprocessing {self.name} returned None")
+        return out
+
+
 class MneRaw(BaseExtractor):
     """
     Feature extractor for raw MNE data files.
@@ -306,6 +347,11 @@ class MneRaw(BaseExtractor):
         Internal Active Shielding (MaxShield). Such recordings contain
         compensation signals that should normally be removed via SSS/tSSS
         (MaxFilter) before analysis. Does not affect the cache uid.
+    raw_preprocessing : list of RawTransform, default=[]
+        Functions applied in order to each loaded ``Raw``, before channel picking
+        and the steps above, e.g.
+        ``[{"name": "mne.preprocessing.compute_current_source_density"}]``.
+        Their source code is part of the cache uid (see :class:`RawTransform`).
 
     """
 
@@ -335,6 +381,7 @@ class MneRaw(BaseExtractor):
     bipolar_ref: tuple[list[str], list[str]] | None = None
     channel_order: tp.Literal["unique", "original"] = "unique"
     allow_maxshield: bool = False
+    raw_preprocessing: list[RawTransform] = []
 
     _channels: dict[str, int] = {}
 
@@ -464,7 +511,12 @@ class MneRaw(BaseExtractor):
     )
     def _get_data(self, events: tp.Sequence[etypes.MneRaw]) -> tp.Iterator[MneTimedArray]:
         for event in events:
-            ta = self._preprocess_raw(event.read(), event)
+            raw = event.read()
+            if self.raw_preprocessing:
+                raw.load_data()
+            for transform in self.raw_preprocessing:
+                raw = transform(raw)
+            ta = self._preprocess_raw(raw, event)
             # not in _preprocess_raw, which subclasses override without super()
             if self.store_dtype == "float16":
                 ta.data = quantize.Float16StoredArray(ta.data)  # type: ignore[assignment]
