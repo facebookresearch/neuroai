@@ -414,6 +414,7 @@ def build_experiment_configs(
     prepare: bool = False,
     download: bool = False,
     quiet: bool = False,
+    overrides: tp.Mapping[str, tp.Any] | None = None,
 ) -> list[ConfDict]:
     """Assemble one experiment config per (task, dataset, space, model, grid point).
 
@@ -536,6 +537,11 @@ def build_experiment_configs(
             )
     if tasks and not configs:
         raise ValueError("No experiment left for this selection; see the warnings above.")
+    if overrides:
+        # Last, because the debug and prepare overlays run after a model config
+        # is merged and would otherwise silently revert an override.
+        for config in configs:
+            config.update(dict(overrides))
     return configs
 
 

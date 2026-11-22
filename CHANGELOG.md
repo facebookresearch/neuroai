@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: `--overrides YAML` and `run_benchmark(overrides=...)` apply dotted-key or nested config overrides last to every experiment, like `evaluate_model(overrides=...)`, which now goes through the same `build_experiment_configs(overrides=...)` (#358).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

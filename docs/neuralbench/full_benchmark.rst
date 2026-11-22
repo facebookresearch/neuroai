@@ -204,6 +204,19 @@ all dataset variants for a task:
    neuralbench eeg motor_imagery --dataset all      # Run on all 18 motor imagery datasets
    neuralbench eeg p3 --dataset all                 # Run on all 24 P300 datasets
 
+Overriding config values
+------------------------
+
+``--overrides`` takes a YAML file of config keys, dotted or nested, applied last to
+every experiment (after ``--debug`` and ``--prepare``), as ``evaluate_model``'s
+``overrides``.  Overridden values change the cache keys, so the runs are cached
+apart:
+
+.. code-block:: bash
+
+   echo "data.neuro.filter: [4.0, 40.0]" > filter.yaml
+   neuralbench eeg motor_imagery --overrides filter.yaml
+
 Visualizing results
 --------------------
 
