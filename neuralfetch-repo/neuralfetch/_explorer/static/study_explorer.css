@@ -1,0 +1,624 @@
+#study-explorer {
+  /* device colors come from the root style */
+  --nse-other: #6b7280;
+  --nse-border: var(--color-background-border, #d1d5db);
+  --nse-panel: var(--color-background-secondary, #f8fafc);
+  --nse-text: var(--color-foreground-primary, #111827);
+  --nse-muted: var(--color-foreground-muted, #4b5563);
+  --nse-brand: var(--color-brand-primary, #448aff);
+  --nse-tile: color-mix(in srgb, currentColor 5%, transparent);
+  /* Host --control-* tokens inherit; fallbacks keep the catalogue independent. */
+  --nse-control-font-size: var(--control-font-size, 0.78rem);
+  --nse-control-padding-block: var(--control-padding-block, 0.3rem);
+  --nse-control-padding-inline: var(--control-padding-inline, 0.7rem);
+  --nse-control-hit-area: var(--control-hit-area, 0px);
+  color: var(--nse-text);
+}
+#study-explorer [hidden] { display: none !important; }
+#study-explorer :is(button, a[href]) {
+  box-sizing: border-box;
+  min-height: var(--nse-control-hit-area);
+  min-width: var(--nse-control-hit-area);
+}
+#study-explorer a[href] {
+  align-items: center;
+  display: inline-flex;
+}
+#study-explorer :is(button, a[href], [role="button"]):focus-visible {
+  outline: 2px solid var(--control-focus, var(--nse-brand));
+  outline-offset: 2px;
+}
+#study-explorer .study-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 1em;
+  vertical-align: -0.125em;
+  width: 1em;
+}
+@media (pointer: coarse) {
+  #study-explorer {
+    /* In-flow hit areas cannot overlap adjacent controls. */
+    --nse-control-hit-area: max(44px, var(--control-hit-area, 44px));
+  }
+}
+#study-explorer[data-study-view] > .explorer-catalog,
+#study-explorer[data-study-view] .study-details-close {
+  display: none;
+}
+#study-explorer .study-view-nav:not([hidden]) {
+  margin: 0 0 12px;
+}
+#study-explorer h1,
+#study-explorer h2 {
+  margin-bottom: 8px;
+}
+#study-explorer section {
+  margin-top: 28px;
+}
+#study-explorer .note {
+  color: var(--nse-muted);
+}
+#study-explorer .controls {
+  background: var(--nse-panel);
+  border: 1px solid var(--nse-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+#study-explorer .controls-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+#study-explorer .controls-label {
+  color: var(--nse-text);
+  flex: 0 0 64px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+#study-explorer .event-chips {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#study-explorer .event-chip {
+  --chip-color: var(--nse-brand);
+  background: transparent;
+  border: 1px solid var(--nse-border);
+  border-radius: 999px;
+  color: var(--nse-text);
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+#study-explorer .event-chip--device {
+  border-color: color-mix(in srgb, var(--chip-color) 40%, var(--nse-border));
+}
+#study-explorer .event-chip:hover {
+  border-color: var(--chip-color);
+  color: var(--chip-color);
+}
+#study-explorer .event-chip.active {
+  background: var(--chip-color);
+  border-color: var(--chip-color);
+  color: #fff;
+}
+#study-explorer .event-chip:not(.active) {
+  background: transparent;
+  color: var(--nse-muted);
+  opacity: 0.5;
+}
+#study-explorer .event-chip:not(.active):hover {
+  opacity: 0.95;
+}
+#study-explorer .event-chip:not(.active):focus-visible {
+  opacity: 1;
+}
+/* Tabbed explorer: shared section for the scatter and the table. */
+#study-explorer .explorer-tabs-section {
+  margin-top: 22px;
+}
+#study-explorer .explorer-tabs {
+  border-bottom: 1px solid var(--nse-border);
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+#study-explorer .explorer-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--nse-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+#study-explorer .explorer-tab:hover:not(.active) {
+  color: var(--nse-text);
+}
+#study-explorer .explorer-tab.active {
+  border-bottom-color: var(--nse-brand);
+  color: var(--nse-brand);
+}
+#study-explorer .explorer-tab-panel[hidden] {
+  display: none !important;
+}
+#study-explorer .summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-top: 14px;
+}
+#study-explorer .summary div {
+  background: var(--nse-panel);
+  border: 1px solid var(--nse-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+#study-explorer .summary strong {
+  display: block;
+  font-size: 20px;
+}
+#study-explorer .summary span {
+  color: var(--nse-muted);
+  font-size: 0.85em;
+}
+#study-explorer .scatter-wrap,
+#study-explorer .table-wrap {
+  border: 1px solid var(--nse-border);
+  border-radius: 10px;
+  overflow: auto;
+}
+/* Horizontal scroll shadows on the events table: the two outer
+   radial-gradients fade in/out with `background-attachment: scroll` to
+   signal that the table extends past the visible edge. */
+#study-explorer .table-wrap {
+  background:
+    radial-gradient(
+      farthest-side at 0 50%,
+      color-mix(in srgb, var(--nse-text) 14%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      farthest-side at 100% 50%,
+      color-mix(in srgb, var(--nse-text) 14%, transparent),
+      transparent
+    ) right;
+  background-attachment: scroll, scroll;
+  background-color: var(--color-background-primary, #fff);
+  background-repeat: no-repeat;
+  background-size: 16px 100%, 16px 100%;
+}
+#study-explorer .scatter-wrap {
+  background: var(--nse-panel);
+}
+#study-explorer .scatter-wrap svg {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+  max-width: 900px;
+  width: 100%;
+}
+#study-explorer .grid {
+  stroke: color-mix(in srgb, var(--nse-text) 12%, transparent);
+  stroke-width: 1;
+}
+#study-explorer .axis {
+  stroke: color-mix(in srgb, var(--nse-text) 55%, transparent);
+  stroke-width: 1.5;
+}
+#study-explorer .axis-label {
+  fill: var(--nse-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+#study-explorer .axis-tick {
+  fill: var(--nse-muted);
+  font-size: 11px;
+}
+#study-explorer .study-point {
+  cursor: pointer;
+}
+#study-explorer .study-point circle {
+  stroke: color-mix(in srgb, var(--nse-text) 65%, transparent);
+  transition: stroke-width 0.12s, fill-opacity 0.12s;
+}
+#study-explorer .study-point:hover circle,
+#study-explorer .study-point:focus circle {
+  fill-opacity: 0.9;
+  stroke-width: 2;
+}
+#study-explorer .study-link {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+#study-explorer .study-link:hover,
+#study-explorer .study-link:focus-visible {
+  color: var(--nse-brand);
+  text-decoration: underline;
+}
+#study-explorer #study-tooltip {
+  background: var(--color-background-primary, #fff);
+  border: 1px solid var(--nse-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  color: var(--nse-text);
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 360px;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 100;
+}
+#study-explorer .tooltip-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+#study-explorer table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  min-width: 100%;
+}
+#study-explorer th,
+#study-explorer td {
+  border-bottom: 1px solid var(--nse-border);
+  border-right: 1px solid var(--nse-border);
+  padding: 7px 9px;
+  text-align: center;
+  white-space: nowrap;
+}
+#study-explorer thead th {
+  background: var(--nse-panel);
+  color: var(--nse-text);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+#study-explorer .study-col {
+  background: var(--color-background-primary, #fff);
+  left: 0;
+  position: sticky;
+  text-align: left;
+  z-index: 3;
+}
+#study-explorer thead .study-col {
+  background: var(--nse-panel);
+}
+#study-explorer .event-col {
+  cursor: pointer;
+  user-select: none;
+  writing-mode: vertical-rl;
+}
+#study-explorer .event-col:hover {
+  background: color-mix(in srgb, var(--chip-color, var(--nse-brand)) 30%, transparent);
+}
+#study-explorer .event-col button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  pointer-events: none;
+  writing-mode: vertical-rl;
+}
+#study-explorer .event-col:not(.active) button {
+  opacity: 0.5;
+}
+#study-explorer .event-col:not(.active):hover button {
+  opacity: 0.95;
+}
+#study-explorer .event-col {
+  --chip-color: var(--nse-brand);
+}
+#study-explorer .event-col.active,
+#study-explorer .event-col.active button {
+  background: color-mix(in srgb, var(--chip-color) 25%, transparent);
+  color: var(--nse-text);
+}
+#study-explorer .event-super-header th {
+  background: color-mix(in srgb, var(--nse-text) 8%, transparent);
+  color: var(--nse-muted);
+  font-weight: 700;
+  text-align: center;
+}
+#study-explorer .neuro-event-col,
+#study-explorer .other-event-col {
+  background: var(--nse-panel);
+}
+#study-explorer .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+#study-explorer .tick {
+  color: color-mix(in srgb, var(--nse-emg) 80%, var(--nse-text));
+  font-weight: 700;
+}
+#study-explorer [hidden] {
+  display: none !important;
+}
+/* Row backgrounds are opaque mixes into the page background so the
+   left-sticky study-name column doesn't bleed through when the table
+   scrolls horizontally. */
+#study-explorer .study-row.device-eeg td,
+#study-explorer .study-row.device-eeg .study-col {
+  background: color-mix(in srgb, var(--nse-eeg) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-meg td,
+#study-explorer .study-row.device-meg .study-col {
+  background: color-mix(in srgb, var(--nse-meg) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-fmri td,
+#study-explorer .study-row.device-fmri .study-col {
+  background: color-mix(in srgb, var(--nse-fmri) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-ieeg td,
+#study-explorer .study-row.device-ieeg .study-col {
+  background: color-mix(in srgb, var(--nse-ieeg) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-emg td,
+#study-explorer .study-row.device-emg .study-col {
+  background: color-mix(in srgb, var(--nse-emg) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-fnirs td,
+#study-explorer .study-row.device-fnirs .study-col {
+  background: color-mix(in srgb, var(--nse-fnirs) 10%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-multimodal td,
+#study-explorer .study-row.device-multimodal .study-col {
+  background: color-mix(in srgb, var(--nse-multimodal) 8%, var(--color-background-primary, #fff));
+}
+#study-explorer .study-row.device-other td,
+#study-explorer .study-row.device-other .study-col {
+  background: var(--color-background-primary, #fff);
+}
+/* Inline study-details panel — shown below the active tab when a study
+   is clicked. Same panel is used for plot circles and table rows. */
+#study-explorer .study-details {
+  background: var(--color-background-primary, #fff);
+  border: 1px solid var(--nse-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  color: var(--nse-text);
+  margin-top: 18px;
+  padding: 18px 22px 18px;
+}
+#study-explorer .study-details-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+#study-explorer .study-details-header > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#study-explorer .study-details-name {
+  font-size: 1.15em;
+  font-weight: 700;
+  word-break: break-word;
+}
+#study-explorer .study-details-device-badge {
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  text-transform: uppercase;
+}
+#study-explorer .study-details-close {
+  background: transparent;
+  border: 0;
+  color: var(--nse-muted);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  margin-top: -2px;
+  padding: 0 4px;
+}
+#study-explorer .study-details-close:hover {
+  color: var(--nse-text);
+}
+#study-explorer .study-details-aliases {
+  color: var(--nse-muted);
+  font-size: 0.85em;
+  font-style: italic;
+  margin: 0 0 8px;
+}
+#study-explorer .study-details-description {
+  color: var(--nse-text);
+  font-size: 0.92em;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+#study-explorer .study-details-stats {
+  background: var(--nse-panel);
+  border: 1px solid var(--nse-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin: 0 0 12px;
+  padding: 10px 14px;
+}
+#study-explorer .study-tooltip-hint { opacity: 0.7; margin-top: 6px; }
+#study-explorer .study-details-stats > div {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+#study-explorer .study-details-stats dt {
+  color: var(--nse-muted);
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+#study-explorer .study-details-stats dd {
+  color: var(--nse-text);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin: 0;
+  text-align: right;
+}
+#study-explorer .study-details-events {
+  font-size: 0.85em;
+  margin-bottom: 14px;
+}
+#study-explorer .study-details-events-label {
+  color: var(--nse-muted);
+  font-weight: 600;
+  margin-right: 6px;
+}
+#study-explorer .study-details-events-list .event-pill {
+  background: color-mix(in srgb, var(--nse-brand) 10%, transparent);
+  border-radius: 999px;
+  color: var(--nse-text);
+  display: inline-block;
+  font-size: 0.95em;
+  margin: 2px 4px 2px 0;
+  padding: 1px 8px;
+}
+#study-explorer .study-details-snippets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+#study-explorer .study-details-snippet-wrap {
+  background: var(--nse-panel);
+  border: 1px solid var(--nse-border);
+  border-radius: 8px;
+  padding: 8px 12px 10px;
+}
+#study-explorer .study-details-snippet-label {
+  color: var(--nse-muted);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+#study-explorer .study-details-snippet {
+  background: transparent;
+  border: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  line-height: 1.5;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0;
+  white-space: pre;
+}
+#study-explorer .study-details-snippet code {
+  background: transparent;
+  color: var(--nse-text);
+  padding: 0;
+}
+#study-explorer .study-details-snippet .token.comment {
+  color: var(--nse-muted);
+}
+#study-explorer .study-details-snippet .token.keyword {
+  color: var(--nse-brand);
+  font-weight: 600;
+}
+#study-explorer .study-details-snippet .token.string {
+  color: var(--nse-meg);
+}
+#study-explorer .study-details-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+#study-explorer .study-details-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--nse-border);
+  border-radius: var(--control-radius, 6px);
+  color: var(--nse-text);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 600;
+  gap: 4px;
+  text-decoration: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+#study-explorer .study-details-btn:hover {
+  background: color-mix(in srgb, var(--nse-brand) 10%, transparent);
+  border-color: var(--nse-brand);
+  color: var(--control-link-fg, var(--nse-text));
+}
+#study-explorer .study-details-open {
+  background: var(--control-primary-bg, #2563eb);
+  border-color: var(--control-primary-bg, #2563eb);
+  color: var(--control-primary-fg, #fff);
+}
+#study-explorer .study-details-open:hover {
+  background: var(--control-primary-hover-bg, #1d4ed8);
+  border-color: var(--control-primary-hover-bg, #1d4ed8);
+  color: var(--control-primary-fg, #fff);
+  filter: none;
+}
+#study-explorer :is(.event-chip, .explorer-tab, .study-details-btn) {
+  font-size: var(--nse-control-font-size);
+  line-height: 1.25;
+  padding: var(--nse-control-padding-block) var(--nse-control-padding-inline);
+}
+#study-explorer :is(button:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+#study-explorer .explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+#study-explorer .explorer-header h1 {
+  margin: 0;
+}
+#study-explorer .explorer-site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: flex-end;
+}
+#study-explorer .study-details-reports {
+  margin: 12px 0;
+}
+#study-explorer .study-point.is-selected circle {
+  stroke: var(--nse-brand);
+  stroke-width: 3px;
+}
+#study-explorer .study-name.is-selected {
+  outline: 2px solid var(--nse-brand);
+  outline-offset: -2px;
+}

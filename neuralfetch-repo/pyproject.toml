@@ -50,6 +50,7 @@ build-backend = "setuptools.build_meta"
 # py.typed marker enables cross-package type checking (PEP 561)
 # editable installs need: pip install --config-settings editable_mode=strict -e .
 "neuralfetch" = ["py.typed"]
+"neuralfetch._explorer" = ["static/*.css", "static/*.js", "static/icons/*.svg"]
 
 [tool.setuptools.packages.find]
 where = ["."]
