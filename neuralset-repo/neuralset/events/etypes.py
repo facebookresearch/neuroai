@@ -530,6 +530,12 @@ class Audio(BaseSplittableEvent):
     Requires :code:`soundfile` to be installed. Duration and frequency are auto-detected
     from the file if not provided.
 
+    Parameters
+    ----------
+    modality : Literal["heard", "spoken"], optional
+        Whether the participant heard the sound, or produced it (e.g. a
+        recording of their own voice). Default: None
+
     Returns
     -------
     torch.Tensor
@@ -553,6 +559,7 @@ class Audio(BaseSplittableEvent):
     requirements: tp.ClassVar[tuple[str, ...]] = ("soundfile",)
     # soundfile (or PySoundFile?) or sox or sox_io may be needed as a backend
     # https://pytorch.org/audio/0.7.0/backend.html
+    modality: tp.Literal["heard", "spoken"] | None = None
 
     def model_post_init(self, log__: tp.Any) -> None:
         if self._missing_duration_or_frequency():
@@ -640,8 +647,9 @@ class BaseText(Event):
         The text content (must be non-empty)
     context : str, optional
         Contextual information (e.g., preceding words). Default: ""
-    modality : Literal["heard", "read", "imagined", "typed", "written", "caption"], optional
-        Modality of the text event. Default: None
+    modality : Literal["heard", "read", "spoken", "imagined", "typed", "written", "caption"], optional
+        Modality of the text event, "spoken" for the participant's own speech.
+        Default: None
 
     Raises
     ------
@@ -653,7 +661,8 @@ class BaseText(Event):
     language: str = ""
     context: str = ""
     modality: (
-        tp.Literal["heard", "read", "imagined", "typed", "written", "caption"] | None
+        tp.Literal["heard", "read", "spoken", "imagined", "typed", "written", "caption"]
+        | None
     ) = None
 
 

@@ -22,10 +22,12 @@ from neuraltrain.models.common import ChannelMerger, FourierEmb
 from neuraltrain.models.preprocessor import OnTheFlyPreprocessor
 
 from .modules import (
+    AttentivePool,
     ChannelProjection,
     DownstreamWrapper,
     DownstreamWrapperModel,
     LoraConfig,
+    Mean,
 )
 from .registry import _resolve_model_config_path, load_yaml_config
 
@@ -248,6 +250,19 @@ def test_attention_probe_is_trainable_on_frozen_backbone(ndim):
     assert not any(p.requires_grad for p in wrapped.wrapped_model.parameters())
     assert probe_params and all(p.requires_grad for p in probe_params)
     assert wrapped(**dummy).shape == (B, Fp)
+
+
+@pytest.mark.parametrize(
+    "pool",
+    [Mean(dim=(1, 2)), AttentivePool(emb_dim=8, num_heads=2)],
+    ids=["mean", "attentive"],
+)
+def test_pooling_skips_all_zero_tokens(pool):
+    tokens = torch.randn(2, 3, 4, 8)  # (B, n_chans, n_patches, emb)
+    padded = torch.cat([tokens, torch.zeros(2, 2, 4, 8)], dim=1)  # 2 padded channels
+    with torch.no_grad():
+        torch.testing.assert_close(pool(padded), pool(tokens))
+        assert pool(torch.zeros(1, 2, 4, 8)).isfinite().all()
 
 
 def test_attention_probe_requires_no_aggregation():

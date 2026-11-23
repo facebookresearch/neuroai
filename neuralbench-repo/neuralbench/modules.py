@@ -143,19 +143,36 @@ class IndexSelect(nn.Module):
         return out
 
 
+def _real_tokens(x: torch.Tensor) -> torch.Tensor:
+    """``(B, *token_dims)`` mask of the tokens of *x* that are not all zero.
+
+    A brain model zeroes the tokens of its padding (e.g. padded channels), which
+    the pooling skips.
+    """
+    return x.abs().amax(dim=-1) > 0
+
+
+def _token_mean(x: torch.Tensor, dim: int | tuple[int, ...]) -> torch.Tensor:
+    real = _real_tokens(x).unsqueeze(-1).to(x.dtype)
+    # a sample without a real token pools to zero, as a plain mean of its zeros
+    return (x * real).sum(dim=dim) / real.sum(dim=dim).clamp(min=1)
+
+
 class Mean(nn.Module):
-    """Reduce a tensor by averaging over one or more dimensions."""
+    """Reduce a tensor by averaging over one or more token dimensions, skipping
+    all-zero (padding) tokens."""
 
     def __init__(self, dim: int | tuple[int, ...]) -> None:
         super().__init__()
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.mean(dim=self.dim)
+        return _token_mean(x, self.dim)
 
 
 class ConcatGroupedMean(nn.Module):
-    """Split a tensor into ``n_splits`` groups along ``dim``, average each group, then concatenate."""
+    """Split a tensor into ``n_splits`` groups along ``dim``, average each group's
+    non-zero tokens, then concatenate."""
 
     def __init__(self, dim: int, n_splits: int) -> None:
         super().__init__()
@@ -165,7 +182,7 @@ class ConcatGroupedMean(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.concat(
             [
-                xi.mean(dim=self.dim)
+                _token_mean(xi, self.dim)
                 for xi in torch.tensor_split(x, self.n_splits, dim=self.dim)
             ],
             dim=self.dim,
@@ -197,7 +214,8 @@ def _flatten_tokens(x: torch.Tensor) -> torch.Tensor:
 
 
 class AttentivePool(nn.Module):
-    """Pool tokens with a single learnable query via multi-head cross-attention.
+    """Pool tokens with a single learnable query via multi-head cross-attention,
+    all-zero (padding) tokens masked out.
 
     The attentive-probe read-out for frozen SSL features (cf. the MAE / V-JEPA
     attentive pooler), without the surrounding transformer MLP/LayerNorm/residual.
@@ -223,7 +241,12 @@ class AttentivePool(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = _flatten_tokens(x)  # (B, n_tokens, emb)
         query = self.query.expand(x.shape[0], -1, -1)
-        pooled, _ = self.attn(query, x, x, need_weights=False)  # (B, 1, emb)
+        padding = ~_real_tokens(x)
+        # a sample without a real token attends to all of them, as unmasked
+        padding = padding & ~padding.all(dim=1, keepdim=True)
+        pooled, _ = self.attn(
+            query, x, x, key_padding_mask=padding, need_weights=False
+        )  # (B, 1, emb)
         return pooled.squeeze(1)
 
 
@@ -543,6 +566,8 @@ class DownstreamWrapper(pydantic.BaseModel):
         ``"first"`` selects only the first timestep/token;
         an ``int`` splits into n groups, averages each group, then concatenates;
         ``None`` performs no aggregation (required by ``probe_config="attention"``).
+        ``"mean"``, the int splits and ``probe_config="attention"`` leave out
+        all-zero tokens, the padding a brain model zeroes.
         When ``probe_layer`` is set, the captured activation is canonicalised to
         batch-first before aggregation (see ``probe_batch_dim``), so these
         semantics are identical for intermediate and final outputs.

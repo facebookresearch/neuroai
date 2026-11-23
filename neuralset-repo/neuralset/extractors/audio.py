@@ -18,7 +18,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from neuralset import base as nsbase
-from neuralset.events import etypes
+from neuralset.events import etypes, eventquery
 
 from .base import BaseExtractor, ContextWindow
 from .hf import HuggingFaceConfig, HuggingFaceMixin
@@ -35,6 +35,11 @@ class BaseAudio(BaseExtractor):
         Windows of audio processed at once, to bound the memory of the model on
         long events (instead of chunking them with ``ChunkEvents``). Each event is
         still cached as a whole. By default, each event is processed at once.
+    query : str or None
+        Event query (see :func:`neuralset.events.eventquery.compile_event_query`)
+        selecting the ``Audio`` events to read, e.g. ``modality == "spoken"``, so
+        that different sounds feed different extractors. The soundtracks of
+        ``Video`` events, which have no modality, are all read.
 
     Note
     ----
@@ -55,6 +60,7 @@ class BaseAudio(BaseExtractor):
     frequency: tp.Literal["native"] | float = "native"
     norm_audio: bool = True
     context: ContextWindow = ContextWindow()
+    query: nsbase.Query | None = None
 
     infra: MapInfra = MapInfra(
         timeout_min=25,
@@ -74,8 +80,40 @@ class BaseAudio(BaseExtractor):
     def _input_frequency(self) -> float:
         raise NotImplementedError
 
+    _query_predicate: tp.Callable[[etypes.Event], bool] | None = pydantic.PrivateAttr(
+        default=None
+    )
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        if self.query is not None:
+            self._query_predicate = eventquery.compile_event_query(self.query)
+
     def _exclude_from_cache_uid(self) -> List[str]:
-        return super()._exclude_from_cache_uid()
+        # the events are selected before their cached data is read
+        return [*super()._exclude_from_cache_uid(), "query"]
+
+    def _select(self, obj: tp.Any) -> list[etypes.Event]:
+        events = self._event_types_helper.extract(obj)
+        if self._query_predicate is None:
+            return events
+        query = self._query_predicate
+        return [e for e in events if not isinstance(e, etypes.Audio) or query(e)]
+
+    def prepare(self, obj: tp.Any) -> None:
+        super().prepare(self._select(obj))
+
+    def _get_relevant_events(
+        self,
+        events: tp.Any,
+        trigger: etypes.Event | None,
+        *,
+        start: float,
+        duration: float,
+    ) -> list[etypes.Event]:
+        return super()._get_relevant_events(
+            self._select(events), trigger, start=start, duration=duration
+        )
 
     @abstractmethod
     def _process_wav(self, wav: torch.Tensor) -> torch.Tensor:
