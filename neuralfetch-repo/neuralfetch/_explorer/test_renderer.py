@@ -121,12 +121,19 @@ def test_metadata_discovery_and_public_defaults(catalog):
     assets = files("neuralfetch._explorer").joinpath("static")
     css = assets.joinpath("study_explorer.css").read_text(encoding="utf-8").strip()
     javascript = assets.joinpath("study_explorer.js").read_text(encoding="utf-8").strip()
+    packaged_icons = {
+        asset.read_text(encoding="utf-8").strip()
+        for asset in assets.joinpath("icons").iterdir()
+        if asset.name.endswith(".svg")
+    }
+    assert len(packaged_icons) == 8
     for document in (html, public_html):
         assert css in document and javascript in document
         assert '<script type="module">' in document
         assert 'src="static/study_explorer.js"' not in document
         icons = re.findall(r'<svg class="study-icon"[^>]*>.*?</svg>', document)
         assert len(icons) == 8
+        assert set(icons) == packaged_icons
         paths = set()
         for markup in icons:
             icon = ET.fromstring(markup)
