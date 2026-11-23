@@ -490,6 +490,10 @@ class ChannelMerger(model_base.BaseBrainModelConfig):
         therefore some channels need to be ignored for some of the examples.
 
         NOTE: `ns.extractors.ChannelPositions` defines this value as well.
+    select_first_if_positions_equal :
+        If True, examples whose valid channels all have the same position (e.g. all filled with 0
+        by `ns.extractors.ChannelPositions(zero_unknown=True)`) skip the attention and select their
+        first `n_virtual_channels` valid channels instead.
     """
 
     n_virtual_channels: int = 270
@@ -506,6 +510,7 @@ class ChannelMerger(model_base.BaseBrainModelConfig):
     embed_ref: bool = False
     unmerge: bool = False
     invalid_value: float = INVALID_POS_VALUE
+    select_first_if_positions_equal: bool = False
 
     def build(self) -> "ChannelMergerModel":
         return ChannelMergerModel(self)
@@ -544,6 +549,7 @@ class ChannelMergerModel(nn.Module):
         self.usage_penalty = config.usage_penalty
         self._penalty = torch.tensor(0.0)
         self.unmerge = config.unmerge
+        self.select_first_if_positions_equal = config.select_first_if_positions_equal
 
     @property
     def training_penalty(self):
@@ -615,7 +621,22 @@ class ChannelMergerModel(nn.Module):
         scores += score_offset[:, None]
         if self.unmerge:
             scores = scores.transpose(1, 2)
-        return torch.softmax(scores, dim=2).nan_to_num()  # Replace nans by 0
+        weights = torch.softmax(scores, dim=2).nan_to_num()  # Replace nans by 0
+        if self.select_first_if_positions_equal:
+            invalid = invalid_mask[..., None]
+            pos_max = positions.masked_fill(invalid, float("-inf")).amax(dim=1)
+            pos_min = positions.masked_fill(invalid, float("inf")).amin(dim=1)
+            all_equal = (pos_max == pos_min).all(dim=-1)  # False if no valid channel
+            valid = score_offset.isfinite()  # not invalid nor dropped out
+            valid_rank = valid.cumsum(dim=1) - 1  # shape: (B, C)
+            virtual = torch.arange(self.heads.shape[-2], device=device)
+            select_first = valid[:, None] & (valid_rank[:, None] == virtual[:, None])
+            if self.unmerge:
+                select_first = select_first.transpose(1, 2)
+            weights = torch.where(
+                all_equal[:, None, None].to(device), select_first.to(weights), weights
+            )
+        return weights
 
     def forward(
         self,

@@ -1357,6 +1357,21 @@ def test_channel_positions_too_many_invalid(fake_invalid_eeg, caplog) -> None:
     assert "Fewer than 10% of the channels have valid positions" in caplog.text
 
 
+def test_channel_positions_zero_unknown(fake_invalid_eeg) -> None:
+    from neuralset.extractors.neuro import MneTimedArray
+
+    eeg = ns.extractors.EegExtractor()
+    ch_pos = ns.extractors.ChannelPositions(
+        neuro=eeg, layout_or_montage_name="EEG1005", normalize=None, zero_unknown=True
+    )
+    ta = MneTimedArray.from_native(fake_invalid_eeg)
+    eeg._update_channels(ta.ch_names + ["padding"])
+    positions = ch_pos._compute_positions(ta)
+    assert (positions[0] != 0).any()  # Cz
+    assert (positions[1:-1] == 0).all()
+    assert (positions[-1] == ch_pos.INVALID_VALUE).all()
+
+
 def test_channel_positions_require_eeg() -> None:
     meg = ns.extractors.MegExtractor()
     with pytest.raises(ValueError):
