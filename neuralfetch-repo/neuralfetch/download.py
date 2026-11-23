@@ -116,11 +116,8 @@ def temp_mne_data(path: Path, *, clear_dataset_configs: bool = False):
     path : Path
         Directory to use as ``MNE_DATA``.  Must already exist.
     clear_dataset_configs : bool
-        If True, temporarily clears all ``MNE_DATASETS_*_PATH`` entries
-        (via env-vars) so that MNE/MOABB re-derives paths from
-        ``MNE_DATA`` instead of using stale cached paths.  Recommended
-        during *download*; leave False during *load* so that existing
-        per-dataset configs stay intact.
+        If True, temporarily override dataset-specific MNE paths with ``path``.
+        Used during MOABB download and load to ignore stale per-user settings.
     """
     if not path.exists():
         raise FileNotFoundError(f"MNE data path does not exist: {path}")

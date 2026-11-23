@@ -264,6 +264,8 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     query : Query or None
         Optional timeline selection, applied before loading (e.g.
         ``"timeline_index < 5"``); filter loaded rows with ``QueryEvents``.
+    exclude_events : str, tuple of str, or None
+        Types and subclasses to omit before validation and caching.
 
     Examples
     --------
@@ -293,6 +295,7 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
     timelines: TimelineLoader = TimelineLoader()
     version: str = ""
     query: base.Query | None = None
+    exclude_events: str | tuple[str, ...] | None = None
 
     # internal
     _cls_string: str = ""  # cache
@@ -451,7 +454,15 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
         """Descriptor for the study instance parametrization"""
         cls_kwargs: tp.Any = self.model_dump(serialize_as_any=True, exclude_defaults=True)
         # Exclude standard fields from class kwargs
-        for p in ["infra", "timelines", "version", "path", "name", "query"]:
+        for p in [
+            "infra",
+            "timelines",
+            "version",
+            "path",
+            "name",
+            "query",
+            "exclude_events",
+        ]:
             cls_kwargs.pop(p, None)
         if cls_kwargs:
             # should the class parameter be part of the timeline? or does
@@ -523,6 +534,9 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
         if "subject" not in timeline:
             raise RuntimeError("timeline dict must contain 'subject' key")
         out = self._load_timeline_events(timeline)
+        if self.exclude_events is not None:
+            names = etypes.EventTypesHelper(self.exclude_events).names
+            out = out.loc[~out.type.isin(names)].copy()
         # Core columns are always overwritten
         out.loc[:, "subject"] = f"{cls_name}/{timeline['subject']}"
         out.loc[:, "timeline"] = self._to_timeline_string(timeline)

@@ -351,6 +351,9 @@ def test_study_caching(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     df = queried.run()
     assert len(df) == 4  # 2 selected timelines x 2 events
     assert not loaded  # query never re-loads
+    filtered = queried.clone({"exclude_events": "Action"}).run()
+    assert filtered.type.tolist() == ["Image", "Image"]
+    assert len(loaded) == 2
     # clear_cache must wipe the per-timeline cache, not just the gathered result
     loaded.clear()
     study.lookup().clear_cache()
