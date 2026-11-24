@@ -14,25 +14,16 @@ from neuralset.extractors.hf import HuggingFaceMixin
 
 
 @pytest.mark.parametrize("preset", presets.EXTRACTORS)
-def test_extractor_presets_instantiate(
-    preset: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # no full model snapshot (GBs per preset, again on every CI run) for a config check
-    monkeypatch.setattr(
-        HuggingFaceMixin, "_download_huggingface_snapshot", lambda self: None
-    )
+@HuggingFaceMixin.no_snapshot_download()
+def test_extractor_presets_instantiate(preset: str) -> None:
     config = presets.extractor(preset)
     extractor = ns.extractors.BaseExtractor.model_validate(config)
     assert extractor.infra.uid()  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize("preset", presets.EXTRACTORS)
-def test_neuro_presets_cache_as_float16(
-    preset: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        HuggingFaceMixin, "_download_huggingface_snapshot", lambda self: None
-    )
+@HuggingFaceMixin.no_snapshot_download()
+def test_neuro_presets_cache_as_float16(preset: str) -> None:
     extractor = ns.extractors.BaseExtractor.model_validate(presets.extractor(preset))
     if "store_dtype" in type(extractor).model_fields:
         assert extractor.store_dtype == "float16", (  # type: ignore[attr-defined]
