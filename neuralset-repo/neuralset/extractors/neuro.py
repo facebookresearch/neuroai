@@ -2551,6 +2551,12 @@ class ChannelPositions(BaseStatic):
     mapped to the head frame with the recording's ``dev_head_t`` unless ``coord_frame="device"``.
     See https://mne.tools/stable/documentation/implementation.html#coordinate-systems for details.
 
+    Note
+    ----
+    Temporary: this standalone extractor will be replaced by per-channel features computed by
+    the neuro extractor itself, so that positions no longer need a separate extractor kept
+    aligned with it.
+
     Parameters
     ----------
     neuro:
@@ -2594,6 +2600,9 @@ class ChannelPositions(BaseStatic):
         device frame, with a warning, and MEG neuro caches written before neuralset stored
         ``dev_head_t`` raise an error. ``"device"`` keeps the frame of the MEG helmet, in which a
         sensor has the same coordinates in every recording of a system, wherever the head sits.
+    zero_unknown:
+        If True, channels of the recording without a position are filled with 0 instead of
+        ``INVALID_VALUE``. Padding channels (absent from the recording) keep ``INVALID_VALUE``.
     """
 
     event_types: tp.Literal["MneRaw", "Meg", "Eeg", "Ieeg"] = "MneRaw"
@@ -2605,6 +2614,7 @@ class ChannelPositions(BaseStatic):
     normalize: tp.Literal["min_max", "center_and_scale"] | None = "min_max"
     factor: float = 1.0
     coord_frame: tp.Literal["head", "device"] = "head"
+    zero_unknown: bool = False
 
     _neuro: MneRaw = pydantic.PrivateAttr()
 
@@ -2834,7 +2844,8 @@ class ChannelPositions(BaseStatic):
             positions /= np.sqrt(self.n_spatial_dims * sq_norm)
 
         positions *= self.factor
-        positions = np.nan_to_num(positions, nan=self.INVALID_VALUE)
+        unknown_value = 0.0 if self.zero_unknown else self.INVALID_VALUE
+        positions = np.nan_to_num(positions, nan=unknown_value)
 
         n_spatial_dims = self.n_spatial_dims
         if self.include_ref_eeg:

@@ -257,6 +257,34 @@ def test_channel_merger_dropout(
     assert (weights == 0.0).all()
 
 
+@pytest.mark.parametrize("unmerge", [False, True])
+def test_channel_merger_select_first_if_positions_equal(unmerge: bool) -> None:
+    n_virtual_channels, n_channels = 4, 6
+    positions = torch.rand(3, n_channels, 2)
+    positions[1] = 0.0
+    positions[2] = 0.5
+    positions[2, [0, 2]] = INVALID_POS_VALUE
+    merger = ChannelMerger(
+        n_virtual_channels=n_virtual_channels,
+        unmerge=unmerge,
+        select_first_if_positions_equal=True,
+    ).build()
+    weights = merger._get_weights(torch.arange(3), positions, positions.device)
+    if unmerge:
+        weights = weights.transpose(1, 2)
+    select_first = torch.eye(n_virtual_channels, n_channels)
+    assert not torch.equal(weights[0], select_first)
+    assert torch.equal(weights[1], select_first)
+    expected = torch.zeros(n_virtual_channels, n_channels)
+    expected[[0, 1, 2, 3], [1, 3, 4, 5]] = 1.0  # channels 0 and 2 are invalid
+    assert torch.equal(weights[2], expected)
+
+    if not unmerge:  # dropout is not implemented for unmerge
+        merger.dropout, merger.dropout_around_channel = 0.1, True
+        weights = merger._get_weights(torch.arange(1), positions[1:2], positions.device)
+        assert (weights == 0.0).all()  # all channels banned
+
+
 def test_channel_unmerger_shape(fake_meg):
     chout = 12
     pos_dim = 288
