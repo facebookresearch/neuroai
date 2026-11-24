@@ -49,6 +49,30 @@ def test_split_audio(tmp_path: Path) -> None:
     assert expected2 == seconds2
 
 
+def test_query_selects_the_sounds(tmp_path: Path) -> None:
+    fp = tmp_path / "noise.wav"
+    create_wav(fp, fs=16000, duration=2)
+    heard, spoken, unflagged = sounds = [
+        etypes.Audio(start=0, timeline="t", filepath=fp, modality=modality)
+        for modality in ("heard", "spoken", None)
+    ]
+    movie = etypes.Video(
+        start=0, timeline="t", filepath=tmp_path / "movie.mp4", frequency=25, duration=2
+    )
+    events = [*sounds, movie]
+    selected = {}
+    for query in ("modality == 'spoken'", "modality != 'spoken'"):
+        kwargs: dict = dict(frequency=50, event_types=("Audio", "Video"))
+        feat = audio.MelSpectrum(**kwargs, query=query)
+        selected[query] = feat._get_relevant_events(events, None, start=0, duration=2)
+        assert feat.infra.uid() == audio.MelSpectrum(**kwargs).infra.uid()
+    # the soundtracks of videos are read whatever the query
+    assert selected == {
+        "modality == 'spoken'": [spoken, movie],
+        "modality != 'spoken'": [heard, unflagged, movie],
+    }
+
+
 @pytest.mark.parametrize("channels", (None, 1, 2))
 def test_mel_spectrum(tmp_path: Path, channels: int | None) -> None:
     fp = tmp_path / "noise.wav"
