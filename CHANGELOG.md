@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- `neuralbench`: with `CLUSTER: null`, `run_benchmark` and the CLI raise once every experiment has run if any of them failed, listing their run folders. exca's in-process job keeps the exception instead of raising it, so a benchmark whose runs all failed exited 0 (#365).
+- `neuralbench`: the `dummy` baseline on a dense `(N, C, T)` target (`emg pose`) predicts each window's time-major `(T, C)` mean over labelled frames, the layout `BrainModule` scores, rather than a `(B * C, T)` tensor that failed the step (#365).
+- `neuralbench`: `cospectra_log_lr` caps its Welch `window` at the largest power of two that fits the trials. On trials shorter than the window (1 s at 120 Hz against the default 128 samples) every co-spectrum was NaN and the fit failed with "Input X contains NaN" (#365).
+- `neuraltrain`: `Rank`, `TopkAcc` and `InverseNormalizedRank` rank a NaN prediction at the middle of the candidates rather than at half the number of queries, which lies past the last candidate when queries outnumber candidates and dragged retrieval scores down; scores of runs with NaN predictions change (#365).
+- `neuraltrain`: torch LR scheduler configs validate their kwargs merged with the build kwargs, so `CosineAnnealingLR` builds without a placeholder `T_max` in its config; build kwargs still take precedence (#365).
+- `neuralbench`: `--debug` keeps the held-out test session or run of the `p3 hoffmann2008` and `motor_imagery zhou2016` / `wei2022a` variants, whose debug subsets had none and failed with "Predefined train/test split required."; the `--debug` help no longer claims it sets `infra.mode='force'` (#365).
+
 ## [0.4.0] - 2026-10-10
 
 - `neuralbench`: unvalidated (`_`-prefixed) tasks get the same handcrafted sklearn baseline as their validated name (`registry.feature_based_baseline`) (#310).

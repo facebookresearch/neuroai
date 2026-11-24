@@ -273,7 +273,7 @@ class Rank(torchmetrics.Metric):
         ranks_gt = (scores > true_scores).nansum(dim=1)
         ranks_ge = (scores >= true_scores).nansum(dim=1) - 1
         ranks = (ranks_gt + ranks_ge) / 2
-        ranks[ranks < 0] = len(scores) // 2  # FIXME
+        ranks[ranks < 0] = scores.shape[1] // 2  # FIXME
         if retrieval_size is not None:
             ranks /= retrieval_size
         return ranks

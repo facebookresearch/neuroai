@@ -291,6 +291,14 @@ def test_cospectra_log_lr_recovers_ssvep_peak() -> None:
     )
 
 
+def test_cospectra_log_lr_fits_trials_shorter_than_window() -> None:
+    """1 s trials (120 samples) are shorter than the default ``window=128``,
+    which fit no Welch segment and gave all-NaN co-spectra."""
+    X, y = _make_ssvep_signal(n_classes=3, duration=1.0)
+    pipe = CoSpectraLogLR().build(**_fit_kwargs(X, y))._pipe
+    assert np.isfinite(pipe[0].transform(X)).all()
+
+
 def test_upper_tri_log1p_small_example() -> None:
     """``_UpperTriLog1p`` log1p's the diagonal, keeps off-diagonal raw, and
     flattens ``(N, C, C, F)`` to ``(N, F * C*(C+1)/2)``."""

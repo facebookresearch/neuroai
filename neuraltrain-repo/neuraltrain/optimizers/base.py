@@ -74,7 +74,7 @@ class BaseTorchLRScheduler(BaseLRScheduler):
 
     def build(self, optimizer: Optimizer, **build_kwargs: tp.Any) -> LRScheduler:
         exca.helpers.validate_kwargs(
-            self._SCHEDULER_CLASS, self.kwargs | {"optimizer": None}
+            self._SCHEDULER_CLASS, self.kwargs | build_kwargs | {"optimizer": None}
         )
         return self._SCHEDULER_CLASS(optimizer, **(self.kwargs | build_kwargs))
 
