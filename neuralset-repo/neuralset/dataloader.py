@@ -490,9 +490,11 @@ class Segmenter(base.Step):
         Dataframe query selecting which events act as :term:`triggers <trigger>`
         — segments are time-locked to the matching events
         (see :data:`base.Query`).
-        At least one of ``trigger_query`` or ``stride`` must be provided.
+        Required, also with ``stride``: e.g. ``trigger_query="type == 'Meg'"``
+        tiles sliding windows across each recording.
     stride: optional float
-        Stride (in seconds) to use to define sliding window segments.
+        Stride (in seconds) to use to define sliding window segments within each
+        trigger event (requires ``trigger_query``).
     stride_drop_incomplete: optional bool
         If True and stride is not None, drop segments that are not fully contained within the
         (start, stop) block.
@@ -540,8 +542,16 @@ class Segmenter(base.Step):
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
-        if self.trigger_query is None and self.stride is None:
-            raise ValueError("At least one of trigger_query or stride must be provided.")
+        if self.trigger_query is None:
+            msg = "trigger_query must be provided"
+            if self.stride is not None:
+                # stride alone yields no segments: windows are tiled within each
+                # trigger event, so the events to tile must be selected explicitly
+                msg += (
+                    f" with stride={self.stride}: windows are tiled within each trigger"
+                    " event, e.g. trigger_query=\"type == 'Meg'\" to tile each recording"
+                )
+            raise ValueError(msg + ".")
 
     def _run(self, events: pd.DataFrame) -> SegmentDataset:
         return self.apply(events)
