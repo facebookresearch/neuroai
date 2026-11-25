@@ -266,6 +266,22 @@ def test_empty_set(test_data_path: Path) -> None:
         dloader.build()
 
 
+def test_segmenter_requires_trigger_query() -> None:
+    extractors = {"pulse": {"name": "Pulse", "frequency": 100, "aggregation": "sum"}}
+    with pytest.raises(ValueError, match="trigger_query must be provided"):
+        dl.Segmenter(extractors=extractors, duration=1.0)  # type: ignore
+    # stride alone used to pass validation and then fail with "Empty trigger events"
+    with pytest.raises(ValueError, match="with stride=1.0: windows are tiled"):
+        dl.Segmenter(extractors=extractors, duration=1.0, stride=1.0)  # type: ignore
+    segmenter = dl.Segmenter(
+        extractors=extractors,  # type: ignore
+        duration=1.0,
+        stride=1.0,
+        trigger_query="type == 'Meg'",
+    )
+    assert segmenter.stride == 1.0
+
+
 def test_drop_useless_events(test_data_path: Path) -> None:
     config = dict(
         studies=[{"name": "Test2023Meg", "path": test_data_path}],
