@@ -4,6 +4,8 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import contextlib
+import contextvars
 import typing as tp
 
 import numpy as np
@@ -101,6 +103,9 @@ class HuggingFaceConfig(base.BaseModel):
         )
 
 
+_NO_SNAPSHOT_DOWNLOAD = contextvars.ContextVar("_NO_SNAPSHOT_DOWNLOAD", default=False)
+
+
 class HuggingFaceMixin(base.BaseModel):
     """Mixin for extractors that use a HuggingFace model.
     These extractors all return a tensor of shape (n_layers, n_tokens, *embedding_shape).
@@ -186,7 +191,22 @@ class HuggingFaceMixin(base.BaseModel):
         if self.cache_n_layers == 1:
             msg = f"Set {name}.cache_n_layers=None instead of 1"
             raise ValueError(msg)
-        self._download_huggingface_snapshot()
+        if not _NO_SNAPSHOT_DOWNLOAD.get():
+            self._download_huggingface_snapshot()
+
+    @staticmethod
+    @contextlib.contextmanager
+    def no_snapshot_download() -> tp.Iterator[None]:
+        """Build extractors without prefetching their model snapshot.
+
+        Loading the model still requires its cached snapshot. Use this as a
+        context manager or decorator for configuration checks.
+        """
+        token = _NO_SNAPSHOT_DOWNLOAD.set(True)
+        try:
+            yield
+        finally:
+            _NO_SNAPSHOT_DOWNLOAD.reset(token)
 
     def _download_huggingface_snapshot(self) -> None:
         from huggingface_hub import snapshot_download

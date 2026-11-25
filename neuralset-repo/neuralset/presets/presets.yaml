@@ -1,0 +1,211 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
+# Preset extractor and study configs, to share cached features across projects
+# (see presets.py).
+# Each preset id is its own entry in the shared cache, which only pays off if
+# several projects use it: add a preset only for an actual use case. Any change
+# to a field entering the cache uid creates new entries in the shared cache.
+
+infra:
+  neuro: &neuro_infra
+    cluster: auto
+    keep_in_ram: true
+    mode: cached
+    cpus_per_task: 10
+    min_samples_per_job: 4
+    max_jobs: 512
+    timeout_min: 720
+  huggingface: &huggingface_infra
+    cluster: auto
+    keep_in_ram: true
+    mode: cached
+    gpus_per_node: 1
+    cpus_per_task: 10
+    min_samples_per_job: 1024
+    max_jobs: 32
+    timeout_min: 720
+  timelines: &timelines_infra
+    backend: Auto
+    cpus_per_task: 4
+    min_items_per_job: 5
+    max_jobs: 1024
+    timeout_min: 240
+
+extractors:
+  # neuro presets cache as float16 (store_dtype; reads return float32)
+  eeg_100hz: &eeg_100hz
+    name: EegExtractor
+    picks: [eeg]
+    frequency: 100.0
+    filter: [0.1, 40.0]
+    notch_filter: [50.0, 60.0]
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+    store_dtype: float16
+    infra: *neuro_infra
+  eeg_200hz:
+    <<: *eeg_100hz
+    frequency: 200.0
+    filter: [0.1, 75.0]
+  meg_100hz: &meg_100hz
+    name: MegExtractor
+    # not [meg]: on CTF that also picks the reference channels
+    picks: [mag, grad]
+    compensation_grade: 3
+    frequency: 100.0
+    filter: [0.1, 40.0]
+    notch_filter: [50.0, 60.0]
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+    store_dtype: float16
+    apply_sss: maxshield
+    allow_maxshield: true
+    infra: *neuro_infra
+  meg_200hz:
+    <<: *meg_100hz
+    frequency: 200.0
+    filter: [0.1, 75.0]
+  # referencing (bipolar, common average) is montage-dependent so left to projects
+  ieeg_250hz: &ieeg_250hz
+    name: IeegExtractor
+    # Include DBS-lead LFP channels.
+    picks: [seeg, ecog, dbs]
+    frequency: 250.0
+    filter: [0.1, 100.0]
+    notch_filter: [50.0, 60.0]
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+    store_dtype: float16
+    fill_non_finite: 0.0
+    on_filter_too_long: drop
+    infra: *neuro_infra
+  ieeg_500hz:
+    <<: *ieeg_250hz
+    frequency: 500.0
+    filter: [0.1, 200.0]
+  # high-gamma amplitude: 70-150 Hz band-pass and Hilbert envelope at the native
+  # rate (the low-pass is skipped below 300 Hz), then resampled. Robust-scaled
+  # values are centred, so baseline_mode "mean" or "zscore", not "(log)ratio"
+  ieeg_highgamma_50hz:
+    <<: *ieeg_250hz
+    frequency: 50.0
+    filter: [70.0, 150.0]
+    apply_hilbert: true
+  emg_500hz: &emg_500hz
+    name: EmgExtractor
+    picks: [emg]
+    frequency: 500.0
+    filter: [20.0, 180.0]
+    notch_filter: [50.0, 60.0]
+    baseline: null
+    scaler: RobustScaler
+    clamp: 20.0
+    store_dtype: float16
+    infra: *neuro_infra
+  emg_1000hz:
+    <<: *emg_500hz
+    frequency: 1000.0
+    filter: [20.0, 400.0]
+  # fMRI: studies with several spaces need a query (excluded from the cache uid):
+  # 'space == "fsaverage"' for fmri_fs5, an MNI space for the atlases
+  fmri_fs5: &fmri_fs5
+    name: FmriExtractor
+    projection: {name: SurfaceProjector, mesh: fsaverage5, spatial_downsampling: mean}
+    offset: 0
+    frequency: native
+    store_dtype: float16
+    infra: {<<: *neuro_infra, min_samples_per_job: 16}
+  fmri_schaefer1000:
+    <<: *fmri_fs5
+    projection:
+      name: AtlasProjector
+      atlas: schaefer_2018
+      atlas_kwargs: {n_rois: 1000, resolution_mm: 2}
+      resampling_target: labels
+  fmri_difumo1024:
+    <<: *fmri_fs5
+    projection:
+      name: AtlasProjector
+      atlas: difumo
+      atlas_kwargs: {dimension: 1024, resolution_mm: 2}
+      resampling_target: labels
+  image_dinov2_large:
+    name: HuggingFaceImage
+    model_name: facebook/dinov2-large
+    layers: 0.6666666666666666  # 2/3
+    token_aggregation: mean
+    aggregation: sum
+    event_types: Image
+    hf_config: {processor_kwargs: {do_rescale: false, use_fast: true}}
+    batch_size: 128
+    infra: *huggingface_infra
+  audiovisual_qwen3_omni:
+    # Video (frames + soundtrack), Audio and Image events, see QwenOmni. Whole
+    # events are cached, embedded in 30 s windows every 24 s: as the thinker is
+    # causal, each latent sees >= 6 s of past
+    name: QwenOmni
+    model_name: Qwen/Qwen3-Omni-30B-A3B-Instruct
+    frequency: 2.0
+    layers: 0.6666666666666666  # 2/3
+    aggregation: sum
+    fps: 2.0
+    max_pixels: 200704  # 256 * 28 * 28
+    context: {duration: 30.0, overlap: 0.2, causal: true}
+    infra:
+      <<: *huggingface_infra
+      min_samples_per_job: 1  # one video per job: ~10 s per minute of video
+      mem_gb: 200  # ~66 GB of weights loaded through CPU memory
+  # TRIBE's speech features. Whole events are cached, embedded in 30 s windows
+  # overlapping by 20%: each latent sees >= 3 s of audio on each side
+  audio_w2vbert_2hz: &audio_w2vbert_2hz
+    name: Wav2VecBert
+    model_name: facebook/w2v-bert-2.0
+    layers: 0.6666666666666666  # 2/3
+    aggregation: sum
+    event_types: Audio
+    frequency: 2.0
+    context: {duration: 30.0, overlap: 0.2, causal: false}
+    # one item per recording
+    infra: {<<: *huggingface_infra, min_samples_per_job: 4}
+  # e.g. for M/EEG: each sample averages the 50 Hz frames of w2v-BERT over 50 ms
+  audio_w2vbert_20hz:
+    <<: *audio_w2vbert_2hz
+    frequency: 20.0
+  # TRIBE's video features. Whole events are cached, embedded in 8 s windows of
+  # 64 frames (8 fps) overlapping by 20%: each token sees >= 0.75 s of video on
+  # each side. The native 4 Hz tokens are averaged to 2 Hz
+  video_vjepa2_2hz:
+    name: HuggingFaceVideo
+    model_name: facebook/vjepa2-vitl-fpc64-256
+    num_frames: 64
+    context: {duration: 8.0, overlap: 0.2, causal: false}
+    layers: 0.6666666666666666  # 2/3
+    aggregation: sum
+    event_types: Video
+    frequency: 2.0
+    # one item per recording
+    infra: {<<: *huggingface_infra, min_samples_per_job: 4}
+  # TRIBE's text features, on the AlignedText events of AddAlignedTexts (one per
+  # Text, the default text_type). Each word sees 512 to 1024 words of context
+  # within its Text. frequency is excluded from the cache uid
+  text_qwen3:
+    name: HuggingFaceText
+    model_name: Qwen/Qwen3-0.6B
+    layers: 0.6666666666666666  # 2/3
+    aggregation: sum
+    frequency: 2.0
+    context: {words: 1024, overlap: 0.5, causal: true}
+    batch_size: 4
+    # one item per Text
+    infra: {<<: *huggingface_infra, min_samples_per_job: 32}
+
+study:
+  timelines:
+    infra: *timelines_infra

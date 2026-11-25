@@ -1916,6 +1916,27 @@ def test_fmri_mesh_from_2d() -> None:
     assert out.shape == (10242 * 2, 5)  # fsaverage5 size
 
 
+def test_cell_average() -> None:
+    target = np.eye(3)
+    source = np.vstack([target, [[0.9, 0.1, 0.0], [0.0, 0.2, 0.9]]])
+    source /= np.linalg.norm(source, axis=1, keepdims=True)
+    averaged = ns.extractors.neuro._cell_average(source, target) @ [1.0, 2, 3, 5, 7]
+    np.testing.assert_allclose(averaged, [3.0, 2.0, 5.0])  # (1 + 5) / 2, 2, (3 + 7) / 2
+
+
+def test_surface_projector_mean(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scipy import sparse
+
+    neuro = ns.extractors.neuro
+    n6, n5 = neuro.FSAVERAGE_SIZES["fsaverage6"], neuro.FSAVERAGE_SIZES["fsaverage5"]
+    fake_average = sparse.eye(n5, n6, format="csr")
+    monkeypatch.setattr(neuro, "_voronoi_matrix", lambda *_: fake_average)
+    data = np.random.default_rng(0).normal(size=(2 * n6, 3))
+    projector = neuro.SurfaceProjector(mesh="fsaverage5", spatial_downsampling="mean")
+    expected = np.vstack([data[:n5], data[n6 : n6 + n5]])
+    np.testing.assert_allclose(projector.apply(_PseudoNifti(data)), expected)
+
+
 def test_ieeg(test_data_path: Path) -> None:
     ns.Study(
         name="Test2025Ieeg",

@@ -23,7 +23,7 @@ from ..events.utils import extract_events
 from . import base
 from .hf import HuggingFaceMixin
 from .image import HuggingFaceImage
-from .text import HuggingFaceText
+from .text import HuggingFaceSentence, HuggingFaceWord
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +272,9 @@ class ExtractorPCA(base.BaseStatic):
             )
 
 
+_PCA_EXTRACTORS = (HuggingFaceWord, HuggingFaceSentence, HuggingFaceImage)
+
+
 class HuggingFacePCA(ExtractorPCA):
     """Applies a PCA to the underlying HuggingFace extractor.
     The underlying extractor is first computed through the prepare method, and then
@@ -298,8 +301,10 @@ class HuggingFacePCA(ExtractorPCA):
     use_tmp_cache: bool = True
 
     def model_post_init(self, log__: tp.Any) -> None:
-        if not isinstance(self.extractor, (HuggingFaceText, HuggingFaceImage)):
-            raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
+        if not isinstance(self.extractor, _PCA_EXTRACTORS):
+            raise TypeError(
+                "Only HuggingFaceWord, HuggingFaceSentence and HuggingFaceImage are supported"
+            )
         if self.extractor.infra.folder is None:
             raise RuntimeError("extractor's infra folder should be provided")
         super().model_post_init(log__)
@@ -317,7 +322,9 @@ class HuggingFacePCA(ExtractorPCA):
     def prepare(self, obj: tp.Any) -> None:
         pca_events = self._prepare_pca_uid(obj)
         if not isinstance(self.extractor, HuggingFaceMixin):  # for typing
-            raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
+            raise TypeError(
+                "Only HuggingFaceWord, HuggingFaceSentence and HuggingFaceImage are supported"
+            )
         basefolder = Path(self.extractor.infra.folder)
         # uid-keyed (events + extractor): retries reuse it, other models can't rmtree it
         uid_folder = self.extractor.infra.uid_folder()
@@ -375,7 +382,9 @@ class HuggingFacePCA(ExtractorPCA):
         uids = [self._to_uid(e) for e in events]
         feat = self.extractor
         if not isinstance(feat, HuggingFaceMixin):  # for typing
-            raise TypeError("Only HuggingFaceText and HuggingFaceImage are supported")
+            raise TypeError(
+                "Only HuggingFaceWord, HuggingFaceSentence and HuggingFaceImage are supported"
+            )
         for event, d in zip(events, self._get_data(uids)):
             if feat.cache_n_layers is not None:
                 d = feat._aggregate_layers(d)

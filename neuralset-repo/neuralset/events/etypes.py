@@ -10,6 +10,7 @@ The class `Event` and its children (e.g. `Audio`, `Word`, etc.) define the
 expected fields for each event type.
 """
 
+import hashlib
 import inspect
 import itertools
 import logging
@@ -700,6 +701,116 @@ class Keystroke(BaseText):
     """Keystroke event with associated text."""
 
     sentence: str = ""
+
+
+def _read_only_array(dtype: type) -> tp.Callable[[tp.Any], np.ndarray]:
+    def validate(value: tp.Any) -> np.ndarray:
+        out: np.ndarray = np.array(value, dtype=dtype)
+        if out.ndim != 1:
+            raise ValueError(f"Expected a 1D array, got shape {out.shape}")
+        out.flags.writeable = False  # values derived from it are cached
+        return out
+
+    return validate
+
+
+# 1D, so that parquet can store them
+_Floats = tp.Annotated[np.ndarray, pydantic.PlainValidator(_read_only_array(np.float64))]
+_Ints = tp.Annotated[np.ndarray, pydantic.PlainValidator(_read_only_array(np.int32))]
+
+
+class AlignedText(BaseText):
+    """Text aligned with its words, for word-level features without Word events.
+
+    Word ``i`` spans ``text[word_char_starts[i]:word_char_stops[i]]`` and times
+    ``[start + word_starts[i], start + word_starts[i] + word_durations[i])``.
+    A sibling of ``Text``, so that ``"Text"`` transforms and extractors ignore it.
+    Build these events with
+    :class:`~neuralset.events.transforms.text.AddAlignedTexts`.
+    """
+
+    word_starts: _Floats  # seconds, relative to start
+    word_durations: _Floats
+    word_char_starts: _Ints  # offsets in text
+    word_char_stops: _Ints
+    #: time step (s) of the word onsets setting windows of a duration (see
+    #: :meth:`onset_ticks`), so that windows and cache uids are robust to float noise
+    ONSET_TICK: tp.ClassVar[float] = 1e-3
+    _max_word_duration: float = 0.0
+    _time_sorted: bool = True
+    _content_uid: str = ""
+    _onsets_uid: str = ""
+
+    def model_post_init(self, log__: tp.Any) -> None:
+        super().model_post_init(log__)
+        arrays = [
+            self.word_starts,
+            self.word_durations,
+            self.word_char_starts,
+            self.word_char_stops,
+        ]
+        lengths = {len(a) for a in arrays}
+        if len(lengths) != 1 or not len(self.word_starts):
+            msg = "AlignedText word arrays must have the same non-zero length, "
+            msg += f"got lengths {[len(a) for a in arrays]}"
+            raise ValueError(msg)
+        if np.any(self.word_durations < 0):
+            raise ValueError("AlignedText word_durations must be >= 0")
+        char_starts, char_stops = self.word_char_starts, self.word_char_stops
+        if char_starts.min() < 0 or char_stops.max() > len(self.text):
+            raise ValueError("AlignedText word characters must fall within text")
+        if np.any(char_stops <= char_starts):
+            raise ValueError("AlignedText words must span at least one character")
+        if np.any(np.diff(char_starts) < 0):
+            raise ValueError("AlignedText word_char_starts must be non-decreasing")
+        self._max_word_duration = float(self.word_durations.max())
+        self._time_sorted = not np.any(np.diff(self.word_starts) < 0)
+
+    def __eq__(self, other: object) -> bool:
+        # the default comparison is ambiguous for array fields
+        if not isinstance(other, AlignedText):
+            return NotImplemented
+        return all(
+            np.array_equal(value, other_value)
+            if isinstance(value, np.ndarray)
+            else value == other_value
+            for (_, value), (_, other_value) in zip(self, other)
+        )
+
+    def overlapping_words(self, start: float, stop: float) -> np.ndarray:
+        """Indices of the words overlapping [start, stop)."""
+        first, last = 0, len(self.word_starts)
+        if self._time_sorted:  # binary search, as in the segments' event store
+            # slightly widened, the exact test below being in absolute time
+            bounds = [start - self._max_word_duration - 1e-6, stop + 1e-6]
+            first, last = np.searchsorted(self.word_starts, np.array(bounds) - self.start)
+        starts = self.start + self.word_starts[first:last]
+        overlapping = starts < stop
+        overlapping &= starts + self.word_durations[first:last] > start
+        return first + np.flatnonzero(overlapping)
+
+    def onset_ticks(self) -> np.ndarray:
+        """Word onsets in ticks of ``ONSET_TICK`` after the first one, made
+        non-decreasing (alignments may slightly overlap words) so that windows
+        of a duration are ranges of words."""
+        onsets = np.maximum.accumulate(self.word_starts)
+        return np.round((onsets - onsets[0]) / self.ONSET_TICK).astype(np.int64)
+
+    def content_uid(self) -> str:
+        """Identifier of the text and its word spans, so not of word timings:
+        identical stimuli share it."""
+        if not self._content_uid:  # needed at each extraction, but O(n_words)
+            spans = np.stack([self.word_char_starts, self.word_char_stops])
+            digest = hashlib.md5(self.text.encode() + spans.tobytes()).hexdigest()
+            self._content_uid = f"{self.text[:40]}_{digest[:16]}"
+        return self._content_uid
+
+    def onsets_uid(self) -> str:
+        """Identifier of the word onsets relative to the first one (at the
+        ``ONSET_TICK`` resolution), which set the windows of a duration."""
+        if not self._onsets_uid:  # as content_uid
+            self._onsets_uid = hashlib.md5(self.onset_ticks().tobytes()).hexdigest()[:16]
+        return self._onsets_uid
 
 
 class CategoricalEvent(Event):

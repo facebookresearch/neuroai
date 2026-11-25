@@ -288,6 +288,7 @@ def test_event_type_list() -> None:
         # text
         "BaseText",
         "Text",
+        "AlignedText",
         "Sentence",
         "Word",
         "Phoneme",

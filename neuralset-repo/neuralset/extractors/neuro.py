@@ -1539,17 +1539,63 @@ class BaseFmriProjector(DiscriminatedModel, discriminator_key="name"):
         return []
 
 
+def _unit_sphere(mesh: str, hemi: str) -> np.ndarray:
+    """Vertex positions of an fsaverage mesh's sphere, scaled to unit norm."""
+    from nilearn import datasets, surface
+
+    with _nilearn_download_lock():
+        fsaverage = datasets.fetch_surf_fsaverage(mesh)
+    xyz = surface.load_surf_mesh(fsaverage[f"sphere_{hemi}"]).coordinates
+    xyz = np.asarray(xyz, dtype=np.float64)
+    return xyz / np.linalg.norm(xyz, axis=1, keepdims=True)
+
+
+def _cell_average(source: np.ndarray, target: np.ndarray) -> tp.Any:
+    """``(n_target, n_source)`` sparse matrix averaging, for each target position, the
+    source positions nearest to it (its Voronoi cell). A target whose cell is empty
+    takes the value of its nearest source position."""
+    from scipy import sparse
+    from scipy.spatial import cKDTree
+
+    _, cell = cKDTree(target).query(source)
+    rows, cols = cell, np.arange(len(source))
+    empty = np.flatnonzero(np.bincount(cell, minlength=len(target)) == 0)
+    if empty.size:
+        _, nearest = cKDTree(source).query(target[empty])
+        rows, cols = np.concatenate([rows, empty]), np.concatenate([cols, nearest])
+    counts = np.bincount(rows, minlength=len(target))
+    shape = (len(target), len(source))
+    return sparse.csr_matrix((1.0 / counts[rows], (rows, cols)), shape=shape)
+
+
+@functools.cache
+def _voronoi_matrix(source: str, target: str, hemi: str) -> tp.Any:
+    """:func:`_cell_average` from one fsaverage mesh to another, on their spheres."""
+    return _cell_average(_unit_sphere(source, hemi), _unit_sphere(target, hemi))
+
+
 class SurfaceProjector(BaseFmriProjector):
     """Project data to an fsaverage surface mesh.
-    For volumetric data, this uses ``nilearn.surface.vol_to_surf`` to project the data to the surface.
-    For surface data, this simply downsamples the data to the target mesh resolution.
 
-    Fields beyond ``mesh`` mirror the keyword arguments of
+    For volumetric data, this uses ``nilearn.surface.vol_to_surf``. Surface data on a
+    finer fsaverage mesh is brought to ``mesh`` with ``spatial_downsampling``:
+
+    * ``"decimate"`` (default) keeps the first vertices of each hemisphere: coarser
+      fsaverage meshes are prefixes of finer ones (icosahedral nesting), so this
+      selects the target mesh's own vertices. Volumes are sampled on ``mesh``
+      directly.
+    * ``"mean"`` averages, for each target vertex, the source vertices closest to it
+      on the sphere (its Voronoi cell: 16 vertices from fsaverage7 to fsaverage5).
+      For volumetric data and a target coarser than fsaverage6, the volume is sampled
+      on fsaverage6 and averaged in the same way.
+
+    Fields beyond ``mesh`` and ``spatial_downsampling`` mirror the keyword arguments of
     ``nilearn.surface.vol_to_surf`` and are forwarded to it.
 
     Examples
     --------
     >>> SurfaceProjector(mesh="fsaverage5")
+    >>> SurfaceProjector(mesh="fsaverage5", spatial_downsampling="mean")
     >>> SurfaceProjector(mesh="fsaverage6", radius=5.0, interpolation="nearest")
     """
 
@@ -1560,6 +1606,7 @@ class SurfaceProjector(BaseFmriProjector):
     n_samples: int | None = None
     mask_img: tp.Any | None = None
     depth: list[float] | None = None
+    spatial_downsampling: tp.Literal["decimate", "mean"] = "decimate"
 
     _mesh: tp.Any | None = pydantic.PrivateAttr(default=None)
 
@@ -1577,12 +1624,20 @@ class SurfaceProjector(BaseFmriProjector):
             self._mesh = fsaverage
         return self._mesh
 
-    def apply(self, rec: tp.Any) -> np.ndarray:
+    def apply(self, rec: tp.Any, **kwargs: tp.Any) -> np.ndarray:
         if len(rec.shape) == 4:
             # 4-D volume data → use nilearn.surface.vol_to_surf
             mesh = self.get_mesh()
             from nilearn.surface import vol_to_surf
 
+            sampled = self.mesh
+            fine = FSAVERAGE_SIZES["fsaverage6"]
+            if self.spatial_downsampling == "mean" and FSAVERAGE_SIZES[self.mesh] < fine:
+                from nilearn import datasets
+
+                sampled = "fsaverage6"
+                with _nilearn_download_lock():
+                    mesh = datasets.fetch_surf_fsaverage(sampled)
             hemis = [
                 vol_to_surf(
                     rec,
@@ -1597,6 +1652,11 @@ class SurfaceProjector(BaseFmriProjector):
                 )
                 for hemi in ("left", "right")
             ]
+            if sampled != self.mesh:
+                hemis = [
+                    _voronoi_matrix(sampled, self.mesh, hemi) @ data
+                    for hemi, data in zip(("left", "right"), hemis)
+                ]
             return np.vstack(hemis)
 
         elif len(rec.shape) == 2:
@@ -1612,8 +1672,14 @@ class SurfaceProjector(BaseFmriProjector):
                     f"Cannot upsample from {n_vertices} vertices to {n_vertices_resampled} vertices"
                 )
             if n_vertices > n_vertices_resampled:
-                left = data[:n_vertices_resampled, :]
-                right = data[n_vertices : n_vertices + n_vertices_resampled, :]
+                left, right = data[:n_vertices], data[n_vertices:]
+                if self.spatial_downsampling == "mean":
+                    source = {v: k for k, v in FSAVERAGE_SIZES.items()}[n_vertices]
+                    left = _voronoi_matrix(source, self.mesh, "left") @ left
+                    right = _voronoi_matrix(source, self.mesh, "right") @ right
+                else:
+                    left = left[:n_vertices_resampled]
+                    right = right[:n_vertices_resampled]
                 data = np.concatenate([left, right], axis=0)
             return data
         else:
