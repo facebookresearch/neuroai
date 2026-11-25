@@ -20,6 +20,7 @@ dependencies = [
   "exca>=0.6.0,<=0.6.2",
   "rapidfuzz",
   "packaging",
+  "pyyaml",
   "ujson",
 ]
 
