@@ -90,6 +90,7 @@ Transforms
    :nosignatures:
 
    EnsureTexts
+   AddAlignedTexts
    AddConcatenationContext
    AddContextToWords
    AddPartOfSpeech
@@ -198,6 +199,8 @@ Extractors — Text
    :nosignatures:
 
    HuggingFaceText
+   HuggingFaceWord
+   HuggingFaceSentence
    SentenceTransformer
    SonarEmbedding
    SpacyEmbedding

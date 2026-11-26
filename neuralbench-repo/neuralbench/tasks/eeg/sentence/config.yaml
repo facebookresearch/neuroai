@@ -18,9 +18,7 @@ data:
   channel_positions:
     layout_or_montage_name: GSN-HydroCel-128
   target:
-    name: HuggingFaceText
-    event_types: Sentence
-    contextualized: false
+    name: HuggingFaceSentence
     model_name: "openai-community/gpt2"
     layers: 0.6667
     token_aggregation: mean
