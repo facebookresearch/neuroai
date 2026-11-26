@@ -17,8 +17,6 @@ from neuralset.base import TimedArray
 from neuralset.events import etypes
 from neuralset.events.transforms import (
     AddAlignedTexts,
-    AddConcatenationContext,
-    AddContextToWords,
     AddSentenceToWords,
 )
 from neuralset.events.utils import extract_events, standardize_events
@@ -56,8 +54,6 @@ def _make_test_events() -> pd.DataFrame:
     ]
     events = pd.DataFrame(events_list)
     events = standardize_events(events)
-    add_context = AddConcatenationContext()
-    add_context(events)
     return events
 
 
@@ -546,9 +542,10 @@ def test_timed_windows(causal: bool) -> None:
 
 def test_single_window_matches_word_pipeline() -> None:
     events = _text_and_words()
-    contexts = AddContextToWords(sentence_only=False, split_field="")(events)
-    words = contexts.loc[contexts.type == "Word"]
-    expected = _contextual_vectors(list(words.context), list(words.text))
+    words = events.loc[events.type == "Word"]
+    # each word read after the text up to it (the former per-word contexts)
+    contexts = [TEXT[: int(c) + len(w)] for c, w in zip(words.text_char, words.text)]
+    expected = _contextual_vectors(contexts, list(words.text))
     new = text.HuggingFaceText(aggregation="sum", frequency=10, **GPT2)
     (event,) = extract_events(AddAlignedTexts()(events), types="AlignedText")
     assert isinstance(event, etypes.AlignedText)
@@ -566,9 +563,13 @@ def test_single_window_matches_word_pipeline() -> None:
 def test_sentence_only_context_matches_word_pipeline() -> None:
     # "the" ends after "mat", the last word of its sentence
     events = _text_and_words(long_word="the")
-    contexts = AddContextToWords(sentence_only=True, split_field="")(events.copy())
-    words = contexts.loc[contexts.type == "Word"]
-    expected = _contextual_vectors(list(words.context), list(words.text))
+    words = events.loc[events.type == "Word"]
+    # each word read after its sentence up to it (former sentence_only=True contexts)
+    contexts = [
+        s[: int(c) + len(w)]
+        for s, c, w in zip(words.sentence, words.sentence_char, words.text)
+    ]
+    expected = _contextual_vectors(contexts, list(words.text))
     # sentences are split from the Text: Sentence events are not needed
     no_sentences = events.loc[events.type != "Sentence"]
     aligned = AddAlignedTexts(text_type="Sentence")(no_sentences)

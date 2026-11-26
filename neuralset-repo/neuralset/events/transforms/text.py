@@ -6,7 +6,6 @@
 
 import logging
 import typing as tp
-from collections import deque
 from functools import lru_cache
 
 import numpy as np
@@ -19,7 +18,14 @@ from neuralset import segments as _segs
 
 from .. import etypes as ev
 from ..study import EventsTransform
-from .utils import MISSING_SENTENCE, TextWordMatcher, _extract_sentences, parse_text
+from .utils import (
+    MISSING_SENTENCE,
+    TextWordMatcher,
+    _extract_sentences,
+    parse_text,
+    validate_event_types,
+    validate_split_labels,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -247,216 +253,100 @@ class AddSentenceToWords(EventsTransform):
         return events
 
 
-def _sentence_start(word: tp.Any) -> int | None:
-    """Start char of the word's sentence in the parent Text, None if unmatched."""
-    try:
-        _ = word.sentence[:0]  # fails on NaN/None/missing
-        return int(word.text_char) - int(word.sentence_char)
-    except (TypeError, ValueError, AttributeError):
-        return None
+# ---------------------------------------------------------------------------
+# Removed: per-word context strings, replaced by AddAlignedTexts + HuggingFaceText
+# ---------------------------------------------------------------------------
+
+
+def _removed_context_message(name: str, data: tp.Any, splits: bool = False) -> str:
+    """Error of the removed transforms, given their config ``data``."""
+    params = data if isinstance(data, dict) else {}
+    msg = f"{name} was removed: events no longer get a context string. "
+    if splits:
+        msg += "For its sentences and splits, use AddSentenceToWords and "
+        msg += "AssignSentenceSplit. "
+    event_type = params.get("event_type", "Word")
+    if event_type != "Word":
+        msg += f"{event_type} events can be embedded alone (e.g. HuggingFaceSentence); "
+        msg += "only words are embedded in context. "
+    msg += (
+        "For contextual word embeddings, add AddAlignedTexts to the events "
+        "transforms (text_type='Sentence' for sentence_only=True) and embed its "
+        "AlignedText events with HuggingFaceText, whose context sets the windows of "
+        "words: context={'words': N, 'min_context_words': N - 1} reads every word "
+        "with the N words of max_context_len=N (one forward pass per word), "
+        "context={'words': N} with N/2 to N words (two passes per N words)."
+    )
+    if params.get("split_field", "split"):
+        msg += (
+            " This context stops at the boundaries of the Text events, not where "
+            "the split changes: to keep the words of a split from seeing those of "
+            "another, split the Texts at split boundaries before AddAlignedTexts."
+        )
+    return msg
 
 
 class AddContextToWords(EventsTransform):
-    """Add a context field to the events dataframe, for each word event, by concatenating
-    the sentence fields.
+    """Removed: raises with the replacement, :class:`AddAlignedTexts` (one
+    ``AlignedText`` per Text, or per sentence with ``text_type="Sentence"``)
+    embedded by :class:`~neuralset.extractors.text.HuggingFaceText` in windows of
+    words (its ``context``)."""
 
-    .. warning::
-       **Unstable API** — the context representation (per-word concatenated strings)
-       will be replaced with compact indices in a future release.
-
-    Parameters
-    ----------
-    sentence_only: bool
-        only use current sentence as context
-    max_context_len: None or int
-        if not None, caps the context len to a given number of words (counted through whitespaces)
-    split_field: str
-        field on which to reset contexts. If empty, context is only reset for new timelines.
-    """
-
-    sentence_only: bool = True  # only use context from current sentence
-    max_context_len: int | None = None  # cut the context after given number of words
-    split_field: str = "split"
-
-    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
-        if hasattr(events, "context"):  # make sure it is typed as str
-            events["context"] = events["context"].fillna("").astype(str)
-        wtypes = ev.EventTypesHelper("Word")
-        words = events.loc[events.type.isin(wtypes.names), :]
-        last_word: tp.Any = None
-        contexts = []
-        desc = "Add context to words"
-        worditer: tp.Iterator[ev.Word] = words.itertuples(index=False)  # type: ignore
-        sfield = self.split_field
-        if sfield and sfield not in words.columns:
-            raise ValueError(f"split_field {sfield!r} is not part of dataframe columns")
-        for word in tqdm(worditer, total=len(words), desc=desc, mininterval=10):
-            if last_word is not None:
-                # check order as a security
-                same_timeline = last_word.timeline == word.timeline
-                if same_timeline and (word.start < last_word.start):
-                    msg = "Words are not in increasing order "
-                    msg += f"({word} follows {last_word})"
-                    raise ValueError(msg)
-                # reset if split differs or timeline differs
-                splits = [getattr(w, sfield, "") for w in (word, last_word)]
-                if splits[0] != splits[1] or not same_timeline:
-                    last_word = None  # restart
-            sent_start = _sentence_start(word)
-            if sent_start is None:
-                contexts.append("")
-                continue
-            sent_char = int(word.text_char) - sent_start  # type: ignore[attr-defined]
-            # first word, restart parts
-            if last_word is None:
-                past_parts: deque[str] = deque(maxlen=self.max_context_len)
-                start_char = 0  # assumes not splitting within sentences
-            # not first word from now on
-            if last_word is not None:
-                if sent_start != _sentence_start(last_word):
-                    # new sentence
-                    if self.sentence_only:
-                        past_parts.clear()
-                    else:  # add end of sentence:
-                        past_parts[-1] += last_word.sentence[start_char:]
-                    start_char = 0
-                elif past_parts:  # same sentence
-                    # append up to current character to the last context part
-                    past_parts[-1] += word.sentence[start_char:sent_char]
-                    start_char = sent_char
-            # reset context with timeline + check ordering for safety
-            last_char = sent_char + len(word.text)
-            new = word.sentence[start_char:last_char]
-            contexts.append("".join(past_parts) + new)
-            past_parts.append(new)
-            start_char = last_char
-            last_word = word
-        # set new context column
-        events.loc[words.index, "context"] = contexts
-        return events
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _removed(cls, data: tp.Any) -> tp.Any:
+        raise ValueError(_removed_context_message(cls.__name__, data))
 
 
 class AddConcatenationContext(EventsTransform):
-    """
-    Adds contextual information to events by concatenating previous events of the same type.
+    """Removed: raises with the replacement, :class:`AddAlignedTexts` (see
+    :class:`AddContextToWords`)."""
 
-    .. warning::
-       **Unstable API** — the context representation will be replaced with compact
-       indices in a future release.
-
-    This transform iterates over events of a specified type (default "Word") and
-    creates a `context` column in the DataFrame. For each event, the context
-    consists of the concatenated texts of all previous events in the same chunk,
-    where chunks are determined by timeline changes, split changes, or sentence
-    boundaries (if `sentence_only=True`). Optionally, the context length can be
-    limited by `max_context_len`.
-
-    .. note::
-
-        if an event is missing (eg. a previous word event) it will be missing in the context.
-        Use AddContextToWords for a more careful consideration of context, and the addition of punctuation.
-
-    Parameters
-    ----------
-    event_type : str, default="Word"
-        Type of event to use for building context.
-    sentence_only : bool, default=False
-        If True, chunks are defined by sentence boundaries; otherwise, by
-        timeline and split changes.
-    max_context_len : int | None, default=None
-        Maximum number of previous events to include in the context. If None,
-        all previous events in the chunk are used.
-    split_field : str, default="split"
-        Column name used to detect split boundaries when creating chunks.
-    """
-
-    event_type: str = "Word"
-    sentence_only: bool = False
-    max_context_len: int | None = None
-    split_field: str = "split"
-
-    def model_post_init(self, log__: tp.Any) -> None:
-        super().model_post_init(log__)
-        if self.event_type not in ev.Event._CLASSES:
-            raise TypeError(f"Event type {self.event_type} not found in events")
-
-    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
-        """In place: adds concatenation of previous words to context."""
-        from collections import deque
-
-        words = events.loc[events.type == self.event_type].copy()
-
-        # identify chunks
-        previous = words.copy().shift(1)
-        timeline_change = words.timeline.astype(str) != previous.timeline.astype(str)
-        chunk_change = timeline_change
-        if self.split_field in words.columns:
-            prev_split = previous[self.split_field].astype(str)
-            split_change = words[self.split_field].astype(str) != prev_split
-            chunk_change = chunk_change | split_change
-        if self.sentence_only:
-            sentence_change = words.sequence_id != previous.sequence_id
-            chunk_change = chunk_change | sentence_change
-        words.loc[words.index, "chunk"] = np.cumsum(chunk_change)
-
-        for _, df in words.groupby("chunk", sort=False):
-            if (df.start.diff() < 0).any():  # type: ignore[operator]
-                raise ValueError("Events should be ordered by start time")
-            texts = df["text"].tolist()
-            chunk_contexts: list[str] = []
-            # Build cumulative context strings, optionally capped to a sliding window.
-            window: deque[str] | list[str] = (
-                deque(maxlen=self.max_context_len)
-                if self.max_context_len is not None
-                else []
-            )
-            for word in texts:
-                window.append(word)
-                chunk_contexts.append(" ".join(window))
-
-            events.loc[df.index, "context"] = chunk_contexts
-
-        return events
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _removed(cls, data: tp.Any) -> tp.Any:
+        raise ValueError(_removed_context_message(cls.__name__, data))
 
 
 class AddAlignedTexts(EventsTransform):
-    """Create one :class:`~neuralset.events.etypes.AlignedText` per Text (or per
-    sentence of each Text), carrying the timing and character span of its Words
-    (for :class:`~neuralset.extractors.text.HuggingFaceText`, whose context stops
-    at the boundaries of the AlignedText events).
+    """Build :class:`~neuralset.events.etypes.AlignedText` events for contextual
+    word embeddings with :class:`~neuralset.extractors.text.HuggingFaceText`.
 
-    Only ``text_type`` changes the ``AlignedText`` events, so a stimulus gets the
-    same ones, and thus the same cached features, whatever the project:
-
-    1. Timelines with Words but no Text get one built from their Words, as with
-       ``EnsureTexts()`` (spaCy punctuation).
-    2. Each Word goes to the last Text enclosing it in time, and is matched to
-       its characters as in ``AddSentenceToWords``; it spans the length of its
-       ``text`` from there. Unmatched Words are left out, with a warning.
-    3. Each Text with matched Words yields an ``AlignedText``, which copies the
-       other columns of the Text, spans both the Text and its Words, and
-       stores word times relative to its start. With ``text_type="Sentence"``,
-       each sentence of the Text with matched Words does instead (the spaCy
-       sentences of ``AddSentenceToWords``), spanning its Words.
-
-    Text rows are kept, Sentence rows are ignored, no column is added to Word
-    rows, and events without any Word are returned unchanged.
+    Words are matched to their last enclosing Text; unmatched Words are omitted
+    with a warning. Missing Texts are built from Words using spaCy punctuation.
+    Text rows are kept, and existing Sentence rows are ignored.
 
     Parameters
     ----------
     drop_words : bool
-        If True, remove all Word rows from the output.
-    text_type : {"Text", "Sentence"}
-        One AlignedText per Text, or per sentence: with ``"Sentence"``, every word
-        of ``HuggingFaceText`` sees only its sentence (the preceding words of its
-        sentence with causal windows, as with
-        ``AddContextToWords(sentence_only=True)``). Sentences are split from the
-        Texts, whatever the Sentence events, so that they do not depend on the
-        segmentation of a study or project.
+        Remove source Word rows when True. Default: False.
+    text_type : str
+        ``"Text"`` (default) or ``"Sentence"``: group words by Text or by sentences
+        derived from its content, before applying any time-based split boundaries.
+    event_type_to_split_by : str or None
+        Registered event type carrying ``split`` labels, e.g. ``"Ieeg"``. Label
+        changes define time boundaries at gap midpoints, as in
+        :class:`~neuralset.events.transforms.chunking.ChunkEvents`, so text can
+        share recording/audio split times without needing Sentence events or their
+        split labels, even within a sentence. Custom registered event types and
+        arbitrary labels are supported; selected events need a ``split`` column
+        with non-missing labels.
+
+        Words belong to the section where they start; a boundary-starting word
+        goes to the following section. Output event spans and word durations are
+        clipped to the section, without changing source Word timings. Context
+        windows contain only that section's words. Leading/trailing words stay
+        in the first/last section. ``None`` (default), no selected events or no
+        label changes leave the timeline unsplit.
     """
 
     drop_words: bool = False
     text_type: tp.Literal["Text", "Sentence"] = "Text"
+    event_type_to_split_by: str | None = None
+
+    _check_event_types = pydantic.field_validator("event_type_to_split_by")(
+        validate_event_types
+    )
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
         word_names = ev.EventTypesHelper("Word").names
@@ -478,24 +368,34 @@ class AddAlignedTexts(EventsTransform):
             n_words += len(words)
             n_unmatched += int((~matched).sum())
             n_empty_timelines += not matched.any()
+            # split section of each word (a single one without event_type_to_split_by)
+            bounds = [-np.inf, *self._split_boundaries(tl_events), np.inf]
+            sections = np.searchsorted(bounds[1:-1], words.start.to_numpy(), side="right")
             for k, (_, text) in enumerate(texts.iterrows()):
-                mine = matched & (owners == k)
-                if not mine.any():
-                    continue
-                order = np.argsort(text_chars[mine], kind="stable")
-                sel = words.loc[mine].iloc[order]
-                char_starts = text_chars[mine][order]
-                if self.text_type == "Text":
-                    new_rows.append(self._aligned_text(text, sel, char_starts))
-                    continue
-                spans = sentence_spans[mine][order]
-                for sent_start, sent_stop in np.unique(spans, axis=0):
-                    in_sentence = spans[:, 0] == sent_start
-                    sentence = (int(sent_start), int(sent_stop))
-                    row = self._aligned_text(
-                        text, sel.loc[in_sentence], char_starts[in_sentence], sentence
-                    )
-                    new_rows.append(row)
+                for c in range(len(bounds) - 1):
+                    mine = matched & (owners == k) & (sections == c)
+                    if not mine.any():
+                        continue
+                    section = (bounds[c], bounds[c + 1])
+                    order = np.argsort(text_chars[mine], kind="stable")
+                    sel = words.loc[mine].iloc[order]
+                    char_starts = text_chars[mine][order]
+                    if self.text_type == "Text":
+                        row = self._aligned_text(text, sel, char_starts, section=section)
+                        new_rows.append(row)
+                        continue
+                    spans = sentence_spans[mine][order]
+                    for sent_start, sent_stop in np.unique(spans, axis=0):
+                        in_sentence = spans[:, 0] == sent_start
+                        sentence = (int(sent_start), int(sent_stop))
+                        row = self._aligned_text(
+                            text,
+                            sel.loc[in_sentence],
+                            char_starts[in_sentence],
+                            sentence,
+                            section,
+                        )
+                        new_rows.append(row)
         if n_unmatched:
             # with allow_missing, the extractor returns zeros for them
             logger.warning(
@@ -513,15 +413,32 @@ class AddAlignedTexts(EventsTransform):
             events = pd.concat([events, pd.DataFrame(new_rows)], ignore_index=True)
         return events
 
+    def _split_boundaries(self, events: pd.DataFrame) -> list[float]:
+        """Times where the ``split`` of ``event_type_to_split_by`` changes in one
+        timeline's ``events``, at the middle of the gap (as ``ChunkEvents``)."""
+        if self.event_type_to_split_by is None:
+            return []
+        rows = events.loc[events.type == self.event_type_to_split_by]
+        if rows.empty:
+            return []
+        rows = rows.sort_values("start")
+        splits = validate_split_labels(rows).astype(str).to_numpy()
+        stops = (rows.start + rows.duration).to_numpy()
+        starts = rows.start.to_numpy()
+        change = np.flatnonzero(splits[1:] != splits[:-1])
+        return [float((stops[i] + starts[i + 1]) / 2) for i in change]
+
     @staticmethod
     def _aligned_text(
         text: pd.Series,
         words: pd.DataFrame,
         char_starts: np.ndarray,
         sentence: tuple[int, int] | None = None,
+        section: tuple[float, float] = (-np.inf, np.inf),
     ) -> dict[str, tp.Any]:
         """AlignedText row of the Words of a Text (sorted by character), or of
-        those of its sentence spanning characters ``sentence``."""
+        those of its sentence spanning characters ``sentence``, within the split
+        ``section`` (start, stop) of the timeline."""
         content: str = text.text
         word_stops = (words.start + words.duration).to_numpy()
         start, stop = float(words.start.min()), float(word_stops.max())
@@ -531,7 +448,8 @@ class AddAlignedTexts(EventsTransform):
         else:
             content = content[sentence[0] : sentence[1]].rstrip()
             char_starts = char_starts - sentence[0]
-        # same assumption as AddContextToWords: the word text is in the Text
+        start, stop = max(start, section[0]), min(stop, section[1])
+        # the word text is assumed to be in the Text, from its first character
         char_stops = char_starts + words.text.str.len().to_numpy()
         row = text.to_dict()
         row.update(
@@ -540,7 +458,9 @@ class AddAlignedTexts(EventsTransform):
             start=start,
             duration=stop - start,
             word_starts=words.start.to_numpy() - start,
-            word_durations=words.duration.to_numpy(),
+            word_durations=np.minimum(
+                words.duration.to_numpy(), section[1] - words.start.to_numpy()
+            ),
             word_char_starts=char_starts,
             word_char_stops=np.minimum(char_stops, len(content)),
         )
