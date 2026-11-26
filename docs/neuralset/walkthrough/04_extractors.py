@@ -252,17 +252,11 @@ print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 # Text
 # ~~~~~
 #
-# :class:`~neuralset.extractors.HuggingFaceText` extracts contextual
-# word embeddings from transformer models: the
-# :class:`~neuralset.events.transforms.AddAlignedTexts` transform groups
-# the Words of each Text into an ``AlignedText`` event, which the model
-# reads in windows of words (``context``).
-# :class:`~neuralset.extractors.HuggingFaceWord` and
-# :class:`~neuralset.extractors.HuggingFaceSentence` embed each Word or
-# Sentence event alone.
-#
-# Layer and token aggregation are configurable via
-# :class:`~neuralset.extractors.base.HuggingFaceMixin`:
+# - :class:`~neuralset.extractors.HuggingFaceWord`: one vector per Word, read alone
+# - :class:`~neuralset.extractors.HuggingFaceSentence`: one vector per Sentence, read alone
+# - :class:`~neuralset.extractors.HuggingFaceText`: each word read in its context,
+#   after :class:`~neuralset.events.transforms.AddAlignedTexts` groups the Words
+#   of each Text into one ``AlignedText`` event
 #
 # .. code-block:: python
 #
@@ -272,9 +266,8 @@ print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 #    events = AddAlignedTexts()(events)
 #    text_ext = HuggingFaceText(
 #        model_name="gpt2",
-#        frequency=10.0,            # output samples per second
-#        layers=[0.5, 0.75],        # relative depths of the layers to use
-#        token_aggregation="mean",  # mean over subword tokens
+#        frequency=10.0,      # output samples per second
+#        layers=[0.5, 0.75],  # relative depths of the layers to use
 #    )
 #
 # :class:`~neuralset.extractors.SpacyEmbedding` provides lighter
