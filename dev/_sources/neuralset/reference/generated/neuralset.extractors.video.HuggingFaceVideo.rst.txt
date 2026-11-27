@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.extractors.video.HuggingFaceVideo
+===========================================
+
+.. currentmodule:: neuralset.extractors.video
+
+.. autopydantic_model:: HuggingFaceVideo
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

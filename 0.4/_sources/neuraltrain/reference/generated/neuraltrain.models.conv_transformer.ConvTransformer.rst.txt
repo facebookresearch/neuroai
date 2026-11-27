@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.conv\_transformer.ConvTransformer
+====================================================
+
+.. currentmodule:: neuraltrain.models.conv_transformer
+
+.. autopydantic_model:: ConvTransformer
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

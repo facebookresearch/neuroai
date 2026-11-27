@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Emg
+===========================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Emg
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

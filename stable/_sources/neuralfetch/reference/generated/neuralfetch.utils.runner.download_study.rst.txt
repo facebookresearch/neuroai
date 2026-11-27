@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralfetch.utils.runner.download\_study
+========================================
+
+.. currentmodule:: neuralfetch.utils.runner
+
+.. autofunction:: download_study
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

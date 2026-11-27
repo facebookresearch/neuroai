@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.etypes.Video
+=============================
+
+.. currentmodule:: neuralset.events.etypes
+
+.. autopydantic_model:: Video
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.splitting.AssignKSplits
+===================================================
+
+.. currentmodule:: neuralset.events.transforms.splitting
+
+.. autopydantic_model:: AssignKSplits
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralbench.main.BenchmarkAggregator
+====================================
+
+.. currentmodule:: neuralbench.main
+
+.. autopydantic_model:: BenchmarkAggregator
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

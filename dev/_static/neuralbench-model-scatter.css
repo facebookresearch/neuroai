@@ -1,0 +1,152 @@
+/* ================================================================
+   NeuralBench interactive model scatter – scoped under
+   #neuralbench-model-scatter so nothing leaks into other pages.
+   ================================================================ */
+
+#neuralbench-model-scatter {
+  margin: 1.5rem 0 2rem;
+  font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+}
+
+/* ---- Controls bar ---- */
+
+#neuralbench-model-scatter .nbms-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1.1rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+#neuralbench-model-scatter .nbms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+#neuralbench-model-scatter .nbms-field-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-foreground-secondary, #555);
+  white-space: nowrap;
+}
+
+#neuralbench-model-scatter .nbms-select {
+  padding: 0.32rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-primary, #333);
+  cursor: pointer;
+  min-width: 12rem;
+}
+
+#neuralbench-model-scatter .nbms-select:focus {
+  outline: 2px solid var(--color-brand-primary, #448aff);
+  outline-offset: 1px;
+}
+
+#neuralbench-model-scatter .nbms-select[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Contextual hint under a control (e.g. the task picker). */
+#neuralbench-model-scatter .nbms-hint {
+  display: none;
+  font-size: 0.68rem;
+  font-style: italic;
+  color: var(--color-foreground-secondary, #888);
+  max-width: 12rem;
+}
+
+/* Muted field: shown when the task picker has no effect. */
+#neuralbench-model-scatter .nbms-field-muted .nbms-field-label {
+  opacity: 0.55;
+}
+
+#neuralbench-model-scatter .nbms-field-muted .nbms-hint {
+  display: block;
+}
+
+/* ---- Options: log toggles + export ---- */
+
+#neuralbench-model-scatter .nbms-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  height: 2rem;
+}
+
+#neuralbench-model-scatter .nbms-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--color-foreground-primary, #333);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#neuralbench-model-scatter .nbms-check input[disabled] {
+  cursor: not-allowed;
+}
+
+#neuralbench-model-scatter .nbms-check:has(input[disabled]) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#neuralbench-model-scatter .nbms-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.34rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid var(--color-brand-primary, #448aff);
+  border-radius: 6px;
+  background: var(--color-brand-primary, #448aff);
+  color: #fff;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+#neuralbench-model-scatter .nbms-btn:hover {
+  filter: brightness(1.08);
+}
+
+#neuralbench-model-scatter .nbms-btn-ghost {
+  background: transparent;
+  color: var(--color-brand-primary, #448aff);
+}
+
+#neuralbench-model-scatter .nbms-btn-ghost:hover {
+  background: var(--color-background-hover, rgba(68, 138, 255, 0.1));
+  filter: none;
+}
+
+/* ---- Plot area ---- */
+
+#neuralbench-model-scatter .nbms-plot {
+  width: 100%;
+  height: 580px;
+}
+
+#neuralbench-model-scatter .nbms-note {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-foreground-secondary, #777);
+}
+
+/* Keep the Plotly modebar unobtrusive. */
+#neuralbench-model-scatter .modebar {
+  opacity: 0.35;
+}
+#neuralbench-model-scatter .modebar:hover {
+  opacity: 0.9;
+}

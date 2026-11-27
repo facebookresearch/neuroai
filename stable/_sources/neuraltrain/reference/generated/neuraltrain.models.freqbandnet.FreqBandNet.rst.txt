@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.freqbandnet.FreqBandNet
+==========================================
+
+.. currentmodule:: neuraltrain.models.freqbandnet
+
+.. autopydantic_model:: FreqBandNet
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

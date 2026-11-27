@@ -1,0 +1,245 @@
+/* ================================================================
+   NeuralBench per-category radar plots – scoped under
+   #neuralbench-category-radars so nothing leaks into other pages.
+   ================================================================ */
+
+#neuralbench-category-radars {
+  margin: 1.5rem 0 2rem;
+  font-family: var(--font-stack, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+}
+
+/* ---- Controls bar ---- */
+
+.ncr-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.ncr-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-foreground-border, #ccc);
+  border-radius: 6px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.ncr-toggle-btn {
+  padding: 0.32rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: none;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-secondary, #555);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ncr-toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--color-foreground-border, #ccc);
+}
+
+.ncr-toggle-btn.ncr-active {
+  background: var(--color-brand-primary, #448aff);
+  color: #fff;
+}
+
+.ncr-toggle-btn:hover:not(.ncr-active) {
+  background: var(--color-background-hover, #f0f0f0);
+}
+
+/* ---- Legend (model + aggregate chips) ---- */
+
+.ncr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.4rem;
+  align-items: flex-start;
+}
+
+.ncr-legend-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.ncr-legend-agg {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  padding-right: 1rem;
+  border-right: 1px solid var(--color-foreground-border, #e0e0e0);
+}
+
+.ncr-group-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-foreground-muted, #888);
+}
+
+.ncr-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  max-width: 22rem;
+}
+
+.ncr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.16rem 0.45rem 0.16rem 0.3rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--color-foreground-border, #ddd);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--color-foreground-secondary, #666);
+  background: var(--color-background-primary, #fff);
+  transition: border-color 0.15s, color 0.15s, background 0.15s, opacity 0.15s;
+  opacity: 0.55;
+}
+
+.ncr-chip.ncr-on {
+  opacity: 1;
+  color: var(--color-foreground-primary, #222);
+  border-color: var(--color-foreground-border-strong, #bbb);
+}
+
+.ncr-chip:hover {
+  background: var(--color-background-hover, #f2f2f2);
+}
+
+.ncr-chip input {
+  display: none;
+}
+
+.ncr-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+  background: var(--sw, #888);
+  flex: 0 0 auto;
+}
+
+.ncr-swatch-dashed {
+  height: 0;
+  width: 1.1rem;
+  border-radius: 0;
+  background: none;
+  border-top: 3px dashed var(--sw, #888);
+}
+
+.ncr-chip-agg {
+  font-weight: 600;
+}
+
+.ncr-group-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.ncr-mini-btn {
+  font-size: 0.68rem;
+  padding: 0.08rem 0.4rem;
+  border: 1px solid var(--color-foreground-border, #ddd);
+  border-radius: 5px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-secondary, #777);
+  cursor: pointer;
+}
+
+.ncr-mini-btn:hover {
+  background: var(--color-background-hover, #f0f0f0);
+}
+
+/* ---- Radar grid + cards ---- */
+
+.ncr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.ncr-card {
+  border: 1px solid var(--color-background-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  padding: 0.7rem 0.5rem 0.4rem;
+  background: var(--color-background-secondary, rgba(0, 0, 0, 0.015));
+}
+
+.ncr-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 0.4rem;
+  margin-bottom: 0.1rem;
+}
+
+.ncr-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-foreground-primary, #222);
+}
+
+.ncr-card-metric {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-foreground-muted, #999);
+  font-variant-numeric: tabular-nums;
+}
+
+.ncr-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ncr-axis-label {
+  font-size: 8px;
+  font-family: var(--font-stack, sans-serif);
+  pointer-events: none;
+}
+
+.ncr-marker {
+  cursor: pointer;
+  transition: r 0.1s;
+}
+
+.ncr-marker:hover {
+  r: 4.5;
+}
+
+/* ---- Tooltip (appended to <body>) ---- */
+
+.ncr-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 15rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  border-radius: 6px;
+  background: var(--color-background-primary, #fff);
+  color: var(--color-foreground-primary, #222);
+  border: 1px solid var(--color-foreground-border, #ccc);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.ncr-tip-title {
+  font-weight: 600;
+}
+
+.ncr-tip-task {
+  color: var(--color-foreground-secondary, #666);
+  font-size: 0.74rem;
+}
+
+.ncr-tip-val {
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}

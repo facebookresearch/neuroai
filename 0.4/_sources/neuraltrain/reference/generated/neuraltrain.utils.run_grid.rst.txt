@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.utils.run\_grid
+===========================
+
+.. currentmodule:: neuraltrain.utils
+
+.. autofunction:: run_grid
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuraltrain.models.transformer.TransformerEncoder
+=================================================
+
+.. currentmodule:: neuraltrain.models.transformer
+
+.. autopydantic_model:: TransformerEncoder
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`

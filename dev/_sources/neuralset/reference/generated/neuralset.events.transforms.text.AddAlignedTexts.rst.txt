@@ -1,0 +1,14 @@
+﻿.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
+
+neuralset.events.transforms.text.AddAlignedTexts
+================================================
+
+.. currentmodule:: neuralset.events.transforms.text
+
+.. autopydantic_model:: AddAlignedTexts
+
+.. container:: autosummary-back-link
+
+   :doc:`← Back to API reference <../reference>`
