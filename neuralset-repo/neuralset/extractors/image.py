@@ -323,7 +323,6 @@ class HuggingFaceImage(extractor_base.BaseStatic, hf.HuggingFaceMixin):
             raise TypeError("Use HuggingFaceImage.__call__ for Video events.")
         # layer * patches * size
         latent = next(self._get_data([event]))
-        latent = np.array(latent, copy=False)  # make sure it's loaded from memmap
         if self.cache_n_layers is not None:
             latent = self._aggregate_layers(latent)
         # copy needed: memmap arrays are read-only
@@ -405,7 +404,7 @@ class BaseClassicImageExtractor(extractor_base.BaseStatic):
         raise NotImplementedError
 
     def get_static(self, event: etypes.Image) -> torch.Tensor:
-        return torch.Tensor(np.asarray(next(self._get_data([event]))))
+        return torch.tensor(next(self._get_data([event])))  # copy: memmap is read-only
 
 
 class RFFT2D(BaseClassicImageExtractor):

@@ -59,7 +59,7 @@ class Test2024Fnirs(study.Study):
             # montage = mne.channels.make_standard_montage('artinis-octamon')
             # raw.set_montage(montage)
 
-            fname.parent.mkdir(exist_ok=True)
+            fname.parent.mkdir(parents=True, exist_ok=True)
             raw.save(fname, verbose=False)
 
         return mne.io.read_raw_fif(fname)

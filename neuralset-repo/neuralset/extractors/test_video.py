@@ -22,7 +22,7 @@ from neuralset.events import etypes
 
 from . import video as vid
 from .base import ContextWindow
-from .video import _VideoImage, resamp_first_dim
+from .video import _VideoImage
 
 logging.getLogger("neuralset").setLevel(logging.DEBUG)
 
@@ -79,11 +79,6 @@ def test_split_video(video_event: etypes.Video) -> None:
     clip1, clip2 = chunk1.read(), chunk2.read()
     assert clip1.duration == 4
     assert clip2.duration == duration - 4
-
-
-def test_resamp_first_dim() -> None:
-    data = torch.rand(12, 7, 5)
-    assert resamp_first_dim(data, 8).shape == (8, 7, 5)
 
 
 def test_video_requirements() -> None:

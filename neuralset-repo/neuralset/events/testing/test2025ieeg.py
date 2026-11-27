@@ -39,7 +39,7 @@ class _BaseTest2025Ieeg(study.Study):
             data = np.ones((len(ch_names), 1)) * np.arange(n_times)[None, :] / self.sfreq
             raw = mne.io.RawArray(data, info, verbose=False)
 
-            fname.parent.mkdir(exist_ok=True)
+            fname.parent.mkdir(parents=True, exist_ok=True)
             raw.save(fname, verbose=False)
 
         return mne.io.read_raw_fif(fname)

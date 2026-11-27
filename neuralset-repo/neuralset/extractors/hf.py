@@ -220,17 +220,33 @@ class HuggingFaceMixin(base.BaseModel):
             revision = None if load_kwargs is None else load_kwargs.get("revision")
             if revision not in revisions:
                 revisions.append(revision)
+        # TF, Flax, Rust, TFLite and ONNX weights: never loaded, often most of a repo
+        ignore = [
+            "*.h5",
+            "*.msgpack",
+            "*.ot",  # codespell:ignore ot
+            "*.tflite",
+            "*.onnx",
+            "*.onnx_data",
+        ]
+        model_kwargs = self.hf_config.model_kwargs or {}
+        if model_kwargs.get("from_tf"):
+            ignore.remove("*.h5")
+        if model_kwargs.get("from_flax"):
+            ignore.remove("*.msgpack")
         for revision in revisions:
             kwargs = {} if revision is None else {"revision": revision}
             try:  # fast path once the snapshot is already cached
                 snapshot_download(
                     repo_id=self.model_name,
                     local_files_only=True,
+                    ignore_patterns=ignore,
                     **kwargs,
                 )
             except LocalEntryNotFoundError:  # first instantiation populates the cache
                 snapshot_download(
                     repo_id=self.model_name,
+                    ignore_patterns=ignore,
                     **kwargs,
                 )
 

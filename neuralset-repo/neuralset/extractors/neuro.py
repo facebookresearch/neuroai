@@ -2481,9 +2481,9 @@ class FmriExtractor(BaseExtractor):
 
         Since np.interp does not extrapolate, we cannot resample beyond the original time range.
         This means we likely lose one TR (or a few) at the very end of the timeline. These
-        "invalid" TRs are filled with NaNs to keep the output data shape consistent with the
-        original duration.
-        '"""
+        "invalid" TRs repeat the last original TR to keep the output data shape consistent
+        with the original duration.
+        """
         voxel_dims, n_trs = data.shape[:-1], data.shape[-1]
 
         trs = np.arange(n_trs) * orig_tr
@@ -2502,8 +2502,8 @@ class FmriExtractor(BaseExtractor):
         if dropped_trs > 0:
             msg = (
                 f"{dropped_trs} invalid TR(s) at the end of the timeline due to resampling without"
-                f" interpolation from T={orig_tr:0.2f}s to T={new_tr:0.2f}s. These invalid TRs "
-                "have been filled with NaNs."
+                f" extrapolation from T={orig_tr:0.2f}s to T={new_tr:0.2f}s. These invalid TRs "
+                "repeat the last original TR."
             )
             logger.warning(msg)
 

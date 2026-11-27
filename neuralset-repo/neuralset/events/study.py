@@ -28,19 +28,6 @@ from .utils import SpecialLoader as SpecialLoader  # isort: skip  # pylint: disa
 logger = logging.getLogger(__name__)
 
 
-def _check_folder_path(path: base.PathLike, name: str) -> Path:
-    """Create `path` if missing; require its parent to already exist.
-
-    Raises RuntimeError if the parent is missing, so a misconfigured study
-    root fails fast instead of creating directories at the wrong location.
-    """
-    path = Path(path)
-    if not path.parent.exists():
-        raise RuntimeError(f"Parent folder {path.parent} of {name} must exist first.")
-    path.mkdir(exist_ok=True)
-    return path
-
-
 def _identify_study_subfolder(path: str | Path, name: str) -> Path:
     """If provided with path and study name, if
     path / name or path / name.lower() exist then returns the first.
@@ -48,7 +35,6 @@ def _identify_study_subfolder(path: str | Path, name: str) -> Path:
     folder is a sub-folder with its name.
     """
     path = Path(path)
-    path = _check_folder_path(path, name=f"{name}.path")
     if path.name.lower() != name.lower():
         # use the subfolder with capitalized or uncapitalized name if it exists,
         # this enables using same folder everywhere
@@ -436,7 +422,10 @@ class Study(patterns.Scatter, base.Step):  # type: ignore[misc]
         # The study subfolder is settled in ``model_post_init`` (see there), so
         # ``download()`` never reassigns ``self.path`` and is safe to call on a
         # frozen post-``run()`` instance.
-        self.path.mkdir(parents=True, exist_ok=True)
+        if not self.path.parent.exists():
+            msg = f"Parent folder {self.path.parent} of {type(self).__name__}.path"
+            raise RuntimeError(f"{msg} must exist first.")
+        self.path.mkdir(exist_ok=True)
         self._download(**kwargs)
         if not self.path.exists():
             raise RuntimeError(f"Path does not exist: {self.path}")

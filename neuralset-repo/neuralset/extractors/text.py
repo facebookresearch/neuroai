@@ -65,8 +65,7 @@ class BaseText(BaseStatic):
             yield self.get_embedding(event.text, language=event.language)
 
     def get_static(self, event: _ev.etypes.Text) -> torch.Tensor:
-        latent = torch.from_numpy(next(self._get_data([event])))
-        return latent
+        return torch.tensor(next(self._get_data([event])))  # copy: memmap is read-only
 
     @abstractmethod
     def get_embedding(self, text: str, language: str = "") -> np.ndarray:
