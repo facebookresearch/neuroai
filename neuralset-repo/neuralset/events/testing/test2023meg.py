@@ -80,7 +80,7 @@ class Test2023Meg(study.Study):
             np.random.seed(0)
             data = np.ones((n_chans, 1)) * np.arange(n_times)[None, :] / sfreq
             raw = mne.io.RawArray(data, info, verbose=False)
-            fif.parent.mkdir(exist_ok=True)
+            fif.parent.mkdir(parents=True, exist_ok=True)
 
             raw.save(fif, verbose=False)
         return mne.io.Raw(fif, verbose=False)

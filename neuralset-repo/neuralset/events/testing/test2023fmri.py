@@ -51,7 +51,7 @@ class Test2023Fmri(study.Study):
             nifti_image = nibabel.Nifti1Image(data_array, np.eye(4))
             tr_in_seconds = 2.0
             nifti_image.header["pixdim"][4] = tr_in_seconds
-            nii.parent.mkdir(exist_ok=True)
+            nii.parent.mkdir(parents=True, exist_ok=True)
             nibabel.save(nifti_image, nii)
         return nibabel.load(nii)
 

@@ -40,26 +40,6 @@ def _huggingface_video_event_uid(event: evts.Image | evts.Video) -> str:
         raise ValueError(f"Incorrect event type for video extractor: {event.type}")
 
 
-def resamp_first_dim(data: torch.Tensor, new_first_dim: int) -> torch.Tensor:
-    if data.shape[0] == new_first_dim:
-        return data
-    import julius
-
-    logger.debug(
-        "Resampling video embedding from %s samples to %s", data.shape[0], new_first_dim
-    )
-    resample = julius.resample.ResampleFrac(
-        old_sr=data.shape[0],
-        new_sr=new_first_dim,
-    ).to(data.device)
-    dims = []
-    for dim in tqdm(data.reshape(data.shape[0], -1).T):
-        dims.append(resample(dim.float()))
-    # TODO: stack an extra frame here?
-    output = torch.stack(dims).reshape(-1, *data.shape[1:])
-    return output
-
-
 class HuggingFaceVideoConfig(hf.HuggingFaceConfig):
     processor_kwargs: dict[str, tp.Any] | None = {"do_rescale": True}
     HF_CLASS_DEFAULTS: tp.ClassVar[dict[str, dict[str, str]]] = {

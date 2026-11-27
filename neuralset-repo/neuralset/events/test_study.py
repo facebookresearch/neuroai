@@ -128,11 +128,16 @@ def test_study_download(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("with_name", [False, True])
 def test_download_appends_study_name(tmp_path: Path, with_name: bool) -> None:
-    path = tmp_path / "FakeData2025" if with_name else tmp_path
+    root = tmp_path / "data"
+    path = root / "FakeData2025" if with_name else root
     study = FakeData2025(path=path)
+    assert not root.exists(), "config must not touch the disk"
     study._download = lambda: (study.path / "data.txt").touch()  # type: ignore
+    with pytest.raises(RuntimeError, match="must exist first"):
+        study.download()
+    root.mkdir()
     study.download()
-    assert study.path == tmp_path / "FakeData2025"
+    assert study.path == root / "FakeData2025"
     assert (study.path / "data.txt").is_file()
 
 

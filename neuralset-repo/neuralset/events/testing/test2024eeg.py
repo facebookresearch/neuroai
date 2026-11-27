@@ -52,7 +52,7 @@ class _BaseTest2024Eeg(study.Study):
             if montage is not None:
                 raw = raw.set_montage(montage, on_missing="ignore")
 
-            fname.parent.mkdir(exist_ok=True)
+            fname.parent.mkdir(parents=True, exist_ok=True)
             raw.save(fname, verbose=False)
 
         return mne.io.read_raw_fif(fname)
