@@ -225,7 +225,7 @@ Local caching, then scaling to a cluster:
 
    # Dispatch to Slurm — events batched across GPU workers
    # Requires: `pip install transformers` (or `pip install "neuralset[all]"`)
-   extractor = ns.extractors.HuggingFaceText(
+   extractor = ns.extractors.HuggingFaceWord(
        model_name="gpt2",
        infra={"cluster": "slurm", "folder": "/cache",
               "gpus_per_node": 1, "timeout_min": 120},

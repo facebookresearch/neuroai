@@ -24,6 +24,7 @@ data:
       model_name: "facebook/vjepa2-vitg-fpc64-256"
       frequency: 4
       num_frames: 64  # matches the fpc64 checkpoint (64 frames per clip)
+      context: {duration: 0.25, overlap: 0}  # one window per output sample
       aggregation: trigger
       infra:
         cluster: !!python/name:neuralbench.config_manager.CLUSTER

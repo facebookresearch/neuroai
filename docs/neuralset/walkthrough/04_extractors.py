@@ -109,7 +109,7 @@ print(f"First pulse only: {pulse_first(two_events, start=9.5, duration=2.0)}")
 # .. code-block:: python
 #
 #    # Requires: `pip install transformers` (or `pip install "neuralset[all]"`)
-#    extractor = HuggingFaceText(
+#    extractor = HuggingFaceWord(
 #        model_name="gpt2",
 #        infra={"backend": "Slurm", "folder": "/cache",
 #               "gpus_per_node": 1, "partition": "gpu"},
@@ -252,22 +252,22 @@ print(f"fMRI shape: {fmri_sample.shape}  (x, y, z, time)")
 # Text
 # ~~~~~
 #
-# :class:`~neuralset.extractors.HuggingFaceText` extracts
-# contextualized embeddings from transformer models. It uses the
-# ``context`` field on Word events (populated by text transforms)
-# to provide surrounding context for each word.
-#
-# Layer and token aggregation are configurable via
-# :class:`~neuralset.extractors.base.HuggingFaceMixin`:
+# - :class:`~neuralset.extractors.HuggingFaceWord`: one vector per Word, read alone
+# - :class:`~neuralset.extractors.HuggingFaceSentence`: one vector per Sentence, read alone
+# - :class:`~neuralset.extractors.HuggingFaceText`: each word read in its context,
+#   after :class:`~neuralset.events.transforms.AddAlignedTexts` groups the Words
+#   of each Text into one ``AlignedText`` event
 #
 # .. code-block:: python
 #
+#    from neuralset.events.transforms import AddAlignedTexts
 #    from neuralset.extractors import HuggingFaceText
 #
+#    events = AddAlignedTexts()(events)
 #    text_ext = HuggingFaceText(
 #        model_name="gpt2",
-#        layers=(8, 9, 10, 11),     # which transformer layers to use
-#        token_aggregation="mean",  # mean over subword tokens
+#        frequency=10.0,      # output samples per second
+#        layers=[0.5, 0.75],  # relative depths of the layers to use
 #    )
 #
 # :class:`~neuralset.extractors.SpacyEmbedding` provides lighter
