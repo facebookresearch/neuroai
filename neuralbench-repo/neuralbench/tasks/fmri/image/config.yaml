@@ -20,7 +20,6 @@ data:
     model_name: facebook/dinov2-giant
     layers: 0.6667
     token_aggregation: mean
-    imsize: 518
     aggregation: trigger
     infra:
       cluster: !!python/name:neuralbench.config_manager.CLUSTER
