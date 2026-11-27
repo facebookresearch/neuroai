@@ -93,8 +93,6 @@ Transforms
    AddAlignedTexts
    AddConcatenationContext
    AddContextToWords
-   AddPartOfSpeech
-   AddPhonemes
    AddSentenceToWords
    AddSummary
 
