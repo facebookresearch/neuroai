@@ -582,21 +582,3 @@ class AddSummary(EventsTransform):
             summaries.append(summary)
         events = pd.concat([events, pd.DataFrame(summaries)], ignore_index=True)
         return events
-
-
-class AddPhonemes(EventsTransform):
-    """
-    Add phoneme information to events.
-    """
-
-    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
-        raise NotImplementedError
-
-
-class AddPartOfSpeech(EventsTransform):
-    """
-    Add Part-Of-Speech (POS) tags to events.
-    """
-
-    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
-        raise NotImplementedError
