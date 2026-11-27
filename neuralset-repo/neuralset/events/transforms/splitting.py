@@ -146,54 +146,16 @@ class AssignKSplits(EventsTransform):
 
 
 class AssignWordSplitAndContext(EventsTransform):
-    """Sequence of 3 standard operations: add sentences, assign split, add context.
+    """Removed: raises with the replacement, ``AddSentenceToWords`` +
+    :class:`AssignSentenceSplit` for the sentences and splits, and
+    ``AddAlignedTexts`` + ``HuggingFaceText`` for contextual word embeddings (see
+    :class:`~neuralset.events.transforms.text.AddContextToWords`)."""
 
-    .. warning::
-       **Unstable API** — the context step will change in a future release.
-    """
-
-    min_duration: float | None = None
-    min_words: int | None = None
-    ratios: tuple[float, float, float] = (0.8, 0.1, 0.1)
-    seed: int = 0
-    max_unmatched_ratio: float = 0.0
-    tolerance: float = 0.0
-    sentence_only: bool = True
-    max_context_len: int | None = None
-    override_sentences: bool = False
-    split_field: str = "split"
-
+    @pydantic.model_validator(mode="before")
     @classmethod
-    def _exclude_from_cls_uid(cls) -> list[str]:
-        return super()._exclude_from_cls_uid() + ["max_unmatched_ratio"]
-
-    def _run(self, events: pd.DataFrame) -> pd.DataFrame:
-        params = [(x, getattr(self, x)) for x in type(self).model_fields]
-        names = ["sentence", "split", "context"]
-        transforms = [self.transform(name) for name in names]  # type: ignore
-        add_sentence, assign_split, add_context = transforms
-        expected = {name for e in transforms for name in type(e).model_fields}
-        diff = expected.symmetric_difference({p[0] for p in params})
-        if diff:
-            raise RuntimeError(
-                f"Mismatch between proposed parameters and transforms parameters: {diff}"
-            )
-        df = add_sentence._run(events)
-        df = assign_split._run(df)
-        df = add_context._run(df)
-        return df
-
-    def transform(
-        self, name: tp.Literal["sentence", "split", "context"]
-    ) -> EventsTransform:
-        params = [(x, getattr(self, x)) for x in type(self).model_fields if x != "type"]
-        transforms: dict[str, tp.Type[EventsTransform]] = {
-            "sentence": _text.AddSentenceToWords,
-            "split": AssignSentenceSplit,
-            "context": _text.AddContextToWords,
-        }
-        cls = transforms[name]
-        return cls(**{x: y for x, y in params if x in cls.model_fields})  # type: ignore
+    def _removed(cls, data: tp.Any) -> tp.Any:
+        msg = _text._removed_context_message(cls.__name__, data, splits=True)
+        raise ValueError(msg)
 
 
 class SklearnSplit(EventsTransform):

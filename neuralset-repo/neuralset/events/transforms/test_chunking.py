@@ -100,10 +100,29 @@ def test_build_sections(
         assert chunking._build_sections(event, rows, allow_leakage) == expected
 
 
+@pytest.mark.parametrize("splits", [(np.nan, np.nan), ("train", np.nan)])
+def test_split_boundaries_reject_missing_labels(splits: tuple[str | float, ...]) -> None:
+    # Word labels create the global column but must not mask unlabeled Ieeg rows.
+    events = pd.DataFrame(
+        [dict(type="Word", start=0.0, duration=0.5, split="train")]
+        + [
+            dict(type="Ieeg", start=float(2 * i), duration=1.0, split=split)
+            for i, split in enumerate(splits)
+        ]
+    )
+    transform = _transf.AddAlignedTexts(event_type_to_split_by="Ieeg")
+    with pytest.raises(ValueError, match="missing split labels"):
+        transform._split_boundaries(events)
+    audio: tp.Any = types.SimpleNamespace(start=0.0, duration=4.0, frequency=100.0)
+    with pytest.raises(ValueError, match="missing split labels"):
+        chunking._build_sections(audio, events.loc[events.type == "Ieeg"])
+
+
 @pytest.mark.parametrize(
     "kwargs,match",
     [
-        (dict(event_type_to_chunk="NotAnEvent"), "not a splittable"),
+        (dict(event_type_to_chunk="NotAnEvent"), "Unknown event type"),
+        (dict(event_type_to_chunk="Word"), "not a splittable"),
         (
             dict(
                 event_type_to_chunk="Audio",
@@ -121,7 +140,7 @@ def test_build_sections(
     ],
 )
 def test_chunk_events_config_validation(kwargs: dict, match: str | None) -> None:
-    """``model_post_init`` rejects (or accepts when ``match is None``)."""
+    """Configuration rejects invalid names, non-splittable types and tiling bounds."""
     if match is None:
         _transf.ChunkEvents(**kwargs)
     else:

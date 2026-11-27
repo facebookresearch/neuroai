@@ -11,6 +11,7 @@ import urllib.parse
 
 import numpy as np
 import pandas as pd
+import pydantic
 
 from neuralset import base
 from neuralset import segments as _segs
@@ -18,6 +19,7 @@ from neuralset import segments as _segs
 from .. import etypes as ev
 from ..study import EventsTransform
 from ..utils import query_with_index
+from .utils import validate_event_types
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,8 @@ class RemoveMissing(EventsTransform):
 
     event_types: str | tp.Sequence[str] = "Word"
     field: str = "context"
+
+    _check_event_types = pydantic.field_validator("event_types")(validate_event_types)
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
         if self.field not in events.columns:
@@ -85,7 +89,7 @@ class AlignEvents(EventsTransform):
 
     would produce the following events dataframe::
 
-        from the transform AlignEvents(trigger_type="Word", trigger_field="text", types_to_align="MEG"):
+        from the transform AlignEvents(trigger_type="Word", trigger_field="text", types_to_align="Meg"):
 
         AlignEvents:blublu
         Word  blublu     start=0
@@ -99,6 +103,10 @@ class AlignEvents(EventsTransform):
     trigger_type: str
     trigger_field: str | tuple[str, ...]
     types_to_align: str | tuple[str, ...]
+
+    _check_event_types = pydantic.field_validator("trigger_type", "types_to_align")(
+        validate_event_types
+    )
 
     def model_post_init(self, log__: tp.Any) -> None:
         super().model_post_init(log__)
@@ -290,6 +298,8 @@ class ConfigureEventLoader(EventsTransform):
 
     event_types: str | tuple[str, ...]
     params: dict[str, str] = {}
+
+    _check_event_types = pydantic.field_validator("event_types")(validate_event_types)
 
     def _run(self, events: pd.DataFrame) -> pd.DataFrame:
         if not self.params:

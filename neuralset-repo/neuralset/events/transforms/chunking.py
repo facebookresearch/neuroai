@@ -9,9 +9,11 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pydantic
 
 from .. import etypes as ev
 from ..study import EventsTransform
+from .utils import validate_event_types, validate_split_labels
 
 Tiling = tp.Literal["equal", "max"]
 
@@ -103,7 +105,7 @@ def _build_sections(
         return [_Section(e_start, e_stop)]
     freq = float(event.frequency)
     min_gap = 1.0 / freq if freq > 0 else 0.0
-    splits = rows.split.astype(str)
+    splits = validate_split_labels(rows).astype(str)
     boundaries = [e_start]
     for i in range(1, len(rows)):
         if splits.iloc[i] == splits.iloc[i - 1]:
@@ -224,6 +226,10 @@ class ChunkEvents(EventsTransform):
     max_duration: float = np.inf
     tiling: Tiling = "max"
     allow_sample_leakage: bool = False
+
+    _check_event_types = pydantic.field_validator(
+        "event_type_to_chunk", "event_type_to_split_by"
+    )(validate_event_types)
 
     # Slack for sample-aligned float compares; absorbs float noise without
     # masking real mismatches so long as ``event.frequency << 1 / tol``

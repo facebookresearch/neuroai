@@ -26,6 +26,7 @@ import neuralset as ns
 from neuralset.events import etypes
 from neuralset.events import transforms as _transf
 from neuralset.events.transforms import utils as _tutils
+from neuralset.extractors.text import HuggingFaceText
 
 logging.getLogger("exca").setLevel(logging.DEBUG)
 
@@ -49,13 +50,18 @@ def _make_test_events() -> tuple[list[str], pd.DataFrame]:
     return sentence, events
 
 
-def test_context() -> None:
-    sentence, events = _make_test_events()
-    transform = _transf.AddConcatenationContext()
-    events = transform(events)
-    for i, row in events.iterrows():
-        assert isinstance(i, int)
-        assert row["context"] == " ".join(sentence[: i + 1])
+@pytest.mark.parametrize(
+    "cls",
+    [
+        _transf.AddContextToWords,
+        _transf.AddConcatenationContext,
+        _transf.AssignWordSplitAndContext,
+    ],
+)
+def test_removed_context_transforms(cls: type[_transf.EventsTransform]) -> None:
+    config = {"sentence_only": False, "max_context_len": 1024}
+    with pytest.raises(ValueError, match="add AddAlignedTexts"):
+        cls.model_validate(config)
 
 
 class FeatEnhancer(_transf.EventsTransform):
@@ -85,22 +91,16 @@ def test_transforms_on_study() -> None:
         # {"name": "AddText"},
         # {"name": "AddSentenceToWords", "override_sentences": True},
         # {"name": "AssignSentenceSplit", "min_duration": 3},
-        # {"name": "AddContextToWords"},  # , "sentence_only": True},
         {"name": "AddSentenceToWords", "max_unmatched_ratio": 0.05},
-        {
-            "name": "AddContextToWords",
-            "sentence_only": False,
-            "max_context_len": 1024,
-            "split_field": "",
-        },
+        {"name": "AddAlignedTexts"},
     ]
     events = ns.Chain(steps=steps).run()
-    assert "context" in events.columns
+    assert "AlignedText" in events.type.values
     # assert "split" in events.columns
     events.loc[
-        # events.type == "Word", ["text", "sentence_char", "sentence", "split", "context"]
+        # events.type == "Word", ["text", "sentence_char", "sentence", "split"]
         events.type == "Word",
-        ["text", "sentence_char", "sentence", "context"],
+        ["text", "sentence_char", "sentence"],
     ].to_csv(f"{name}.csv", sep=";")
 
 
@@ -154,30 +154,13 @@ def test_standard_text_enhancement(
     }  # just to be sure we set sentence to Words
     df.loc[[37, 38], "sentence"] = [np.nan, ""]
     df = _transf.AssignSentenceSplit(max_unmatched_ratio=0.05)(df)
-    df = _transf.AddContextToWords(sentence_only=False)(df)
     assert df.type[2] == "Word"
     assert df.split[2] == "test"  # deterministic split -> should always be test
     assert df.type[70] == "Word"
     assert df.split[70] == "train"  # deterministic split -> should always be train
     assert np.isnan(df.split[0])  # full text -> no split
-    last = len(df) - 1
-    assert df.context[last].startswith("Quand")  # wshould be a long context
-    df = _transf.AddContextToWords(sentence_only=True)(df)
-    assert df.context[last] == "C'est véritablement utile puisque c'est joli"
-    df = _transf.AddContextToWords(max_context_len=3)(df)
-    assert df.context[last] == "utile puisque c'est joli"
-    # try full pipeline as one transform:
-    df = _make_test_dataframe()
-    df.loc[:, "context"] = np.nan
-    df = _transf.AssignWordSplitAndContext(max_context_len=2)(df)
-    # if recwarn:
-    #     # setting an item of incompatible dtype (for context column)
-    #     raise AssertionError(f"Got warnings: {[w.message for w in recwarn.list]}")
-    #     # new unknown issue:
-    #     # AssertionError: Got warnings: [ResourceWarning('unclosed file <_io.BufferedReader name=33>'), ResourceWarning('unclosed file <_io.BufferedReader name=35>')]
-
-    assert df.context[last] == "puisque c'est joli"
     # test sentence
+    df = _transf.AddSentenceToWords()(_make_test_dataframe())
     sentence_row = df.loc[df.type == "Sentence"].iloc[0]
     sentence = ns.events.Event.from_dict(sentence_row)
     assert sentence.type == "Sentence"
@@ -194,11 +177,10 @@ def test_standard_multi_timeline() -> None:
     df = pd.concat([df, df2], ignore_index=True)
     assert df.type[70] == "Word"
     df.loc[70, "type"] = "Phoneme"
-    df = _transf.AssignWordSplitAndContext(max_context_len=2)(df)
+    df = _transf.AssignSentenceSplit()(_transf.AddSentenceToWords()(df))
     # override + all the same split (fast track)
-    df = _transf.AssignWordSplitAndContext(
-        max_context_len=2, override_sentences=True, ratios=(1, 0, 0)
-    )(df)
+    df = _transf.AddSentenceToWords(override_sentences=True)(df)
+    df = _transf.AssignSentenceSplit(ratios=(1, 0, 0))(df)
     assert all(x == "train" for x in df.loc[df.type == "Word"].split)
 
 
@@ -208,7 +190,7 @@ def test_assign_k_splits() -> None:
     df2 = df.copy()
     df2["timeline"] = "tl2"
     df = pd.concat([df, df2], ignore_index=True)
-    df = _transf.AssignWordSplitAndContext(max_context_len=2)(df)
+    df = _transf.AssignSentenceSplit()(_transf.AddSentenceToWords()(df))
     df = _transf.AssignKSplits(k=3)(df)
     expected = {"4ee9472d-ksplit1/2", "4ee9472d-ksplit2/2", "4ee9472d-ksplit1/1"}
     assert set(df.loc[df.type == "Word"].split) == expected
@@ -227,43 +209,6 @@ def test_merge_sentences() -> None:
     assert tuple(len(ss) for ss in merged) == (2, 1, 1, 1)
     merged = _tutils._merge_sentences(seqs, min_words=3)
     assert tuple(len(ss) for ss in merged) == (3, 2)
-
-
-@pytest.mark.parametrize(
-    "change_timeline,split_field,expected",
-    [
-        (False, "split", "b b b. c c c. d d d"),
-        (True, "split", "d d d"),
-        (False, "", "a a a. b b b. c c c. d d d"),
-    ],
-)
-def test_add_context_to_words(
-    change_timeline: bool, split_field: str, expected: str
-) -> None:
-    words = []
-    ind = 0
-    timeline = "lpp"
-    for letter_idx, word in enumerate("abcd"):
-        if word == "d" and change_timeline:
-            timeline = "lpp2"
-        for i in range(3):
-            words.append(
-                {
-                    "text": word,
-                    "type": "Word",
-                    "sentence": (f"{word} " * 3).strip() + ". ",
-                    "sentence_char": 2 * i,
-                    "text_char": letter_idx * 100 + 2 * i,
-                    "start": ind,
-                    "duration": 0.2,
-                    "timeline": timeline,
-                    "split": "test" if word == "a" else "train",
-                }
-            )
-            ind += 1
-    df = pd.DataFrame(words)
-    df = _transf.AddContextToWords(sentence_only=False, split_field=split_field)(df)
-    assert list(df.context)[-1] == expected
 
 
 def _make_sentence_events(
@@ -450,15 +395,18 @@ def test_gap_punctuated_word_offset() -> None:
 
 
 def test_duplicate_full_pipeline(recwarn: pytest.WarningsRecorder) -> None:
-    # try full pipeline as one transform:
     df = _make_test_dataframe(duplicate=2)
-    df = _transf.AssignWordSplitAndContext(max_context_len=6, max_unmatched_ratio=0.02)(
-        df
-    )
+    df = _transf.AddSentenceToWords(max_unmatched_ratio=0.02)(df)
+    df = _transf.AssignSentenceSplit(max_unmatched_ratio=0.02)(df)
+    df = _transf.AddAlignedTexts()(df)
     ws = [x.message for x in recwarn if "removed in Pydantic V3" not in str(x.message)]
-    assert not ws  # setting an item of incompatible dtype (for context column)
-    # no restart after duplicate:
-    assert df.loc[6].context == "Peut-être bien que cet"
+    assert not ws  # e.g. setting an item of incompatible dtype
+    # the duplicate is left out, without shifting the following words:
+    (aligned,) = ns.events.utils.extract_events(df, types="AlignedText")
+    assert isinstance(aligned, etypes.AlignedText)
+    spans = zip(aligned.word_char_starts, aligned.word_char_stops)
+    words = [aligned.text[start:stop] for start, stop in spans]
+    assert words[:5] == ["Peut-être", "bien", "que", "cet", "homme"]
 
 
 def test_remove_missing() -> None:
@@ -1178,6 +1126,153 @@ def test_no_circular_import_extractors() -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize(
+    "transform_cls,field,kwargs",
+    [
+        (
+            _transf.AddAlignedTexts,
+            "event_type_to_split_by",
+            {"event_type_to_split_by": "Mge"},
+        ),
+        (
+            _transf.ChunkEvents,
+            "event_type_to_split_by",
+            {"event_type_to_chunk": "Meg", "event_type_to_split_by": "Mge"},
+        ),
+        (_transf.RemoveMissing, "event_types", {"event_types": ["Word", "Mge"]}),
+        (
+            _transf.AlignEvents,
+            "trigger_type",
+            {"trigger_type": "Mge", "trigger_field": "text", "types_to_align": "Meg"},
+        ),
+        (
+            _transf.AlignEvents,
+            "types_to_align",
+            {
+                "trigger_type": "Word",
+                "trigger_field": "text",
+                "types_to_align": ("Word", "Mge"),
+            },
+        ),
+        (_transf.ConfigureEventLoader, "event_types", {"event_types": ("Word", "Mge")}),
+    ],
+)
+def test_invalid_transform_event_type(
+    transform_cls: type[_transf.EventsTransform],
+    field: str,
+    kwargs: dict[str, tp.Any],
+) -> None:
+    # One check per field binding; chunk-type validation is covered in test_chunking.
+    with pytest.raises(pydantic.ValidationError, match="Unknown event type") as err:
+        transform_cls.model_validate(kwargs)
+    assert err.value.errors()[0]["loc"] == (field,)
+
+
+@pytest.mark.parametrize(
+    "text_type,event_type,splits",
+    [
+        ("Text", "Meg", ("train", "val", "test")),
+        ("Sentence", "Meg", ("train", "val", "test")),
+        ("Text", "ExperimentSplit", ("session_a", "session_b", "session_c")),
+    ],
+)
+def test_add_aligned_texts_split_by(
+    text_type: tp.Literal["Text", "Sentence"],
+    event_type: str,
+    splits: tuple[str, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if event_type == "ExperimentSplit":
+        # A type registered after importing transforms must work without a fixed list.
+        monkeypatch.setattr(etypes.Event, "_CLASSES", etypes.Event._CLASSES.copy())
+
+        class ExperimentSplit(etypes.Event):
+            pass
+
+    # Exercise the real timing emitter without downloading/loading a language model.
+    monkeypatch.setattr(
+        HuggingFaceText,
+        "_get_data",
+        lambda self, items: [
+            np.zeros((len(item.event.word_starts), 1)) for item in items
+        ],
+    )
+    extractor = HuggingFaceText(frequency=0)
+    # Split boundaries at 1.5 and 2.5 s. The second word straddles the first;
+    # the last two words start exactly at boundaries and belong to the next section.
+    words = "he runs she eats".split()
+    onsets = [0.0, 1.0, 1.5, 2.5]
+    durations = [0.5, 0.75, 0.5, 0.5]
+    rows = [
+        dict(type="Word", text=w, start=start, duration=duration, timeline="t")
+        for w, start, duration in zip(words, onsets, durations)
+    ]
+    rows.append(
+        dict(
+            type="Text", text="He runs. She eats!", start=-0.1, duration=4.2, timeline="t"
+        )
+    )
+    pieces = [
+        dict(
+            type=event_type,
+            filepath=":x.fif",
+            frequency=10.0,
+            subject="s",
+            start=start,
+            duration=duration,
+            split=split,
+            timeline="t",
+        )
+        for start, duration, split in [
+            (0, 1.5, splits[0]),
+            (1.5, 1, splits[1]),
+            (2.5, 1.5, splits[2]),
+        ]
+    ]
+
+    def aligned(pieces: list[dict[str, tp.Any]]) -> list[etypes.AlignedText]:
+        events = pd.DataFrame(rows + pieces).assign(language="english")
+        df = ns.events.standardize_events(events)
+        transform = _transf.AddAlignedTexts(
+            text_type=text_type, event_type_to_split_by=event_type
+        )
+        out = transform(df)
+        # Clip only the emitted AlignedText timings, not the source Word events.
+        original_words = out.loc[out.type == "Word"].sort_values("start")
+        np.testing.assert_allclose(original_words.duration, durations)
+        texts = etypes.EventTypesHelper("AlignedText").extract(out)
+        return sorted(texts, key=lambda e: e.start)  # type: ignore
+
+    texts = aligned(pieces)
+    # one AlignedText per split (and sentence), with its own words only
+    spans = [zip(t.word_char_starts, t.word_char_stops) for t in texts]
+    assert [[t.text[a:b].lower() for a, b in s] for t, s in zip(texts, spans)] == [
+        ["he", "runs"],
+        ["she"],
+        ["eats"],
+    ]
+    # Event spans, stored words and emitted features must all stay in their section.
+    for t, (low, high) in zip(texts, [(-np.inf, 1.5), (1.5, 2.5), (2.5, np.inf)]):
+        stop = t.start + t.duration
+        assert low <= t.start and stop <= high + 1e-9
+        assert np.all(t.start + t.word_starts + t.word_durations <= stop + 1e-9)
+        assert not t.overlapping_words(stop, stop + 0.1).size
+        timed = list(extractor._get_timed_arrays([t], t.start, t.duration))
+        np.testing.assert_allclose([a.duration for a in timed], t.word_durations)
+        assert all(a.start + a.duration <= stop + 1e-9 for a in timed)
+    if text_type == "Text":
+        assert [t.start for t in texts][1:] == [1.5, 2.5]
+    starts = np.concatenate([t.start + t.word_starts for t in texts])
+    np.testing.assert_allclose(starts, onsets)
+    np.testing.assert_allclose(np.concatenate([t.word_durations for t in texts]), 0.5)
+    # A single split preserves the original word durations, including the 0.75s word.
+    unsplit = aligned([{**p, "split": "test"} for p in pieces])
+    assert len(unsplit) == (1 if text_type == "Text" else 2)
+    np.testing.assert_allclose(
+        np.concatenate([t.word_durations for t in unsplit]), durations
+    )
+
+
 def test_add_aligned_texts(tmp_path: Path) -> None:
     words = "he runs she eats".split()
     rows = [
@@ -1196,7 +1291,7 @@ def test_add_aligned_texts(tmp_path: Path) -> None:
         )
     )
     df = ns.events.standardize_events(pd.DataFrame(rows).assign(language="english"))
-    out = _transf.AddAlignedTexts(drop_words=True)(df)
+    out = _transf.AddAlignedTexts(drop_words=True, event_type_to_split_by=None)(df)
     assert set(out.type) == {"Text", "AlignedText"}
     # standardize_events + parquet round trip of the array cells
     cache: tp.Any = CacheDict(folder=tmp_path, cache_type="ValidatedParquet")

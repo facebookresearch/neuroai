@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
+import pandas as pd
 
 from neuralset import utils as _ns_utils
 
@@ -24,6 +25,33 @@ logger = logging.getLogger(__name__)
 
 
 MISSING_SENTENCE = "# MISSING SENTENCE #"
+
+_EventTypeNames = tp.TypeVar("_EventTypeNames", bound=str | tp.Sequence[str] | None)
+
+
+def validate_event_types(names: _EventTypeNames) -> _EventTypeNames:
+    """Validate registered event names, preserving a single name, sequence or None.
+
+    Custom Event subclasses are supported as soon as they are defined or imported.
+    """
+    if names is not None:
+        for name in (names,) if isinstance(names, str) else names:
+            if name not in ev.Event._CLASSES:
+                raise ValueError(
+                    f"Unknown event type {name!r}; define or import its Event subclass "
+                    "before configuring transforms."
+                )
+    return names
+
+
+def validate_split_labels(events: pd.DataFrame) -> pd.Series:
+    """Return selected events' split labels, rejecting a missing column or values."""
+    if "split" not in events.columns:
+        raise ValueError("Selected events must have a split column")
+    labels = events["split"]
+    if labels.isna().any():
+        raise ValueError("Selected events have missing split labels")
+    return labels
 
 
 # ---------------------------------------------------------------------------
