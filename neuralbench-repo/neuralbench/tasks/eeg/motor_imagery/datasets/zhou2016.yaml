@@ -8,6 +8,11 @@ data:
   study:
     source:
       name: Zhou2016Fully
+    # each run ends with a BAD_ACQ_SKIP annotation, loaded as a Stimulus with the
+    # default code -100: keep only the 3 classes
+    filter_valid_events:
+      name: QueryEvents
+      query: "(type == 'Eeg') | (code.isin([1, 2, 3]))"
     split:
       =replace=: true
       # Zhou2016: 4 subjects, 3 sessions per subject, 2 runs per session.
