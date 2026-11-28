@@ -8,6 +8,7 @@ import logging
 import typing as tp
 
 import numpy as np
+import pandas as pd
 import torch
 from pydantic import Field, field_validator
 from torch.utils.data import DataLoader
@@ -40,6 +41,23 @@ from .utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _unique_start_trigger_mask(events: pd.DataFrame, event_types: list[str]) -> pd.Series:
+    """Choose one window per annotated onset while retaining every event.
+
+    TUEV can annotate multiple states or channels at the same instant. Only
+    the trigger mask is deduplicated; the event table passed to the segmenter
+    remains intact so a window's multilabel target sees every annotation.
+    """
+    candidates = events.loc[events.type.isin(event_types)]
+    keys = ["timeline", "start"]
+    if candidates.groupby(keys, dropna=False)["split"].nunique(dropna=False).gt(1).any():
+        raise ValueError("Events at the same onset belong to different splits")
+    keep = ~candidates.duplicated(subset=keys, keep="first")
+    mask = pd.Series(False, index=events.index)
+    mask.loc[candidates.index] = keep.to_numpy()
+    return mask
 
 
 class BaseSampler(ns.base.NamedModel):
@@ -150,6 +168,7 @@ class Data(ns.BaseModel):
     channel_positions: ns.extractors.ChannelPositions | None = None
     # Segments
     trigger_event_type: str | list[str]
+    trigger_collision_policy: tp.Literal["error", "unique_start"] = "error"
     start: float = -0.5
     duration: float | None = 3
     stride: float | None = None
@@ -253,10 +272,18 @@ class Data(ns.BaseModel):
             if isinstance(self.trigger_event_type, str)
             else self.trigger_event_type
         )
+        if self.trigger_collision_policy == "unique_start":
+            events = events.copy()
+            events["_neuralbench_unique_start_trigger"] = _unique_start_trigger_mask(
+                events, trigger_event_type
+            )
+            trigger_query = "_neuralbench_unique_start_trigger"
+        else:
+            trigger_query = f"type in {trigger_event_type}"
         segmenter = ns.dataloader.Segmenter(
             start=self.start,
             duration=self.duration,
-            trigger_query=f"type in {trigger_event_type}",
+            trigger_query=trigger_query,
             stride=self.stride,
             stride_drop_incomplete=self.stride_drop_incomplete,
             drop_incomplete=self.drop_incomplete,

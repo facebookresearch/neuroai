@@ -500,6 +500,17 @@ MODELS: list[ModelEntry] = [
         builder=_make_classic_braindecode_builder("CTNet"),
         backbone_subtract=("final_layer",),
     ),
+    # The language backbone is pretrained, but its EEG projector and task head
+    # are fitted for each benchmark task. This is a task model, not an EEG
+    # foundation encoder with a downstream adaptation wrapper.
+    ModelEntry(
+        name="Llama 3.2 3B + EEG",
+        family="classic",
+        device="eeg",
+        config_name="Llama32EEG",
+        cli_name="llama32",
+        architecture="Transformer",
+    ),
     # Task-specific EMG model (emg/typing CTC task).
     ModelEntry(
         name="EMG2QwertyNet",

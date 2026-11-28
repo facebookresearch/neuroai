@@ -18,6 +18,7 @@ from . import freqbandnet as _freqbandnet  # noqa: F401
 from . import green as _green  # noqa: F401
 from . import labram as _labram  # noqa: F401
 from . import linear as _linear  # noqa: F401
+from . import llama32_eeg as _llama32_eeg  # noqa: F401
 from . import luna as _luna  # noqa: F401
 from . import mae as _mae  # noqa: F401
 from . import preprocessor as _preprocessor  # noqa: F401

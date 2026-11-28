@@ -124,6 +124,8 @@ def init_lazy_layers(
     with one that has the adapter's target channel count.
     Only parameters accepted by ``brain_model.forward`` are passed.
     """
+    if getattr(brain_model, "skip_dummy_forward", False):
+        return
     with torch.no_grad():
         brain_model.eval()
         model_sig = inspect.signature(brain_model.forward)
@@ -157,6 +159,7 @@ def build_brain_model(
     val_loader: DataLoader | None = None,
     wandb_logger: WandbLogger | None = None,
     loss: BaseLoss | None = None,
+    task_name: str | None = None,
 ) -> tuple[torch.nn.Module, int, int, list[str] | None]:
     """Build, initialise and optionally wrap a brain model.
 
@@ -204,6 +207,12 @@ def build_brain_model(
         n_outputs = feat.shape[1]
     else:
         n_outputs = feat.shape[-1]
+    target_labels: list[str] | None = None
+    label_to_ind = getattr(leaf, "_label_to_ind", None)
+    if label_to_ind:
+        ordered = {idx: label for label, idx in label_to_ind.items() if idx >= 0}
+        if set(ordered) == set(range(n_outputs)):
+            target_labels = [ordered[idx] for idx in range(n_outputs)]
 
     # Derive sampling rate / channel names from the neuro extractor so models
     # that need them (frequency: Green/FreqBandNet/CoSpectra; ch_names:
@@ -314,6 +323,8 @@ def build_brain_model(
             frequency=frequency,
             ch_names=ch_names,
             mesh=mesh,
+            task_name=task_name,
+            target_labels=target_labels,
             ctc_blank_idx=ctc_blank_idx,
             load_targets=_load_targets,
             load_neuro_targets=_load_neuro_targets,
@@ -326,6 +337,8 @@ def build_brain_model(
             frequency=frequency,
             ch_names=ch_names,
             mesh=mesh,
+            task_name=task_name,
+            target_labels=target_labels,
         )
     brain_model = brain_model_config.build_from_context(ctx)
 
@@ -352,17 +365,32 @@ def build_brain_model(
     # 5) Log model summary. torchinfo adds up the memory of everything in
     # ``input_data``, so anything that is not a tensor (``ch_names``) has to
     # reach the forward as a keyword argument instead.
-    model_summary = summary(
-        brain_model,
-        input_data={k: v for k, v in dummy_batch.items() if isinstance(v, torch.Tensor)},
-        **{k: v for k, v in dummy_batch.items() if not isinstance(v, torch.Tensor)},
-        col_names=("output_size", "num_params", "trainable"),
-        row_settings=("hide_recursive_layers",),
-        verbose=0,
-    )
-    LOGGER.info("Model summary:\n%s", model_summary)
-    n_total_params: int = model_summary.total_params
-    n_trainable_params: int = model_summary.trainable_params
+    if getattr(brain_model, "skip_torchinfo_summary", False):
+        # Running torchinfo would perform another full Llama forward before
+        # Lightning places this large model on its training device.
+        n_total_params = sum(p.numel() for p in brain_model.parameters())
+        n_trainable_params = sum(
+            p.numel() for p in brain_model.parameters() if p.requires_grad
+        )
+        LOGGER.info(
+            "Model parameters: total=%d, trainable=%d",
+            n_total_params,
+            n_trainable_params,
+        )
+    else:
+        model_summary = summary(
+            brain_model,
+            input_data={
+                k: v for k, v in dummy_batch.items() if isinstance(v, torch.Tensor)
+            },
+            **{k: v for k, v in dummy_batch.items() if not isinstance(v, torch.Tensor)},
+            col_names=("output_size", "num_params", "trainable"),
+            row_settings=("hide_recursive_layers",),
+            verbose=0,
+        )
+        LOGGER.info("Model summary:\n%s", model_summary)
+        n_total_params = model_summary.total_params
+        n_trainable_params = model_summary.trainable_params
     if wandb_logger is not None:
         # Not experiment.config[...]: outside rank zero that attribute is a dummy
         # method, so assigning to it raises TypeError under DDP.
